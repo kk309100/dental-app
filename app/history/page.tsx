@@ -1,122 +1,76 @@
-'use client'
+"use client"
 
-import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
 
 export default function HistoryPage() {
-  const [clinics, setClinics] = useState([])
-  const [selectedClinic, setSelectedClinic] = useState('')
-  const [orders, setOrders] = useState([])
-  const [products, setProducts] = useState([])
+  const [orders, setOrders] = useState<any[]>([])
+  const [orderItems, setOrderItems] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [clinics, setClinics] = useState<any[]>([])
 
   useEffect(() => {
-    fetchClinics()
-    fetchProducts()
+    fetchData()
   }, [])
 
-  async function fetchClinics() {
-    const { data } = await supabase.from('clinics').select('*')
-    setClinics(data || [])
+  async function fetchData() {
+    const { data: ordersData } = await supabase
+      .from("命令")
+      .select("*")
+      .order("created_at", { ascending: false })
+
+    const { data: itemsData } = await supabase
+      .from("order_items")
+      .select("*")
+
+    const { data: productsData } = await supabase
+      .from("製品")
+      .select("*")
+
+    const { data: clinicsData } = await supabase
+      .from("クリニック")
+      .select("*")
+
+    setOrders(ordersData || [])
+    setOrderItems(itemsData || [])
+    setProducts(productsData || [])
+    setClinics(clinicsData || [])
   }
 
-  async function fetchProducts() {
-    const { data } = await supabase.from('products').select('*')
-    setProducts(data || [])
+  function getClinicName(clinic_id: string) {
+    const clinic = clinics.find(c => c.id === clinic_id)
+    return clinic?.名称 || "不明"
   }
 
-  async function fetchOrders(clinicId) {
-    setSelectedClinic(clinicId)
-
-    if (!clinicId) {
-      setOrders([])
-      return
-    }
-
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (
-          id,
-          quantity,
-          price,
-          product_id
-        )
-      `)
-      .eq('clinic_id', clinicId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error(error)
-      alert('注文履歴の取得でエラー')
-      return
-    }
-
-    setOrders(data || [])
+  function getProductName(product_id: string) {
+    const product = products.find(p => p.id === product_id)
+    return product?.名称 || "不明"
   }
 
-  function getProductName(productId) {
-    const product = products.find((item) => item.id === productId)
-    return product ? product.name : productId
+  function getItems(order_id: string) {
+    return orderItems.filter(item => item.order_id === order_id)
   }
 
   return (
-    <main style={{ maxWidth: 480, margin: '0 auto', padding: 16 }}>
-      <h1 style={{ fontSize: 24, marginBottom: 16 }}>注文履歴</h1>
+    <div style={{ padding: 20 }}>
+      <h2>注文履歴</h2>
 
-      <div style={{ marginBottom: 20 }}>
-        <label style={{ fontWeight: 'bold' }}>医院を選択</label>
-        <select
-          value={selectedClinic}
-          onChange={(e) => fetchOrders(e.target.value)}
-          style={{
-            width: '100%',
-            padding: 12,
-            marginTop: 8,
-            borderRadius: 8,
-            border: '1px solid #ccc',
-            fontSize: 16,
-          }}
-        >
-          <option value="">選択してください</option>
-          {clinics.map((clinic) => (
-            <option key={clinic.id} value={clinic.id}>
-              {clinic.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {orders.map(order => (
+        <div key={order.id} style={{ border: "1px solid #ccc", margin: 10, padding: 10 }}>
+          <div>医院：{getClinicName(order.clinic_id)}</div>
+          <div>金額：{order.合計金額}円</div>
+          <div>ステータス：{order.状況}</div>
 
-      {selectedClinic && orders.length === 0 && (
-        <p>注文履歴はありません</p>
-      )}
-
-      {orders.map((order) => (
-        <div
-          key={order.id}
-          style={{
-            border: '1px solid #ddd',
-            borderRadius: 12,
-            padding: 16,
-            marginBottom: 12,
-            background: '#fff',
-          }}
-        >
-          <p>注文日：{order.created_at}</p>
-          <p>ステータス：{order.status}</p>
-          <p>合計金額：{order.total_price}円</p>
-
-          <h3>注文明細</h3>
-
-          {order.order_items?.map((item) => (
-            <div key={item.id}>
-              <p>商品名：{getProductName(item.product_id)}</p>
-              <p>数量：{item.quantity}</p>
-              <p>小計：{item.price * item.quantity}円</p>
-            </div>
-          ))}
+          <div style={{ marginTop: 10 }}>
+            <strong>明細</strong>
+            {getItems(order.id).map(item => (
+              <div key={item.id}>
+                {getProductName(item.product_id)} × {item.数量}
+              </div>
+            ))}
+          </div>
         </div>
       ))}
-    </main>
+    </div>
   )
 }
