@@ -1,151 +1,96 @@
-'use client'
+"use client"
 
-import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
 
 export default function AdminPage() {
-  const [orders, setOrders] = useState([])
-  const [products, setProducts] = useState([])
-  const [clinics, setClinics] = useState([])
-  const [manufacturers, setManufacturers] = useState([])
-  const [view, setView] = useState('orders') // orders / purchase
+  const [orders, setOrders] = useState<any[]>([])
+  const [orderItems, setOrderItems] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [clinics, setClinics] = useState<any[]>([])
 
   useEffect(() => {
-    fetchOrders()
-    fetchProducts()
-    fetchClinics()
-    fetchManufacturers()
+    fetchData()
   }, [])
 
-  async function fetchOrders() {
-    const { data } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (
-          id,
-          quantity,
-          price,
-          product_id
-        )
-      `)
-      .order('created_at', { ascending: false })
+  async function fetchData() {
+    const { data: ordersData } = await supabase
+      .from("命令")
+      .select("*")
+      .order("created_at", { ascending: false })
 
-    setOrders(data || [])
+    const { data: itemsData } = await supabase
+      .from("order_items")
+      .select("*")
+
+    const { data: productsData } = await supabase
+      .from("製品")
+      .select("*")
+
+    const { data: clinicsData } = await supabase
+      .from("クリニック")
+      .select("*")
+
+    setOrders(ordersData || [])
+    setOrderItems(itemsData || [])
+    setProducts(productsData || [])
+    setClinics(clinicsData || [])
   }
 
-  async function fetchProducts() {
-    const { data } = await supabase.from('products').select('*')
-    setProducts(data || [])
+  function getClinicName(clinic_id: string) {
+    const clinic = clinics.find(c => c.id === clinic_id)
+    return clinic?.名称 || "不明"
   }
 
-  async function fetchClinics() {
-    const { data } = await supabase.from('clinics').select('*')
-    setClinics(data || [])
+  function getProductName(product_id: string) {
+    const product = products.find(p => p.id === product_id)
+    return product?.名称 || "不明"
   }
 
-  async function fetchManufacturers() {
-    const { data } = await supabase.from('manufacturers').select('*')
-    setManufacturers(data || [])
+  function getOrderItems(order_id: string) {
+    return orderItems.filter(item => item.order_id === order_id)
   }
 
-  function getProductName(id) {
-    const p = products.find((x) => x.id === id)
-    return p ? p.name : id
+  async function updateStatus(id: string, status: string) {
+    await supabase
+      .from("命令")
+      .update({ 状況: status })
+      .eq("id", id)
+
+    fetchData()
   }
-
-  function getClinicName(id) {
-    const c = clinics.find((x) => x.id === id)
-    return c ? c.name : '不明'
-  }
-
-  function getManufacturerName(id) {
-    const m = manufacturers.find((x) => x.id === id)
-    return m ? m.name : '未設定'
-  }
-
-  async function updateStatus(orderId, status) {
-    await supabase.from('orders').update({ status }).eq('id', orderId)
-    fetchOrders()
-  }
-
-  // 発注対象
-  const purchaseProducts = products.filter(
-    (p) => p.stock <= p.reorder_level
-  )
-
-  const manufacturerNames = [
-    ...new Set(
-      purchaseProducts.map((p) =>
-        getManufacturerName(p.manufacturer_id)
-      )
-    ),
-  ]
 
   return (
-    <div style={{ padding: 16 }}>
-      <h1>管理画面</h1>
+    <div style={{ padding: 20 }}>
+      <h2>管理画面</h2>
 
-      {/* タブ切り替え */}
-      <div style={{ marginBottom: 20 }}>
-        <button onClick={() => setView('orders')}>注文管理</button>
-        <button onClick={() => setView('purchase')}>発注リスト</button>
-      </div>
+      {orders.map(order => (
+        <div key={order.id} style={{ border: "1px solid #ccc", margin: 10, padding: 10 }}>
+          
+          <div>医院：{getClinicName(order.clinic_id)}</div>
+          <div>金額：{order.合計金額}円</div>
+          <div>ステータス：{order.状況}</div>
 
-      {/* ================= 注文管理 ================= */}
-      {view === 'orders' && (
-        <div>
-          {orders.map((order) => (
-            <div key={order.id} style={{ border: '1px solid #ddd', padding: 12, marginBottom: 12 }}>
-              <p>医院：{getClinicName(order.clinic_id)}</p>
-              <p>金額：{order.total_price}円</p>
-              <p>ステータス：{order.status}</p>
+          <select
+            value={order.状況}
+            onChange={(e) => updateStatus(order.id, e.target.value)}
+          >
+            <option value="注文受付">注文受付</option>
+            <option value="確認中">確認中</option>
+            <option value="納品済み">納品済み</option>
+          </select>
 
-              <select
-                value={order.status}
-                onChange={(e) => updateStatus(order.id, e.target.value)}
-              >
-                <option>注文受付</option>
-                <option>確認中</option>
-                <option>納品準備中</option>
-                <option>納品済み</option>
-              </select>
+          <div style={{ marginTop: 10 }}>
+            <strong>明細</strong>
+            {getOrderItems(order.id).map(item => (
+              <div key={item.id}>
+                {getProductName(item.product_id)} × {item.数量}
+              </div>
+            ))}
+          </div>
 
-              <h4>明細</h4>
-              {order.order_items?.map((item) => (
-                <div key={item.id}>
-                  <p>{getProductName(item.product_id)}</p>
-                  <p>{item.quantity}個</p>
-                </div>
-              ))}
-            </div>
-          ))}
         </div>
-      )}
-
-      {/* ================= 発注リスト ================= */}
-      {view === 'purchase' && (
-        <div>
-          {manufacturerNames.map((name) => (
-            <div key={name}>
-              <h2>{name}</h2>
-
-              {purchaseProducts
-                .filter(
-                  (p) =>
-                    getManufacturerName(p.manufacturer_id) === name
-                )
-                .map((p) => (
-                  <div key={p.id}>
-                    <p>{p.name}</p>
-                    <p>在庫：{p.stock}</p>
-                    <p>発注目安：{p.reorder_level}</p>
-                  </div>
-                ))}
-            </div>
-          ))}
-        </div>
-      )}
+      ))}
     </div>
   )
 }
