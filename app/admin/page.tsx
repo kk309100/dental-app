@@ -32,129 +32,93 @@ export default function AdminPage() {
     setManufacturers(manufacturersData || [])
   }
 
-  function getClinicName(clinicId: string) {
-    const clinic = clinics.find((c) => c.id === clinicId)
-    return clinic ? clinic.name : "不明"
+  function getClinicName(id: string) {
+    return clinics.find((c) => c.id === id)?.name || "不明"
   }
 
-  function getProductName(productId: string) {
-    const product = products.find((p) => p.id === productId)
-    return product ? product.name : "不明"
+  function getProduct(id: string) {
+    return products.find((p) => p.id === id)
   }
 
-  function getManufacturerName(manufacturerId: string) {
-    const manufacturer = manufacturers.find((m) => m.id === manufacturerId)
-    return manufacturer ? manufacturer.name : "メーカー未設定"
+  function getManufacturerName(id: string) {
+    return manufacturers.find((m) => m.id === id)?.name || "未設定"
   }
 
   function getItems(orderId: string) {
-    return orderItems.filter((item) => item.order_id === orderId)
+    return orderItems.filter((i) => i.order_id === orderId)
   }
 
-  async function updateStatus(orderId: string, status: string) {
-    await supabase.from("orders").update({ status }).eq("id", orderId)
-    fetchData()
-  }
+  // =========================
+  // 納品・発注の分岐ロジック
+  // =========================
 
-  const purchaseProducts = products.filter((product) => {
-    const reorderLevel = product.reorder_level ?? 10
-    return product.stock <= reorderLevel
+  const deliveryList: any[] = []
+  const purchaseList: any[] = []
+
+  orders.forEach((order) => {
+    getItems(order.id).forEach((item) => {
+      const product = getProduct(item.product_id)
+      if (!product) return
+
+      if (product.stock >= item.quantity) {
+        deliveryList.push({
+          ...item,
+          product,
+          clinic_id: order.clinic_id,
+        })
+      } else {
+        purchaseList.push({
+          ...item,
+          product,
+        })
+      }
+    })
   })
 
-  const groupedPurchaseProducts = purchaseProducts.reduce((acc: any, product) => {
-    const makerName = getManufacturerName(product.manufacturer_id)
-
-    if (!acc[makerName]) {
-      acc[makerName] = []
-    }
-
-    acc[makerName].push(product)
+  // メーカー別にまとめる
+  const groupedPurchase = purchaseList.reduce((acc: any, item) => {
+    const maker = getManufacturerName(item.product.manufacturer_id)
+    if (!acc[maker]) acc[maker] = []
+    acc[maker].push(item)
     return acc
   }, {})
 
   return (
-    <main style={{ maxWidth: 800, margin: "0 auto", padding: 20 }}>
+    <main style={{ padding: 20, maxWidth: 900, margin: "0 auto" }}>
       <h1>管理画面</h1>
 
-      <h2>注文管理</h2>
+      {/* ================= 納品書 ================= */}
+      <h2>納品書（在庫あり）</h2>
 
-      {orders.length === 0 && <p>注文はありません</p>}
+      {deliveryList.length === 0 && <p>納品可能な商品はありません</p>}
 
-      {orders.map((order) => (
-        <div
-          key={order.id}
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            padding: 14,
-            marginBottom: 12,
-          }}
-        >
-          <p>医院：{getClinicName(order.clinic_id)}</p>
-          <p>金額：{order.total_price}円</p>
-          <p>ステータス：{order.status}</p>
-          <p>注文日時：{order.created_at}</p>
-
-          <select
-            value={order.status}
-            onChange={(e) => updateStatus(order.id, e.target.value)}
-            style={{ padding: 10, marginBottom: 12 }}
-          >
-            <option value="注文受付">注文受付</option>
-            <option value="確認中">確認中</option>
-            <option value="納品準備中">納品準備中</option>
-            <option value="納品済み">納品済み</option>
-            <option value="入荷待ち">入荷待ち</option>
-            <option value="キャンセル">キャンセル</option>
-          </select>
-
-          <h3>明細</h3>
-
-          {getItems(order.id).map((item) => (
-            <div key={item.id}>
-              <p>
-                {getProductName(item.product_id)} × {item.quantity}
-              </p>
-              <p>小計：{item.price * item.quantity}円</p>
-            </div>
-          ))}
+      {deliveryList.map((item, index) => (
+        <div key={index} style={{ borderBottom: "1px solid #ddd", marginBottom: 10 }}>
+          <p>医院：{getClinicName(item.clinic_id)}</p>
+          <p>商品：{item.product.name}</p>
+          <p>数量：{item.quantity}</p>
         </div>
       ))}
 
       <hr style={{ margin: "30px 0" }} />
 
-      <h2>発注が必要なリスト</h2>
+      {/* ================= 発注書 ================= */}
+      <h2>発注書（メーカー別）</h2>
 
-      {purchaseProducts.length === 0 && (
-        <p>現在、発注が必要な商品はありません</p>
+      {Object.keys(groupedPurchase).length === 0 && (
+        <p>発注が必要な商品はありません</p>
       )}
 
-      {Object.entries(groupedPurchaseProducts).map(([makerName, items]: any) => (
-        <div
-          key={makerName}
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            padding: 14,
-            marginBottom: 12,
-            background: "#fafafa",
-          }}
-        >
-          <h3>{makerName}</h3>
+      {Object.entries(groupedPurchase).map(([maker, items]: any) => (
+        <div key={maker} style={{ marginBottom: 20, border: "1px solid #ddd", padding: 10 }}>
+          <h3>{maker}</h3>
 
-          {items.map((product: any) => {
-            const reorderLevel = product.reorder_level ?? 10
-            const recommendedOrder = reorderLevel * 2 - product.stock
-
-            return (
-              <div key={product.id} style={{ marginBottom: 10 }}>
-                <p>商品名：{product.name}</p>
-                <p>現在庫：{product.stock}</p>
-                <p>発注基準：{reorderLevel}</p>
-                <p>推奨発注数：{recommendedOrder}</p>
-              </div>
-            )
-          })}
+          {items.map((item: any, i: number) => (
+            <div key={i}>
+              <p>商品：{item.product.name}</p>
+              <p>不足数：{item.quantity - item.product.stock}</p>
+            </div>
+          ))}
         </div>
       ))}
     </main>
