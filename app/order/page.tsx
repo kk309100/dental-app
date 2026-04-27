@@ -47,10 +47,8 @@ export default function OrderPage() {
           if (item.id === productId) {
             const newQuantity =
               type === "plus" ? item.quantity + 1 : item.quantity - 1
-
             return { ...item, quantity: newQuantity }
           }
-
           return item
         })
         .filter((item) => item.quantity > 0)
@@ -73,6 +71,7 @@ export default function OrderPage() {
       0
     )
 
+    // ① 注文作成
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert([
@@ -91,6 +90,7 @@ export default function OrderPage() {
       return
     }
 
+    // ② 注文明細
     const orderItems = cart.map((item) => ({
       order_id: order.id,
       product_id: item.id,
@@ -108,8 +108,19 @@ export default function OrderPage() {
       return
     }
 
+    // 🔥 ③ 在庫更新（ここが今回の追加）
+    for (const item of cart) {
+      await supabase
+        .from("products")
+        .update({
+          stock: item.stock - item.quantity,
+        })
+        .eq("id", item.id)
+    }
+
     alert("注文完了")
     setCart([])
+    fetchProducts() // 在庫再取得
   }
 
   const totalPrice = cart.reduce(
@@ -137,15 +148,7 @@ export default function OrderPage() {
       <h2>商品一覧</h2>
 
       {products.map((product) => (
-        <div
-          key={product.id}
-          style={{
-            border: "1px solid #ddd",
-            padding: 12,
-            marginBottom: 12,
-            borderRadius: 8,
-          }}
-        >
+        <div key={product.id} style={{ border: "1px solid #ddd", padding: 12, marginBottom: 12 }}>
           <p>{product.name}</p>
           <p>価格：{product.price}円</p>
           <p>在庫：{product.stock}</p>
@@ -158,49 +161,22 @@ export default function OrderPage() {
 
       <h2>カート</h2>
 
-      {cart.length === 0 && <p>カートは空です</p>}
-
       {cart.map((item) => (
-        <div
-          key={item.id}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 10,
-            padding: 10,
-            border: "1px solid #ddd",
-            borderRadius: 8,
-          }}
-        >
+        <div key={item.id} style={{ display: "flex", justifyContent: "space-between" }}>
+          <p>{item.name}</p>
+
           <div>
-            <p>{item.name}</p>
-            <p>{item.price}円</p>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button onClick={() => updateQuantity(item.id, "minus")}>
-              −
-            </button>
-
+            <button onClick={() => updateQuantity(item.id, "minus")}>−</button>
             <span>{item.quantity}</span>
-
-            <button onClick={() => updateQuantity(item.id, "plus")}>
-              ＋
-            </button>
+            <button onClick={() => updateQuantity(item.id, "plus")}>＋</button>
           </div>
         </div>
       ))}
 
       {cart.length > 0 && (
         <>
-          <p style={{ fontWeight: "bold", fontSize: 18 }}>
-            合計：{totalPrice}円
-          </p>
-
-          <button onClick={submitOrder} style={{ marginTop: 20 }}>
-            注文確定
-          </button>
+          <p>合計：{totalPrice}円</p>
+          <button onClick={submitOrder}>注文確定</button>
         </>
       )}
     </main>
