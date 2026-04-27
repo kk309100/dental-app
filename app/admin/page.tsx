@@ -20,21 +20,10 @@ export default function AdminPage() {
       .select("*")
       .order("created_at", { ascending: false })
 
-    const { data: itemsData } = await supabase
-      .from("order_items")
-      .select("*")
-
-    const { data: productsData } = await supabase
-      .from("products")
-      .select("*")
-
-    const { data: clinicsData } = await supabase
-      .from("clinics")
-      .select("*")
-
-    const { data: manufacturersData } = await supabase
-      .from("manufacturers")
-      .select("*")
+    const { data: itemsData } = await supabase.from("order_items").select("*")
+    const { data: productsData } = await supabase.from("products").select("*")
+    const { data: clinicsData } = await supabase.from("clinics").select("*")
+    const { data: manufacturersData } = await supabase.from("manufacturers").select("*")
 
     setOrders(ordersData || [])
     setOrderItems(itemsData || [])
@@ -63,17 +52,14 @@ export default function AdminPage() {
   }
 
   async function updateStatus(orderId: string, status: string) {
-    await supabase
-      .from("orders")
-      .update({ status })
-      .eq("id", orderId)
-
+    await supabase.from("orders").update({ status }).eq("id", orderId)
     fetchData()
   }
 
-  const purchaseProducts = products.filter(
-    (product) => product.stock <= product.reorder_level
-  )
+  const purchaseProducts = products.filter((product) => {
+    const reorderLevel = product.reorder_level ?? 10
+    return product.stock <= reorderLevel
+  })
 
   const groupedPurchaseProducts = purchaseProducts.reduce((acc: any, product) => {
     const makerName = getManufacturerName(product.manufacturer_id)
@@ -137,7 +123,7 @@ export default function AdminPage() {
 
       <hr style={{ margin: "30px 0" }} />
 
-      <h2>発注リスト</h2>
+      <h2>発注が必要なリスト</h2>
 
       {purchaseProducts.length === 0 && (
         <p>現在、発注が必要な商品はありません</p>
@@ -156,17 +142,19 @@ export default function AdminPage() {
         >
           <h3>{makerName}</h3>
 
-          {items.map((product: any) => (
-            <div key={product.id} style={{ marginBottom: 10 }}>
-              <p>商品名：{product.name}</p>
-              <p>現在庫：{product.stock}</p>
-              <p>発注基準：{product.reorder_level}</p>
-              <p>
-                推奨発注数：
-                {product.reorder_level * 2 - product.stock}
-              </p>
-            </div>
-          ))}
+          {items.map((product: any) => {
+            const reorderLevel = product.reorder_level ?? 10
+            const recommendedOrder = reorderLevel * 2 - product.stock
+
+            return (
+              <div key={product.id} style={{ marginBottom: 10 }}>
+                <p>商品名：{product.name}</p>
+                <p>現在庫：{product.stock}</p>
+                <p>発注基準：{reorderLevel}</p>
+                <p>推奨発注数：{recommendedOrder}</p>
+              </div>
+            )
+          })}
         </div>
       ))}
     </main>
