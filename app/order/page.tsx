@@ -40,6 +40,23 @@ export default function OrderPage() {
     }
   }
 
+  function updateQuantity(productId: string, type: "plus" | "minus") {
+    setCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.id === productId) {
+            const newQuantity =
+              type === "plus" ? item.quantity + 1 : item.quantity - 1
+
+            return { ...item, quantity: newQuantity }
+          }
+
+          return item
+        })
+        .filter((item) => item.quantity > 0)
+    )
+  }
+
   async function submitOrder() {
     if (!selectedClinic) {
       alert("医院を選択してください")
@@ -95,6 +112,11 @@ export default function OrderPage() {
     setCart([])
   }
 
+  const totalPrice = cart.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  )
+
   return (
     <main style={{ maxWidth: 480, margin: "0 auto", padding: 20 }}>
       <h1>注文画面</h1>
@@ -127,35 +149,59 @@ export default function OrderPage() {
           <p>{product.name}</p>
           <p>価格：{product.price}円</p>
           <p>在庫：{product.stock}</p>
-          <button onClick={() => addToCart(product)}>カートに入れる</button>
+
+          <button onClick={() => addToCart(product)}>
+            カートに入れる
+          </button>
         </div>
       ))}
 
       <h2>カート</h2>
 
-     {cart.map((item) => (
-  <div key={item.id} style={{ marginBottom: 8 }}>
-    <p>{item.name} × {item.quantity}</p>
+      {cart.length === 0 && <p>カートは空です</p>}
 
-    <button
-      onClick={() =>
-        setCart(cart.filter((cartItem) => cartItem.id !== item.id))
-      }
-      style={{
-        padding: 8,
-        borderRadius: 6,
-        border: "1px solid #ccc",
-        background: "#fff",
-      }}
-    >
-      カートから削除
-    </button>
-  </div>
-))}
+      {cart.map((item) => (
+        <div
+          key={item.id}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 10,
+            padding: 10,
+            border: "1px solid #ddd",
+            borderRadius: 8,
+          }}
+        >
+          <div>
+            <p>{item.name}</p>
+            <p>{item.price}円</p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={() => updateQuantity(item.id, "minus")}>
+              −
+            </button>
+
+            <span>{item.quantity}</span>
+
+            <button onClick={() => updateQuantity(item.id, "plus")}>
+              ＋
+            </button>
+          </div>
+        </div>
+      ))}
+
       {cart.length > 0 && (
-        <button onClick={submitOrder} style={{ marginTop: 20 }}>
-          注文確定
-        </button>
+        <>
+          <p style={{ fontWeight: "bold", fontSize: 18 }}>
+            合計：{totalPrice}円
+          </p>
+
+          <button onClick={submitOrder} style={{ marginTop: 20 }}>
+            注文確定
+          </button>
+        </>
       )}
     </main>
   )
