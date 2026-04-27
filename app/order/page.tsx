@@ -28,6 +28,11 @@ export default function OrderPage() {
     const existing = cart.find((item) => item.id === product.id)
 
     if (existing) {
+      if (existing.quantity >= product.stock) {
+        alert("在庫数を超えています")
+        return
+      }
+
       setCart(
         cart.map((item) =>
           item.id === product.id
@@ -44,19 +49,86 @@ export default function OrderPage() {
     setCart((prev) =>
       prev
         .map((item) => {
-          if (item.id === productId) {
-            const newQuantity =
-              type === "plus" ? item.quantity + 1 : item.quantity - 1
-            return { ...item, quantity: newQuantity }
+          if (item.id !== productId) return item
+
+          if (type === "plus") {
+            if (item.quantity >= item.stock) {
+              alert("在庫数を超えています")
+              return item
+            }
+
+            return { ...item, quantity: item.quantity + 1 }
           }
-          return item
+
+          return { ...item, quantity: item.quantity - 1 }
         })
         .filter((item) => item.quantity > 0)
     )
   }
 
   async function submitOrder() {
-    alert("注文完了（UI確認用）")
+    if (!selectedClinic) {
+      alert("医院を選択してください")
+      return
+    }
+
+    if (cart.length === 0) {
+      alert("カートが空です")
+      return
+    }
+
+    const totalPrice = cart.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    )
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert([
+        {
+          clinic_id: selectedClinic,
+          status: "注文受付",
+          total_price: totalPrice,
+        },
+      ])
+      .select()
+      .single()
+
+    if (orderError) {
+      console.error(orderError)
+      alert("注文作成でエラー")
+      return
+    }
+
+    const orderItems = cart.map((item) => ({
+      order_id: order.id,
+      product_id: item.id,
+      quantity: item.quantity,
+      price: item.price,
+    }))
+
+    const { error: itemError } = await supabase
+      .from("order_items")
+      .insert(orderItems)
+
+    if (itemError) {
+      console.error(itemError)
+      alert("注文明細でエラー")
+      return
+    }
+
+    for (const item of cart) {
+      await supabase
+        .from("products")
+        .update({
+          stock: item.stock - item.quantity,
+        })
+        .eq("id", item.id)
+    }
+
+    alert("注文完了")
+    setCart([])
+    fetchProducts()
   }
 
   const totalPrice = cart.reduce(
@@ -65,10 +137,9 @@ export default function OrderPage() {
   )
 
   return (
-    <main style={{ maxWidth: 480, margin: "0 auto", padding: 16 }}>
+    <main style={{ maxWidth: 480, margin: "0 auto", padding: 16, paddingBottom: 140 }}>
       <h1 style={{ fontSize: 24, marginBottom: 16 }}>注文</h1>
 
-      {/* 医院選択 */}
       <select
         value={selectedClinic}
         onChange={(e) => setSelectedClinic(e.target.value)}
@@ -88,8 +159,7 @@ export default function OrderPage() {
         ))}
       </select>
 
-      {/* 商品一覧 */}
-      <h2 style={{ marginBottom: 10 }}>商品一覧</h2>
+      <h2>商品一覧</h2>
 
       {products.map((product) => (
         <div
@@ -103,13 +173,12 @@ export default function OrderPage() {
           }}
         >
           <p style={{ fontWeight: "bold" }}>{product.name}</p>
-          <p style={{ color: "#666" }}>{product.price}円</p>
-          <p style={{ fontSize: 12 }}>在庫：{product.stock}</p>
+          <p>{product.price}円</p>
+          <p>在庫：{product.stock}</p>
 
           <button
             onClick={() => addToCart(product)}
             style={{
-              marginTop: 10,
               width: "100%",
               padding: 10,
               borderRadius: 8,
@@ -123,8 +192,7 @@ export default function OrderPage() {
         </div>
       ))}
 
-      {/* カート */}
-      <h2 style={{ marginTop: 20 }}>カート</h2>
+      <h2>カート</h2>
 
       {cart.length === 0 && <p>カートは空です</p>}
 
@@ -141,40 +209,17 @@ export default function OrderPage() {
         >
           <div>
             <p>{item.name}</p>
-            <p style={{ fontSize: 12 }}>{item.price}円</p>
+            <p>{item.price}円</p>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button
-              onClick={() => updateQuantity(item.id, "minus")}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 6,
-                border: "1px solid #ddd",
-              }}
-            >
-              −
-            </button>
-
+            <button onClick={() => updateQuantity(item.id, "minus")}>−</button>
             <span>{item.quantity}</span>
-
-            <button
-              onClick={() => updateQuantity(item.id, "plus")}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 6,
-                border: "1px solid #ddd",
-              }}
-            >
-              ＋
-            </button>
+            <button onClick={() => updateQuantity(item.id, "plus")}>＋</button>
           </div>
         </div>
       ))}
 
-      {/* 固定フッター */}
       {cart.length > 0 && (
         <div
           style={{
@@ -192,7 +237,6 @@ export default function OrderPage() {
           <button
             onClick={submitOrder}
             style={{
-              marginTop: 10,
               width: "100%",
               padding: 14,
               borderRadius: 10,
