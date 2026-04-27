@@ -133,12 +133,25 @@ export default function OrderPage() {
 
       <h2>カート</h2>
 
-      {cart.map((item) => (
-        <div key={item.id}>
-          {item.name} × {item.quantity}
-        </div>
-      ))}
+     {cart.map((item) => (
+  <div key={item.id} style={{ marginBottom: 8 }}>
+    <p>{item.name} × {item.quantity}</p>
 
+    <button
+      onClick={() =>
+        setCart(cart.filter((cartItem) => cartItem.id !== item.id))
+      }
+      style={{
+        padding: 8,
+        borderRadius: 6,
+        border: "1px solid #ccc",
+        background: "#fff",
+      }}
+    >
+      カートから削除
+    </button>
+  </div>
+))}
       {cart.length > 0 && (
         <button onClick={submitOrder} style={{ marginTop: 20 }}>
           注文確定
