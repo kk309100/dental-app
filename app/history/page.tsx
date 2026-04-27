@@ -15,7 +15,7 @@ export default function HistoryPage() {
 
   async function fetchData() {
     const { data: ordersData } = await supabase
-      .from("命令")
+      .from("orders")
       .select("*")
       .order("created_at", { ascending: false })
 
@@ -24,11 +24,11 @@ export default function HistoryPage() {
       .select("*")
 
     const { data: productsData } = await supabase
-      .from("製品")
+      .from("products")
       .select("*")
 
     const { data: clinicsData } = await supabase
-      .from("クリニック")
+      .from("clinics")
       .select("*")
 
     setOrders(ordersData || [])
@@ -37,40 +37,53 @@ export default function HistoryPage() {
     setClinics(clinicsData || [])
   }
 
-  function getClinicName(clinic_id: string) {
-    const clinic = clinics.find(c => c.id === clinic_id)
-    return clinic?.名称 || "不明"
+  function getClinicName(clinicId: string) {
+    const clinic = clinics.find((c) => c.id === clinicId)
+    return clinic ? clinic.name : "不明"
   }
 
-  function getProductName(product_id: string) {
-    const product = products.find(p => p.id === product_id)
-    return product?.名称 || "不明"
+  function getProductName(productId: string) {
+    const product = products.find((p) => p.id === productId)
+    return product ? product.name : "不明"
   }
 
-  function getItems(order_id: string) {
-    return orderItems.filter(item => item.order_id === order_id)
+  function getItems(orderId: string) {
+    return orderItems.filter((item) => item.order_id === orderId)
   }
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>注文履歴</h2>
+    <main style={{ maxWidth: 480, margin: "0 auto", padding: 20 }}>
+      <h1>注文履歴</h1>
 
-      {orders.map(order => (
-        <div key={order.id} style={{ border: "1px solid #ccc", margin: 10, padding: 10 }}>
-          <div>医院：{getClinicName(order.clinic_id)}</div>
-          <div>金額：{order.合計金額}円</div>
-          <div>ステータス：{order.状況}</div>
+      {orders.length === 0 && <p>注文履歴はありません</p>}
 
-          <div style={{ marginTop: 10 }}>
-            <strong>明細</strong>
-            {getItems(order.id).map(item => (
-              <div key={item.id}>
-                {getProductName(item.product_id)} × {item.数量}
-              </div>
-            ))}
-          </div>
+      {orders.map((order) => (
+        <div
+          key={order.id}
+          style={{
+            border: "1px solid #ddd",
+            borderRadius: 10,
+            padding: 14,
+            marginBottom: 12,
+          }}
+        >
+          <p>医院：{getClinicName(order.clinic_id)}</p>
+          <p>金額：{order.total_price}円</p>
+          <p>ステータス：{order.status}</p>
+          <p>注文日時：{order.created_at}</p>
+
+          <h3>明細</h3>
+
+          {getItems(order.id).map((item) => (
+            <div key={item.id}>
+              <p>
+                {getProductName(item.product_id)} × {item.quantity}
+              </p>
+              <p>小計：{item.price * item.quantity}円</p>
+            </div>
+          ))}
         </div>
       ))}
-    </div>
+    </main>
   )
 }
