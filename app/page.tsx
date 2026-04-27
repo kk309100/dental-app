@@ -12,7 +12,7 @@ export default function Home() {
       </p>
 
       <div style={{ display: "grid", gap: 12 }}>
-        <Link href="/purchase">
+        <Link href="/order">
           <button
             style={{
               width: "100%",
