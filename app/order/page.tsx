@@ -56,71 +56,7 @@ export default function OrderPage() {
   }
 
   async function submitOrder() {
-    if (!selectedClinic) {
-      alert("医院を選択してください")
-      return
-    }
-
-    if (cart.length === 0) {
-      alert("カートが空です")
-      return
-    }
-
-    const totalPrice = cart.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    )
-
-    // ① 注文作成
-    const { data: order, error: orderError } = await supabase
-      .from("orders")
-      .insert([
-        {
-          clinic_id: selectedClinic,
-          status: "注文受付",
-          total_price: totalPrice,
-        },
-      ])
-      .select()
-      .single()
-
-    if (orderError) {
-      console.error(orderError)
-      alert("注文作成でエラー")
-      return
-    }
-
-    // ② 注文明細
-    const orderItems = cart.map((item) => ({
-      order_id: order.id,
-      product_id: item.id,
-      quantity: item.quantity,
-      price: item.price,
-    }))
-
-    const { error: itemError } = await supabase
-      .from("order_items")
-      .insert(orderItems)
-
-    if (itemError) {
-      console.error(itemError)
-      alert("注文明細でエラー")
-      return
-    }
-
-    // 🔥 ③ 在庫更新（ここが今回の追加）
-    for (const item of cart) {
-      await supabase
-        .from("products")
-        .update({
-          stock: item.stock - item.quantity,
-        })
-        .eq("id", item.id)
-    }
-
-    alert("注文完了")
-    setCart([])
-    fetchProducts() // 在庫再取得
+    alert("注文完了（UI確認用）")
   }
 
   const totalPrice = cart.reduce(
@@ -129,13 +65,20 @@ export default function OrderPage() {
   )
 
   return (
-    <main style={{ maxWidth: 480, margin: "0 auto", padding: 20 }}>
-      <h1>注文画面</h1>
+    <main style={{ maxWidth: 480, margin: "0 auto", padding: 16 }}>
+      <h1 style={{ fontSize: 24, marginBottom: 16 }}>注文</h1>
 
+      {/* 医院選択 */}
       <select
         value={selectedClinic}
         onChange={(e) => setSelectedClinic(e.target.value)}
-        style={{ width: "100%", padding: 12, marginBottom: 16 }}
+        style={{
+          width: "100%",
+          padding: 12,
+          marginBottom: 16,
+          borderRadius: 10,
+          border: "1px solid #ddd",
+        }}
       >
         <option value="">医院を選択</option>
         {clinics.map((clinic) => (
@@ -145,39 +88,123 @@ export default function OrderPage() {
         ))}
       </select>
 
-      <h2>商品一覧</h2>
+      {/* 商品一覧 */}
+      <h2 style={{ marginBottom: 10 }}>商品一覧</h2>
 
       {products.map((product) => (
-        <div key={product.id} style={{ border: "1px solid #ddd", padding: 12, marginBottom: 12 }}>
-          <p>{product.name}</p>
-          <p>価格：{product.price}円</p>
-          <p>在庫：{product.stock}</p>
+        <div
+          key={product.id}
+          style={{
+            background: "#fff",
+            borderRadius: 12,
+            padding: 14,
+            marginBottom: 12,
+            boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+          }}
+        >
+          <p style={{ fontWeight: "bold" }}>{product.name}</p>
+          <p style={{ color: "#666" }}>{product.price}円</p>
+          <p style={{ fontSize: 12 }}>在庫：{product.stock}</p>
 
-          <button onClick={() => addToCart(product)}>
-            カートに入れる
+          <button
+            onClick={() => addToCart(product)}
+            style={{
+              marginTop: 10,
+              width: "100%",
+              padding: 10,
+              borderRadius: 8,
+              background: "#111",
+              color: "#fff",
+              border: "none",
+            }}
+          >
+            カートに追加
           </button>
         </div>
       ))}
 
-      <h2>カート</h2>
+      {/* カート */}
+      <h2 style={{ marginTop: 20 }}>カート</h2>
+
+      {cart.length === 0 && <p>カートは空です</p>}
 
       {cart.map((item) => (
-        <div key={item.id} style={{ display: "flex", justifyContent: "space-between" }}>
-          <p>{item.name}</p>
-
+        <div
+          key={item.id}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: 10,
+            borderBottom: "1px solid #eee",
+          }}
+        >
           <div>
-            <button onClick={() => updateQuantity(item.id, "minus")}>−</button>
+            <p>{item.name}</p>
+            <p style={{ fontSize: 12 }}>{item.price}円</p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              onClick={() => updateQuantity(item.id, "minus")}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                border: "1px solid #ddd",
+              }}
+            >
+              −
+            </button>
+
             <span>{item.quantity}</span>
-            <button onClick={() => updateQuantity(item.id, "plus")}>＋</button>
+
+            <button
+              onClick={() => updateQuantity(item.id, "plus")}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                border: "1px solid #ddd",
+              }}
+            >
+              ＋
+            </button>
           </div>
         </div>
       ))}
 
+      {/* 固定フッター */}
       {cart.length > 0 && (
-        <>
-          <p>合計：{totalPrice}円</p>
-          <button onClick={submitOrder}>注文確定</button>
-        </>
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: "#fff",
+            padding: 16,
+            borderTop: "1px solid #ddd",
+          }}
+        >
+          <p style={{ fontWeight: "bold" }}>合計：{totalPrice}円</p>
+
+          <button
+            onClick={submitOrder}
+            style={{
+              marginTop: 10,
+              width: "100%",
+              padding: 14,
+              borderRadius: 10,
+              background: "#111",
+              color: "#fff",
+              border: "none",
+              fontSize: 16,
+            }}
+          >
+            注文確定
+          </button>
+        </div>
       )}
     </main>
   )
