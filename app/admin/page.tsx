@@ -8,6 +8,7 @@ export default function AdminPage() {
   const [orderItems, setOrderItems] = useState<any[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [clinics, setClinics] = useState<any[]>([])
+  const [manufacturers, setManufacturers] = useState<any[]>([])
 
   useEffect(() => {
     fetchData()
@@ -31,10 +32,15 @@ export default function AdminPage() {
       .from("clinics")
       .select("*")
 
+    const { data: manufacturersData } = await supabase
+      .from("manufacturers")
+      .select("*")
+
     setOrders(ordersData || [])
     setOrderItems(itemsData || [])
     setProducts(productsData || [])
     setClinics(clinicsData || [])
+    setManufacturers(manufacturersData || [])
   }
 
   function getClinicName(clinicId: string) {
@@ -45,6 +51,11 @@ export default function AdminPage() {
   function getProductName(productId: string) {
     const product = products.find((p) => p.id === productId)
     return product ? product.name : "不明"
+  }
+
+  function getManufacturerName(manufacturerId: string) {
+    const manufacturer = manufacturers.find((m) => m.id === manufacturerId)
+    return manufacturer ? manufacturer.name : "メーカー未設定"
   }
 
   function getItems(orderId: string) {
@@ -60,9 +71,26 @@ export default function AdminPage() {
     fetchData()
   }
 
+  const purchaseProducts = products.filter(
+    (product) => product.stock <= product.reorder_level
+  )
+
+  const groupedPurchaseProducts = purchaseProducts.reduce((acc: any, product) => {
+    const makerName = getManufacturerName(product.manufacturer_id)
+
+    if (!acc[makerName]) {
+      acc[makerName] = []
+    }
+
+    acc[makerName].push(product)
+    return acc
+  }, {})
+
   return (
-    <main style={{ maxWidth: 700, margin: "0 auto", padding: 20 }}>
+    <main style={{ maxWidth: 800, margin: "0 auto", padding: 20 }}>
       <h1>管理画面</h1>
+
+      <h2>注文管理</h2>
 
       {orders.length === 0 && <p>注文はありません</p>}
 
@@ -102,6 +130,41 @@ export default function AdminPage() {
                 {getProductName(item.product_id)} × {item.quantity}
               </p>
               <p>小計：{item.price * item.quantity}円</p>
+            </div>
+          ))}
+        </div>
+      ))}
+
+      <hr style={{ margin: "30px 0" }} />
+
+      <h2>発注リスト</h2>
+
+      {purchaseProducts.length === 0 && (
+        <p>現在、発注が必要な商品はありません</p>
+      )}
+
+      {Object.entries(groupedPurchaseProducts).map(([makerName, items]: any) => (
+        <div
+          key={makerName}
+          style={{
+            border: "1px solid #ddd",
+            borderRadius: 10,
+            padding: 14,
+            marginBottom: 12,
+            background: "#fafafa",
+          }}
+        >
+          <h3>{makerName}</h3>
+
+          {items.map((product: any) => (
+            <div key={product.id} style={{ marginBottom: 10 }}>
+              <p>商品名：{product.name}</p>
+              <p>現在庫：{product.stock}</p>
+              <p>発注基準：{product.reorder_level}</p>
+              <p>
+                推奨発注数：
+                {product.reorder_level * 2 - product.stock}
+              </p>
             </div>
           ))}
         </div>
