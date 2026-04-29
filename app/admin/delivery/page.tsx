@@ -14,11 +14,7 @@ export default function DeliveryPage() {
   }, [])
 
   async function fetchData() {
-    const { data: ordersData } = await supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false })
-
+    const { data: ordersData } = await supabase.from("orders").select("*")
     const { data: itemsData } = await supabase.from("order_items").select("*")
     const { data: productsData } = await supabase.from("products").select("*")
     const { data: clinicsData } = await supabase.from("clinics").select("*")
@@ -56,7 +52,7 @@ export default function DeliveryPage() {
     const total = subtotal + tax
 
     return (
-      <section className="sheet">
+      <div className="sheet">
         <div className="header">
           <div>
             <div className="small">お客様コード：</div>
@@ -124,7 +120,7 @@ export default function DeliveryPage() {
             </div>
           </div>
         </div>
-      </section>
+      </div>
     )
   }
 
@@ -136,8 +132,12 @@ export default function DeliveryPage() {
 
       {orders.map((order) => (
         <div key={order.id} className="a4">
-          <Sheet order={order} />
-          <Sheet order={order} isCopy />
+          <div className="half">
+            <Sheet order={order} />
+          </div>
+          <div className="half">
+            <Sheet order={order} isCopy />
+          </div>
         </div>
       ))}
 
@@ -155,14 +155,19 @@ export default function DeliveryPage() {
           width: 210mm;
           height: 297mm;
           margin: auto;
-          padding: 6mm 10mm;
           background: white;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .half {
+          height: 50%;
+          padding: 8mm 10mm;
           box-sizing: border-box;
         }
 
         .sheet {
-          height: 126mm;
-          padding: 2mm;
+          height: 100%;
           font-size: 10px;
         }
 
