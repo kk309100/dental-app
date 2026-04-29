@@ -25,8 +25,8 @@ export default function DeliveryPage() {
     setClinics(clinicsData || [])
   }
 
-  function getClinicName(id: string) {
-    return clinics.find((c) => c.id === id)?.name || ""
+  function getClinic(id: string) {
+    return clinics.find((c) => c.id === id)
   }
 
   function getProduct(id: string) {
@@ -46,6 +46,7 @@ export default function DeliveryPage() {
   }
 
   function Sheet({ order, isCopy = false }: any) {
+    const clinic = getClinic(order.clinic_id)
     const items = getItems(order.id)
     const subtotal = Number(order.total_price || 0)
     const tax = Math.floor(subtotal * 0.1)
@@ -54,9 +55,11 @@ export default function DeliveryPage() {
     return (
       <div className="sheet">
         <div className="header">
-          <div>
+          <div className="clinic-area">
             <div className="small">お客様コード：</div>
-            <div className="clinic">{getClinicName(order.clinic_id)} 御中</div>
+            <div className="clinic-name">{clinic?.name || ""} 御中</div>
+            <div className="clinic-info">{clinic?.address || "医院住所未設定"}</div>
+            <div className="clinic-info">TEL：{clinic?.phone || "医院電話未設定"}</div>
           </div>
 
           <div className="title">
@@ -65,7 +68,11 @@ export default function DeliveryPage() {
 
           <div className="company">
             <div>発行日：{new Date(order.created_at).toLocaleDateString()}</div>
-            <div className="company-name">株式会社 BIODENT</div>
+            <div className="company-name">株式会社 清新</div>
+            <div>〒000-0000</div>
+            <div>愛知県名古屋市中川区五月通2-37</div>
+            <div>TEL：052-526-3223</div>
+            <div>FAX：052-655-5977</div>
           </div>
         </div>
 
@@ -168,38 +175,48 @@ export default function DeliveryPage() {
 
         .sheet {
           height: 100%;
-          font-size: 10px;
+          font-size: 9.5px;
         }
 
         .header {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 4mm;
+          display: grid;
+          grid-template-columns: 1.15fr 1fr 1.15fr;
+          gap: 8px;
+          margin-bottom: 3mm;
         }
 
         .small {
-          font-size: 9px;
-          margin-bottom: 6mm;
+          font-size: 8.5px;
+          margin-bottom: 3mm;
         }
 
-        .clinic {
-          font-size: 14px;
+        .clinic-name {
+          font-size: 13px;
           font-weight: bold;
           border-bottom: 1px solid #000;
+          margin-bottom: 2mm;
+        }
+
+        .clinic-info {
+          font-size: 8.5px;
+          line-height: 1.3;
         }
 
         .title {
           font-size: 22px;
           font-weight: bold;
           letter-spacing: 6px;
+          text-align: center;
         }
 
         .company {
-          font-size: 9px;
+          font-size: 8.5px;
+          line-height: 1.3;
         }
 
         .company-name {
           font-weight: bold;
+          font-size: 12px;
         }
 
         .message {
@@ -269,7 +286,6 @@ export default function DeliveryPage() {
           font-size: 12px;
         }
 
-        /* ★ここが今回の最重要修正 */
         @media print {
           header,
           nav,
