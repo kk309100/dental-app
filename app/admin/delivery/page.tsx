@@ -269,14 +269,25 @@ export default function DeliveryPage() {
           font-size: 12px;
         }
 
+        /* ★ここが今回の最重要修正 */
         @media print {
+          header,
+          nav,
           .no-print {
-            display: none;
+            display: none !important;
+          }
+
+          body {
+            margin: 0 !important;
           }
 
           .page {
-            padding: 0;
-            background: white;
+            padding: 0 !important;
+            background: white !important;
+          }
+
+          .a4 {
+            margin: 0 !important;
           }
         }
       `}</style>
