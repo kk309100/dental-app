@@ -70,7 +70,7 @@ export default function DeliveryPage() {
             <div>発行日：{new Date(order.created_at).toLocaleDateString()}</div>
             <div className="company-name">株式会社 清新</div>
             <div>〒000-0000</div>
-            <div>愛知県名古屋市中川区五月通2-37</div>
+            <div>愛知県名古屋市中川区五月通2-37黄金ｽﾃｰｼｮﾝﾋﾞﾙ3F</div>
             <div>TEL：052-526-3223</div>
             <div>FAX：052-655-5977</div>
           </div>
