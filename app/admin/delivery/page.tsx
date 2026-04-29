@@ -51,22 +51,25 @@ export default function DeliveryPage() {
 
   function Sheet({ order, isCopy = false }: any) {
     const items = getItems(order.id)
-    const tax = Math.floor(order.total_price * 0.1)
-    const totalWithTax = order.total_price + tax
+    const subtotal = Number(order.total_price || 0)
+    const tax = Math.floor(subtotal * 0.1)
+    const total = subtotal + tax
 
     return (
-      <section className="sheet">
-        <div className="header">
-          <div className="customer">
-            <div className="code">お客様コード：</div>
+      <section className="delivery-sheet">
+        <div className="delivery-header">
+          <div className="customer-area">
+            <div className="small">お客様コード：</div>
             <div className="clinic-name">{getClinicName(order.clinic_id)}　御中</div>
           </div>
 
-          <div className="title">
-            納　品　書{isCopy ? "（控）" : ""}
+          <div className="title-area">
+            <div className="delivery-title">
+              納　品　書{isCopy ? "（控）" : ""}
+            </div>
           </div>
 
-          <div className="company">
+          <div className="company-area">
             <div>発行日：{new Date(order.created_at).toLocaleDateString()}</div>
             <div className="company-name">株式会社 BIODENT</div>
             <div>〒000-0000</div>
@@ -78,25 +81,24 @@ export default function DeliveryPage() {
 
         <div className="message">下記の通り納品いたしました。</div>
 
-        <table className="detail">
+        <table className="delivery-table">
           <thead>
             <tr>
-              <th className="col-no">No.</th>
-              <th className="col-name">品名</th>
-              <th className="col-qty">数量</th>
-              <th className="col-price">単価</th>
-              <th className="col-amount">金額</th>
+              <th className="no">No.</th>
+              <th className="name">品名</th>
+              <th className="qty">数量</th>
+              <th className="price">単価</th>
+              <th className="amount">金額</th>
             </tr>
           </thead>
-
           <tbody>
-            {Array.from({ length: 10 }).map((_, i) => {
-              const item = items[i]
+            {Array.from({ length: 10 }).map((_, index) => {
+              const item = items[index]
               const product = item ? getProduct(item.product_id) : null
 
               return (
-                <tr key={i}>
-                  <td className="center">{i + 1}</td>
+                <tr key={index}>
+                  <td className="center">{index + 1}</td>
                   <td className="product-name">{product?.name || ""}</td>
                   <td className="center">{item?.quantity || ""}</td>
                   <td className="right">{item ? formatNumber(item.price) : ""}</td>
@@ -109,15 +111,15 @@ export default function DeliveryPage() {
           </tbody>
         </table>
 
-        <div className="bottom">
-          <div className="note">
-            <div className="note-title">備考：</div>
+        <div className="bottom-area">
+          <div className="note-box">
+            <strong>備考：</strong>
           </div>
 
           <div className="total-box">
             <div className="total-row">
               <span>小計</span>
-              <span>{formatNumber(order.total_price)} 円</span>
+              <span>{formatNumber(subtotal)} 円</span>
             </div>
             <div className="total-row">
               <span>消費税</span>
@@ -125,7 +127,7 @@ export default function DeliveryPage() {
             </div>
             <div className="total-row grand">
               <span>合計</span>
-              <span>{formatNumber(totalWithTax)} 円</span>
+              <span>{formatNumber(total)} 円</span>
             </div>
           </div>
         </div>
@@ -134,23 +136,28 @@ export default function DeliveryPage() {
   }
 
   return (
-    <main className="page">
-      <button className="no-print print-button" onClick={printPage}>
+    <main className="delivery-page">
+      <button className="print-button no-print" onClick={printPage}>
         印刷
       </button>
 
       {orders.map((order) => (
-        <div key={order.id} className="a4">
+        <div key={order.id} className="a4-page">
           <Sheet order={order} />
           <div className="cut-line">────────────　切　り　取　り　線　────────────</div>
           <Sheet order={order} isCopy />
         </div>
       ))}
 
-      <style jsx>{`
-        .page {
-          background: #eee;
+      <style jsx global>{`
+        body {
+          margin: 0;
+          background: #eeeeee;
+        }
+
+        .delivery-page {
           padding: 20px;
+          background: #eeeeee;
         }
 
         .print-button {
@@ -163,32 +170,33 @@ export default function DeliveryPage() {
           font-weight: bold;
         }
 
-        .a4 {
+        .a4-page {
           width: 210mm;
           height: 297mm;
-          background: white;
+          background: #fff;
           margin: 0 auto 24px;
           padding: 8mm 10mm;
           box-sizing: border-box;
           page-break-after: always;
         }
 
-        .sheet {
+        .delivery-sheet {
           height: 132mm;
           box-sizing: border-box;
           padding: 3mm;
           font-size: 11px;
           color: #000;
+          background: #fff;
         }
 
-        .header {
+        .delivery-header {
           display: grid;
-          grid-template-columns: 1.1fr 1fr 1.1fr;
+          grid-template-columns: 1.15fr 1fr 1.15fr;
           align-items: start;
-          margin-bottom: 6mm;
+          margin-bottom: 5mm;
         }
 
-        .code {
+        .small {
           font-size: 10px;
           margin-bottom: 8mm;
         }
@@ -202,14 +210,17 @@ export default function DeliveryPage() {
           border-bottom: 1.5px solid #000;
         }
 
-        .title {
+        .title-area {
           text-align: center;
+        }
+
+        .delivery-title {
           font-size: 24px;
           font-weight: bold;
           letter-spacing: 7px;
         }
 
-        .company {
+        .company-area {
           font-size: 10px;
           line-height: 1.45;
         }
@@ -225,7 +236,7 @@ export default function DeliveryPage() {
           font-size: 11px;
         }
 
-        .detail {
+        .delivery-table {
           width: 100%;
           border-collapse: collapse;
           border: 2px solid #000;
@@ -233,7 +244,7 @@ export default function DeliveryPage() {
           font-size: 11px;
         }
 
-        .detail th {
+        .delivery-table th {
           border: 1.5px solid #000;
           border-bottom: 2px solid #000;
           background: #f2f2f2;
@@ -242,30 +253,30 @@ export default function DeliveryPage() {
           font-weight: bold;
         }
 
-        .detail td {
+        .delivery-table td {
           border: 1.5px solid #000;
           height: 7mm;
           padding: 2px 5px;
           vertical-align: middle;
         }
 
-        .col-no {
+        .delivery-table .no {
           width: 7%;
         }
 
-        .col-name {
+        .delivery-table .name {
           width: 50%;
         }
 
-        .col-qty {
+        .delivery-table .qty {
           width: 11%;
         }
 
-        .col-price {
+        .delivery-table .price {
           width: 16%;
         }
 
-        .col-amount {
+        .delivery-table .amount {
           width: 16%;
         }
 
@@ -286,22 +297,18 @@ export default function DeliveryPage() {
           font-weight: bold;
         }
 
-        .bottom {
+        .bottom-area {
           display: grid;
           grid-template-columns: 1fr 64mm;
           gap: 10mm;
           margin-top: 4mm;
         }
 
-        .note {
+        .note-box {
           border: 2px solid #000;
           height: 19mm;
           padding: 4px;
           box-sizing: border-box;
-        }
-
-        .note-title {
-          font-weight: bold;
         }
 
         .total-box {
@@ -343,20 +350,35 @@ export default function DeliveryPage() {
           color: #333;
         }
 
+        @page {
+          size: A4 portrait;
+          margin: 0;
+        }
+
         @media print {
-          .no-print {
-            display: none;
+          body {
+            background: #fff;
           }
 
-          .page {
-            background: white;
+          nav,
+          .no-print,
+          .print-button {
+            display: none !important;
+          }
+
+          .delivery-page {
             padding: 0;
+            background: #fff;
           }
 
-          .a4 {
+          .a4-page {
             margin: 0;
             padding: 8mm 10mm;
-            page-break-after: always;
+            box-shadow: none;
+          }
+
+          a[href]:after {
+            content: "";
           }
         }
       `}</style>
