@@ -51,16 +51,16 @@ export default function DeliveryPage() {
     return (
       <section className="sheet">
         <div className="top">
-          <div className="left">
+          <div>
             <div>お客様コード：</div>
             <div className="clinic">{getClinicName(order.clinic_id)} 御中</div>
           </div>
 
-          <div className="center">
-            <div className="title">納 品 書{isCopy ? " 控" : ""}</div>
+          <div className="title">
+            納 品 書{isCopy ? " 控" : ""}
           </div>
 
-          <div className="right">
+          <div>
             <div>発行日：{new Date(order.created_at).toLocaleDateString()}</div>
             <div className="company">株式会社 BIODENT</div>
           </div>
@@ -76,31 +76,24 @@ export default function DeliveryPage() {
               <th>金額</th>
             </tr>
           </thead>
+
           <tbody>
-            {items.map((item: any, i: number) => {
-              const product = getProduct(item.product_id)
+            {Array.from({ length: 10 }).map((_, i) => {
+              const item = items[i]
+              const product = item ? getProduct(item.product_id) : null
+
               return (
-                <tr key={item.id}>
+                <tr key={i}>
                   <td>{i + 1}</td>
-                  <td className="left-text">{product?.name}</td>
-                  <td>{item.quantity}</td>
-                  <td>{formatNumber(item.price)}</td>
+                  <td className="left-text">{product?.name || ""}</td>
+                  <td>{item?.quantity || ""}</td>
+                  <td>{item ? formatNumber(item.price) : ""}</td>
                   <td className="bold">
-                    {formatNumber(item.price * item.quantity)}
+                    {item ? formatNumber(item.price * item.quantity) : ""}
                   </td>
                 </tr>
               )
             })}
-
-            {Array.from({ length: 8 - items.length }).map((_, i) => (
-              <tr key={i}>
-                <td>&nbsp;</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-            ))}
           </tbody>
         </table>
 
@@ -182,11 +175,11 @@ export default function DeliveryPage() {
           border: 1px solid #000;
           padding: 6px;
           height: 8mm;
+          text-align: center;
         }
 
         .detail th {
           background: #eee;
-          text-align: center;
         }
 
         .left-text {
