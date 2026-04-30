@@ -25,8 +25,8 @@ export default function DeliveryPage() {
     setClinics(clinicsData || [])
   }
 
-  function getClinic(id: string) {
-    return clinics.find((c) => c.id === id)
+  function getClinicName(id: string) {
+    return clinics.find((c) => c.id === id)?.name || ""
   }
 
   function getProduct(id: string) {
@@ -41,13 +41,41 @@ export default function DeliveryPage() {
     return Number(num || 0).toLocaleString()
   }
 
-  function printPage() {
+  // 🔥 納品済みにする
+  async function markAsDelivered() {
+    for (const order of orders) {
+      await supabase
+        .from("orders")
+        .update({ status: "納品済み" })
+        .eq("id", order.id)
+    }
+  }
+
+  // 🔥 印刷処理
+  async function printPage() {
+    await markAsDelivered()
     window.print()
+    setTimeout(() => fetchData(), 500)
   }
 
   function Sheet({ order, isCopy = false }: any) {
-    const clinic = getClinic(order.clinic_id)
-    const items = getItems(order.id)
+    const rawItems = getItems(order.id)
+
+    // 🔥 同じ商品まとめる
+    const items = Object.values(
+      rawItems.reduce((acc: any, item: any) => {
+        const key = item.product_id
+
+        if (!acc[key]) {
+          acc[key] = { ...item }
+        } else {
+          acc[key].quantity += item.quantity
+        }
+
+        return acc
+      }, {})
+    )
+
     const subtotal = Number(order.total_price || 0)
     const tax = Math.floor(subtotal * 0.1)
     const total = subtotal + tax
@@ -55,11 +83,9 @@ export default function DeliveryPage() {
     return (
       <div className="sheet">
         <div className="header">
-          <div className="clinic-area">
-            <div className="small">お客様コード：</div>
-            <div className="clinic-name">{clinic?.name || ""} 御中</div>
-            <div className="clinic-info">{clinic?.address || "医院住所未設定"}</div>
-            <div className="clinic-info">TEL：{clinic?.phone || "医院電話未設定"}</div>
+          <div>
+            <div className="small">納品書番号：{order.delivery_number}</div>
+            <div className="clinic">{getClinicName(order.clinic_id)} 御中</div>
           </div>
 
           <div className="title">
@@ -68,15 +94,9 @@ export default function DeliveryPage() {
 
           <div className="company">
             <div>発行日：{new Date(order.created_at).toLocaleDateString()}</div>
-            <div className="company-name">株式会社 清新</div>
-            <div>〒000-0000</div>
-            <div>愛知県名古屋市中川区五月通2-37黄金ｽﾃｰｼｮﾝﾋﾞﾙ3F</div>
-            <div>TEL：052-526-3223</div>
-            <div>FAX：052-655-5977</div>
+            <div className="company-name">株式会社 BIODENT</div>
           </div>
         </div>
-
-        <div className="message">下記の通り納品いたしました。</div>
 
         <table className="detail">
           <thead>
@@ -91,13 +111,13 @@ export default function DeliveryPage() {
 
           <tbody>
             {Array.from({ length: 10 }).map((_, i) => {
-              const item = items[i]
+              const item: any = items[i]
               const product = item ? getProduct(item.product_id) : null
 
               return (
                 <tr key={i}>
                   <td className="center">{i + 1}</td>
-                  <td className="name">{product?.name || ""}</td>
+                  <td>{product?.name || ""}</td>
                   <td className="center">{item?.quantity || ""}</td>
                   <td className="right">{item ? formatNumber(item.price) : ""}</td>
                   <td className="right bold">
@@ -134,29 +154,26 @@ export default function DeliveryPage() {
   return (
     <main className="page">
       <button className="no-print" onClick={printPage}>
-        印刷
+        印刷（完了すると一覧から消えます）
       </button>
 
-      {orders.map((order) => (
-        <div key={order.id} className="a4">
-          <div className="half">
-            <Sheet order={order} />
+      {/* 🔥 納品済みは表示しない */}
+      {orders
+        .filter((o) => o.status !== "納品済み")
+        .map((order) => (
+          <div key={order.id} className="a4">
+            <div className="half">
+              <Sheet order={order} />
+            </div>
+            <div className="half">
+              <Sheet order={order} isCopy />
+            </div>
           </div>
-          <div className="half">
-            <Sheet order={order} isCopy />
-          </div>
-        </div>
-      ))}
+        ))}
 
       <style jsx global>{`
-        body {
-          margin: 0;
-        }
-
-        .page {
-          padding: 20px;
-          background: #eee;
-        }
+        body { margin: 0; }
+        .page { padding: 20px; background: #eee; }
 
         .a4 {
           width: 210mm;
@@ -173,55 +190,15 @@ export default function DeliveryPage() {
           box-sizing: border-box;
         }
 
-        .sheet {
-          height: 100%;
-          font-size: 9.5px;
-        }
+        .sheet { font-size: 10px; }
 
         .header {
-          display: grid;
-          grid-template-columns: 1.15fr 1fr 1.15fr;
-          gap: 8px;
-          margin-bottom: 3mm;
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 4mm;
         }
 
-        .small {
-          font-size: 8.5px;
-          margin-bottom: 3mm;
-        }
-
-        .clinic-name {
-          font-size: 13px;
-          font-weight: bold;
-          border-bottom: 1px solid #000;
-          margin-bottom: 2mm;
-        }
-
-        .clinic-info {
-          font-size: 8.5px;
-          line-height: 1.3;
-        }
-
-        .title {
-          font-size: 22px;
-          font-weight: bold;
-          letter-spacing: 6px;
-          text-align: center;
-        }
-
-        .company {
-          font-size: 8.5px;
-          line-height: 1.3;
-        }
-
-        .company-name {
-          font-weight: bold;
-          font-size: 12px;
-        }
-
-        .message {
-          margin-bottom: 2mm;
-        }
+        .title { font-size: 20px; font-weight: bold; }
 
         .detail {
           width: 100%;
@@ -229,33 +206,14 @@ export default function DeliveryPage() {
           border: 2px solid #000;
         }
 
-        .detail th,
-        .detail td {
+        .detail th, .detail td {
           border: 1px solid #000;
-          height: 5.5mm;
-          padding: 2px 4px;
+          height: 5mm;
         }
 
-        .detail th {
-          background: #eee;
-          text-align: center;
-        }
-
-        .name {
-          text-align: left;
-        }
-
-        .center {
-          text-align: center;
-        }
-
-        .right {
-          text-align: right;
-        }
-
-        .bold {
-          font-weight: bold;
-        }
+        .center { text-align: center; }
+        .right { text-align: right; }
+        .bold { font-weight: bold; }
 
         .bottom {
           display: flex;
@@ -274,36 +232,13 @@ export default function DeliveryPage() {
           width: 60mm;
         }
 
-        .total-row {
-          display: flex;
-          justify-content: space-between;
-          border-bottom: 1px solid #000;
-          padding: 3px 6px;
-        }
-
-        .grand {
-          font-weight: bold;
-          font-size: 12px;
-        }
-
         @media print {
-          header,
-          nav,
-          .no-print {
+          header, nav, .no-print {
             display: none !important;
-          }
-
-          body {
-            margin: 0 !important;
           }
 
           .page {
             padding: 0 !important;
-            background: white !important;
-          }
-
-          .a4 {
-            margin: 0 !important;
           }
         }
       `}</style>
