@@ -7,7 +7,7 @@ export default function AdminPage() {
     <main style={containerStyle}>
       <h1 style={titleStyle}>管理画面</h1>
 
-      {/* ドキュメント導線 */}
+      {/* 帳票 */}
       <div style={sectionStyle}>
         <h2 style={sectionTitle}>帳票</h2>
 
@@ -18,9 +18,17 @@ export default function AdminPage() {
         <Link href="/admin/purchase-order">
           <button style={buttonStyle}>発注書</button>
         </Link>
+
+        <Link href="/admin/delivery-search">
+          <button style={buttonStyle}>納品書検索</button>
+        </Link>
+
+        <Link href="/admin/delivered">
+          <button style={buttonStyle}>納品済み一覧</button>
+        </Link>
       </div>
 
-      {/* 他機能（今後拡張用） */}
+      {/* 管理機能 */}
       <div style={sectionStyle}>
         <h2 style={sectionTitle}>管理機能</h2>
 
@@ -32,30 +40,32 @@ export default function AdminPage() {
   )
 }
 
-const containerStyle = {
+/* ===== スタイル ===== */
+
+const containerStyle: React.CSSProperties = {
   maxWidth: 600,
   margin: "0 auto",
   padding: 20,
 }
 
-const titleStyle = {
+const titleStyle: React.CSSProperties = {
   fontSize: 24,
   marginBottom: 20,
 }
 
-const sectionStyle = {
+const sectionStyle: React.CSSProperties = {
   display: "flex",
-  flexDirection: "column" as const,
+  flexDirection: "column",
   gap: 12,
   marginBottom: 30,
 }
 
-const sectionTitle = {
+const sectionTitle: React.CSSProperties = {
   fontSize: 18,
   marginBottom: 10,
 }
 
-const buttonStyle = {
+const buttonStyle: React.CSSProperties = {
   width: "100%",
   padding: 14,
   borderRadius: 10,
@@ -63,6 +73,6 @@ const buttonStyle = {
   background: "#111",
   color: "#fff",
   fontSize: 16,
-  fontWeight: "bold" as const,
+  fontWeight: "bold",
   cursor: "pointer",
 }
