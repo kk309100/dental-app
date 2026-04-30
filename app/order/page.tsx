@@ -24,6 +24,26 @@ export default function OrderPage() {
     setClinics(data || [])
   }
 
+  async function generateDeliveryNumber() {
+    const today = new Date()
+    const y = today.getFullYear()
+    const m = String(today.getMonth() + 1).padStart(2, "0")
+    const d = String(today.getDate()).padStart(2, "0")
+
+    const dateStr = `${y}${m}${d}`
+
+    const { data } = await supabase
+      .from("orders")
+      .select("id")
+      .gte("created_at", `${y}-${m}-${d}T00:00:00`)
+      .lte("created_at", `${y}-${m}-${d}T23:59:59`)
+
+    const count = (data?.length || 0) + 1
+    const seq = String(count).padStart(4, "0")
+
+    return `DN-${dateStr}-${seq}`
+  }
+
   function addToCart(product: any) {
     const existing = cart.find((item) => item.id === product.id)
 
@@ -82,6 +102,8 @@ export default function OrderPage() {
       0
     )
 
+    const deliveryNumber = await generateDeliveryNumber()
+
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert([
@@ -89,6 +111,7 @@ export default function OrderPage() {
           clinic_id: selectedClinic,
           status: "注文受付",
           total_price: totalPrice,
+          delivery_number: deliveryNumber,
         },
       ])
       .select()
@@ -126,7 +149,7 @@ export default function OrderPage() {
         .eq("id", item.id)
     }
 
-    alert("注文完了")
+    alert(`注文完了\n納品書番号：${deliveryNumber}`)
     setCart([])
     fetchProducts()
   }
