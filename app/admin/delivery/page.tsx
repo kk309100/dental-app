@@ -25,8 +25,8 @@ export default function DeliveryPage() {
     setClinics(clinicsData || [])
   }
 
-  function getClinicName(id: string) {
-    return clinics.find((c) => c.id === id)?.name || ""
+  function getClinic(id: string) {
+    return clinics.find((c) => c.id === id)
   }
 
   function getProduct(id: string) {
@@ -51,7 +51,7 @@ export default function DeliveryPage() {
     }
   }
 
-  // 🔥 印刷処理
+  // 🔥 印刷
   async function printPage() {
     await markAsDelivered()
     window.print()
@@ -59,19 +59,15 @@ export default function DeliveryPage() {
   }
 
   function Sheet({ order, isCopy = false }: any) {
+    const clinic = getClinic(order.clinic_id)
     const rawItems = getItems(order.id)
 
     // 🔥 同じ商品まとめる
     const items = Object.values(
       rawItems.reduce((acc: any, item: any) => {
         const key = item.product_id
-
-        if (!acc[key]) {
-          acc[key] = { ...item }
-        } else {
-          acc[key].quantity += item.quantity
-        }
-
+        if (!acc[key]) acc[key] = { ...item }
+        else acc[key].quantity += item.quantity
         return acc
       }, {})
     )
@@ -83,18 +79,40 @@ export default function DeliveryPage() {
     return (
       <div className="sheet">
         <div className="header">
+          {/* 左：医院 */}
           <div>
             <div className="small">納品書番号：{order.delivery_number}</div>
-            <div className="clinic">{getClinicName(order.clinic_id)} 御中</div>
+
+            <div className="clinic">
+              {clinic?.name || ""} 御中
+            </div>
+
+            <div className="clinic-info">
+              {clinic?.address || ""}
+            </div>
+
+            <div className="clinic-info">
+              TEL：{clinic?.phone || ""}
+            </div>
           </div>
 
+          {/* 中央：タイトル */}
           <div className="title">
             納　品　書{isCopy ? "（控）" : ""}
           </div>
 
+          {/* 右：自社 */}
           <div className="company">
             <div>発行日：{new Date(order.created_at).toLocaleDateString()}</div>
+
             <div className="company-name">株式会社 BIODENT</div>
+
+            <div>〒454-0812</div>
+            <div>名古屋市中川区五月通2-37</div>
+            <div>黄金ステーションビル3階</div>
+
+            <div>TEL：052-526-3223</div>
+            <div>FAX：052-655-5977</div>
           </div>
         </div>
 
@@ -119,9 +137,13 @@ export default function DeliveryPage() {
                   <td className="center">{i + 1}</td>
                   <td>{product?.name || ""}</td>
                   <td className="center">{item?.quantity || ""}</td>
-                  <td className="right">{item ? formatNumber(item.price) : ""}</td>
+                  <td className="right">
+                    {item ? formatNumber(item.price) : ""}
+                  </td>
                   <td className="right bold">
-                    {item ? formatNumber(item.price * item.quantity) : ""}
+                    {item
+                      ? formatNumber(item.price * item.quantity)
+                      : ""}
                   </td>
                 </tr>
               )
@@ -154,10 +176,10 @@ export default function DeliveryPage() {
   return (
     <main className="page">
       <button className="no-print" onClick={printPage}>
-        印刷（完了すると一覧から消えます）
+        印刷（実行で納品済みになります）
       </button>
 
-      {/* 🔥 納品済みは表示しない */}
+      {/* 🔥 納品済みは非表示 */}
       {orders
         .filter((o) => o.status !== "納品済み")
         .map((order) => (
@@ -173,7 +195,11 @@ export default function DeliveryPage() {
 
       <style jsx global>{`
         body { margin: 0; }
-        .page { padding: 20px; background: #eee; }
+
+        .page {
+          padding: 20px;
+          background: #eee;
+        }
 
         .a4 {
           width: 210mm;
@@ -198,7 +224,31 @@ export default function DeliveryPage() {
           margin-bottom: 4mm;
         }
 
-        .title { font-size: 20px; font-weight: bold; }
+        .small { font-size: 9px; margin-bottom: 4mm; }
+
+        .clinic {
+          font-size: 14px;
+          font-weight: bold;
+          border-bottom: 1px solid #000;
+        }
+
+        .clinic-info {
+          font-size: 10px;
+        }
+
+        .title {
+          font-size: 20px;
+          font-weight: bold;
+          letter-spacing: 4px;
+        }
+
+        .company {
+          font-size: 10px;
+        }
+
+        .company-name {
+          font-weight: bold;
+        }
 
         .detail {
           width: 100%;
@@ -206,9 +256,11 @@ export default function DeliveryPage() {
           border: 2px solid #000;
         }
 
-        .detail th, .detail td {
+        .detail th,
+        .detail td {
           border: 1px solid #000;
           height: 5mm;
+          padding: 2px;
         }
 
         .center { text-align: center; }
