@@ -141,14 +141,31 @@ export default function OrderPage() {
     }
 
     for (const item of cart) {
-      await supabase
-        .from("products")
-        .update({
-          stock: item.stock - item.quantity,
-        })
-        .eq("id", item.id)
-    }
+  // 本部在庫を減らす
+  await supabase
+    .from("products")
+    .update({
+      stock: item.stock - item.quantity,
+    })
+    .eq("id", item.id)
 
+  // 医院在庫も減らす
+  const { data: existing } = await supabase
+    .from("clinic_inventory")
+    .select("*")
+    .eq("clinic_id", selectedClinic)
+    .eq("product_id", item.id)
+    .single()
+
+  if (existing) {
+    await supabase
+      .from("clinic_inventory")
+      .update({
+        stock: existing.stock - item.quantity,
+      })
+      .eq("id", existing.id)
+  }
+}
     alert(`注文完了\n納品書番号：${deliveryNumber}`)
     setCart([])
     fetchProducts()
