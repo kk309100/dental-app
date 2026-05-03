@@ -32,12 +32,15 @@ export default function LoginPage() {
       .eq("id", data.user.id)
       .single()
 
-    if (profile?.role === "admin") {
-      router.push("/admin")
-    } else {
-      router.push("/order")
-    }
+   if (profile?.role === "admin") {
+  router.push("/admin")
+  return
+}
 
+if (profile?.role === "clinic") {
+  router.push("/order")
+  return
+}
     setLoading(false)
   }
 
