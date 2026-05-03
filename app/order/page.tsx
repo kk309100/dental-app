@@ -103,32 +103,45 @@ export default function OrderPage() {
     const existing = cart.find((item) => item.id === product.id)
 
     if (existing) {
-      setCart(
-        cart.map((item) =>
+      setCart((prev) =>
+        prev.map((item) =>
           item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: Number(item.quantity || 0) + 1 }
             : item
         )
       )
     } else {
-      setCart([...cart, { ...product, quantity: 1 }])
+      setCart((prev) => [...prev, { ...product, quantity: 1 }])
     }
 
     setOrderComplete(false)
   }
 
-  function updateQuantity(productId: string, type: "plus" | "minus") {
+  function decreaseQuantity(productId: string) {
     setCart((prev) =>
       prev
         .map((item) => {
           if (item.id !== productId) return item
 
-          const quantity =
-            type === "plus" ? item.quantity + 1 : item.quantity - 1
-
-          return { ...item, quantity }
+          return {
+            ...item,
+            quantity: Number(item.quantity || 0) - 1,
+          }
         })
-        .filter((item) => item.quantity > 0)
+        .filter((item) => Number(item.quantity || 0) > 0)
+    )
+  }
+
+  function increaseQuantity(productId: string) {
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.id !== productId) return item
+
+        return {
+          ...item,
+          quantity: Number(item.quantity || 0) + 1,
+        }
+      })
     )
   }
 
@@ -190,7 +203,7 @@ export default function OrderPage() {
     }
 
     const totalPrice = cart.reduce(
-      (sum, item) => sum + Number(item.price || 0) * item.quantity,
+      (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
       0
     )
 
@@ -243,11 +256,14 @@ export default function OrderPage() {
   }
 
   const totalPrice = cart.reduce(
-    (sum, item) => sum + Number(item.price || 0) * item.quantity,
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
     0
   )
 
-  const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0)
+  const totalQuantity = cart.reduce(
+    (sum, item) => sum + Number(item.quantity || 0),
+    0
+  )
 
   if (loading) return <p style={{ padding: 20 }}>読み込み中...</p>
 
@@ -359,14 +375,22 @@ export default function OrderPage() {
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => updateQuantity(item.id, "minus")} style={qtyBtn}>
+          <div style={quantityBoxStyle}>
+            <button
+              type="button"
+              onClick={() => decreaseQuantity(item.id)}
+              style={qtyBtn}
+            >
               −
             </button>
 
-            <span>{item.quantity}</span>
+            <span style={quantityTextStyle}>{item.quantity}</span>
 
-            <button onClick={() => updateQuantity(item.id, "plus")} style={qtyBtn}>
+            <button
+              type="button"
+              onClick={() => increaseQuantity(item.id)}
+              style={qtyBtn}
+            >
               ＋
             </button>
           </div>
@@ -495,16 +519,31 @@ const cartItemStyle: React.CSSProperties = {
   alignItems: "center",
   padding: 10,
   borderBottom: "1px solid #eee",
+  gap: 10,
+}
+
+const quantityBoxStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  alignItems: "center",
+  flexShrink: 0,
+}
+
+const quantityTextStyle: React.CSSProperties = {
+  minWidth: 24,
+  textAlign: "center",
+  fontWeight: "bold",
 }
 
 const qtyBtn: React.CSSProperties = {
-  width: 34,
-  height: 34,
+  width: 38,
+  height: 38,
   borderRadius: 8,
   border: "1px solid #ddd",
   background: "#fff",
-  fontSize: 18,
+  fontSize: 20,
   fontWeight: "bold",
+  cursor: "pointer",
 }
 
 const bottomCartStyle: React.CSSProperties = {
