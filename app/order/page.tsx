@@ -187,6 +187,7 @@ export default function OrderPage() {
     const orderItems = cart.map((item) => ({
       order_id: order.id,
       product_id: item.id,
+      product_name: item.name,
       quantity: item.quantity,
       price: item.price,
     }))
@@ -321,9 +322,9 @@ export default function OrderPage() {
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => updateQuantity(item.id, "minus")}>−</button>
+            <button onClick={() => updateQuantity(item.id, "minus")} style={qtyBtn}>−</button>
             <span>{item.quantity}</span>
-            <button onClick={() => updateQuantity(item.id, "plus")}>＋</button>
+            <button onClick={() => updateQuantity(item.id, "plus")} style={qtyBtn}>＋</button>
           </div>
         </div>
       ))}
@@ -403,6 +404,15 @@ const cartItemStyle: React.CSSProperties = {
   alignItems: "center",
   padding: 10,
   borderBottom: "1px solid #eee",
+}
+
+const qtyBtn: React.CSSProperties = {
+  width: 32,
+  height: 32,
+  borderRadius: 6,
+  border: "1px solid #ddd",
+  background: "#fff",
+  fontWeight: "bold",
 }
 
 const bottomCartStyle: React.CSSProperties = {
