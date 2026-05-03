@@ -9,6 +9,8 @@ export default function OrderPage() {
   const router = useRouter()
 
   const [products, setProducts] = useState<any[]>([])
+  const [orders, setOrders] = useState<any[]>([])
+  const [orderItems, setOrderItems] = useState<any[]>([])
   const [cart, setCart] = useState<any[]>([])
   const [clinicId, setClinicId] = useState("")
   const [clinicName, setClinicName] = useState("")
@@ -17,6 +19,9 @@ export default function OrderPage() {
   const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
   const [orderComplete, setOrderComplete] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [showCartEdit, setShowCartEdit] = useState(false)
+  const [lastOrderId, setLastOrderId] = useState("")
 
   useEffect(() => {
     checkLogin()
@@ -55,18 +60,29 @@ export default function OrderPage() {
       .single()
 
     setClinicName(clinic?.name || "")
-    await fetchProducts()
+
+    await fetchData(profile.clinic_id)
     setLoading(false)
   }
 
-  async function fetchProducts() {
-    const { data } = await supabase
+  async function fetchData(targetClinicId: string) {
+    const { data: productsData } = await supabase
       .from("products")
       .select("*")
       .eq("is_active", true)
       .order("name", { ascending: true })
 
-    setProducts(data || [])
+    const { data: ordersData } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("clinic_id", targetClinicId)
+      .order("created_at", { ascending: false })
+
+    const { data: itemsData } = await supabase.from("order_items").select("*")
+
+    setProducts(productsData || [])
+    setOrders(ordersData || [])
+    setOrderItems(itemsData || [])
   }
 
   function normalizeText(value: any) {
@@ -99,6 +115,42 @@ export default function OrderPage() {
     })
   }, [products, search, category])
 
+  const frequentProducts = useMemo(() => {
+    const clinicOrderIds = orders.map((o) => o.id)
+
+    const countMap: Record<string, number> = {}
+
+    orderItems
+      .filter((item) => clinicOrderIds.includes(item.order_id))
+      .forEach((item) => {
+        countMap[item.product_id] =
+          (countMap[item.product_id] || 0) + Number(item.quantity || 0)
+      })
+
+    return products
+      .map((product) => ({
+        ...product,
+        used_count: countMap[product.id] || 0,
+      }))
+      .filter((product) => product.used_count > 0)
+      .sort((a, b) => b.used_count - a.used_count)
+      .slice(0, 8)
+  }, [products, orders, orderItems])
+
+  const recentProducts = useMemo(() => {
+    const clinicOrderIds = orders.slice(0, 10).map((o) => o.id)
+
+    const recentProductIds = orderItems
+      .filter((item) => clinicOrderIds.includes(item.order_id))
+      .map((item) => item.product_id)
+
+    const uniqueIds = Array.from(new Set(recentProductIds)).slice(0, 8)
+
+    return uniqueIds
+      .map((id) => products.find((p) => p.id === id))
+      .filter(Boolean)
+  }, [products, orders, orderItems])
+
   function addToCart(product: any) {
     const existing = cart.find((item) => item.id === product.id)
 
@@ -122,11 +174,7 @@ export default function OrderPage() {
       prev
         .map((item) => {
           if (item.id !== productId) return item
-
-          return {
-            ...item,
-            quantity: Number(item.quantity || 0) - 1,
-          }
+          return { ...item, quantity: Number(item.quantity || 0) - 1 }
         })
         .filter((item) => Number(item.quantity || 0) > 0)
     )
@@ -136,13 +184,13 @@ export default function OrderPage() {
     setCart((prev) =>
       prev.map((item) => {
         if (item.id !== productId) return item
-
-        return {
-          ...item,
-          quantity: Number(item.quantity || 0) + 1,
-        }
+        return { ...item, quantity: Number(item.quantity || 0) + 1 }
       })
     )
+  }
+
+  function removeFromCart(productId: string) {
+    setCart((prev) => prev.filter((item) => item.id !== productId))
   }
 
   async function startScan() {
@@ -228,7 +276,7 @@ export default function OrderPage() {
       return
     }
 
-    const orderItems = cart.map((item) => ({
+    const orderItemsData = cart.map((item) => ({
       order_id: order.id,
       product_id: item.id,
       product_name: item.name,
@@ -238,7 +286,7 @@ export default function OrderPage() {
 
     const { error: itemError } = await supabase
       .from("order_items")
-      .insert(orderItems)
+      .insert(orderItemsData)
 
     if (itemError) {
       console.error(itemError)
@@ -246,8 +294,12 @@ export default function OrderPage() {
       return
     }
 
+    setLastOrderId(order.id)
     setCart([])
+    setShowConfirm(false)
+    setShowCartEdit(false)
     setOrderComplete(true)
+    await fetchData(clinicId)
   }
 
   async function logout() {
@@ -268,7 +320,7 @@ export default function OrderPage() {
   if (loading) return <p style={{ padding: 20 }}>読み込み中...</p>
 
   return (
-    <main style={{ maxWidth: 560, margin: "0 auto", padding: 16, paddingBottom: 170 }}>
+    <main style={pageStyle}>
       <button onClick={logout} style={logoutButton}>
         ログアウト
       </button>
@@ -288,17 +340,17 @@ export default function OrderPage() {
           style={inputStyle}
         />
 
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          style={inputStyle}
-        >
+        <div style={categoryScroll}>
           {categories.map((c: any) => (
-            <option key={c} value={c}>
+            <button
+              key={c}
+              onClick={() => setCategory(c)}
+              style={category === c ? activeCategoryButton : categoryButton}
+            >
               {c}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
 
         <button onClick={startScan} style={scanButtonStyle}>
           📷 バーコードで追加
@@ -310,28 +362,57 @@ export default function OrderPage() {
               🛒 {totalQuantity}点 / 税抜 {totalPrice.toLocaleString()}円
             </p>
 
-            <button onClick={submitOrder} style={submitButtonStyle}>
-              注文確定
-            </button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <button onClick={() => setShowCartEdit(true)} style={subButtonStyle}>
+                カート編集
+              </button>
+              <button onClick={() => setShowConfirm(true)} style={submitButtonStyle}>
+                注文確認
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {scanning && (
-        <div id="reader" style={{ width: "100%", marginBottom: 16 }} />
-      )}
+      {scanning && <div id="reader" style={{ width: "100%", marginBottom: 16 }} />}
 
       {orderComplete && (
         <div style={completeStyle}>
           <p style={{ fontWeight: "bold" }}>注文が完了しました</p>
 
           <button
-            onClick={() => router.push("/history")}
+            onClick={() => router.push(`/order-edit/${lastOrderId}`)}
             style={submitButtonStyle}
           >
+            注文内容を修正
+          </button>
+
+          <button onClick={() => router.push("/history")} style={submitButtonStyle}>
             注文履歴へ
           </button>
         </div>
+      )}
+
+      {frequentProducts.length > 0 && (
+        <>
+          <h2>よく使う商品</h2>
+          <div style={horizontalList}>
+            {frequentProducts.map((product) => (
+              <MiniProductCard key={product.id} product={product} onAdd={addToCart} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {recentProducts.length > 0 && (
+        <>
+          <h2>最近注文した商品</h2>
+          <div style={horizontalList}>
+            {recentProducts.map((product: any) => (
+              <MiniProductCard key={product.id} product={product} onAdd={addToCart} />
+            ))}
+          </div>
+        </>
       )}
 
       <h2>商品一覧</h2>
@@ -339,24 +420,21 @@ export default function OrderPage() {
       {filteredProducts.map((product) => (
         <div key={product.id} style={cardStyle}>
           {product.image_url ? (
-            <img
-              src={product.image_url}
-              alt={product.name}
-              style={imageStyle}
-            />
+            <img src={product.image_url} alt={product.name} style={imageStyle} />
           ) : (
             <div style={noImageStyle}>NO IMAGE</div>
           )}
 
-          <p style={{ fontWeight: "bold", marginBottom: 6 }}>{product.name}</p>
-          <p style={smallText}>商品コード：{product.product_code || "-"}</p>
-          <p style={smallText}>メーカー：{product.manufacturer || "-"}</p>
-          <p style={priceText}>税抜：{Number(product.price || 0).toLocaleString()}円</p>
+          <div>
+            <p style={productNameStyle}>{product.name}</p>
+            <p style={smallText}>商品コード：{product.product_code || "-"}</p>
+            <p style={smallText}>メーカー：{product.manufacturer || "-"}</p>
+            <p style={priceText}>
+              税抜：{Number(product.price || 0).toLocaleString()}円
+            </p>
+          </div>
 
-          <button
-            onClick={() => addToCart(product)}
-            style={addButtonStyle}
-          >
+          <button onClick={() => addToCart(product)} style={addButtonStyle}>
             ＋ カートに追加
           </button>
         </div>
@@ -367,34 +445,13 @@ export default function OrderPage() {
       {cart.length === 0 && <p>カートは空です</p>}
 
       {cart.map((item) => (
-        <div key={item.id} style={cartItemStyle}>
-          <div>
-            <p style={{ margin: 0, fontWeight: "bold" }}>{item.name}</p>
-            <p style={{ margin: 0, fontSize: 12 }}>
-              税抜：{Number(item.price || 0).toLocaleString()}円
-            </p>
-          </div>
-
-          <div style={quantityBoxStyle}>
-            <button
-              type="button"
-              onClick={() => decreaseQuantity(item.id)}
-              style={qtyBtn}
-            >
-              −
-            </button>
-
-            <span style={quantityTextStyle}>{item.quantity}</span>
-
-            <button
-              type="button"
-              onClick={() => increaseQuantity(item.id)}
-              style={qtyBtn}
-            >
-              ＋
-            </button>
-          </div>
-        </div>
+        <CartItem
+          key={item.id}
+          item={item}
+          onMinus={decreaseQuantity}
+          onPlus={increaseQuantity}
+          onRemove={removeFromCart}
+        />
       ))}
 
       {cart.length > 0 && (
@@ -403,13 +460,132 @@ export default function OrderPage() {
             🛒 {totalQuantity}点 / 税抜 {totalPrice.toLocaleString()}円
           </p>
 
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <button onClick={() => setShowCartEdit(true)} style={subButtonStyle}>
+              カート編集
+            </button>
+            <button onClick={() => setShowConfirm(true)} style={submitButtonStyle}>
+              注文確認
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showCartEdit && (
+        <Modal>
+          <h2>カート編集</h2>
+
+          {cart.map((item) => (
+            <CartItem
+              key={item.id}
+              item={item}
+              onMinus={decreaseQuantity}
+              onPlus={increaseQuantity}
+              onRemove={removeFromCart}
+            />
+          ))}
+
+          <button onClick={() => setShowCartEdit(false)} style={submitButtonStyle}>
+            戻る
+          </button>
+        </Modal>
+      )}
+
+      {showConfirm && (
+        <Modal>
+          <h2>注文確認</h2>
+
+          <p>医院：{clinicName}</p>
+
+          {cart.map((item) => (
+            <div key={item.id} style={confirmItemStyle}>
+              <strong>{item.name}</strong>
+              <p style={{ margin: "4px 0" }}>
+                {item.quantity}個 × 税抜 {Number(item.price || 0).toLocaleString()}円
+              </p>
+              <p style={{ margin: 0 }}>
+                小計：税抜{" "}
+                {(Number(item.price || 0) * Number(item.quantity || 0)).toLocaleString()}円
+              </p>
+            </div>
+          ))}
+
+          <p style={{ fontWeight: "bold", fontSize: 18 }}>
+            合計：税抜 {totalPrice.toLocaleString()}円
+          </p>
+
           <button onClick={submitOrder} style={submitButtonStyle}>
             注文確定
           </button>
-        </div>
+
+          <button onClick={() => setShowConfirm(false)} style={subButtonStyle}>
+            戻る
+          </button>
+        </Modal>
       )}
     </main>
   )
+}
+
+function MiniProductCard({ product, onAdd }: any) {
+  return (
+    <div style={miniCardStyle}>
+      {product.image_url ? (
+        <img src={product.image_url} alt={product.name} style={miniImageStyle} />
+      ) : (
+        <div style={miniNoImageStyle}>NO IMAGE</div>
+      )}
+      <p style={{ fontWeight: "bold", fontSize: 12 }}>{product.name}</p>
+      <p style={{ fontSize: 12 }}>税抜 {Number(product.price || 0).toLocaleString()}円</p>
+      <button onClick={() => onAdd(product)} style={miniAddButtonStyle}>
+        ＋
+      </button>
+    </div>
+  )
+}
+
+function CartItem({ item, onMinus, onPlus, onRemove }: any) {
+  return (
+    <div style={cartItemStyle}>
+      <div>
+        <p style={{ margin: 0, fontWeight: "bold" }}>{item.name}</p>
+        <p style={{ margin: 0, fontSize: 12 }}>
+          税抜：{Number(item.price || 0).toLocaleString()}円
+        </p>
+      </div>
+
+      <div style={quantityBoxStyle}>
+        <button type="button" onClick={() => onMinus(item.id)} style={qtyBtn}>
+          −
+        </button>
+
+        <span style={quantityTextStyle}>{item.quantity}</span>
+
+        <button type="button" onClick={() => onPlus(item.id)} style={qtyBtn}>
+          ＋
+        </button>
+
+        <button type="button" onClick={() => onRemove(item.id)} style={removeBtn}>
+          削除
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function Modal({ children }: any) {
+  return (
+    <div style={modalBgStyle}>
+      <div style={modalStyle}>{children}</div>
+    </div>
+  )
+}
+
+const pageStyle: React.CSSProperties = {
+  maxWidth: 560,
+  margin: "0 auto",
+  padding: 16,
+  paddingBottom: 180,
 }
 
 const logoutButton: React.CSSProperties = {
@@ -446,6 +622,28 @@ const inputStyle: React.CSSProperties = {
   boxSizing: "border-box",
 }
 
+const categoryScroll: React.CSSProperties = {
+  display: "flex",
+  overflowX: "auto",
+  gap: 8,
+  marginBottom: 10,
+  paddingBottom: 4,
+}
+
+const categoryButton: React.CSSProperties = {
+  whiteSpace: "nowrap",
+  padding: "8px 12px",
+  borderRadius: 999,
+  border: "1px solid #ddd",
+  background: "#fff",
+}
+
+const activeCategoryButton: React.CSSProperties = {
+  ...categoryButton,
+  background: "#111",
+  color: "#fff",
+}
+
 const scanButtonStyle: React.CSSProperties = {
   width: "100%",
   padding: 14,
@@ -464,9 +662,51 @@ const topCartStyle: React.CSSProperties = {
   padding: 12,
 }
 
+const horizontalList: React.CSSProperties = {
+  display: "flex",
+  overflowX: "auto",
+  gap: 10,
+  paddingBottom: 8,
+}
+
+const miniCardStyle: React.CSSProperties = {
+  minWidth: 140,
+  background: "#fff",
+  border: "1px solid #eee",
+  borderRadius: 12,
+  padding: 10,
+}
+
+const miniImageStyle: React.CSSProperties = {
+  width: "100%",
+  height: 70,
+  objectFit: "cover",
+  borderRadius: 8,
+}
+
+const miniNoImageStyle: React.CSSProperties = {
+  height: 70,
+  borderRadius: 8,
+  background: "#f1f5f9",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#94a3b8",
+  fontSize: 11,
+}
+
+const miniAddButtonStyle: React.CSSProperties = {
+  width: "100%",
+  padding: 8,
+  borderRadius: 8,
+  border: "none",
+  background: "#111",
+  color: "#fff",
+}
+
 const cardStyle: React.CSSProperties = {
   background: "#fff",
-  borderRadius: 12,
+  borderRadius: 14,
   padding: 14,
   marginBottom: 12,
   boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
@@ -482,7 +722,7 @@ const imageStyle: React.CSSProperties = {
 }
 
 const noImageStyle: React.CSSProperties = {
-  height: 80,
+  height: 70,
   borderRadius: 8,
   marginBottom: 8,
   background: "#f1f5f9",
@@ -491,6 +731,12 @@ const noImageStyle: React.CSSProperties = {
   justifyContent: "center",
   color: "#94a3b8",
   fontSize: 12,
+}
+
+const productNameStyle: React.CSSProperties = {
+  fontWeight: "bold",
+  marginBottom: 6,
+  fontSize: 15,
 }
 
 const smallText: React.CSSProperties = {
@@ -506,8 +752,8 @@ const priceText: React.CSSProperties = {
 
 const addButtonStyle: React.CSSProperties = {
   width: "100%",
-  padding: 10,
-  borderRadius: 8,
+  padding: 11,
+  borderRadius: 10,
   background: "#111",
   color: "#fff",
   border: "none",
@@ -524,7 +770,7 @@ const cartItemStyle: React.CSSProperties = {
 
 const quantityBoxStyle: React.CSSProperties = {
   display: "flex",
-  gap: 10,
+  gap: 8,
   alignItems: "center",
   flexShrink: 0,
 }
@@ -544,6 +790,14 @@ const qtyBtn: React.CSSProperties = {
   fontSize: 20,
   fontWeight: "bold",
   cursor: "pointer",
+}
+
+const removeBtn: React.CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 8,
+  border: "1px solid #ef4444",
+  background: "#fff",
+  color: "#ef4444",
 }
 
 const bottomCartStyle: React.CSSProperties = {
@@ -569,10 +823,44 @@ const submitButtonStyle: React.CSSProperties = {
   fontWeight: "bold",
 }
 
+const subButtonStyle: React.CSSProperties = {
+  width: "100%",
+  padding: 14,
+  marginTop: 8,
+  borderRadius: 10,
+  background: "#fff",
+  color: "#111",
+  border: "1px solid #ddd",
+  fontSize: 16,
+  fontWeight: "bold",
+}
+
 const completeStyle: React.CSSProperties = {
   background: "#ecfdf5",
   border: "1px solid #10b981",
   borderRadius: 12,
   padding: 14,
   marginBottom: 16,
+}
+
+const modalBgStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.35)",
+  zIndex: 50,
+  padding: 16,
+  overflowY: "auto",
+}
+
+const modalStyle: React.CSSProperties = {
+  maxWidth: 520,
+  margin: "40px auto",
+  background: "#fff",
+  borderRadius: 14,
+  padding: 16,
+}
+
+const confirmItemStyle: React.CSSProperties = {
+  borderBottom: "1px solid #eee",
+  padding: "10px 0",
 }
