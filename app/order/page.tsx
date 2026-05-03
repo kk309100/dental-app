@@ -2,23 +2,34 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import { useRouter } from "next/navigation"
 
-export default function HistoryPage() {
-  const [clinics, setClinics] = useState<any[]>([])
-  const [selectedClinic, setSelectedClinic] = useState("")
-  const [orders, setOrders] = useState<any[]>([])
-  const [orderItems, setOrderItems] = useState<any[]>([])
+export default function OrderPage() {
+  const router = useRouter()
+
   const [products, setProducts] = useState<any[]>([])
+  const [cart, setCart] = useState<any[]>([])
+  const [clinics, setClinics] = useState<any[]>([])
+  const [clinicInventory, setClinicInventory] = useState<any[]>([])
+  const [selectedClinic, setSelectedClinic] = useState("")
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchClinics()
-    fetchProducts()
-    fetchOrderItems()
+    checkUser()
   }, [])
 
-  async function fetchClinics() {
-    const { data } = await supabase.from("clinics").select("*")
-    setClinics(data || [])
+  async function checkUser() {
+    const { data } = await supabase.auth.getUser()
+
+    if (!data.user) {
+      router.push("/login")
+      return
+    }
+
+    await fetchProducts()
+    await fetchClinics()
+    await fetchClinicInventory()
+    setLoading(false)
   }
 
   async function fetchProducts() {
@@ -26,99 +37,248 @@ export default function HistoryPage() {
     setProducts(data || [])
   }
 
-  async function fetchOrderItems() {
-    const { data } = await supabase.from("order_items").select("*")
-    setOrderItems(data || [])
+  async function fetchClinics() {
+    const { data } = await supabase.from("clinics").select("*")
+    setClinics(data || [])
   }
 
-  async function fetchOrdersByClinic(clinicId: string) {
-    setSelectedClinic(clinicId)
+  async function fetchClinicInventory() {
+    const { data } = await supabase.from("clinic_inventory").select("*")
+    setClinicInventory(data || [])
+  }
 
-    if (!clinicId) {
-      setOrders([])
+  function getClinicStock(productId: string) {
+    const item = clinicInventory.find(
+      (i) => i.clinic_id === selectedClinic && i.product_id === productId
+    )
+    return item ? item.stock : 0
+  }
+
+  function getCartQuantity(productId: string) {
+    const item = cart.find((i) => i.id === productId)
+    return item ? item.quantity : 0
+  }
+
+  async function generateDeliveryNumber() {
+    const today = new Date()
+    const y = today.getFullYear()
+    const m = String(today.getMonth() + 1).padStart(2, "0")
+    const d = String(today.getDate()).padStart(2, "0")
+    const dateStr = `${y}${m}${d}`
+
+    const { data } = await supabase
+      .from("orders")
+      .select("id")
+      .gte("created_at", `${y}-${m}-${d}T00:00:00`)
+      .lte("created_at", `${y}-${m}-${d}T23:59:59`)
+
+    const count = (data?.length || 0) + 1
+    const seq = String(count).padStart(4, "0")
+
+    return `DN-${dateStr}-${seq}`
+  }
+
+  function addToCart(product: any) {
+    if (!selectedClinic) {
+      alert("先に医院を選択してください")
       return
     }
 
-    const { data, error } = await supabase
+    const clinicStock = getClinicStock(product.id)
+    const currentQuantity = getCartQuantity(product.id)
+
+    if (clinicStock <= 0) {
+      alert("医院在庫がありません")
+      return
+    }
+
+    if (currentQuantity >= clinicStock) {
+      alert("在庫を超えています")
+      return
+    }
+
+    const existing = cart.find((item) => item.id === product.id)
+
+    if (existing) {
+      setCart(
+        cart.map((item) =>
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        )
+      )
+    } else {
+      setCart([...cart, { ...product, quantity: 1 }])
+    }
+  }
+
+  function updateQuantity(productId: string, type: "plus" | "minus") {
+    setCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.id !== productId) return item
+
+          if (type === "plus") {
+            const clinicStock = getClinicStock(productId)
+
+            if (item.quantity >= clinicStock) {
+              alert("在庫を超えています")
+              return item
+            }
+
+            return { ...item, quantity: item.quantity + 1 }
+          }
+
+          return { ...item, quantity: item.quantity - 1 }
+        })
+        .filter((item) => item.quantity > 0)
+    )
+  }
+
+  async function submitOrder() {
+    if (!selectedClinic) {
+      alert("医院を選択してください")
+      return
+    }
+
+    if (cart.length === 0) {
+      alert("カートが空です")
+      return
+    }
+
+    for (const item of cart) {
+      const stock = getClinicStock(item.id)
+      if (item.quantity > stock) {
+        alert(`${item.name} の在庫不足`)
+        return
+      }
+    }
+
+    const totalPrice = cart.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    )
+
+    const deliveryNumber = await generateDeliveryNumber()
+
+    const { data: order, error } = await supabase
       .from("orders")
-      .select("*")
-      .eq("clinic_id", clinicId)
-      .order("created_at", { ascending: false })
+      .insert([
+        {
+          clinic_id: selectedClinic,
+          status: "注文受付",
+          total_price: totalPrice,
+          delivery_number: deliveryNumber,
+        },
+      ])
+      .select()
+      .single()
 
     if (error) {
-      console.error(error)
-      alert("注文履歴の取得でエラー")
+      alert("注文エラー")
       return
     }
 
-    setOrders(data || [])
+    const orderItems = cart.map((item) => ({
+      order_id: order.id,
+      product_id: item.id,
+      quantity: item.quantity,
+      price: item.price,
+    }))
+
+    await supabase.from("order_items").insert(orderItems)
+
+    // 在庫減算
+    for (const item of cart) {
+      await supabase
+        .from("products")
+        .update({ stock: item.stock - item.quantity })
+        .eq("id", item.id)
+
+      const existing = clinicInventory.find(
+        (i) => i.clinic_id === selectedClinic && i.product_id === item.id
+      )
+
+      if (existing) {
+        await supabase
+          .from("clinic_inventory")
+          .update({
+            stock: existing.stock - item.quantity,
+          })
+          .eq("id", existing.id)
+      }
+    }
+
+    alert(`注文完了\n${deliveryNumber}`)
+
+    // 🔥 ここが重要（遷移防止）
+    setCart([])
+    setTimeout(() => {
+      window.location.reload()
+    }, 300)
   }
 
-  function getProductName(productId: string) {
-    const product = products.find((p) => p.id === productId)
-    return product ? product.name : "不明"
+  async function logout() {
+    await supabase.auth.signOut()
+    router.push("/login")
   }
 
-  function getItems(orderId: string) {
-    return orderItems.filter((item) => item.order_id === orderId)
-  }
+  if (loading) return <p>読み込み中...</p>
+
+  const totalPrice = cart.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  )
 
   return (
-    <main style={{ maxWidth: 480, margin: "0 auto", padding: 20 }}>
-      <h1>注文履歴</h1>
+    <main style={{ maxWidth: 480, margin: "0 auto", padding: 16 }}>
+      <button onClick={logout}>ログアウト</button>
+
+      <h1>注文</h1>
 
       <select
         value={selectedClinic}
-        onChange={(e) => fetchOrdersByClinic(e.target.value)}
-        style={{
-          width: "100%",
-          padding: 12,
-          marginBottom: 16,
-          borderRadius: 10,
-          border: "1px solid #ddd",
-        }}
+        onChange={(e) => setSelectedClinic(e.target.value)}
       >
-        <option value="">医院を選択してください</option>
-        {clinics.map((clinic) => (
-          <option key={clinic.id} value={clinic.id}>
-            {clinic.name}
+        <option value="">医院を選択</option>
+        {clinics.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
           </option>
         ))}
       </select>
 
-      {!selectedClinic && <p>医院を選択すると注文履歴が表示されます。</p>}
+      <h2>商品</h2>
 
-      {selectedClinic && orders.length === 0 && (
-        <p>この医院の注文履歴はありません。</p>
-      )}
+      {products.map((p) => {
+        const stock = getClinicStock(p.id)
+        const low = stock <= (p.reorder_level ?? 10)
 
-      {orders.map((order) => (
-        <div
-          key={order.id}
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            padding: 14,
-            marginBottom: 12,
-            background: "#fff",
-          }}
-        >
-          <p>注文日時：{order.created_at}</p>
-          <p>ステータス：{order.status}</p>
-          <p>金額：{order.total_price}円</p>
+        return (
+          <div key={p.id} style={{ border: low ? "2px solid red" : "1px solid #ddd", marginBottom: 10 }}>
+            <p>{p.name}</p>
+            <p>在庫：{stock}</p>
 
-          <h3>明細</h3>
+            <button disabled={stock <= 0} onClick={() => addToCart(p)}>
+              {stock <= 0 ? "在庫なし" : "追加"}
+            </button>
+          </div>
+        )
+      })}
 
-          {getItems(order.id).map((item) => (
-            <div key={item.id}>
-              <p>
-                {getProductName(item.product_id)} × {item.quantity}
-              </p>
-              <p>小計：{item.price * item.quantity}円</p>
-            </div>
-          ))}
+      <h2>カート</h2>
+
+      {cart.map((item) => (
+        <div key={item.id}>
+          {item.name} × {item.quantity}
         </div>
       ))}
+
+      {cart.length > 0 && (
+        <button onClick={submitOrder}>
+          注文確定（{totalPrice}円）
+        </button>
+      )}
     </main>
   )
 }
