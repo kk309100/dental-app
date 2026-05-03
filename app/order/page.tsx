@@ -69,6 +69,13 @@ export default function OrderPage() {
     setProducts(data || [])
   }
 
+  function normalizeText(value: any) {
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFKC")
+      .replace(/\s+/g, "")
+  }
+
   const categories = useMemo(() => {
     const list = products
       .map((p) => p.category)
@@ -78,18 +85,15 @@ export default function OrderPage() {
   }, [products])
 
   const filteredProducts = useMemo(() => {
+    const keyword = normalizeText(search)
+
     return products.filter((p) => {
-      const keyword = search.toLowerCase()
+      const target = normalizeText(
+        `${p.name || ""} ${p.product_code || ""} ${p.manufacturer || ""} ${p.barcode || ""}`
+      )
 
-      const matchSearch =
-        !keyword ||
-        String(p.name || "").toLowerCase().includes(keyword) ||
-        String(p.product_code || "").toLowerCase().includes(keyword) ||
-        String(p.manufacturer || "").toLowerCase().includes(keyword) ||
-        String(p.barcode || "").toLowerCase().includes(keyword)
-
-      const matchCategory =
-        category === "すべて" || p.category === category
+      const matchSearch = !keyword || target.includes(keyword)
+      const matchCategory = category === "すべて" || p.category === category
 
       return matchSearch && matchCategory
     })
@@ -141,7 +145,9 @@ export default function OrderPage() {
         setScanning(false)
 
         const product = products.find(
-          (p) => String(p.barcode) === decodedText
+          (p) =>
+            String(p.barcode || "") === decodedText ||
+            String(p.product_code || "") === decodedText
         )
 
         if (!product) {
@@ -241,15 +247,12 @@ export default function OrderPage() {
     0
   )
 
-  const totalQuantity = cart.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  )
+  const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0)
 
   if (loading) return <p style={{ padding: 20 }}>読み込み中...</p>
 
   return (
-    <main style={{ maxWidth: 520, margin: "0 auto", padding: 16, paddingBottom: 150 }}>
+    <main style={{ maxWidth: 560, margin: "0 auto", padding: 16, paddingBottom: 170 }}>
       <button onClick={logout} style={logoutButton}>
         ログアウト
       </button>
@@ -288,7 +291,7 @@ export default function OrderPage() {
         {cart.length > 0 && (
           <div style={topCartStyle}>
             <p style={{ margin: 0, fontWeight: "bold" }}>
-              🛒 {totalQuantity}点 / {totalPrice}円
+              🛒 {totalQuantity}点 / 税抜 {totalPrice.toLocaleString()}円
             </p>
 
             <button onClick={submitOrder} style={submitButtonStyle}>
@@ -319,18 +322,20 @@ export default function OrderPage() {
 
       {filteredProducts.map((product) => (
         <div key={product.id} style={cardStyle}>
-          {product.image_url && (
+          {product.image_url ? (
             <img
               src={product.image_url}
               alt={product.name}
               style={imageStyle}
             />
+          ) : (
+            <div style={noImageStyle}>NO IMAGE</div>
           )}
 
-          <p style={{ fontWeight: "bold" }}>{product.name}</p>
-          <p>商品コード：{product.product_code || "-"}</p>
-          <p>メーカー：{product.manufacturer || "-"}</p>
-          <p>価格：{product.price || 0}円</p>
+          <p style={{ fontWeight: "bold", marginBottom: 6 }}>{product.name}</p>
+          <p style={smallText}>商品コード：{product.product_code || "-"}</p>
+          <p style={smallText}>メーカー：{product.manufacturer || "-"}</p>
+          <p style={priceText}>税抜：{Number(product.price || 0).toLocaleString()}円</p>
 
           <button
             onClick={() => addToCart(product)}
@@ -348,8 +353,10 @@ export default function OrderPage() {
       {cart.map((item) => (
         <div key={item.id} style={cartItemStyle}>
           <div>
-            <p style={{ margin: 0 }}>{item.name}</p>
-            <p style={{ margin: 0, fontSize: 12 }}>{item.price}円</p>
+            <p style={{ margin: 0, fontWeight: "bold" }}>{item.name}</p>
+            <p style={{ margin: 0, fontSize: 12 }}>
+              税抜：{Number(item.price || 0).toLocaleString()}円
+            </p>
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -369,7 +376,7 @@ export default function OrderPage() {
       {cart.length > 0 && (
         <div style={bottomCartStyle}>
           <p style={{ margin: 0, fontWeight: "bold" }}>
-            🛒 {totalQuantity}点 / {totalPrice}円
+            🛒 {totalQuantity}点 / 税抜 {totalPrice.toLocaleString()}円
           </p>
 
           <button onClick={submitOrder} style={submitButtonStyle}>
@@ -444,10 +451,33 @@ const cardStyle: React.CSSProperties = {
 
 const imageStyle: React.CSSProperties = {
   width: "100%",
-  height: 120,
+  height: 130,
   objectFit: "cover",
   borderRadius: 8,
   marginBottom: 8,
+}
+
+const noImageStyle: React.CSSProperties = {
+  height: 80,
+  borderRadius: 8,
+  marginBottom: 8,
+  background: "#f1f5f9",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#94a3b8",
+  fontSize: 12,
+}
+
+const smallText: React.CSSProperties = {
+  margin: "2px 0",
+  fontSize: 12,
+  color: "#555",
+}
+
+const priceText: React.CSSProperties = {
+  margin: "6px 0",
+  fontWeight: "bold",
 }
 
 const addButtonStyle: React.CSSProperties = {
