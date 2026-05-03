@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 
@@ -8,9 +8,13 @@ export default function OrderPage() {
   const router = useRouter()
 
   const [products, setProducts] = useState<any[]>([])
-  const [cart, setCart] = useState<any[]>([])
   const [clinics, setClinics] = useState<any[]>([])
+  const [clinicInventory, setClinicInventory] = useState<any[]>([])
+  const [orderItems, setOrderItems] = useState<any[]>([])
+  const [cart, setCart] = useState<any[]>([])
   const [selectedClinic, setSelectedClinic] = useState("")
+  const [search, setSearch] = useState("")
+  const [category, setCategory] = useState("すべて")
   const [loading, setLoading] = useState(true)
   const [orderComplete, setOrderComplete] = useState(false)
 
@@ -19,13 +23,92 @@ export default function OrderPage() {
   }, [])
 
   async function fetchData() {
-    const { data: productsData } = await supabase.from("products").select("*")
-    const { data: clinicsData } = await supabase.from("clinics").select("*")
+    const { data: productsData } = await supabase
+      .from("products")
+      .select("*")
+      .eq("is_active", true)
+      .order("name", { ascending: true })
+
+    const { data: clinicsData } = await supabase
+      .from("clinics")
+      .select("*")
+      .order("name", { ascending: true })
+
+    const { data: inventoryData } = await supabase
+      .from("clinic_inventory")
+      .select("*")
+
+    const { data: orderItemsData } = await supabase
+      .from("order_items")
+      .select("*")
 
     setProducts(productsData || [])
     setClinics(clinicsData || [])
+    setClinicInventory(inventoryData || [])
+    setOrderItems(orderItemsData || [])
     setLoading(false)
   }
+
+  function getClinicStock(productId: string) {
+    const item = clinicInventory.find(
+      (i) => i.clinic_id === selectedClinic && i.product_id === productId
+    )
+
+    return item ? Number(item.stock || 0) : 0
+  }
+
+  function getDisplayStock(product: any) {
+    if (selectedClinic) return getClinicStock(product.id)
+    return Number(product.stock || 0)
+  }
+
+  function getCartQuantity(productId: string) {
+    const item = cart.find((i) => i.id === productId)
+    return item ? item.quantity : 0
+  }
+
+  const categories = useMemo(() => {
+    const list = products
+      .map((p) => p.category)
+      .filter((c) => c && String(c).trim() !== "")
+
+    return ["すべて", ...Array.from(new Set(list))]
+  }, [products])
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const keyword = search.toLowerCase()
+
+      const matchesSearch =
+        !keyword ||
+        String(product.name || "").toLowerCase().includes(keyword) ||
+        String(product.product_code || "").toLowerCase().includes(keyword) ||
+        String(product.manufacturer || "").toLowerCase().includes(keyword)
+
+      const matchesCategory =
+        category === "すべて" || product.category === category
+
+      return matchesSearch && matchesCategory
+    })
+  }, [products, search, category])
+
+  const favoriteProducts = useMemo(() => {
+    const countMap: any = {}
+
+    orderItems.forEach((item) => {
+      countMap[item.product_id] =
+        (countMap[item.product_id] || 0) + Number(item.quantity || 0)
+    })
+
+    return products
+      .map((product) => ({
+        ...product,
+        ordered_count: countMap[product.id] || 0,
+      }))
+      .filter((product) => product.ordered_count > 0)
+      .sort((a, b) => b.ordered_count - a.ordered_count)
+      .slice(0, 10)
+  }, [products, orderItems])
 
   async function generateDeliveryNumber() {
     const now = new Date()
@@ -41,10 +124,29 @@ export default function OrderPage() {
       .lte("created_at", `${y}-${m}-${d}T23:59:59`)
 
     const count = (data?.length || 0) + 1
+
     return `DN-${dateStr}-${String(count).padStart(4, "0")}`
   }
 
   function addToCart(product: any) {
+    if (!selectedClinic) {
+      alert("医院を選択してください")
+      return
+    }
+
+    const stock = getClinicStock(product.id)
+    const currentQuantity = getCartQuantity(product.id)
+
+    if (stock <= 0) {
+      alert("医院在庫がありません")
+      return
+    }
+
+    if (currentQuantity >= stock) {
+      alert("医院在庫数を超えています")
+      return
+    }
+
     const existing = cart.find((item) => item.id === product.id)
 
     if (existing) {
@@ -68,10 +170,18 @@ export default function OrderPage() {
         .map((item) => {
           if (item.id !== productId) return item
 
-          const quantity =
-            type === "plus" ? item.quantity + 1 : item.quantity - 1
+          if (type === "plus") {
+            const stock = getClinicStock(productId)
 
-          return { ...item, quantity }
+            if (item.quantity >= stock) {
+              alert("医院在庫数を超えています")
+              return item
+            }
+
+            return { ...item, quantity: item.quantity + 1 }
+          }
+
+          return { ...item, quantity: item.quantity - 1 }
         })
         .filter((item) => item.quantity > 0)
     )
@@ -88,8 +198,17 @@ export default function OrderPage() {
       return
     }
 
+    for (const item of cart) {
+      const stock = getClinicStock(item.id)
+
+      if (item.quantity > stock) {
+        alert(`${item.name} の医院在庫が不足しています`)
+        return
+      }
+    }
+
     const totalPrice = cart.reduce(
-      (sum, item) => sum + Number(item.price || 0) * item.quantity,
+      (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
       0
     )
 
@@ -114,7 +233,7 @@ export default function OrderPage() {
       return
     }
 
-    const orderItems = cart.map((item) => ({
+    const items = cart.map((item) => ({
       order_id: order.id,
       product_id: item.id,
       quantity: item.quantity,
@@ -123,7 +242,7 @@ export default function OrderPage() {
 
     const { error: itemError } = await supabase
       .from("order_items")
-      .insert(orderItems)
+      .insert(items)
 
     if (itemError) {
       console.error(itemError)
@@ -132,9 +251,24 @@ export default function OrderPage() {
     }
 
     for (const item of cart) {
+      const existing = clinicInventory.find(
+        (i) => i.clinic_id === selectedClinic && i.product_id === item.id
+      )
+
+      if (existing) {
+        await supabase
+          .from("clinic_inventory")
+          .update({
+            stock: Number(existing.stock || 0) - item.quantity,
+          })
+          .eq("id", existing.id)
+      }
+
       await supabase
         .from("products")
-        .update({ stock: Number(item.stock || 0) - item.quantity })
+        .update({
+          stock: Number(item.stock || 0) - item.quantity,
+        })
         .eq("id", item.id)
     }
 
@@ -144,7 +278,7 @@ export default function OrderPage() {
   }
 
   const totalPrice = cart.reduce(
-    (sum, item) => sum + Number(item.price || 0) * item.quantity,
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
     0
   )
 
@@ -153,19 +287,17 @@ export default function OrderPage() {
   }
 
   return (
-    <main style={{ maxWidth: 480, margin: "0 auto", padding: 16, paddingBottom: 160 }}>
-      <h1 style={{ fontSize: 24, marginBottom: 16 }}>注文</h1>
+    <main style={{ maxWidth: 520, margin: "0 auto", padding: 16, paddingBottom: 160 }}>
+      <h1>注文</h1>
 
       <select
         value={selectedClinic}
-        onChange={(e) => setSelectedClinic(e.target.value)}
-        style={{
-          width: "100%",
-          padding: 12,
-          marginBottom: 16,
-          borderRadius: 10,
-          border: "1px solid #ddd",
+        onChange={(e) => {
+          setSelectedClinic(e.target.value)
+          setCart([])
+          setOrderComplete(false)
         }}
+        style={inputStyle}
       >
         <option value="">医院を選択</option>
         {clinics.map((clinic) => (
@@ -175,60 +307,93 @@ export default function OrderPage() {
         ))}
       </select>
 
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="商品名・商品コード・メーカーで検索"
+        style={inputStyle}
+      />
+
+      <select
+        value={category}
+        onChange={(e) => setCategory(e.target.value)}
+        style={inputStyle}
+      >
+        {categories.map((c: any) => (
+          <option key={c} value={c}>
+            {c}
+          </option>
+        ))}
+      </select>
+
+      {favoriteProducts.length > 0 && (
+        <>
+          <h2>よく使う商品</h2>
+
+          {favoriteProducts.map((product) => {
+            const stock = getDisplayStock(product)
+            const isLow = selectedClinic && stock <= (product.reorder_level ?? 10)
+
+            return (
+              <div key={product.id} style={cardStyle(isLow)}>
+                <p style={{ fontWeight: "bold" }}>{product.name}</p>
+                <p>価格：{product.price}円</p>
+                <p>医院在庫：{selectedClinic ? stock : "医院を選択してください"}</p>
+                <p>注文回数目安：{product.ordered_count}</p>
+
+                <button
+                  onClick={() => addToCart(product)}
+                  disabled={!selectedClinic || stock <= 0}
+                  style={buttonStyle(!selectedClinic || stock <= 0)}
+                >
+                  {stock <= 0 && selectedClinic ? "在庫なし" : "カートに追加"}
+                </button>
+              </div>
+            )
+          })}
+        </>
+      )}
+
       <h2>商品一覧</h2>
 
-      {products.map((product) => (
-        <div
-          key={product.id}
-          style={{
-            background: "#fff",
-            borderRadius: 12,
-            padding: 14,
-            marginBottom: 12,
-            boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-          }}
-        >
-          <p style={{ fontWeight: "bold" }}>{product.name}</p>
-          <p>価格：{product.price}円</p>
-          <p>在庫：{product.stock}</p>
+      {filteredProducts.map((product) => {
+        const stock = getDisplayStock(product)
+        const isLow = selectedClinic && stock <= (product.reorder_level ?? 10)
 
-          <button
-            onClick={() => addToCart(product)}
-            style={{
-              width: "100%",
-              padding: 10,
-              borderRadius: 8,
-              background: "#111",
-              color: "#fff",
-              border: "none",
-            }}
-          >
-            カートに追加
-          </button>
-        </div>
-      ))}
+        return (
+          <div key={product.id} style={cardStyle(isLow)}>
+            <p style={{ fontWeight: "bold" }}>{product.name}</p>
+            <p>商品コード：{product.product_code || "-"}</p>
+            <p>メーカー：{product.manufacturer || "-"}</p>
+            <p>価格：{product.price}円</p>
+            <p style={{ color: isLow ? "red" : "#111", fontWeight: isLow ? "bold" : "normal" }}>
+              医院在庫：{selectedClinic ? stock : "医院を選択してください"}
+              {isLow && "（少ない）"}
+            </p>
+
+            <button
+              onClick={() => addToCart(product)}
+              disabled={!selectedClinic || stock <= 0}
+              style={buttonStyle(!selectedClinic || stock <= 0)}
+            >
+              {stock <= 0 && selectedClinic ? "在庫なし" : "カートに追加"}
+            </button>
+          </div>
+        )
+      })}
 
       <h2>カート</h2>
 
       {cart.length === 0 && <p>カートは空です</p>}
 
       {cart.map((item) => (
-        <div
-          key={item.id}
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: 10,
-            borderBottom: "1px solid #eee",
-          }}
-        >
+        <div key={item.id} style={cartStyle}>
           <div>
             <p>{item.name}</p>
             <p>{item.price}円</p>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <button onClick={() => updateQuantity(item.id, "minus")}>−</button>
             <span>{item.quantity}</span>
             <button onClick={() => updateQuantity(item.id, "plus")}>＋</button>
@@ -237,63 +402,22 @@ export default function OrderPage() {
       ))}
 
       {cart.length > 0 && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: "#fff",
-            padding: 16,
-            borderTop: "1px solid #ddd",
-          }}
-        >
+        <div style={footerStyle}>
           <p style={{ fontWeight: "bold" }}>合計：{totalPrice}円</p>
 
-          <button
-            onClick={submitOrder}
-            style={{
-              width: "100%",
-              padding: 14,
-              borderRadius: 10,
-              background: "#111",
-              color: "#fff",
-              border: "none",
-              fontSize: 16,
-            }}
-          >
+          <button onClick={submitOrder} style={submitButtonStyle}>
             注文確定
           </button>
         </div>
       )}
 
       {orderComplete && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: "#fff",
-            padding: 16,
-            borderTop: "1px solid #ddd",
-          }}
-        >
-          <p style={{ fontWeight: "bold", marginBottom: 10 }}>
-            注文が完了しました
-          </p>
+        <div style={footerStyle}>
+          <p style={{ fontWeight: "bold" }}>注文が完了しました</p>
 
           <button
             onClick={() => router.push("/history")}
-            style={{
-              width: "100%",
-              padding: 14,
-              borderRadius: 10,
-              background: "#111",
-              color: "#fff",
-              border: "none",
-              fontSize: 16,
-            }}
+            style={submitButtonStyle}
           >
             注文履歴へ
           </button>
@@ -301,4 +425,63 @@ export default function OrderPage() {
       )}
     </main>
   )
+}
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: 12,
+  marginBottom: 12,
+  borderRadius: 10,
+  border: "1px solid #ddd",
+  boxSizing: "border-box",
+}
+
+function cardStyle(isLow: any): React.CSSProperties {
+  return {
+    background: "#fff",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+    border: isLow ? "2px solid red" : "1px solid #eee",
+  }
+}
+
+function buttonStyle(disabled: boolean): React.CSSProperties {
+  return {
+    width: "100%",
+    padding: 10,
+    borderRadius: 8,
+    background: disabled ? "#ccc" : "#111",
+    color: "#fff",
+    border: "none",
+  }
+}
+
+const cartStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: 10,
+  borderBottom: "1px solid #eee",
+}
+
+const footerStyle: React.CSSProperties = {
+  position: "fixed",
+  bottom: 0,
+  left: 0,
+  right: 0,
+  background: "#fff",
+  padding: 16,
+  borderTop: "1px solid #ddd",
+}
+
+const submitButtonStyle: React.CSSProperties = {
+  width: "100%",
+  padding: 14,
+  borderRadius: 10,
+  background: "#111",
+  color: "#fff",
+  border: "none",
+  fontSize: 16,
 }

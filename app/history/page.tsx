@@ -5,33 +5,26 @@ import { supabase } from "@/lib/supabase"
 
 export default function HistoryPage() {
   const [clinics, setClinics] = useState<any[]>([])
-  const [selectedClinic, setSelectedClinic] = useState("")
+  const [products, setProducts] = useState<any[]>([])
   const [orders, setOrders] = useState<any[]>([])
   const [orderItems, setOrderItems] = useState<any[]>([])
-  const [products, setProducts] = useState<any[]>([])
+  const [selectedClinic, setSelectedClinic] = useState("")
 
   useEffect(() => {
-    fetchClinics()
-    fetchProducts()
-    fetchOrderItems()
+    fetchBaseData()
   }, [])
 
-  async function fetchClinics() {
-    const { data } = await supabase.from("clinics").select("*")
-    setClinics(data || [])
+  async function fetchBaseData() {
+    const { data: clinicsData } = await supabase.from("clinics").select("*")
+    const { data: productsData } = await supabase.from("products").select("*")
+    const { data: itemsData } = await supabase.from("order_items").select("*")
+
+    setClinics(clinicsData || [])
+    setProducts(productsData || [])
+    setOrderItems(itemsData || [])
   }
 
-  async function fetchProducts() {
-    const { data } = await supabase.from("products").select("*")
-    setProducts(data || [])
-  }
-
-  async function fetchOrderItems() {
-    const { data } = await supabase.from("order_items").select("*")
-    setOrderItems(data || [])
-  }
-
-  async function fetchOrdersByClinic(clinicId: string) {
+  async function fetchOrders(clinicId: string) {
     setSelectedClinic(clinicId)
 
     if (!clinicId) {
@@ -39,24 +32,17 @@ export default function HistoryPage() {
       return
     }
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("orders")
       .select("*")
       .eq("clinic_id", clinicId)
       .order("created_at", { ascending: false })
 
-    if (error) {
-      console.error(error)
-      alert("注文履歴の取得でエラー")
-      return
-    }
-
     setOrders(data || [])
   }
 
   function getProductName(productId: string) {
-    const product = products.find((p) => p.id === productId)
-    return product ? product.name : "不明"
+    return products.find((p) => p.id === productId)?.name || "不明"
   }
 
   function getItems(orderId: string) {
@@ -64,12 +50,12 @@ export default function HistoryPage() {
   }
 
   return (
-    <main style={{ maxWidth: 480, margin: "0 auto", padding: 20 }}>
+    <main style={{ maxWidth: 600, margin: "0 auto", padding: 20 }}>
       <h1>注文履歴</h1>
 
       <select
         value={selectedClinic}
-        onChange={(e) => fetchOrdersByClinic(e.target.value)}
+        onChange={(e) => fetchOrders(e.target.value)}
         style={{
           width: "100%",
           padding: 12,
@@ -86,7 +72,7 @@ export default function HistoryPage() {
         ))}
       </select>
 
-      {!selectedClinic && <p>医院を選択すると注文履歴が表示されます。</p>}
+      {!selectedClinic && <p>医院を選択すると履歴が表示されます。</p>}
 
       {selectedClinic && orders.length === 0 && (
         <p>この医院の注文履歴はありません。</p>
@@ -96,16 +82,17 @@ export default function HistoryPage() {
         <div
           key={order.id}
           style={{
-            border: "1px solid #ddd",
-            borderRadius: 10,
+            background: "#fff",
+            borderRadius: 12,
             padding: 14,
             marginBottom: 12,
-            background: "#fff",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
           }}
         >
+          <p>納品書番号：{order.delivery_number || "-"}</p>
           <p>注文日時：{order.created_at}</p>
           <p>ステータス：{order.status}</p>
-          <p>金額：{order.total_price}円</p>
+          <p>合計：{order.total_price}円</p>
 
           <h3>明細</h3>
 
@@ -114,7 +101,7 @@ export default function HistoryPage() {
               <p>
                 {getProductName(item.product_id)} × {item.quantity}
               </p>
-              <p>小計：{item.price * item.quantity}円</p>
+              <p>小計：{Number(item.price || 0) * Number(item.quantity || 0)}円</p>
             </div>
           ))}
         </div>
