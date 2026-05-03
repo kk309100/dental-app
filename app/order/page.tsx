@@ -9,9 +9,9 @@ export default function OrderPage() {
   const router = useRouter()
 
   const [products, setProducts] = useState<any[]>([])
-  const [clinics, setClinics] = useState<any[]>([])
   const [cart, setCart] = useState<any[]>([])
-  const [selectedClinic, setSelectedClinic] = useState("")
+  const [clinicId, setClinicId] = useState("")
+  const [clinicName, setClinicName] = useState("")
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState("すべて")
   const [loading, setLoading] = useState(true)
@@ -19,24 +19,56 @@ export default function OrderPage() {
   const [orderComplete, setOrderComplete] = useState(false)
 
   useEffect(() => {
-    fetchData()
+    checkLogin()
   }, [])
 
-  async function fetchData() {
-    const { data: productsData } = await supabase
+  async function checkLogin() {
+    const { data: userData } = await supabase.auth.getUser()
+
+    if (!userData.user) {
+      router.push("/login")
+      return
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userData.user.id)
+      .single()
+
+    if (!profile) {
+      alert("プロフィールがありません")
+      router.push("/login")
+      return
+    }
+
+    if (profile.role === "admin") {
+      router.push("/admin")
+      return
+    }
+
+    setClinicId(profile.clinic_id)
+
+    const { data: clinic } = await supabase
+      .from("clinics")
+      .select("*")
+      .eq("id", profile.clinic_id)
+      .single()
+
+    setClinicName(clinic?.name || "")
+
+    await fetchProducts()
+    setLoading(false)
+  }
+
+  async function fetchProducts() {
+    const { data } = await supabase
       .from("products")
       .select("*")
       .eq("is_active", true)
       .order("name", { ascending: true })
 
-    const { data: clinicsData } = await supabase
-      .from("clinics")
-      .select("*")
-      .order("name", { ascending: true })
-
-    setProducts(productsData || [])
-    setClinics(clinicsData || [])
-    setLoading(false)
+    setProducts(data || [])
   }
 
   const categories = useMemo(() => {
@@ -58,19 +90,13 @@ export default function OrderPage() {
         String(p.manufacturer || "").toLowerCase().includes(keyword) ||
         String(p.barcode || "").toLowerCase().includes(keyword)
 
-      const matchCategory =
-        category === "すべて" || p.category === category
+      const matchCategory = category === "すべて" || p.category === category
 
       return matchSearch && matchCategory
     })
   }, [products, search, category])
 
   function addToCart(product: any) {
-    if (!selectedClinic) {
-      alert("医院を選択してください")
-      return
-    }
-
     const existing = cart.find((item) => item.id === product.id)
 
     if (existing) {
@@ -144,12 +170,13 @@ export default function OrderPage() {
       .lte("created_at", `${y}-${m}-${d}T23:59:59`)
 
     const count = (data?.length || 0) + 1
+
     return `DN-${dateStr}-${String(count).padStart(4, "0")}`
   }
 
   async function submitOrder() {
-    if (!selectedClinic) {
-      alert("医院を選択してください")
+    if (!clinicId) {
+      alert("医院情報がありません")
       return
     }
 
@@ -169,7 +196,7 @@ export default function OrderPage() {
       .from("orders")
       .insert([
         {
-          clinic_id: selectedClinic,
+          clinic_id: clinicId,
           status: "注文受付",
           total_price: totalPrice,
           delivery_number: deliveryNumber,
@@ -206,40 +233,34 @@ export default function OrderPage() {
     setOrderComplete(true)
   }
 
+  async function logout() {
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
+
   const totalPrice = cart.reduce(
     (sum, item) => sum + Number(item.price || 0) * item.quantity,
     0
   )
 
-  const totalQuantity = cart.reduce(
-    (sum, item) => sum + item.quantity,
-    0
-  )
+  const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0)
 
   if (loading) return <p style={{ padding: 20 }}>読み込み中...</p>
 
   return (
     <main style={{ maxWidth: 520, margin: "0 auto", padding: 16, paddingBottom: 140 }}>
+      <button onClick={logout} style={{ marginBottom: 12 }}>
+        ログアウト
+      </button>
+
       <h1>注文</h1>
 
-      <div style={stickyArea}>
-        <select
-          value={selectedClinic}
-          onChange={(e) => {
-            setSelectedClinic(e.target.value)
-            setCart([])
-            setOrderComplete(false)
-          }}
-          style={inputStyle}
-        >
-          <option value="">医院を選択</option>
-          {clinics.map((clinic) => (
-            <option key={clinic.id} value={clinic.id}>
-              {clinic.name}
-            </option>
-          ))}
-        </select>
+      <div style={clinicBox}>
+        <p style={{ margin: 0 }}>ログイン医院</p>
+        <strong>{clinicName}</strong>
+      </div>
 
+      <div style={stickyArea}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -301,10 +322,7 @@ export default function OrderPage() {
           <p>メーカー：{product.manufacturer || "-"}</p>
           <p>価格：{product.price || 0}円</p>
 
-          <button
-            onClick={() => addToCart(product)}
-            style={addButtonStyle}
-          >
+          <button onClick={() => addToCart(product)} style={addButtonStyle}>
             ＋ カートに追加
           </button>
         </div>
@@ -322,9 +340,13 @@ export default function OrderPage() {
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => updateQuantity(item.id, "minus")} style={qtyBtn}>−</button>
+            <button onClick={() => updateQuantity(item.id, "minus")} style={qtyBtn}>
+              −
+            </button>
             <span>{item.quantity}</span>
-            <button onClick={() => updateQuantity(item.id, "plus")} style={qtyBtn}>＋</button>
+            <button onClick={() => updateQuantity(item.id, "plus")} style={qtyBtn}>
+              ＋
+            </button>
           </div>
         </div>
       ))}
@@ -342,6 +364,14 @@ export default function OrderPage() {
       )}
     </main>
   )
+}
+
+const clinicBox: React.CSSProperties = {
+  background: "#f8fafc",
+  border: "1px solid #ddd",
+  borderRadius: 10,
+  padding: 12,
+  marginBottom: 12,
 }
 
 const stickyArea: React.CSSProperties = {
