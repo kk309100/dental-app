@@ -57,11 +57,6 @@ export default function OrderPage() {
     return item ? Number(item.stock || 0) : 0
   }
 
-  function getDisplayStock(product: any) {
-    if (selectedClinic) return getClinicStock(product.id)
-    return Number(product.stock || 0)
-  }
-
   function getCartQuantity(productId: string) {
     const item = cart.find((i) => i.id === productId)
     return item ? item.quantity : 0
@@ -134,19 +129,6 @@ export default function OrderPage() {
       return
     }
 
-    const stock = getClinicStock(product.id)
-    const currentQuantity = getCartQuantity(product.id)
-
-    if (stock <= 0) {
-      alert("医院在庫がありません")
-      return
-    }
-
-    if (currentQuantity >= stock) {
-      alert("医院在庫数を超えています")
-      return
-    }
-
     const existing = cart.find((item) => item.id === product.id)
 
     if (existing) {
@@ -170,18 +152,10 @@ export default function OrderPage() {
         .map((item) => {
           if (item.id !== productId) return item
 
-          if (type === "plus") {
-            const stock = getClinicStock(productId)
+          const quantity =
+            type === "plus" ? item.quantity + 1 : item.quantity - 1
 
-            if (item.quantity >= stock) {
-              alert("医院在庫数を超えています")
-              return item
-            }
-
-            return { ...item, quantity: item.quantity + 1 }
-          }
-
-          return { ...item, quantity: item.quantity - 1 }
+          return { ...item, quantity }
         })
         .filter((item) => item.quantity > 0)
     )
@@ -196,15 +170,6 @@ export default function OrderPage() {
     if (cart.length === 0) {
       alert("カートが空です")
       return
-    }
-
-    for (const item of cart) {
-      const stock = getClinicStock(item.id)
-
-      if (item.quantity > stock) {
-        alert(`${item.name} の医院在庫が不足しています`)
-        return
-      }
     }
 
     const totalPrice = cart.reduce(
@@ -250,6 +215,7 @@ export default function OrderPage() {
       return
     }
 
+    // 在庫はマイナスになってもOKにする
     for (const item of cart) {
       const existing = clinicInventory.find(
         (i) => i.clinic_id === selectedClinic && i.product_id === item.id
@@ -262,6 +228,16 @@ export default function OrderPage() {
             stock: Number(existing.stock || 0) - item.quantity,
           })
           .eq("id", existing.id)
+      } else {
+        await supabase
+          .from("clinic_inventory")
+          .insert([
+            {
+              clinic_id: selectedClinic,
+              product_id: item.id,
+              stock: 0 - item.quantity,
+            },
+          ])
       }
 
       await supabase
@@ -331,22 +307,24 @@ export default function OrderPage() {
           <h2>よく使う商品</h2>
 
           {favoriteProducts.map((product) => {
-            const stock = getDisplayStock(product)
+            const stock = selectedClinic ? getClinicStock(product.id) : 0
             const isLow = selectedClinic && stock <= (product.reorder_level ?? 10)
 
             return (
               <div key={product.id} style={cardStyle(isLow)}>
                 <p style={{ fontWeight: "bold" }}>{product.name}</p>
                 <p>価格：{product.price}円</p>
-                <p>医院在庫：{selectedClinic ? stock : "医院を選択してください"}</p>
-                <p>注文回数目安：{product.ordered_count}</p>
+                <p style={{ color: isLow ? "red" : "#111" }}>
+                  医院在庫：{selectedClinic ? stock : "医院を選択してください"}
+                  {isLow && "（不足・少ない）"}
+                </p>
 
                 <button
                   onClick={() => addToCart(product)}
-                  disabled={!selectedClinic || stock <= 0}
-                  style={buttonStyle(!selectedClinic || stock <= 0)}
+                  disabled={!selectedClinic}
+                  style={buttonStyle(!selectedClinic)}
                 >
-                  {stock <= 0 && selectedClinic ? "在庫なし" : "カートに追加"}
+                  カートに追加
                 </button>
               </div>
             )
@@ -357,7 +335,7 @@ export default function OrderPage() {
       <h2>商品一覧</h2>
 
       {filteredProducts.map((product) => {
-        const stock = getDisplayStock(product)
+        const stock = selectedClinic ? getClinicStock(product.id) : 0
         const isLow = selectedClinic && stock <= (product.reorder_level ?? 10)
 
         return (
@@ -366,17 +344,18 @@ export default function OrderPage() {
             <p>商品コード：{product.product_code || "-"}</p>
             <p>メーカー：{product.manufacturer || "-"}</p>
             <p>価格：{product.price}円</p>
+
             <p style={{ color: isLow ? "red" : "#111", fontWeight: isLow ? "bold" : "normal" }}>
               医院在庫：{selectedClinic ? stock : "医院を選択してください"}
-              {isLow && "（少ない）"}
+              {isLow && "（不足・少ない）"}
             </p>
 
             <button
               onClick={() => addToCart(product)}
-              disabled={!selectedClinic || stock <= 0}
-              style={buttonStyle(!selectedClinic || stock <= 0)}
+              disabled={!selectedClinic}
+              style={buttonStyle(!selectedClinic)}
             >
-              {stock <= 0 && selectedClinic ? "在庫なし" : "カートに追加"}
+              カートに追加
             </button>
           </div>
         )
