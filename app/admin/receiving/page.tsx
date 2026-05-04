@@ -4,50 +4,109 @@ import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { fmtYen, ymd } from "@/lib/invoice"
 
-type Product = { id: string; name: string; product_code: string | null; manufacturer: string | null; stock: number | null; cost: number | null }
+type Product = {
+  id: string
+  name: string
+  product_code: string | null
+  manufacturer: string | null
+  stock: number | null
+  cost: number | null
+}
 type Supplier = { id: string; name: string; maker_name: string | null }
-
-type Row = {
-  productId: string
-  productName: string  // 表示用、最終的に productId に解決
-  quantity: string
-  unitPrice: string
-  memo: string
+type Mapping = {
+  id: string
+  supplier_id: string | null
+  supplier_product_code: string | null
+  supplier_jan: string | null
+  supplier_product_name: string
+  product_id: string | null
+  unit_quantity_per_pack: number
 }
 
-const newRow = (): Row => ({ productId: "", productName: "", quantity: "", unitPrice: "", memo: "" })
+type Row = {
+  // 商品（既存マスタ参照 or PDFからの自由テキスト）
+  productId: string
+  productName: string  // datalist 表示 + 既存商品マッチング用
+  // 仕入伝票上の情報（PDFから入る場合あり）
+  supplierJan: string
+  supplierCode: string
+  supplierProductName: string  // PDFの場合の元の商品名
+  packSize: string  // 「20枚入」等
+  // 数量・単価
+  quantity: string
+  unitPrice: string
+  unitQuantityPerPack: number  // 換算係数
+  memo: string
+  // マッピング状態
+  mappingId?: string
+  mappingFound: boolean
+}
+
+const newRow = (): Row => ({
+  productId: "", productName: "",
+  supplierJan: "", supplierCode: "", supplierProductName: "",
+  packSize: "", quantity: "", unitPrice: "",
+  unitQuantityPerPack: 1, memo: "",
+  mappingFound: false,
+})
+
 const INITIAL_ROWS = 10
 
 export default function ReceivingPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [supplierId, setSupplierId] = useState("")
-  const [date, setDate] = useState(ymd(new Date()))
-  const [rows, setRows] = useState<Row[]>(Array.from({ length: INITIAL_ROWS }, newRow))
-  const [updateCost, setUpdateCost] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const [progress, setProgress] = useState({ done: 0, total: 0 })
-  const [results, setResults] = useState<{ ok: boolean; msg: string }[]>([])
+  const [mappings, setMappings] = useState<Mapping[]>([])
   const [recent, setRecent] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // 共通設定
+  const [supplierId, setSupplierId] = useState("")
+  const [date, setDate] = useState(ymd(new Date()))
+  const [updateCost, setUpdateCost] = useState(true)
+
+  // 表データ
+  const [rows, setRows] = useState<Row[]>(Array.from({ length: INITIAL_ROWS }, newRow))
+
+  // PDF解析
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
+  const [parsing, setParsing] = useState(false)
+  const [parseError, setParseError] = useState("")
+  const [parsedMeta, setParsedMeta] = useState<{ supplier_name?: string; invoice_number?: string; invoice_date?: string; total?: number } | null>(null)
+
+  // 登録
+  const [submitting, setSubmitting] = useState(false)
+  const [progress, setProgress] = useState({ done: 0, total: 0 })
+  const [logs, setLogs] = useState<string[]>([])
 
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setLoading(true)
-    const [p, s, r] = await Promise.all([
+    const [p, s, m, r] = await Promise.all([
       supabase.from("products").select("id,name,product_code,manufacturer,stock,cost").order("name"),
       supabase.from("suppliers").select("id,name,maker_name").order("name"),
+      supabase.from("supplier_product_mappings").select("*"),
       supabase.from("stock_receipts").select("*").order("created_at", { ascending: false }).limit(20),
     ])
     setProducts((p.data as Product[]) || [])
     setSuppliers((s.data as Supplier[]) || [])
+    setMappings((m.data as Mapping[]) || [])
     setRecent(r.data || [])
     setLoading(false)
   }
 
-  // 名前 → product マップ（datalist で選んだ後の解決用）
+  // 商品マスタの name → product マップ
   const productByName = useMemo(() => new Map(products.map((p) => [p.name, p])), [products])
+
+  // マッピング検索（仕入先固定で JAN > 商品コード > 商品名）
+  function findMapping(supplierJan: string, supplierCode: string, supplierProductName: string): Mapping | undefined {
+    if (!supplierId) return undefined
+    const list = mappings.filter((m) => m.supplier_id === supplierId)
+    if (supplierJan) { const m = list.find((m) => m.supplier_jan === supplierJan); if (m) return m }
+    if (supplierCode) { const m = list.find((m) => m.supplier_product_code === supplierCode); if (m) return m }
+    if (supplierProductName) return list.find((m) => m.supplier_product_name === supplierProductName)
+    return undefined
+  }
 
   function updateRow(i: number, partial: Partial<Row>) {
     setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, ...partial } : r))
@@ -58,77 +117,180 @@ export default function ReceivingPage() {
     updateRow(i, {
       productName: name,
       productId: p?.id || "",
-      // 商品が見つかったら、現在の cost を仕入単価のデフォルトに（空のときのみ）
+      // 商品が見つかったら、空の単価を cost で埋める
       ...(p && !rows[i].unitPrice && p.cost ? { unitPrice: String(p.cost) } : {}),
     })
   }
 
-  function addRow() {
-    setRows((prev) => [...prev, newRow()])
-  }
-
+  function addRow() { setRows((prev) => [...prev, newRow()]) }
   function removeRow(i: number) {
-    setRows((prev) => prev.filter((_, idx) => idx !== i).concat(prev.length === 1 ? [newRow()] : []))
+    setRows((prev) => {
+      const next = prev.filter((_, idx) => idx !== i)
+      return next.length === 0 ? [newRow()] : next
+    })
   }
-
   function clearAll() {
-    if (!confirm("入力をすべてクリアしますか？")) return
+    if (!confirm("入力をすべてクリアしますか？（PDF解析結果も含む）")) return
     setRows(Array.from({ length: INITIAL_ROWS }, newRow))
-    setResults([])
+    setLogs([])
+    setParsedMeta(null)
+    setPdfFile(null)
+    setParseError("")
   }
 
-  // 有効行（商品名 + 数量 入力済み）
-  const validRows = rows.filter((r) => r.productName.trim() && Number(r.quantity) > 0)
-  const totalAmount = validRows.reduce((s, r) => s + (Number(r.unitPrice) || 0) * (Number(r.quantity) || 0), 0)
-  const allRecognized = validRows.every((r) => productByName.has(r.productName.trim()))
+  // PDF アップロード → 解析 → 表に流し込み
+  async function uploadAndParse() {
+    if (!pdfFile) { setParseError("PDF を選択してください"); return }
+    setParsing(true)
+    setParseError("")
+    setParsedMeta(null)
+    try {
+      const buf = await pdfFile.arrayBuffer()
+      const base64 = Buffer.from(buf).toString("base64")
+      const r = await fetch("/api/parse-receiving", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pdfBase64: base64 }),
+      })
+      if (!r.ok) {
+        const err = await r.json()
+        throw new Error(err.error || "解析失敗")
+      }
+      const { data } = await r.json()
+      setParsedMeta({ supplier_name: data.supplier_name, invoice_number: data.invoice_number, invoice_date: data.invoice_date, total: data.total })
+
+      // 仕入先・日付を自動セット
+      if (data.invoice_date) setDate(data.invoice_date)
+      if (!supplierId && data.supplier_name) {
+        const matched = suppliers.find((s) => data.supplier_name.includes(s.name) || s.name.includes(data.supplier_name.split(/\s+/)[0]))
+        if (matched) setSupplierId(matched.id)
+      }
+
+      // 表に流し込み（マッピング自動適用）
+      const newRows: Row[] = data.items.map((it: any) => {
+        const m = findMapping(it.supplier_jan || "", it.supplier_product_code || "", it.supplier_product_name)
+        const product = m?.product_id ? products.find((p) => p.id === m.product_id) : products.find((p) => it.supplier_product_name?.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(it.supplier_product_name?.toLowerCase().slice(0, 8) || ""))
+        return {
+          productId: product?.id || "",
+          productName: product?.name || "",
+          supplierJan: it.supplier_jan || "",
+          supplierCode: it.supplier_product_code || "",
+          supplierProductName: it.supplier_product_name || "",
+          packSize: it.pack_size || "",
+          quantity: String(it.quantity || ""),
+          unitPrice: String(it.unit_price || ""),
+          unitQuantityPerPack: m?.unit_quantity_per_pack || 1,
+          memo: "",
+          mappingId: m?.id,
+          mappingFound: !!m,
+        }
+      })
+      // 既存の空行を消して PDF からの行で置き換え（足りなければ空行追加）
+      const padded = newRows.length >= INITIAL_ROWS ? newRows : [...newRows, ...Array.from({ length: INITIAL_ROWS - newRows.length }, newRow)]
+      setRows(padded)
+    } catch (e) {
+      setParseError((e as Error).message)
+    } finally {
+      setParsing(false)
+    }
+  }
+
+  // 集計
+  const validRows = rows.filter((r) => r.productId && Number(r.quantity) > 0)
+  const totalAmount = validRows.reduce((s, r) => s + (Number(r.unitPrice) || 0) * Number(r.quantity), 0)
+  const allMapped = rows.every((r) => !r.supplierProductName || r.productId)  // PDF由来は要マッピング
 
   async function submitAll() {
     if (validRows.length === 0) { alert("有効な行がありません"); return }
-    if (!allRecognized) { alert("商品マスタに無い商品名が含まれています。商品検索の候補から選んでください。"); return }
-
-    if (!confirm(`${validRows.length} 行を一括登録します。\n合計仕入額: ${fmtYen(totalAmount)}\nよろしいですか？`)) return
+    if (!confirm(`${validRows.length}行を仕入登録します。\n合計仕入額: ${fmtYen(totalAmount)}\nよろしいですか？`)) return
 
     setSubmitting(true)
-    setResults([])
+    setLogs([])
     setProgress({ done: 0, total: validRows.length })
-    const newResults: typeof results = []
+    const newLogs: string[] = []
+
+    // PDF由来の場合は supplier_invoices にも履歴
+    let invoiceId: string | null = null
+    if (parsedMeta) {
+      const { data } = await supabase.from("supplier_invoices").insert({
+        supplier_id: supplierId || null,
+        invoice_date: date,
+        invoice_number: parsedMeta.invoice_number || null,
+        total_amount: totalAmount,
+        pdf_filename: pdfFile?.name || null,
+        parsed_data: parsedMeta,
+        status: "completed",
+        completed_at: new Date().toISOString(),
+      }).select().single()
+      invoiceId = data?.id || null
+    }
 
     for (let i = 0; i < validRows.length; i++) {
       const row = validRows[i]
       try {
-        const product = productByName.get(row.productName.trim())!
+        const product = products.find((p) => p.id === row.productId)
+        if (!product) throw new Error("商品が見つかりません")
         const qty = Number(row.quantity)
         const price = row.unitPrice === "" ? null : Number(row.unitPrice)
+        const stockDelta = qty * row.unitQuantityPerPack
 
-        // 1) products の在庫（と必要なら cost）更新
-        const productUpdate: { stock: number; cost?: number } = { stock: Number(product.stock || 0) + qty }
+        // 商品在庫 + cost 更新
+        const productUpdate: { stock: number; cost?: number } = { stock: (product.stock || 0) + stockDelta }
         if (price !== null && updateCost) productUpdate.cost = price
 
         const { error: pe } = await supabase.from("products").update(productUpdate).eq("id", product.id)
         if (pe) throw new Error(pe.message)
 
-        // 2) stock_receipts に履歴 insert
+        // stock_receipts insert
+        const memoStr = [
+          row.memo,
+          parsedMeta?.invoice_number ? `伝票:${parsedMeta.invoice_number}` : "",
+          row.supplierProductName ? `元:${row.supplierProductName}` : "",
+          row.unitQuantityPerPack !== 1 ? `(${qty}×${row.unitQuantityPerPack})` : "",
+        ].filter(Boolean).join(" / ")
         const { error: re } = await supabase.from("stock_receipts").insert({
           product_id: product.id,
-          quantity: qty,
-          memo: row.memo || null,
+          quantity: stockDelta,
+          memo: memoStr || null,
           supplier_id: supplierId || null,
           unit_price: price,
         })
         if (re) throw new Error(re.message)
 
-        newResults.push({ ok: true, msg: `✓ ${product.name} +${qty}${price !== null ? ` @${fmtYen(price)}` : ""}` })
+        // マッピング学習（PDF由来のみ）
+        if (row.supplierProductName && supplierId) {
+          if (row.mappingId) {
+            await supabase.from("supplier_product_mappings").update({
+              product_id: product.id,
+              unit_quantity_per_pack: row.unitQuantityPerPack,
+              updated_at: new Date().toISOString(),
+            }).eq("id", row.mappingId)
+          } else {
+            await supabase.from("supplier_product_mappings").insert({
+              supplier_id: supplierId,
+              supplier_jan: row.supplierJan || null,
+              supplier_product_code: row.supplierCode || null,
+              supplier_product_name: row.supplierProductName,
+              product_id: product.id,
+              unit_quantity_per_pack: row.unitQuantityPerPack,
+            })
+          }
+        }
+
+        newLogs.push(`✓ ${product.name} +${stockDelta}${row.unitQuantityPerPack !== 1 ? ` (${qty}×${row.unitQuantityPerPack})` : ""}`)
       } catch (e) {
-        newResults.push({ ok: false, msg: `✗ ${row.productName}: ${(e as Error).message}` })
+        newLogs.push(`✗ ${row.productName || row.supplierProductName}: ${(e as Error).message}`)
       }
       setProgress({ done: i + 1, total: validRows.length })
-      setResults([...newResults])
+      setLogs([...newLogs])
     }
 
     setSubmitting(false)
-    // 成功した行を消去
-    if (newResults.every((r) => r.ok)) {
+    if (newLogs.every((l) => l.startsWith("✓"))) {
+      // 成功 → クリア
       setRows(Array.from({ length: INITIAL_ROWS }, newRow))
+      setParsedMeta(null)
+      setPdfFile(null)
     }
     fetchData()
   }
@@ -136,190 +298,181 @@ export default function ReceivingPage() {
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   return (
-    <div className="space-y-5">
-      {/* タイトル */}
+    <div className="space-y-3">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">仕入入力（一括）</h1>
-        <p className="text-xs text-gray-400 mt-0.5">表に複数行入力して一度に登録できます</p>
+        <h1 className="text-lg font-bold text-gray-900">
+          仕入入力
+          <span className="ml-2 text-xs font-normal text-gray-400">手打ち or PDF読込</span>
+        </h1>
       </div>
 
       {/* 共通設定 */}
-      <div className="bg-white rounded-xl p-4" style={{ border: "1px solid #e8eaed" }}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1 font-semibold">仕入先（共通、任意）</label>
-            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-              <option value="">— 仕入先を選択 —</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}{s.maker_name ? ` (${s.maker_name})` : ""}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1 font-semibold">入荷日</label>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white" />
-          </div>
-        </div>
-        <label className="flex items-center gap-2 mt-3 text-xs text-gray-600">
-          <input type="checkbox" checked={updateCost} onChange={(e) => setUpdateCost(e.target.checked)} />
-          単価を入力した行については、商品マスタの仕入価格 (cost) も更新する
-        </label>
-      </div>
-
-      {/* 表 */}
-      <div className="bg-white rounded-xl overflow-hidden" style={{ border: "1px solid #e8eaed" }}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm" style={{ minWidth: 900 }}>
-            <thead>
-              <tr className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
-                <th className="px-2 py-2 text-center w-10">#</th>
-                <th className="px-3 py-2 text-left">商品名（候補から選択）</th>
-                <th className="px-2 py-2 text-right w-20">数量</th>
-                <th className="px-2 py-2 text-right w-28">仕入単価</th>
-                <th className="px-2 py-2 text-right w-28">小計</th>
-                <th className="px-3 py-2 text-left">メモ</th>
-                <th className="px-2 py-2 text-center w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => {
-                const matched = productByName.get(row.productName.trim())
-                const subtotal = Number(row.unitPrice || 0) * Number(row.quantity || 0)
-                const ng = row.productName.trim() && !matched
-                return (
-                  <tr key={i} className={"border-t border-gray-100 " + (ng ? "bg-red-50" : matched ? "bg-emerald-50/30" : "")}>
-                    <td className="px-2 py-1.5 text-center text-xs text-gray-400">{i + 1}</td>
-                    <td className="px-2 py-1.5">
-                      <input
-                        list="products-list"
-                        value={row.productName}
-                        onChange={(e) => onProductNameChange(i, e.target.value)}
-                        placeholder="商品名を入力 or 候補から選択"
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-blue-400"
-                      />
-                      {matched && (
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          コード:{matched.product_code || "—"} / 在庫:{matched.stock ?? 0} / 現単価:{matched.cost ? fmtYen(matched.cost) : "—"}
-                        </p>
-                      )}
-                      {ng && <p className="text-[10px] text-red-600 mt-0.5">⚠ 商品マスタに無い名前です</p>}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <input
-                        type="number"
-                        value={row.quantity}
-                        onChange={(e) => updateRow(i, { quantity: e.target.value })}
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm text-right focus:outline-none focus:border-blue-400"
-                      />
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <input
-                        type="number"
-                        value={row.unitPrice}
-                        onChange={(e) => updateRow(i, { unitPrice: e.target.value })}
-                        placeholder="¥"
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm text-right focus:outline-none focus:border-blue-400"
-                      />
-                    </td>
-                    <td className="px-2 py-1.5 text-right text-sm font-bold text-gray-700">
-                      {subtotal > 0 ? fmtYen(subtotal) : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <input
-                        value={row.memo}
-                        onChange={(e) => updateRow(i, { memo: e.target.value })}
-                        placeholder="伝票No 等"
-                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:border-blue-400"
-                      />
-                    </td>
-                    <td className="px-2 py-1.5 text-center">
-                      <button onClick={() => removeRow(i)} className="text-red-500 hover:text-red-700 text-lg leading-none">×</button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-50 border-t-2 border-gray-200">
-                <td colSpan={4} className="px-3 py-3 text-right text-sm font-bold text-gray-700">合計</td>
-                <td className="px-2 py-3 text-right text-base font-bold text-gray-900">{fmtYen(totalAmount)}</td>
-                <td colSpan={2}></td>
-              </tr>
-            </tfoot>
-          </table>
+      <div className="bg-white rounded-lg p-3" style={{ border: "1px solid #e8eaed" }}>
+        <p className="text-xs font-bold text-gray-500 mb-2">① 仕入先 + 入荷日</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
+            <option value="">— 仕入先を選択 —</option>
+            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.maker_name ? ` (${s.maker_name})` : ""}</option>)}
+          </select>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
         </div>
       </div>
 
-      {/* datalist (HTML5 autocomplete) */}
+      {/* PDF読込 */}
+      <div className="bg-blue-50 rounded-lg p-3" style={{ border: "1px solid #c7d2fe" }}>
+        <p className="text-xs font-bold text-blue-900 mb-2">② PDFから自動入力（任意）</p>
+        <div className="flex gap-2 items-center flex-wrap">
+          <input type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} className="text-xs flex-1 min-w-[200px]" />
+          <button onClick={uploadAndParse} disabled={!pdfFile || parsing} className="px-4 py-1.5 bg-blue-600 text-white rounded text-xs font-bold disabled:opacity-50">
+            {parsing ? "AI解析中…" : "AI解析して下の表に流し込み"}
+          </button>
+        </div>
+        {parseError && <p className="text-xs text-red-700 mt-1">⚠ {parseError}</p>}
+        {parsedMeta && (
+          <p className="text-xs text-blue-800 mt-2">
+            ✓ 解析成功: {parsedMeta.supplier_name || "—"} / No.{parsedMeta.invoice_number || "—"} / 合計 {parsedMeta.total ? fmtYen(parsedMeta.total) : "—"}
+          </p>
+        )}
+      </div>
+
+      {/* 入力表（手打ち + PDFが流し込まれる） */}
+      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <thead className="sticky top-0 bg-gray-100">
+            <tr className="text-[10px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-1.5 py-1.5 text-center w-8">#</th>
+              <th className="px-1.5 py-1.5 text-left">自社商品</th>
+              <th className="px-1.5 py-1.5 text-left w-40">仕入先 商品名/JAN</th>
+              <th className="px-1.5 py-1.5 text-right w-12">数量</th>
+              <th className="px-1.5 py-1.5 text-right w-12">×</th>
+              <th className="px-1.5 py-1.5 text-right w-16">在庫加算</th>
+              <th className="px-1.5 py-1.5 text-right w-20">仕入単価</th>
+              <th className="px-1.5 py-1.5 text-right w-20">小計</th>
+              <th className="px-1.5 py-1.5 text-left w-32">メモ</th>
+              <th className="px-1.5 py-1.5 text-center w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => {
+              const stockDelta = Number(row.quantity || 0) * row.unitQuantityPerPack
+              const subtotal = (Number(row.unitPrice) || 0) * Number(row.quantity || 0)
+              const matched = !!row.productId
+              const isPdfRow = !!row.supplierProductName
+              const ng = isPdfRow && !matched
+              return (
+                <tr key={i} className={"border-b border-gray-100 " + (ng ? "bg-orange-50" : matched ? "bg-emerald-50/30" : "")}>
+                  <td className="px-1.5 py-0.5 text-center text-gray-400">{i + 1}</td>
+                  <td className="px-1.5 py-0.5">
+                    <input
+                      list="products-list"
+                      value={row.productName}
+                      onChange={(e) => onProductNameChange(i, e.target.value)}
+                      placeholder="商品名"
+                      className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-[11px]"
+                    />
+                  </td>
+                  <td className="px-1.5 py-0.5 text-[10px] text-gray-500">
+                    {isPdfRow ? (
+                      <>
+                        <div className="font-semibold text-gray-700">{row.supplierProductName}</div>
+                        <div>{row.supplierJan && `JAN:${row.supplierJan}`} {row.packSize && `/ ${row.packSize}`}</div>
+                      </>
+                    ) : "—"}
+                  </td>
+                  <td className="px-1.5 py-0.5">
+                    <input type="number" value={row.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" />
+                  </td>
+                  <td className="px-1.5 py-0.5">
+                    <input type="number" min={1} value={row.unitQuantityPerPack} onChange={(e) => updateRow(i, { unitQuantityPerPack: Math.max(1, Number(e.target.value) || 1) })} className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" />
+                  </td>
+                  <td className="px-1.5 py-0.5 text-right text-[11px] font-bold">{stockDelta > 0 ? stockDelta : ""}</td>
+                  <td className="px-1.5 py-0.5">
+                    <input type="number" value={row.unitPrice} onChange={(e) => updateRow(i, { unitPrice: e.target.value })} placeholder="¥" className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" />
+                  </td>
+                  <td className="px-1.5 py-0.5 text-right text-[11px] font-bold">{subtotal > 0 ? fmtYen(subtotal) : ""}</td>
+                  <td className="px-1.5 py-0.5">
+                    <input value={row.memo} onChange={(e) => updateRow(i, { memo: e.target.value })} placeholder="伝票No等" className="w-full px-1 py-0.5 border border-gray-200 rounded text-[11px]" />
+                  </td>
+                  <td className="px-1.5 py-0.5 text-center">
+                    <button onClick={() => removeRow(i)} className="text-red-500 hover:text-red-700 text-base leading-none">×</button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot className="bg-gray-50 sticky bottom-0">
+            <tr className="border-t-2 border-gray-300">
+              <td colSpan={7} className="px-2 py-2 text-right text-xs font-bold text-gray-700">合計</td>
+              <td className="px-2 py-2 text-right text-base font-bold text-gray-900">{fmtYen(totalAmount)}</td>
+              <td colSpan={2}></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* datalist */}
       <datalist id="products-list">
-        {products.map((p) => (
-          <option key={p.id} value={p.name}>{p.product_code || ""} {p.manufacturer || ""}</option>
-        ))}
+        {products.map((p) => <option key={p.id} value={p.name}>{p.product_code || ""} {p.manufacturer || ""}</option>)}
       </datalist>
 
       {/* アクション */}
-      <div className="bg-white rounded-xl p-4 sticky bottom-0" style={{ border: "1px solid #e8eaed" }}>
-        <div className="flex items-center gap-3 flex-wrap">
-          <button onClick={addRow} className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 text-sm">
-            ＋ 行を追加
-          </button>
-          <button onClick={clearAll} className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 text-sm">
-            クリア
-          </button>
+      <div className="bg-white rounded-lg p-3 sticky bottom-0" style={{ border: "1px solid #e8eaed" }}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={addRow} className="px-3 py-1.5 border border-gray-200 rounded text-xs">＋ 行を追加</button>
+          <button onClick={clearAll} className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-500">クリア</button>
+          <label className="flex items-center gap-1 text-xs text-gray-600 ml-2">
+            <input type="checkbox" checked={updateCost} onChange={(e) => setUpdateCost(e.target.checked)} />
+            商品マスタの仕入価格も更新
+          </label>
           <div className="flex-1 text-xs text-gray-500 text-right">
             有効: <strong className="text-gray-900">{validRows.length}行</strong> / 合計: <strong className="text-gray-900">{fmtYen(totalAmount)}</strong>
           </div>
           <button
             onClick={submitAll}
-            disabled={submitting || validRows.length === 0 || !allRecognized}
-            className="px-6 py-3 rounded-lg bg-gray-900 text-white font-bold text-sm hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={submitting || validRows.length === 0 || !allMapped}
+            className="px-6 py-3 rounded-lg bg-gray-900 text-white font-bold text-sm disabled:opacity-50"
           >
-            {submitting ? `登録中… ${progress.done}/${progress.total}` : `${validRows.length}行 一括登録`}
+            {submitting ? `登録中… ${progress.done}/${progress.total}` : `${validRows.length}行 仕入登録`}
           </button>
         </div>
+        {!allMapped && (
+          <p className="text-[11px] text-orange-700 mt-1">⚠ オレンジ背景の行は自社商品が未選択です（PDF由来）。</p>
+        )}
       </div>
 
       {/* 結果 */}
-      {results.length > 0 && (
-        <div className="bg-white rounded-xl p-4" style={{ border: "1px solid #e8eaed" }}>
-          <p className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">登録結果</p>
-          <div className="space-y-1 max-h-64 overflow-y-auto">
-            {results.map((r, i) => (
-              <p key={i} className={"text-xs py-1 px-2 rounded " + (r.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700")}>
-                {r.msg}
-              </p>
-            ))}
+      {logs.length > 0 && (
+        <div className="bg-white rounded-lg p-3" style={{ border: "1px solid #e8eaed" }}>
+          <p className="text-xs font-bold text-gray-500 mb-2">登録結果</p>
+          <div className="space-y-1 max-h-48 overflow-auto text-[11px]">
+            {logs.map((l, i) => <div key={i} className={l.startsWith("✓") ? "text-emerald-700" : "text-red-700"}>{l}</div>)}
           </div>
         </div>
       )}
 
-      {/* 直近入荷履歴 */}
-      <div className="bg-white rounded-xl p-4" style={{ border: "1px solid #e8eaed" }}>
-        <p className="text-sm font-bold text-gray-700 mb-3">直近の入荷履歴（最新20件）</p>
-        {recent.length === 0 ? (
-          <p className="text-xs text-gray-400">履歴なし</p>
-        ) : (
-          <div className="space-y-1 max-h-64 overflow-y-auto">
-            {recent.map((rc) => {
-              const product = products.find((p) => p.id === rc.product_id)
-              const supplier = suppliers.find((s) => s.id === rc.supplier_id)
-              return (
-                <div key={rc.id} className="flex items-center justify-between py-1.5 px-2 text-xs border-b border-gray-100">
-                  <div className="flex-1 min-w-0">
-                    <span className="font-semibold text-gray-700">{product?.name || "—"}</span>
-                    <span className="text-gray-400 ml-2">{new Date(rc.created_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                    {supplier && <span className="text-gray-400 ml-2">/ {supplier.name}</span>}
-                  </div>
-                  <div className="flex items-center gap-3 text-right shrink-0">
-                    {rc.unit_price && <span className="text-gray-500">@{fmtYen(rc.unit_price)}</span>}
-                    <span className="font-bold text-gray-900 w-12">+{rc.quantity}</span>
-                  </div>
+      {/* 直近履歴 */}
+      <details className="bg-white rounded-lg p-3" style={{ border: "1px solid #e8eaed" }}>
+        <summary className="text-xs font-bold text-gray-500 cursor-pointer">直近の入荷履歴 (最新20件)</summary>
+        <div className="mt-2 space-y-1 max-h-64 overflow-auto">
+          {recent.map((rc) => {
+            const product = products.find((p) => p.id === rc.product_id)
+            const supplier = suppliers.find((s) => s.id === rc.supplier_id)
+            return (
+              <div key={rc.id} className="flex items-center justify-between py-1.5 px-2 text-[11px] border-b border-gray-100">
+                <div className="flex-1 min-w-0">
+                  <span className="font-semibold">{product?.name || "—"}</span>
+                  <span className="text-gray-400 ml-2">{new Date(rc.created_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  {supplier && <span className="text-gray-400 ml-2">/ {supplier.name}</span>}
                 </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
+                <div className="flex items-center gap-3 text-right shrink-0">
+                  {rc.unit_price && <span className="text-gray-500">@{fmtYen(rc.unit_price)}</span>}
+                  <span className="font-bold w-12">+{rc.quantity}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </details>
     </div>
   )
 }
