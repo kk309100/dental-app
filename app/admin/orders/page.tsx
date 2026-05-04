@@ -98,15 +98,50 @@ export default function AdminOrdersPage() {
     total: orders.length,
   }), [orders])
 
+  function buildStatusPatch(status: string) {
+    const now = new Date().toISOString()
+    const patch: Record<string, unknown> = { status }
+    if (status === "確認中") patch.confirmed_at = now
+    if (status === "準備中") patch.prepared_at = now
+    if (status === "納品済み") patch.delivered_at = now
+    if (status === "キャンセル") patch.cancelled_at = now
+    return patch
+  }
+
+  async function tryUpdate(ids: string[], patch: Record<string, unknown>) {
+    // フル patch でトライ → 失敗（新スキーマ未適用）したら status だけで再試行
+    let { error } = await supabase.from("orders").update(patch).in("id", ids)
+    if (error) {
+      const fallback: Record<string, unknown> = { status: patch.status }
+      const r = await supabase.from("orders").update(fallback).in("id", ids)
+      error = r.error
+    }
+    return error
+  }
+
   async function updateStatus(orderId: string, status: string) {
-    await supabase.from("orders").update({ status }).eq("id", orderId)
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)))
+    const patch = buildStatusPatch(status)
+    const err = await tryUpdate([orderId], patch)
+    if (err) { alert("更新失敗: " + err.message); return }
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status, ...patch } : o)))
   }
 
   async function bulkUpdate(status: string) {
     if (selectedOrderIds.size === 0) return
-    if (!confirm(`${selectedOrderIds.size}件を「${status}」にしますか？`)) return
-    await supabase.from("orders").update({ status }).in("id", Array.from(selectedOrderIds))
+    let deliveryDate: string | null = null
+    // 納品済みは個別の納品日を選べるようにする
+    if (status === "納品済み") {
+      const today = new Date().toISOString().slice(0, 10)
+      const input = prompt(`${selectedOrderIds.size}件を「納品済み」にします。\n納品日（YYYY-MM-DD）を入力してください。`, today)
+      if (input === null) return
+      deliveryDate = input.trim() || today
+    } else {
+      if (!confirm(`${selectedOrderIds.size}件を「${status}」にしますか？`)) return
+    }
+    const patch = buildStatusPatch(status)
+    if (deliveryDate && status === "納品済み") patch.delivered_at = new Date(deliveryDate + "T12:00:00").toISOString()
+    const err = await tryUpdate(Array.from(selectedOrderIds), patch)
+    if (err) { alert("一括更新失敗: " + err.message); return }
     setSelectedOrderIds(new Set())
     fetchData()
   }

@@ -54,9 +54,11 @@ export function calcDueDate(issueDate: Date): string {
 }
 
 // ── 消費税（10%、税抜→税込） ─────────────────────────────────────────
+// インボイス制度では「適格請求書ごとに税率ごと1回端数処理」が原則。
+// 端数処理は事業者の選択（切り捨て/四捨五入/切り上げ）。当社は四捨五入を採用。
 export const TAX_RATE = 0.1
 export function calcTax(subtotal: number): number {
-  return Math.floor(subtotal * TAX_RATE)
+  return Math.round(subtotal * TAX_RATE)
 }
 
 // ── ヘルパ ──────────────────────────────────────────────────────────
@@ -113,8 +115,19 @@ export function getCorporateLabel(corporateName?: string | null, name?: string |
 // ── 請求書ステータス ──────────────────────────────────────────────────
 export const INVOICE_STATUSES = {
   issued: { label: "発行済", color: "#3b82f6" },
+  partial: { label: "一部入金", color: "#f59e0b" },
   paid: { label: "入金済", color: "#10b981" },
   cancelled: { label: "取消", color: "#9ca3af" },
 } as const
 
 export type InvoiceStatus = keyof typeof INVOICE_STATUSES
+
+// ── 消費税計算（軽減税率対応） ─────────────────────────────────────────
+// rate: 0.10 = 10% / 0.08 = 軽減税率
+// rounding: floor / round / ceil（デフォルト: round = 四捨五入。インボイス制度向け）
+export function calcTaxFor(amount: number, rate = 0.10, rounding: "floor" | "round" | "ceil" = "round"): number {
+  const raw = amount * rate
+  if (rounding === "floor") return Math.floor(raw)
+  if (rounding === "ceil") return Math.ceil(raw)
+  return Math.round(raw)
+}
