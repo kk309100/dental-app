@@ -39,9 +39,7 @@ export default function AdminPage() {
       <section style={sectionStyle}>
         <h2 style={sectionTitleStyle}>④ 設定</h2>
 
-        <button style={disabledButtonStyle} disabled>
-          医院管理（今後実装）
-        </button>
+        <AdminLink href="/admin/clinics" label="医院管理" />
 
         <button style={disabledButtonStyle} disabled>
           ユーザー管理（今後実装）
