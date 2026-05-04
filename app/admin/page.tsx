@@ -12,6 +12,7 @@ export default function AdminPage() {
 
         <AdminLink href="/admin/orders" label="注文一覧・注文編集" />
         <AdminLink href="/admin/delivered" label="納品済み一覧・再発行" />
+        <AdminLink href="/admin/sales" label="売上管理（月次・医院別・商品別）" />
       </section>
 
       <section style={sectionStyle}>
