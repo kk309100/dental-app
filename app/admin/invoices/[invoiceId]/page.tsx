@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { use } from "react"
 import { supabase } from "@/lib/supabase"
 import { COMPANY } from "@/lib/company"
-import { fmtYen, fmtDate, INVOICE_STATUSES, getClinicPrefix, type InvoiceStatus } from "@/lib/invoice"
+import { fmtYen, fmtDate, INVOICE_STATUSES, getClinicPrefix, getCorporateLabel, type InvoiceStatus } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -88,19 +88,32 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
   }
 
   // 明細を「商品名で集約」したサマリ表示
-  // product_name が null の場合は products テーブルから補完
+  // product_name が null の場合は products テーブルから補完。
+  // それでも分からない場合は (削除済み商品) として product_id ごとに別行で表示
   const itemSummary = useMemo(() => {
     const productById = new Map(products.map((p) => [p.id, p.name]))
     const map = new Map<string, { name: string; qty: number; amount: number }>()
     items.forEach((it) => {
-      const name = it.product_name || (it.product_id ? productById.get(it.product_id) : null) || "(商品名不明)"
-      const e = map.get(name) || { name, qty: 0, amount: 0 }
+      let key: string
+      if (it.product_name) {
+        key = it.product_name
+      } else if (it.product_id && productById.has(it.product_id)) {
+        key = productById.get(it.product_id)!
+      } else if (it.product_id) {
+        key = `(削除済み商品 #${it.product_id.slice(0, 8)})`
+      } else {
+        key = "(商品名なし)"
+      }
+      const e = map.get(key) || { name: key, qty: 0, amount: 0 }
       e.qty += it.quantity || 0
       e.amount += (it.price || 0) * (it.quantity || 0)
-      map.set(name, e)
+      map.set(key, e)
     })
     return Array.from(map.values()).sort((a, b) => b.amount - a.amount)
   }, [items, products])
+
+  // 商品名が null の明細件数（警告表示用）
+  const missingNameCount = useMemo(() => items.filter((it) => !it.product_name).length, [items])
 
   async function markAsPaid() {
     if (!invoice) return
@@ -143,6 +156,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
 
   const status = INVOICE_STATUSES[invoice.status]
   const clinicPrefix = clinic ? getClinicPrefix(clinic.name, clinic.corporate_name, clinic.clinic_type) : ""
+  const corporateLabel = clinic ? getCorporateLabel(clinic.corporate_name, clinic.name, clinic.clinic_type) : ""
 
   return (
     <>
@@ -181,7 +195,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
           <div style={{ flex: 1 }}>
             {clinic ? (
               <>
-                {clinic.corporate_name && <p style={{ margin: "0 0 4px", fontSize: 13, color: "#444" }}>{clinic.corporate_name}</p>}
+                {corporateLabel && <p style={{ margin: "0 0 4px", fontSize: 13, color: "#444" }}>{corporateLabel}</p>}
                 <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
                   {clinicPrefix}{clinic.name}　御中
                 </p>
@@ -222,6 +236,13 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
         <p style={{ fontSize: 11, color: "#666", margin: "16px 0 6px" }}>
           下記のとおりご請求申し上げます。
         </p>
+        {missingNameCount > 0 && (
+          <p className="no-print" style={{ fontSize: 11, color: "#92400e", background: "#fef3c7", padding: "6px 10px", borderRadius: 4, margin: "0 0 8px" }}>
+            ⚠ 商品名が記録されていない明細が {missingNameCount} 件あります（旧データ）。Supabase で
+            <code style={{ background: "#fff", padding: "0 4px", borderRadius: 2, margin: "0 4px", fontSize: 10 }}>UPDATE order_items SET product_name = p.name FROM products p WHERE order_items.product_id = p.id AND order_items.product_name IS NULL;</code>
+            を実行すると、商品マスタに残っているものは復元されます。
+          </p>
+        )}
         <table style={table}>
           <thead>
             <tr>

@@ -80,11 +80,34 @@ export function fmtDate(d: string | Date | null | undefined): string {
 
 // ── 医院名プレフィックス（「医）」） ────────────────────────────────────
 const DENTAL_KEYWORDS = ["歯科", "デンタル", "dental", "口腔", "矯正歯科", "医院", "クリニック", "診療所"]
-export function getClinicPrefix(name: string, corporateName?: string | null, clinicType?: string | null): string {
-  if (clinicType === "dental") return "医）"
-  if (clinicType === "company" || clinicType === "person" || clinicType === "other") return ""
+function isMedical(name: string, corporateName?: string | null, clinicType?: string | null): boolean {
+  if (clinicType === "dental") return true
+  if (clinicType === "company" || clinicType === "person" || clinicType === "other") return false
   const target = (name + (corporateName || "")).toLowerCase()
-  return DENTAL_KEYWORDS.some((kw) => target.includes(kw.toLowerCase())) ? "医）" : ""
+  return DENTAL_KEYWORDS.some((kw) => target.includes(kw.toLowerCase()))
+}
+
+/**
+ * 医院名の前に付ける短縮プレフィックス。
+ * corporate_name がある場合は二重表示を避けるため空を返す（getCorporateLabel 側で「医療法人 ◯◯」を出す）。
+ */
+export function getClinicPrefix(name: string, corporateName?: string | null, clinicType?: string | null): string {
+  if (corporateName) return "" // corporate_name がある場合は getCorporateLabel に任せる
+  return isMedical(name, corporateName, clinicType) ? "医）" : ""
+}
+
+/**
+ * 法人名ラベル。医療系なら「医療法人 ◯◯」、それ以外は corporate_name そのまま。
+ * corporate_name が空なら空文字。
+ */
+export function getCorporateLabel(corporateName?: string | null, name?: string | null, clinicType?: string | null): string {
+  if (!corporateName) return ""
+  // 既に「医療法人」「株式会社」などが入っているならそのまま返す
+  if (/^(医療法人|社会医療法人|医療法人社団|社団法人|財団法人|学校法人|株式会社|有限会社|合同会社|合資会社)/.test(corporateName)) {
+    return corporateName
+  }
+  if (isMedical(name || "", corporateName, clinicType)) return `医療法人 ${corporateName}`
+  return corporateName
 }
 
 // ── 請求書ステータス ──────────────────────────────────────────────────
