@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
+import Seal from "@/app/components/Seal"
 
 export default function PurchaseOrderPage() {
   const [orders, setOrders] = useState<any[]>([])
@@ -122,7 +123,7 @@ export default function PurchaseOrderPage() {
             <p className="delivery-date">希望納期：＿＿＿年＿＿月＿＿日</p>
           </div>
 
-          <div className="right-info">
+          <div className="right-info" style={{ position: "relative", paddingRight: 60 }}>
             <p>発注年月日：{new Date().toLocaleDateString()}</p>
             <p className="company-name">株式会社 清新</p>
             <p>〒454-0812</p>
@@ -131,6 +132,10 @@ export default function PurchaseOrderPage() {
             <p>TEL：052-526-3223</p>
             <p>FAX：052-655-5977</p>
             <p>担当：</p>
+            {/* 印影 */}
+            <div style={{ position: "absolute", top: 0, right: 0 }}>
+              <Seal size={50} />
+            </div>
           </div>
         </div>
 
