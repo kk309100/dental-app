@@ -72,6 +72,7 @@ export default function InvoicesPage() {
           <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{invoices.length}件</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <Link href="/admin/invoices/bulk"><button style={btnGray}>📋 一括発行</button></Link>
           <Link href="/admin/invoices/create"><button style={btnDark}>＋ 請求書を発行</button></Link>
         </div>
       </div>
@@ -165,6 +166,7 @@ const page: React.CSSProperties = { maxWidth: 960, margin: "0 auto", padding: 20
 const back: React.CSSProperties = { padding: "6px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", marginBottom: 16, cursor: "pointer" }
 const header: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 12 }
 const btnDark: React.CSSProperties = { padding: "8px 16px", borderRadius: 8, border: "none", background: "#111", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }
+const btnGray: React.CSSProperties = { padding: "8px 14px", borderRadius: 8, border: "1px solid #ddd", background: "#f7f7f7", color: "#333", fontSize: 13, cursor: "pointer" }
 const kpiGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 12 }
 const kpiCard: React.CSSProperties = { background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: 14 }
 const filters: React.CSSProperties = { display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }
