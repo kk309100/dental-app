@@ -1,14 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import Link from "next/link"
 
 export default function PurchaseOrderPage() {
   const [orders, setOrders] = useState<any[]>([])
   const [orderItems, setOrderItems] = useState<any[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [clinics, setClinics] = useState<any[]>([])
-  const [manufacturers, setManufacturers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchData()
@@ -16,70 +17,91 @@ export default function PurchaseOrderPage() {
 
   async function fetchData() {
     const { data: ordersData } = await supabase.from("orders").select("*")
-    const { data: itemsData } = await supabase.from("order_items").select("*")
+    const { data: itemsData } = await supabase
+      .from("order_items")
+      .select("*")
+      .or("purchase_status.is.null,purchase_status.eq.未発注")
+
     const { data: productsData } = await supabase.from("products").select("*")
     const { data: clinicsData } = await supabase.from("clinics").select("*")
-    const { data: manufacturersData } = await supabase.from("manufacturers").select("*")
 
     setOrders(ordersData || [])
     setOrderItems(itemsData || [])
     setProducts(productsData || [])
     setClinics(clinicsData || [])
-    setManufacturers(manufacturersData || [])
+    setLoading(false)
   }
 
-  function getClinic(id: string) {
-    return clinics.find((c) => c.id === id)
+  function getOrder(orderId: string) {
+    return orders.find((order) => order.id === orderId)
   }
 
-  function getProduct(id: string) {
-    return products.find((p) => p.id === id)
+  function getClinicName(clinicId: string) {
+    return clinics.find((clinic) => clinic.id === clinicId)?.name || "医院不明"
   }
 
-  function getManufacturer(id: string) {
-    return manufacturers.find((m) => m.id === id)
+  function getProduct(productId: string) {
+    return products.find((product) => product.id === productId)
+  }
+
+  const purchaseRows = useMemo(() => {
+    return orderItems.map((item) => {
+      const product = getProduct(item.product_id)
+      const order = getOrder(item.order_id)
+      const clinicName = order ? getClinicName(order.clinic_id) : "医院不明"
+
+      return {
+        item_id: item.id,
+        order_id: item.order_id,
+        product_id: item.product_id,
+        product_name: item.product_name || product?.name || "商品名なし",
+        manufacturer: product?.manufacturer || "メーカー未設定",
+        quantity: Number(item.quantity || 0),
+        unit: product?.unit || "個",
+        clinic_name: clinicName,
+        delivery_number: order?.delivery_number || "-",
+      }
+    })
+  }, [orderItems, products, orders, clinics])
+
+  const groupedByManufacturer = useMemo(() => {
+    return purchaseRows.reduce((acc: any, row) => {
+      if (!acc[row.manufacturer]) acc[row.manufacturer] = []
+      acc[row.manufacturer].push(row)
+      return acc
+    }, {})
+  }, [purchaseRows])
+
+  async function markManufacturerAsPurchased(manufacturerName: string) {
+    const rows = groupedByManufacturer[manufacturerName] || []
+    const ids = rows.map((row: any) => row.item_id)
+
+    if (ids.length === 0) return
+
+    const ok = confirm(`${manufacturerName} の発注を発注済みにしますか？`)
+    if (!ok) return
+
+    const { error } = await supabase
+      .from("order_items")
+      .update({
+        purchase_status: "発注済み",
+        purchased_at: new Date().toISOString(),
+      })
+      .in("id", ids)
+
+    if (error) {
+      console.error(error)
+      alert("発注済み処理でエラーが出ました")
+      return
+    }
+
+    alert("発注済みにしました")
+    fetchData()
   }
 
   function printPage() {
     window.print()
   }
-
-  const purchaseRows: any[] = []
-
-  orders.forEach((order) => {
-    const clinic = getClinic(order.clinic_id)
-
-    orderItems
-      .filter((item) => item.order_id === order.id)
-      .forEach((item) => {
-        const product = getProduct(item.product_id)
-        if (!product) return
-
-        const reorderLevel = product.reorder_level ?? 10
-
-        if (product.stock <= reorderLevel) {
-          purchaseRows.push({
-            manufacturer_id: product.manufacturer_id,
-            product_name: product.name,
-            quantity: item.quantity,
-            unit: product.unit || "個",
-            clinic_name: clinic?.name || "医院未設定",
-          })
-        }
-      })
-  })
-
-  const groupedByManufacturer = purchaseRows.reduce((acc: any, row) => {
-    const manufacturer = getManufacturer(row.manufacturer_id)
-    const manufacturerName = manufacturer?.name || "メーカー未設定"
-
-    if (!acc[manufacturerName]) {
-      acc[manufacturerName] = []
-    }
-
-    acc[manufacturerName].push(row)
-    return acc
-  }, {})
 
   function PurchaseSheet({ manufacturerName, items }: any) {
     return (
@@ -92,35 +114,23 @@ export default function PurchaseOrderPage() {
 
         <div className="info-area">
           <div className="left-info">
-            <p>〒000-0000</p>
-            <p>発注先住所</p>
+            <p>発注先</p>
 
-            <div className="maker-name">
-              {manufacturerName}　御中
-            </div>
-
-            <p>TEL：000-0000-0000</p>
-            <p>FAX：000-0000-0000</p>
+            <div className="maker-name">{manufacturerName}　御中</div>
 
             <p className="message">下記の通り、発注いたします。</p>
-
-            <p className="delivery-date">
-              希望納期：＿＿＿年＿＿月＿＿日
-            </p>
+            <p className="delivery-date">希望納期：＿＿＿年＿＿月＿＿日</p>
           </div>
 
           <div className="right-info">
             <p>発注年月日：{new Date().toLocaleDateString()}</p>
-            <p className="company-name">株式会社 清新</p>
-            <p>登録番号：T4180001119611</p>
+            <p className="company-name">株式会社 BIODENT</p>
             <p>〒454-0812</p>
             <p>名古屋市中川区五月通2-37</p>
             <p>黄金ステーションビル3階</p>
             <p>TEL：052-526-3223</p>
             <p>FAX：052-655-5977</p>
             <p>担当：</p>
-            <p>発注書No：</p>
-            <p className="page-no">Page：1</p>
           </div>
         </div>
 
@@ -128,7 +138,7 @@ export default function PurchaseOrderPage() {
           <thead>
             <tr>
               <th className="no">No.</th>
-              <th className="product">メーカー / 商品名</th>
+              <th className="product">商品名</th>
               <th className="qty">数量</th>
               <th className="unit">単位</th>
               <th className="memo">摘要</th>
@@ -145,35 +155,61 @@ export default function PurchaseOrderPage() {
                   <td>{item?.product_name || ""}</td>
                   <td className="center">{item?.quantity || ""}</td>
                   <td className="center">{item?.unit || ""}</td>
-                  <td>{item?.clinic_name || ""}</td>
+                  <td>
+                    {item
+                      ? `${item.clinic_name} / ${item.delivery_number}`
+                      : ""}
+                  </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
 
-        <div className="note">
-          備考：
-        </div>
+        <div className="note">備考：</div>
       </section>
     )
   }
 
+  if (loading) return <p style={{ padding: 20 }}>読み込み中...</p>
+
   return (
     <main className="page">
-      <button className="no-print" onClick={printPage}>
-        印刷
-      </button>
+      <div className="no-print toolbar">
+        <Link href="/admin">
+          <button className="sub-btn">管理画面へ戻る</button>
+        </Link>
+
+        <button className="main-btn" onClick={printPage}>
+          印刷
+        </button>
+      </div>
 
       {Object.keys(groupedByManufacturer).length === 0 && (
-        <div className="empty">現在、発注が必要な商品はありません。</div>
+        <div className="empty">現在、未発注の商品はありません。</div>
       )}
 
-      {Object.entries(groupedByManufacturer).map(([manufacturerName, items]: any) => (
-        <div key={manufacturerName} className="a4">
-          <PurchaseSheet manufacturerName={manufacturerName} items={items} />
-        </div>
-      ))}
+      {Object.entries(groupedByManufacturer).map(
+        ([manufacturerName, items]: any) => (
+          <div key={manufacturerName} className="block">
+            <div className="no-print action-box">
+              <h2>{manufacturerName}</h2>
+              <p>{items.length}件の未発注商品があります。</p>
+
+              <button
+                className="done-btn"
+                onClick={() => markManufacturerAsPurchased(manufacturerName)}
+              >
+                このメーカーを発注済みにする
+              </button>
+            </div>
+
+            <div className="a4">
+              <PurchaseSheet manufacturerName={manufacturerName} items={items} />
+            </div>
+          </div>
+        )
+      )}
 
       <style jsx global>{`
         body {
@@ -185,20 +221,60 @@ export default function PurchaseOrderPage() {
           background: #eee;
         }
 
-        .no-print {
-          padding: 10px 20px;
-          margin-bottom: 16px;
+        .toolbar {
+          max-width: 900px;
+          margin: 0 auto 16px;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+
+        .main-btn,
+        .sub-btn,
+        .done-btn {
+          width: 100%;
+          padding: 12px;
+          border-radius: 10px;
+          border: none;
+          font-weight: bold;
+          cursor: pointer;
+        }
+
+        .main-btn {
           background: #111;
           color: white;
-          border: none;
-          border-radius: 8px;
-          font-weight: bold;
+        }
+
+        .sub-btn {
+          background: white;
+          color: #111;
+          border: 1px solid #ddd;
+        }
+
+        .done-btn {
+          background: #0f766e;
+          color: white;
         }
 
         .empty {
+          max-width: 900px;
+          margin: 0 auto;
           background: white;
           padding: 20px;
-          border-radius: 8px;
+          border-radius: 12px;
+        }
+
+        .action-box {
+          max-width: 210mm;
+          margin: 0 auto 12px;
+          background: white;
+          padding: 14px;
+          border-radius: 12px;
+          border: 1px solid #ddd;
+        }
+
+        .block {
+          margin-bottom: 24px;
         }
 
         .a4 {
@@ -261,11 +337,6 @@ export default function PurchaseOrderPage() {
           margin-top: 5mm !important;
           font-weight: bold;
           font-size: 14px;
-        }
-
-        .page-no {
-          text-align: right;
-          margin-top: 2mm !important;
         }
 
         .detail {
