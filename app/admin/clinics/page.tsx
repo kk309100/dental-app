@@ -1,0 +1,326 @@
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import { supabase } from "@/lib/supabase"
+import Link from "next/link"
+
+// ── 型 ─────────────────────────────────────────────────────────────────
+type Clinic = {
+  id: string
+  name: string
+  corporate_name?: string | null
+  contact?: string | null
+  phone?: string | null
+  adress?: string | null   // 注: dental-order スキーマ側の typo（正は address）
+  email?: string | null
+  sales_rep?: string | null
+  closing_day?: string | null
+  clinic_type?: string | null
+  created_at?: string
+}
+
+type Form = {
+  name: string
+  corporate_name: string
+  contact: string
+  phone: string
+  adress: string
+  email: string
+  sales_rep: string
+  closing_day: string
+  clinic_type: string
+}
+
+const empty: Form = {
+  name: "",
+  corporate_name: "",
+  contact: "",
+  phone: "",
+  adress: "",
+  email: "",
+  sales_rep: "",
+  closing_day: "月末",
+  clinic_type: "",
+}
+
+const CLOSING_DAYS = ["月末", "20日", "15日", "10日", "5日", "その他"]
+const CLINIC_TYPES = [
+  { v: "", label: "自動判定（名前から歯科を検出）" },
+  { v: "dental", label: "歯科医院（「医）」を付ける）" },
+  { v: "company", label: "会社・法人（「医）」なし）" },
+  { v: "person", label: "個人（「医）」なし）" },
+  { v: "other", label: "その他（「医）」なし）" },
+]
+
+export default function AdminClinicsPage() {
+  const [clinics, setClinics] = useState<Clinic[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState("")
+  const [showForm, setShowForm] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [form, setForm] = useState<Form>(empty)
+  const [saving, setSaving] = useState(false)
+  const [errMsg, setErrMsg] = useState("")
+
+  useEffect(() => { fetchData() }, [])
+
+  async function fetchData() {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from("clinics")
+      .select("*")
+      .order("name", { ascending: true })
+    if (error) setErrMsg(`読込エラー: ${error.message}`)
+    setClinics(data || [])
+    setLoading(false)
+  }
+
+  // 半角全角統一の検索
+  const filtered = useMemo(() => {
+    const k = norm(search)
+    if (!k) return clinics
+    return clinics.filter((c) => {
+      const target = norm(`${c.name} ${c.corporate_name || ""} ${c.contact || ""} ${c.sales_rep || ""}`)
+      return target.includes(k)
+    })
+  }, [clinics, search])
+
+  function openAdd() {
+    setForm(empty)
+    setEditId(null)
+    setErrMsg("")
+    setShowForm(true)
+  }
+
+  function openEdit(c: Clinic) {
+    setForm({
+      name: c.name || "",
+      corporate_name: c.corporate_name || "",
+      contact: c.contact || "",
+      phone: c.phone || "",
+      adress: c.adress || "",
+      email: c.email || "",
+      sales_rep: c.sales_rep || "",
+      closing_day: c.closing_day || "月末",
+      clinic_type: c.clinic_type || "",
+    })
+    setEditId(c.id)
+    setErrMsg("")
+    setShowForm(true)
+  }
+
+  async function save() {
+    if (!form.name.trim()) {
+      setErrMsg("医院名を入力してください")
+      return
+    }
+    setSaving(true)
+    setErrMsg("")
+    try {
+      if (editId) {
+        const { error } = await supabase.from("clinics").update(form).eq("id", editId)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from("clinics").insert(form)
+        if (error) throw error
+      }
+      setShowForm(false)
+      await fetchData()
+    } catch (e) {
+      setErrMsg(`保存失敗: ${(e as Error).message}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function del(id: string, name: string) {
+    if (!confirm(`「${name}」を削除します。よろしいですか？\n\n※ 関連する注文がある場合は削除できません。`)) return
+    const { error } = await supabase.from("clinics").delete().eq("id", id)
+    if (error) {
+      alert(`削除失敗: ${error.message}\n\n※ この医院を参照している注文が残っている可能性があります。`)
+      return
+    }
+    fetchData()
+  }
+
+  function downloadCSV() {
+    const rows: string[][] = [
+      ["医院名", "法人名", "先方担当", "電話", "メール", "自社担当", "締日", "住所", "種別"],
+      ...clinics.map((c) => [
+        c.name || "",
+        c.corporate_name || "",
+        c.contact || "",
+        c.phone || "",
+        c.email || "",
+        c.sales_rep || "",
+        c.closing_day || "",
+        c.adress || "",
+        c.clinic_type || "",
+      ]),
+    ]
+    const csv = "﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(blob)
+    a.download = "医院一覧.csv"
+    a.click()
+  }
+
+  if (loading) return <main style={page}><p>読み込み中…</p></main>
+
+  return (
+    <main style={page}>
+      <Link href="/admin"><button style={back}>← 戻る</button></Link>
+
+      <div style={header}>
+        <div>
+          <h1 style={{ fontSize: 26, margin: 0 }}>医院管理</h1>
+          <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{clinics.length}件</p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={downloadCSV} style={btnGray}>CSV</button>
+          <button onClick={openAdd} style={btnDark}>＋ 医院を追加</button>
+        </div>
+      </div>
+
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="医院名・法人名・担当で検索（半角/全角OK）"
+        style={searchInput}
+      />
+
+      {errMsg && (
+        <div style={errBox}>{errMsg}</div>
+      )}
+
+      <div style={tableWrap}>
+        {filtered.length === 0 ? (
+          <p style={{ padding: 32, textAlign: "center", color: "#999" }}>
+            {search ? "該当なし" : "医院がまだ登録されていません"}
+          </p>
+        ) : (
+          filtered.map((c) => (
+            <div key={c.id} style={card}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={cardName}>{c.name}</p>
+                {c.corporate_name && <p style={cardSub}>{c.corporate_name}</p>}
+                <div style={cardMeta}>
+                  {c.contact && <span>👤 {c.contact}</span>}
+                  {c.phone && <span>📞 {c.phone}</span>}
+                  {c.email && <span>✉ {c.email}</span>}
+                  {c.sales_rep && <span style={badge}>担当: {c.sales_rep}</span>}
+                  <span style={badgeGray}>{c.closing_day || "月末"}</span>
+                </div>
+                {c.adress && <p style={cardAddr}>📍 {c.adress}</p>}
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => openEdit(c)} style={btnEdit}>編集</button>
+                <button onClick={() => del(c.id, c.name)} style={btnDel}>削除</button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* フォーム モーダル */}
+      {showForm && (
+        <div style={overlay} onClick={() => setShowForm(false)}>
+          <div style={modal} onClick={(e) => e.stopPropagation()}>
+            <div style={modalHeader}>
+              <h2 style={{ margin: 0, fontSize: 18 }}>{editId ? "医院を編集" : "医院を追加"}</h2>
+              <button onClick={() => setShowForm(false)} style={btnClose}>×</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              {errMsg && <div style={errBox}>{errMsg}</div>}
+              <Field label="医院名 *" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} />
+              <Field label="法人名" value={form.corporate_name} onChange={(v) => setForm((f) => ({ ...f, corporate_name: v }))} />
+              <Field label="先方担当者" value={form.contact} onChange={(v) => setForm((f) => ({ ...f, contact: v }))} />
+              <Field label="自社営業担当" value={form.sales_rep} onChange={(v) => setForm((f) => ({ ...f, sales_rep: v }))} />
+              <Field label="電話番号" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
+              <Field label="メールアドレス" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} />
+              <Field label="住所" value={form.adress} onChange={(v) => setForm((f) => ({ ...f, adress: v }))} />
+
+              <div style={fieldWrap}>
+                <label style={fieldLabel}>締日</label>
+                <select
+                  value={form.closing_day}
+                  onChange={(e) => setForm((f) => ({ ...f, closing_day: e.target.value }))}
+                  style={fieldInput}
+                >
+                  {CLOSING_DAYS.map((d) => <option key={d}>{d}</option>)}
+                </select>
+              </div>
+
+              <div style={fieldWrap}>
+                <label style={fieldLabel}>得意先種別（納品書宛名に影響）</label>
+                <select
+                  value={form.clinic_type}
+                  onChange={(e) => setForm((f) => ({ ...f, clinic_type: e.target.value }))}
+                  style={fieldInput}
+                >
+                  {CLINIC_TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                <button onClick={save} style={btnDark} disabled={saving}>{saving ? "保存中…" : "保存"}</button>
+                <button onClick={() => setShowForm(false)} style={btnGray} disabled={saving}>キャンセル</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  )
+}
+
+// ── サブコンポーネント ──────────────────────────────────────────────
+function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={fieldWrap}>
+      <label style={fieldLabel}>{label}</label>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={fieldInput}
+      />
+    </div>
+  )
+}
+
+// ── 補助関数 ──────────────────────────────────────────────────────────
+function norm(v: string) {
+  return String(v || "").toLowerCase().normalize("NFKC")
+}
+
+function csvCell(s: string) {
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+  return s
+}
+
+// ── スタイル ──────────────────────────────────────────────────────────
+const page: React.CSSProperties = { maxWidth: 960, margin: "0 auto", padding: 20 }
+const back: React.CSSProperties = { padding: "6px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", marginBottom: 16, cursor: "pointer" }
+const header: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 12 }
+const btnDark: React.CSSProperties = { padding: "8px 16px", borderRadius: 8, border: "none", background: "#111", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }
+const btnGray: React.CSSProperties = { padding: "8px 14px", borderRadius: 8, border: "1px solid #ddd", background: "#f7f7f7", fontSize: 13, cursor: "pointer", color: "#333" }
+const btnEdit: React.CSSProperties = { padding: "5px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", fontSize: 12, cursor: "pointer", color: "#333" }
+const btnDel: React.CSSProperties = { padding: "5px 12px", borderRadius: 6, border: "1px solid #fcc", background: "#fff5f5", fontSize: 12, cursor: "pointer", color: "#dc2626" }
+const btnClose: React.CSSProperties = { background: "none", border: "none", fontSize: 24, color: "#999", cursor: "pointer", padding: 0, lineHeight: 1 }
+const searchInput: React.CSSProperties = { width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 12, boxSizing: "border-box" }
+const tableWrap: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 8 }
+const card: React.CSSProperties = { background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: 14, display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }
+const cardName: React.CSSProperties = { fontSize: 15, fontWeight: 700, margin: 0, color: "#111" }
+const cardSub: React.CSSProperties = { fontSize: 11, color: "#777", margin: "2px 0 0" }
+const cardMeta: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, fontSize: 11, color: "#555", alignItems: "center" }
+const cardAddr: React.CSSProperties = { fontSize: 11, color: "#777", margin: "4px 0 0" }
+const badge: React.CSSProperties = { padding: "2px 8px", borderRadius: 99, background: "#f3f4f6", fontSize: 10, color: "#555", fontWeight: 600 }
+const badgeGray: React.CSSProperties = { padding: "2px 8px", borderRadius: 99, background: "#fafafa", border: "1px solid #eee", fontSize: 10, color: "#666" }
+const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 40, zIndex: 50 }
+const modal: React.CSSProperties = { background: "#fff", borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }
+const modalHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #eee" }
+const fieldWrap: React.CSSProperties = { marginBottom: 10 }
+const fieldLabel: React.CSSProperties = { display: "block", fontSize: 11, color: "#777", marginBottom: 4, fontWeight: 600 }
+const fieldInput: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 13, boxSizing: "border-box", background: "#fff" }
+const errBox: React.CSSProperties = { padding: 10, background: "#fff5f5", border: "1px solid #fcc", borderRadius: 6, color: "#dc2626", fontSize: 12, marginBottom: 12 }
