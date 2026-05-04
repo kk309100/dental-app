@@ -252,8 +252,8 @@ export default function ReceivingPage() {
 
   return (
     <div className="space-y-3">
-      {/* タイトル + PDF読込ボタン */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      {/* タイトル + PDF読込ボタン（タイトル直右に） */}
+      <div className="flex items-center flex-wrap gap-3">
         <h1 className="text-lg font-bold text-gray-900">
           仕入入力
           <span className="ml-2 text-xs font-normal text-gray-400">手打ち or PDF読込 ・ 商品マスタは自動更新</span>
