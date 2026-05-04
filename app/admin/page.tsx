@@ -45,7 +45,7 @@ export default function AdminHomePage() {
   // ボタン定義（10つ）
   const buttons: ButtonItem[] = [
     { href: "/admin/receiving", label: "仕入", desc: "手入力・PDF読込", icon: Ic.purchase, color: "#7c3aed" },
-    { href: "/admin/purchase-order", label: "発注", desc: "仕入先への発注書", icon: Ic.truck, color: "#0891b2" },
+    { href: "/admin/purchase-orders", label: "発注", desc: "発注書管理・自動提案", icon: Ic.truck, color: "#0891b2" },
     { href: "/admin/orders", label: "注文", desc: "医院からの注文管理", icon: Ic.order, color: "#3b82f6", badge: badges.pendingOrders, badgeLabel: "未処理" },
     { href: "/admin/delivery", label: "納品", desc: "納品書の発行・印刷", icon: Ic.doc, color: "#10b981", badge: badges.undeliveredCount, badgeLabel: "未納品" },
     { href: "/admin/invoices", label: "請求", desc: "請求書発行・入金", icon: Ic.sales, color: "#dc2626", badge: badges.unbilled || badges.unpaidInvoices, badgeLabel: badges.unbilled > 0 ? "未請求" : "未収" },
@@ -79,6 +79,7 @@ export default function AdminHomePage() {
             { href: "/admin/quotes", label: "見積書" },
             { href: "/admin/invoices/bulk", label: "一括請求" },
             { href: "/admin/receivables", label: "売掛金台帳" },
+            { href: "/admin/purchase-order", label: "推奨発注リスト（旧）" },
             { href: "/admin/products", label: "商品マスタ" },
             { href: "/admin/delivery-search", label: "納品書検索" },
             { href: "/admin/delivered", label: "納品済み一覧" },
