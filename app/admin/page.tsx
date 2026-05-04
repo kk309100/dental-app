@@ -20,6 +20,7 @@ export default function AdminPage() {
         <AdminLink href="/admin/delivery" label="納品書" />
         <AdminLink href="/admin/purchase-order" label="発注書" />
         <AdminLink href="/admin/delivery-search" label="納品書検索" />
+<AdminLink href="/admin/delivery-control" label="納品処理" />
       </section>
 
       <section style={sectionStyle}>
