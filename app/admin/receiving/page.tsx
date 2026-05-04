@@ -11,43 +11,26 @@ type Product = {
   manufacturer: string | null
   stock: number | null
   cost: number | null
+  barcode: string | null
 }
 type Supplier = { id: string; name: string; maker_name: string | null }
-type Mapping = {
-  id: string
-  supplier_id: string | null
-  supplier_product_code: string | null
-  supplier_jan: string | null
-  supplier_product_name: string
-  product_id: string | null
-  unit_quantity_per_pack: number
-}
 
 type Row = {
-  // 商品（既存マスタ参照 or PDFからの自由テキスト）
-  productId: string
-  productName: string  // datalist 表示 + 既存商品マッチング用
-  // 仕入伝票上の情報（PDFから入る場合あり）
-  supplierJan: string
-  supplierCode: string
-  supplierProductName: string  // PDFの場合の元の商品名
-  packSize: string  // 「20枚入」等
-  // 数量・単価
+  productName: string         // 商品名（PDF由来 or 手入力）
+  supplierJan: string         // PDF由来
+  supplierCode: string        // PDF由来
+  packSize: string            // 「20枚入」等
   quantity: string
   unitPrice: string
-  unitQuantityPerPack: number  // 換算係数
+  unitQuantityPerPack: number // 換算
   memo: string
-  // マッピング状態
-  mappingId?: string
-  mappingFound: boolean
+  manufacturer: string        // 新規作成時用
 }
 
 const newRow = (): Row => ({
-  productId: "", productName: "",
-  supplierJan: "", supplierCode: "", supplierProductName: "",
+  productName: "", supplierJan: "", supplierCode: "",
   packSize: "", quantity: "", unitPrice: "",
-  unitQuantityPerPack: 1, memo: "",
-  mappingFound: false,
+  unitQuantityPerPack: 1, memo: "", manufacturer: "",
 })
 
 const INITIAL_ROWS = 10
@@ -55,25 +38,20 @@ const INITIAL_ROWS = 10
 export default function ReceivingPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [mappings, setMappings] = useState<Mapping[]>([])
   const [recent, setRecent] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  // 共通設定
   const [supplierId, setSupplierId] = useState("")
   const [date, setDate] = useState(ymd(new Date()))
   const [updateCost, setUpdateCost] = useState(true)
 
-  // 表データ
   const [rows, setRows] = useState<Row[]>(Array.from({ length: INITIAL_ROWS }, newRow))
 
-  // PDF解析
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState("")
   const [parsedMeta, setParsedMeta] = useState<{ supplier_name?: string; invoice_number?: string; invoice_date?: string; total?: number } | null>(null)
 
-  // 登録
   const [submitting, setSubmitting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [logs, setLogs] = useState<string[]>([])
@@ -82,46 +60,20 @@ export default function ReceivingPage() {
 
   async function fetchData() {
     setLoading(true)
-    const [p, s, m, r] = await Promise.all([
-      supabase.from("products").select("id,name,product_code,manufacturer,stock,cost").order("name"),
+    const [p, s, r] = await Promise.all([
+      supabase.from("products").select("id,name,product_code,manufacturer,stock,cost,barcode"),
       supabase.from("suppliers").select("id,name,maker_name").order("name"),
-      supabase.from("supplier_product_mappings").select("*"),
       supabase.from("stock_receipts").select("*").order("created_at", { ascending: false }).limit(20),
     ])
     setProducts((p.data as Product[]) || [])
     setSuppliers((s.data as Supplier[]) || [])
-    setMappings((m.data as Mapping[]) || [])
     setRecent(r.data || [])
     setLoading(false)
-  }
-
-  // 商品マスタの name → product マップ
-  const productByName = useMemo(() => new Map(products.map((p) => [p.name, p])), [products])
-
-  // マッピング検索（仕入先固定で JAN > 商品コード > 商品名）
-  function findMapping(supplierJan: string, supplierCode: string, supplierProductName: string): Mapping | undefined {
-    if (!supplierId) return undefined
-    const list = mappings.filter((m) => m.supplier_id === supplierId)
-    if (supplierJan) { const m = list.find((m) => m.supplier_jan === supplierJan); if (m) return m }
-    if (supplierCode) { const m = list.find((m) => m.supplier_product_code === supplierCode); if (m) return m }
-    if (supplierProductName) return list.find((m) => m.supplier_product_name === supplierProductName)
-    return undefined
   }
 
   function updateRow(i: number, partial: Partial<Row>) {
     setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, ...partial } : r))
   }
-
-  function onProductNameChange(i: number, name: string) {
-    const p = productByName.get(name)
-    updateRow(i, {
-      productName: name,
-      productId: p?.id || "",
-      // 商品が見つかったら、空の単価を cost で埋める
-      ...(p && !rows[i].unitPrice && p.cost ? { unitPrice: String(p.cost) } : {}),
-    })
-  }
-
   function addRow() { setRows((prev) => [...prev, newRow()]) }
   function removeRow(i: number) {
     setRows((prev) => {
@@ -130,7 +82,7 @@ export default function ReceivingPage() {
     })
   }
   function clearAll() {
-    if (!confirm("入力をすべてクリアしますか？（PDF解析結果も含む）")) return
+    if (!confirm("入力をすべてクリアしますか？")) return
     setRows(Array.from({ length: INITIAL_ROWS }, newRow))
     setLogs([])
     setParsedMeta(null)
@@ -138,7 +90,6 @@ export default function ReceivingPage() {
     setParseError("")
   }
 
-  // PDF アップロード → 解析 → 表に流し込み
   async function uploadAndParse() {
     if (!pdfFile) { setParseError("PDF を選択してください"); return }
     setParsing(true)
@@ -159,33 +110,23 @@ export default function ReceivingPage() {
       const { data } = await r.json()
       setParsedMeta({ supplier_name: data.supplier_name, invoice_number: data.invoice_number, invoice_date: data.invoice_date, total: data.total })
 
-      // 仕入先・日付を自動セット
       if (data.invoice_date) setDate(data.invoice_date)
       if (!supplierId && data.supplier_name) {
         const matched = suppliers.find((s) => data.supplier_name.includes(s.name) || s.name.includes(data.supplier_name.split(/\s+/)[0]))
         if (matched) setSupplierId(matched.id)
       }
 
-      // 表に流し込み（マッピング自動適用）
-      const newRows: Row[] = data.items.map((it: any) => {
-        const m = findMapping(it.supplier_jan || "", it.supplier_product_code || "", it.supplier_product_name)
-        const product = m?.product_id ? products.find((p) => p.id === m.product_id) : products.find((p) => it.supplier_product_name?.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(it.supplier_product_name?.toLowerCase().slice(0, 8) || ""))
-        return {
-          productId: product?.id || "",
-          productName: product?.name || "",
-          supplierJan: it.supplier_jan || "",
-          supplierCode: it.supplier_product_code || "",
-          supplierProductName: it.supplier_product_name || "",
-          packSize: it.pack_size || "",
-          quantity: String(it.quantity || ""),
-          unitPrice: String(it.unit_price || ""),
-          unitQuantityPerPack: m?.unit_quantity_per_pack || 1,
-          memo: "",
-          mappingId: m?.id,
-          mappingFound: !!m,
-        }
-      })
-      // 既存の空行を消して PDF からの行で置き換え（足りなければ空行追加）
+      const newRows: Row[] = data.items.map((it: any) => ({
+        productName: it.supplier_product_name || "",
+        supplierJan: it.supplier_jan || "",
+        supplierCode: it.supplier_product_code || "",
+        packSize: it.pack_size || "",
+        quantity: String(it.quantity || ""),
+        unitPrice: String(it.unit_price || ""),
+        unitQuantityPerPack: 1,
+        memo: "",
+        manufacturer: "",
+      }))
       const padded = newRows.length >= INITIAL_ROWS ? newRows : [...newRows, ...Array.from({ length: INITIAL_ROWS - newRows.length }, newRow)]
       setRows(padded)
     } catch (e) {
@@ -195,21 +136,34 @@ export default function ReceivingPage() {
     }
   }
 
-  // 集計
-  const validRows = rows.filter((r) => r.productId && Number(r.quantity) > 0)
+  // 商品マスタ検索: JAN → product_code → name
+  function findProduct(row: Row): Product | undefined {
+    if (row.supplierJan) {
+      const m = products.find((p) => p.barcode === row.supplierJan)
+      if (m) return m
+    }
+    if (row.supplierCode) {
+      const m = products.find((p) => p.product_code === row.supplierCode)
+      if (m) return m
+    }
+    if (row.productName) {
+      return products.find((p) => p.name === row.productName.trim())
+    }
+    return undefined
+  }
+
+  const validRows = rows.filter((r) => r.productName.trim() && Number(r.quantity) > 0)
   const totalAmount = validRows.reduce((s, r) => s + (Number(r.unitPrice) || 0) * Number(r.quantity), 0)
-  const allMapped = rows.every((r) => !r.supplierProductName || r.productId)  // PDF由来は要マッピング
 
   async function submitAll() {
     if (validRows.length === 0) { alert("有効な行がありません"); return }
-    if (!confirm(`${validRows.length}行を仕入登録します。\n合計仕入額: ${fmtYen(totalAmount)}\nよろしいですか？`)) return
+    if (!confirm(`${validRows.length}行を仕入登録します。\n合計仕入額: ${fmtYen(totalAmount)}\n\n商品マスタに無い商品は自動で新規登録されます。\nよろしいですか？`)) return
 
     setSubmitting(true)
     setLogs([])
     setProgress({ done: 0, total: validRows.length })
     const newLogs: string[] = []
 
-    // PDF由来の場合は supplier_invoices にも履歴
     let invoiceId: string | null = null
     if (parsedMeta) {
       const { data } = await supabase.from("supplier_invoices").insert({
@@ -228,24 +182,42 @@ export default function ReceivingPage() {
     for (let i = 0; i < validRows.length; i++) {
       const row = validRows[i]
       try {
-        const product = products.find((p) => p.id === row.productId)
-        if (!product) throw new Error("商品が見つかりません")
         const qty = Number(row.quantity)
         const price = row.unitPrice === "" ? null : Number(row.unitPrice)
         const stockDelta = qty * row.unitQuantityPerPack
 
-        // 商品在庫 + cost 更新
+        // 商品検索 or 新規作成
+        let product = findProduct(row)
+        if (!product) {
+          // 新規作成
+          const supplierName = suppliers.find((s) => s.id === supplierId)?.name || ""
+          const { data: newP, error: cpe } = await supabase.from("products").insert({
+            name: row.productName.trim(),
+            product_code: row.supplierCode || null,
+            manufacturer: row.manufacturer || supplierName || null,
+            barcode: row.supplierJan || null,
+            stock: 0,
+            reorder_level: 10,
+            cost: price,
+            price: 0,
+            is_active: true,
+          }).select().single()
+          if (cpe) throw new Error("商品新規作成失敗: " + cpe.message)
+          product = newP as Product
+          newLogs.push(`+ 新規商品作成: ${product.name}`)
+          // ローカルにも追加して以後のループで再利用可能に
+          setProducts((prev) => [...prev, product!])
+        }
+
+        // 在庫 + cost 更新
         const productUpdate: { stock: number; cost?: number } = { stock: (product.stock || 0) + stockDelta }
         if (price !== null && updateCost) productUpdate.cost = price
-
         const { error: pe } = await supabase.from("products").update(productUpdate).eq("id", product.id)
         if (pe) throw new Error(pe.message)
 
-        // stock_receipts insert
         const memoStr = [
           row.memo,
           parsedMeta?.invoice_number ? `伝票:${parsedMeta.invoice_number}` : "",
-          row.supplierProductName ? `元:${row.supplierProductName}` : "",
           row.unitQuantityPerPack !== 1 ? `(${qty}×${row.unitQuantityPerPack})` : "",
         ].filter(Boolean).join(" / ")
         const { error: re } = await supabase.from("stock_receipts").insert({
@@ -257,37 +229,16 @@ export default function ReceivingPage() {
         })
         if (re) throw new Error(re.message)
 
-        // マッピング学習（PDF由来のみ）
-        if (row.supplierProductName && supplierId) {
-          if (row.mappingId) {
-            await supabase.from("supplier_product_mappings").update({
-              product_id: product.id,
-              unit_quantity_per_pack: row.unitQuantityPerPack,
-              updated_at: new Date().toISOString(),
-            }).eq("id", row.mappingId)
-          } else {
-            await supabase.from("supplier_product_mappings").insert({
-              supplier_id: supplierId,
-              supplier_jan: row.supplierJan || null,
-              supplier_product_code: row.supplierCode || null,
-              supplier_product_name: row.supplierProductName,
-              product_id: product.id,
-              unit_quantity_per_pack: row.unitQuantityPerPack,
-            })
-          }
-        }
-
         newLogs.push(`✓ ${product.name} +${stockDelta}${row.unitQuantityPerPack !== 1 ? ` (${qty}×${row.unitQuantityPerPack})` : ""}`)
       } catch (e) {
-        newLogs.push(`✗ ${row.productName || row.supplierProductName}: ${(e as Error).message}`)
+        newLogs.push(`✗ ${row.productName}: ${(e as Error).message}`)
       }
       setProgress({ done: i + 1, total: validRows.length })
       setLogs([...newLogs])
     }
 
     setSubmitting(false)
-    if (newLogs.every((l) => l.startsWith("✓"))) {
-      // 成功 → クリア
+    if (newLogs.every((l) => l.startsWith("✓") || l.startsWith("+"))) {
       setRows(Array.from({ length: INITIAL_ROWS }, newRow))
       setParsedMeta(null)
       setPdfFile(null)
@@ -302,7 +253,7 @@ export default function ReceivingPage() {
       <div>
         <h1 className="text-lg font-bold text-gray-900">
           仕入入力
-          <span className="ml-2 text-xs font-normal text-gray-400">手打ち or PDF読込</span>
+          <span className="ml-2 text-xs font-normal text-gray-400">手打ち or PDF読込 ・ 商品マスタは自動更新</span>
         </h1>
       </div>
 
@@ -324,32 +275,15 @@ export default function ReceivingPage() {
         <p className="text-xs text-blue-700 mb-3">仕入納品書PDFをアップロードすると、AIが明細を読み取って下の表に流し込みます</p>
 
         <div className="flex flex-col sm:flex-row gap-3 items-stretch">
-          {/* ファイル選択（大きなボタン） */}
-          <label
-            htmlFor="pdf-upload"
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 hover:border-blue-500 transition-colors"
-          >
+          <label htmlFor="pdf-upload" className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 hover:border-blue-500 transition-colors">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-600">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="text-sm font-bold text-blue-700">
-              {pdfFile ? `📄 ${pdfFile.name}` : "PDFファイルを選択"}
-            </span>
+            <span className="text-sm font-bold text-blue-700">{pdfFile ? `📄 ${pdfFile.name}` : "PDFファイルを選択"}</span>
           </label>
-          <input
-            id="pdf-upload"
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-            className="hidden"
-          />
+          <input id="pdf-upload" type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} className="hidden" />
 
-          {/* 解析実行ボタン */}
-          <button
-            onClick={uploadAndParse}
-            disabled={!pdfFile || parsing}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-blue-700"
-          >
+          <button onClick={uploadAndParse} disabled={!pdfFile || parsing} className="px-6 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-blue-700">
             {parsing ? "🔄 AI解析中…" : "🤖 AI解析する"}
           </button>
         </div>
@@ -362,16 +296,16 @@ export default function ReceivingPage() {
         )}
       </div>
 
-      {/* 入力表（手打ち + PDFが流し込まれる） */}
+      {/* 入力表 */}
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
           <thead className="sticky top-0 bg-gray-100">
             <tr className="text-[10px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-1.5 py-1.5 text-center w-8">#</th>
-              <th className="px-1.5 py-1.5 text-left">自社商品</th>
-              <th className="px-1.5 py-1.5 text-left w-40">仕入先 商品名/JAN</th>
+              <th className="px-1.5 py-1.5 text-left">商品名</th>
+              <th className="px-1.5 py-1.5 text-left w-32">JAN / 商品コード</th>
               <th className="px-1.5 py-1.5 text-right w-12">数量</th>
-              <th className="px-1.5 py-1.5 text-right w-12">×</th>
+              <th className="px-1.5 py-1.5 text-right w-12" title="1パッケージあたりの個数">×</th>
               <th className="px-1.5 py-1.5 text-right w-16">在庫加算</th>
               <th className="px-1.5 py-1.5 text-right w-20">仕入単価</th>
               <th className="px-1.5 py-1.5 text-right w-20">小計</th>
@@ -383,34 +317,31 @@ export default function ReceivingPage() {
             {rows.map((row, i) => {
               const stockDelta = Number(row.quantity || 0) * row.unitQuantityPerPack
               const subtotal = (Number(row.unitPrice) || 0) * Number(row.quantity || 0)
-              const matched = !!row.productId
-              const isPdfRow = !!row.supplierProductName
-              const ng = isPdfRow && !matched
+              const existing = findProduct(row)
+              const isPdfRow = !!(row.supplierJan || row.supplierCode)
               return (
-                <tr key={i} className={"border-b border-gray-100 " + (ng ? "bg-orange-50" : matched ? "bg-emerald-50/30" : "")}>
+                <tr key={i} className={"border-b border-gray-100 " + (existing ? "bg-emerald-50/30" : isPdfRow && row.productName ? "bg-yellow-50/40" : "")}>
                   <td className="px-1.5 py-0.5 text-center text-gray-400">{i + 1}</td>
                   <td className="px-1.5 py-0.5">
                     <input
                       list="products-list"
                       value={row.productName}
-                      onChange={(e) => onProductNameChange(i, e.target.value)}
+                      onChange={(e) => updateRow(i, { productName: e.target.value })}
                       placeholder="商品名"
                       className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-[11px]"
                     />
+                    {row.packSize && <div className="text-[9px] text-gray-400 mt-0.5">入数: {row.packSize}</div>}
+                    {row.productName && !existing && <div className="text-[9px] text-yellow-700 mt-0.5">⚡ 新規商品として登録されます</div>}
                   </td>
                   <td className="px-1.5 py-0.5 text-[10px] text-gray-500">
-                    {isPdfRow ? (
-                      <>
-                        <div className="font-semibold text-gray-700">{row.supplierProductName}</div>
-                        <div>{row.supplierJan && `JAN:${row.supplierJan}`} {row.packSize && `/ ${row.packSize}`}</div>
-                      </>
-                    ) : "—"}
+                    {row.supplierJan && <div>{row.supplierJan}</div>}
+                    {row.supplierCode && <div>{row.supplierCode}</div>}
                   </td>
                   <td className="px-1.5 py-0.5">
                     <input type="number" value={row.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" />
                   </td>
                   <td className="px-1.5 py-0.5">
-                    <input type="number" min={1} value={row.unitQuantityPerPack} onChange={(e) => updateRow(i, { unitQuantityPerPack: Math.max(1, Number(e.target.value) || 1) })} className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" />
+                    <input type="number" min={1} value={row.unitQuantityPerPack} onChange={(e) => updateRow(i, { unitQuantityPerPack: Math.max(1, Number(e.target.value) || 1) })} className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" title="1パッケージ=N個。例: 20枚入を「枚」管理なら20" />
                   </td>
                   <td className="px-1.5 py-0.5 text-right text-[11px] font-bold">{stockDelta > 0 ? stockDelta : ""}</td>
                   <td className="px-1.5 py-0.5">
@@ -437,13 +368,16 @@ export default function ReceivingPage() {
         </table>
       </div>
 
-      {/* datalist */}
       <datalist id="products-list">
         {products.map((p) => <option key={p.id} value={p.name}>{p.product_code || ""} {p.manufacturer || ""}</option>)}
       </datalist>
 
-      {/* アクション */}
+      {/* 凡例 + アクション */}
       <div className="bg-white rounded-lg p-3 sticky bottom-0" style={{ border: "1px solid #e8eaed" }}>
+        <div className="flex items-center gap-3 text-[11px] text-gray-600 mb-2 flex-wrap">
+          <span><span className="inline-block w-3 h-3 bg-emerald-50 border border-emerald-200 mr-1 align-middle"></span>商品マスタ既存</span>
+          <span><span className="inline-block w-3 h-3 bg-yellow-50 border border-yellow-200 mr-1 align-middle"></span>新規作成される</span>
+        </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={addRow} className="px-3 py-1.5 border border-gray-200 rounded text-xs">＋ 行を追加</button>
           <button onClick={clearAll} className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-500">クリア</button>
@@ -454,30 +388,23 @@ export default function ReceivingPage() {
           <div className="flex-1 text-xs text-gray-500 text-right">
             有効: <strong className="text-gray-900">{validRows.length}行</strong> / 合計: <strong className="text-gray-900">{fmtYen(totalAmount)}</strong>
           </div>
-          <button
-            onClick={submitAll}
-            disabled={submitting || validRows.length === 0 || !allMapped}
-            className="px-6 py-3 rounded-lg bg-gray-900 text-white font-bold text-sm disabled:opacity-50"
-          >
+          <button onClick={submitAll} disabled={submitting || validRows.length === 0} className="px-6 py-3 rounded-lg bg-gray-900 text-white font-bold text-sm disabled:opacity-50">
             {submitting ? `登録中… ${progress.done}/${progress.total}` : `${validRows.length}行 仕入登録`}
           </button>
         </div>
-        {!allMapped && (
-          <p className="text-[11px] text-orange-700 mt-1">⚠ オレンジ背景の行は自社商品が未選択です（PDF由来）。</p>
-        )}
       </div>
 
-      {/* 結果 */}
       {logs.length > 0 && (
         <div className="bg-white rounded-lg p-3" style={{ border: "1px solid #e8eaed" }}>
           <p className="text-xs font-bold text-gray-500 mb-2">登録結果</p>
           <div className="space-y-1 max-h-48 overflow-auto text-[11px]">
-            {logs.map((l, i) => <div key={i} className={l.startsWith("✓") ? "text-emerald-700" : "text-red-700"}>{l}</div>)}
+            {logs.map((l, i) => (
+              <div key={i} className={l.startsWith("✓") ? "text-emerald-700" : l.startsWith("+") ? "text-blue-700" : "text-red-700"}>{l}</div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* 直近履歴 */}
       <details className="bg-white rounded-lg p-3" style={{ border: "1px solid #e8eaed" }}>
         <summary className="text-xs font-bold text-gray-500 cursor-pointer">直近の入荷履歴 (最新20件)</summary>
         <div className="mt-2 space-y-1 max-h-64 overflow-auto">
