@@ -27,7 +27,7 @@ export default function AdminPage() {
 
         <AdminLink href="/admin/inventory" label="在庫管理" />
         <AdminLink href="/admin/barcodes" label="バーコード生成" />
-
+         <AdminLink href="/admin/products" label="商品編集" />
         <button style={disabledButtonStyle} disabled>
           商品編集（今後実装）
         </button>
