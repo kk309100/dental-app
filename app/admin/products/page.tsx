@@ -2,392 +2,181 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import Link from "next/link"
+import { fmtYen } from "@/lib/invoice"
+
+type Product = {
+  id: string
+  name: string
+  product_code: string | null
+  manufacturer: string | null
+  category: string | null
+  stock: number | null
+  reorder_level: number | null
+  cost: number | null
+  price: number | null
+}
+
+const PAGE_SIZE = 100
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<any[]>([])
-  const [search, setSearch] = useState("")
-  const [category, setCategory] = useState("すべて")
+  const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState("")
+  const [maker, setMaker] = useState("")
+  const [category, setCategory] = useState("すべて")
+  const [page, setPage] = useState(1)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<Partial<Product>>({})
 
-  useEffect(() => {
-    fetchProducts()
-  }, [])
+  useEffect(() => { fetchProducts() }, [])
 
   async function fetchProducts() {
-    const { data, error } = await supabase
+    setLoading(true)
+    const { data } = await supabase
       .from("products")
-      .select("*")
+      .select("id,name,product_code,manufacturer,category,stock,reorder_level,cost,price")
       .order("name", { ascending: true })
-
-    if (error) {
-      console.error(error)
-      alert("商品データ取得でエラー")
-      setLoading(false)
-      return
-    }
-
-    setProducts(data || [])
+    setProducts((data as Product[]) || [])
     setLoading(false)
   }
 
-  function normalizeText(value: any) {
-    return String(value || "")
-      .toLowerCase()
-      .normalize("NFKC")
-      .replace(/\s+/g, "")
-  }
+  const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s+/g, "")
 
   const categories = useMemo(() => {
-    const list = products
-      .map((p) => p.category)
-      .filter((c) => c && String(c).trim() !== "")
-
+    const list = products.map((p) => p.category).filter((c): c is string => !!c && c.trim() !== "")
     return ["すべて", ...Array.from(new Set(list))]
   }, [products])
 
-  const filteredProducts = useMemo(() => {
-    const keyword = normalizeText(search)
-
-    return products.filter((product) => {
-      const target = normalizeText(
-        `${product.name || ""} ${product.product_code || ""} ${product.manufacturer || ""} ${product.barcode || ""}`
-      )
-
-      const matchSearch = !keyword || target.includes(keyword)
-      const matchCategory =
-        category === "すべて" || product.category === category
-
-      return matchSearch && matchCategory
+  const filtered = useMemo(() => {
+    const k = norm(search)
+    const m = norm(maker)
+    return products.filter((p) => {
+      if (category !== "すべて" && p.category !== category) return false
+      if (m && !norm(p.manufacturer || "").includes(m)) return false
+      if (!k) return true
+      const target = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""}`)
+      return target.includes(k)
     })
-  }, [products, search, category])
+  }, [products, search, maker, category])
 
-  async function updateProduct(productId: string, field: string, value: any) {
-    const { error } = await supabase
-      .from("products")
-      .update({ [field]: value })
-      .eq("id", productId)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-    if (error) {
-      console.error(error)
-      alert("更新でエラーが出ました")
-      return
-    }
+  // ページ範囲リセット
+  useEffect(() => { if (page > totalPages) setPage(1) }, [totalPages, page])
 
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, [field]: value } : p))
-    )
+  function startEdit(p: Product) {
+    setEditId(p.id)
+    setEditForm({
+      name: p.name, product_code: p.product_code || "", manufacturer: p.manufacturer || "",
+      category: p.category || "", cost: p.cost, price: p.price,
+    })
   }
 
-  async function updateNumber(productId: string, field: string, value: string) {
-    const numberValue = value === "" ? 0 : Number(value)
-
-    if (Number.isNaN(numberValue)) {
-      alert("数字を入力してください")
-      return
-    }
-
-    await updateProduct(productId, field, numberValue)
+  async function saveEdit() {
+    if (!editId) return
+    await supabase.from("products").update(editForm).eq("id", editId)
+    setEditId(null)
+    fetchProducts()
   }
 
-  if (loading) return <p style={{ padding: 20 }}>読み込み中...</p>
+  if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   return (
-    <main style={pageStyle}>
-      <Link href="/admin">
-        <button style={backButton}>管理画面へ戻る</button>
-      </Link>
+    <div className="space-y-2">
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-lg font-bold text-gray-900">
+          商品マスタ
+          <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{products.length}件</span>
+        </h1>
+      </div>
 
-      <h1>商品編集</h1>
-
-      <div style={filterBox}>
+      {/* 検索バー */}
+      <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="商品名・コード・メーカー・バーコードで検索"
-          style={inputStyle}
+          placeholder="商品名・コード"
+          className="flex-1 min-w-[160px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
         />
-
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          style={inputStyle}
-        >
-          {categories.map((c: any) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
+        <input
+          value={maker}
+          onChange={(e) => setMaker(e.target.value)}
+          placeholder="メーカー"
+          className="w-32 px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
+        />
+        <select value={category} onChange={(e) => setCategory(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
+          {categories.map((c) => <option key={c}>{c}</option>)}
         </select>
-
-        <p style={{ margin: 0, fontSize: 13 }}>
-          表示件数：{filteredProducts.length}件 / 全{products.length}件
-        </p>
       </div>
 
-      {filteredProducts.map((product) => (
-        <div key={product.id} style={cardStyle}>
-          <div style={topRow}>
-            <div>
-              <p style={productName}>{product.name || "商品名なし"}</p>
-              <p style={smallText}>商品コード：{product.product_code || "-"}</p>
-            </div>
+      {/* 密テーブル */}
+      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 240px)" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-gray-100 text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-left" style={td0}>商品名</th>
+              <th className="px-2 py-1.5 text-left w-24" style={td0}>コード</th>
+              <th className="px-2 py-1.5 text-left w-32" style={td0}>メーカー</th>
+              <th className="px-2 py-1.5 text-left w-24" style={td0}>カテゴリ</th>
+              <th className="px-2 py-1.5 text-right w-16" style={td0}>仕入</th>
+              <th className="px-2 py-1.5 text-right w-16" style={td0}>定価</th>
+              <th className="px-2 py-1.5 text-right w-12" style={td0}>在庫</th>
+              <th className="px-2 py-1.5 text-center w-16" style={td0}>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageItems.length === 0 ? (
+              <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">該当商品なし</td></tr>
+            ) : pageItems.map((p, i) => (
+              <tr key={p.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/40")}>
+                {editId === p.id ? (
+                  <>
+                    <td className="px-1 py-0.5" style={td0}><input value={editForm.name || ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs" /></td>
+                    <td className="px-1 py-0.5" style={td0}><input value={editForm.product_code || ""} onChange={(e) => setEditForm({ ...editForm, product_code: e.target.value })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs" /></td>
+                    <td className="px-1 py-0.5" style={td0}><input value={editForm.manufacturer || ""} onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs" /></td>
+                    <td className="px-1 py-0.5" style={td0}><input value={editForm.category || ""} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs" /></td>
+                    <td className="px-1 py-0.5" style={td0}><input type="number" value={editForm.cost ?? ""} onChange={(e) => setEditForm({ ...editForm, cost: Number(e.target.value) || null })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs text-right" /></td>
+                    <td className="px-1 py-0.5" style={td0}><input type="number" value={editForm.price ?? ""} onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) || null })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs text-right" /></td>
+                    <td className="px-2 py-0.5 text-right text-[11px]" style={td0}>{p.stock ?? 0}</td>
+                    <td className="px-1 py-0.5 text-center" style={td0}>
+                      <button onClick={saveEdit} className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded mr-1">保存</button>
+                      <button onClick={() => setEditId(null)} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">×</button>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-2 py-1 text-[12px]" style={td0}>{p.name}</td>
+                    <td className="px-2 py-1 text-[11px] text-gray-500" style={td0}>{p.product_code || ""}</td>
+                    <td className="px-2 py-1 text-[11px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
+                    <td className="px-2 py-1 text-[11px] text-gray-500" style={td0}>{p.category || ""}</td>
+                    <td className="px-2 py-1 text-right text-[11px] text-gray-600" style={td0}>{p.cost ? p.cost.toLocaleString() : ""}</td>
+                    <td className="px-2 py-1 text-right text-[11px] text-gray-700" style={td0}>{p.price ? p.price.toLocaleString() : ""}</td>
+                    <td className="px-2 py-1 text-right text-[11px]" style={td0}>{p.stock ?? 0}</td>
+                    <td className="px-1 py-1 text-center" style={td0}>
+                      <button onClick={() => startEdit(p)} className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600">編集</button>
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-            <label style={activeLabel}>
-              <input
-                type="checkbox"
-                checked={product.is_active !== false}
-                onChange={(e) =>
-                  updateProduct(product.id, "is_active", e.target.checked)
-                }
-              />
-              表示
-            </label>
-          </div>
-
-          <div style={gridStyle}>
-            <EditInput
-              label="商品名"
-              value={product.name}
-              onBlur={(value: string) =>
-                updateProduct(product.id, "name", value)
-              }
-            />
-
-            <EditInput
-              label="商品コード"
-              value={product.product_code}
-              onBlur={(value: string) =>
-                updateProduct(product.id, "product_code", value)
-              }
-            />
-
-            <EditInput
-              label="バーコード"
-              value={product.barcode}
-              onBlur={(value: string) =>
-                updateProduct(product.id, "barcode", value)
-              }
-            />
-
-            <EditInput
-              label="メーカー"
-              value={product.manufacturer}
-              onBlur={(value: string) =>
-                updateProduct(product.id, "manufacturer", value)
-              }
-            />
-
-            <EditInput
-              label="カテゴリー"
-              value={product.category}
-              onBlur={(value: string) =>
-                updateProduct(product.id, "category", value)
-              }
-            />
-
-            <EditInput
-              label="単位"
-              value={product.unit}
-              onBlur={(value: string) =>
-                updateProduct(product.id, "unit", value)
-              }
-            />
-
-            <EditInput
-              label="税抜価格"
-              value={product.price}
-              type="number"
-              onBlur={(value: string) =>
-                updateNumber(product.id, "price", value)
-              }
-            />
-
-            <EditInput
-              label="仕入価格"
-              value={product.cost}
-              type="number"
-              onBlur={(value: string) =>
-                updateNumber(product.id, "cost", value)
-              }
-            />
-
-            <EditInput
-              label="本部在庫"
-              value={product.stock}
-              type="number"
-              onBlur={(value: string) =>
-                updateNumber(product.id, "stock", value)
-              }
-            />
-
-            <EditInput
-              label="発注基準"
-              value={product.reorder_level}
-              type="number"
-              onBlur={(value: string) =>
-                updateNumber(product.id, "reorder_level", value)
-              }
-            />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <label style={labelStyle}>画像URL</label>
-            <input
-              defaultValue={product.image_url || ""}
-              onBlur={(e) =>
-                updateProduct(product.id, "image_url", e.target.value)
-              }
-              style={inputStyle}
-              placeholder="https://..."
-            />
-
-            {product.image_url ? (
-              <img
-                src={product.image_url}
-                alt={product.name}
-                style={imagePreview}
-              />
-            ) : (
-              <div style={noImage}>NO IMAGE</div>
-            )}
-          </div>
+      {/* ページャ */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 py-2 text-xs">
+          <button onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-30">«</button>
+          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-30">‹</button>
+          <span className="px-2 text-gray-500">{page} / {totalPages} ({filtered.length}件)</span>
+          <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-30">›</button>
+          <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-30">»</button>
         </div>
-      ))}
-    </main>
-  )
-}
-
-function EditInput({
-  label,
-  value,
-  onBlur,
-  type = "text",
-}: {
-  label: string
-  value: any
-  onBlur: any
-  type?: string
-}) {
-  const [localValue, setLocalValue] = useState(value ?? "")
-
-  useEffect(() => {
-    setLocalValue(value ?? "")
-  }, [value])
-
-  return (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      <input
-        type={type}
-        value={localValue}
-        onChange={(e) => setLocalValue(e.target.value)}
-        onBlur={() => onBlur(localValue)}
-        style={inputStyle}
-      />
+      )}
     </div>
   )
 }
 
-const pageStyle: React.CSSProperties = {
-  maxWidth: 900,
-  margin: "0 auto",
-  padding: 20,
-}
-
-const backButton: React.CSSProperties = {
-  padding: 10,
-  borderRadius: 8,
-  border: "1px solid #ddd",
-  background: "#fff",
-  marginBottom: 16,
-}
-
-const filterBox: React.CSSProperties = {
-  background: "#fff",
-  border: "1px solid #eee",
-  borderRadius: 14,
-  padding: 14,
-  marginBottom: 16,
-  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-}
-
-const cardStyle: React.CSSProperties = {
-  background: "#fff",
-  border: "1px solid #eee",
-  borderRadius: 14,
-  padding: 16,
-  marginBottom: 16,
-  boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-}
-
-const topRow: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  alignItems: "flex-start",
-  marginBottom: 12,
-}
-
-const productName: React.CSSProperties = {
-  margin: 0,
-  fontWeight: "bold",
-  fontSize: 17,
-}
-
-const smallText: React.CSSProperties = {
-  margin: "4px 0",
-  fontSize: 12,
-  color: "#666",
-}
-
-const activeLabel: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  whiteSpace: "nowrap",
-  fontWeight: "bold",
-}
-
-const gridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 12,
-}
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 12,
-  fontWeight: "bold",
-  marginBottom: 4,
-}
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: 10,
-  borderRadius: 8,
-  border: "1px solid #ddd",
-  boxSizing: "border-box",
-}
-
-const imagePreview: React.CSSProperties = {
-  width: 140,
-  height: 100,
-  objectFit: "cover",
-  borderRadius: 8,
-  marginTop: 8,
-  border: "1px solid #eee",
-}
-
-const noImage: React.CSSProperties = {
-  width: 140,
-  height: 70,
-  borderRadius: 8,
-  marginTop: 8,
-  background: "#f1f5f9",
-  color: "#94a3b8",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: 12,
-}
+const td0: React.CSSProperties = { borderRight: "1px solid #f0f0f0" }
