@@ -1,117 +1,260 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { useRouter } from "next/navigation"
+import { Html5Qrcode } from "html5-qrcode"
 
 export default function OrderPage() {
   const router = useRouter()
 
   const [products, setProducts] = useState<any[]>([])
+  const [orders, setOrders] = useState<any[]>([])
+  const [orderItems, setOrderItems] = useState<any[]>([])
   const [cart, setCart] = useState<any[]>([])
+  const [clinicId, setClinicId] = useState("")
+  const [clinicName, setClinicName] = useState("")
   const [search, setSearch] = useState("")
   const [category, setCategory] = useState("すべて")
-  const [clinicId, setClinicId] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [scanning, setScanning] = useState(false)
+  const [orderComplete, setOrderComplete] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [showCartEdit, setShowCartEdit] = useState(false)
+  const [lastOrderId, setLastOrderId] = useState("")
 
-  // 🔐 ログイン＋医院固定
   useEffect(() => {
-    checkUser()
+    checkLogin()
   }, [])
 
-  async function checkUser() {
-    const { data } = await supabase.auth.getUser()
+  async function checkLogin() {
+    const { data: userData } = await supabase.auth.getUser()
 
-    if (!data.user) {
+    if (!userData.user) {
       router.push("/login")
       return
     }
 
-    // 👉 プロフィールから医院ID取得
     const { data: profile } = await supabase
       .from("profiles")
-      .select("clinic_id")
-      .eq("id", data.user.id)
+      .select("*")
+      .eq("id", userData.user.id)
       .single()
 
-    setClinicId(profile?.clinic_id || "")
+    if (!profile) {
+      router.push("/login")
+      return
+    }
+
+    if (profile.role === "admin") {
+      router.push("/admin")
+      return
+    }
+
+    setClinicId(profile.clinic_id)
+
+    const { data: clinic } = await supabase
+      .from("clinics")
+      .select("*")
+      .eq("id", profile.clinic_id)
+      .single()
+
+    setClinicName(clinic?.name || "")
+
+    await fetchData(profile.clinic_id)
+    setLoading(false)
   }
 
-  // 📦 商品取得
-  useEffect(() => {
-    fetchProducts()
-  }, [])
-
-  async function fetchProducts() {
-    const { data } = await supabase
+  async function fetchData(targetClinicId: string) {
+    const { data: productsData } = await supabase
       .from("products")
       .select("*")
       .eq("is_active", true)
+      .order("name", { ascending: true })
 
-    setProducts(data || [])
+    const { data: ordersData } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("clinic_id", targetClinicId)
+      .order("created_at", { ascending: false })
+
+    const { data: itemsData } = await supabase.from("order_items").select("*")
+
+    setProducts(productsData || [])
+    setOrders(ordersData || [])
+    setOrderItems(itemsData || [])
   }
 
-  // 🔍 検索（全角対応）
-  function normalizeText(v: any) {
-    return String(v || "")
+  function normalizeText(value: any) {
+    return String(value || "")
       .toLowerCase()
       .normalize("NFKC")
       .replace(/\s+/g, "")
   }
 
   const categories = useMemo(() => {
-    const list = products.map((p) => p.category).filter(Boolean)
+    const list = products
+      .map((p) => p.category)
+      .filter((c) => c && String(c).trim() !== "")
+
     return ["すべて", ...Array.from(new Set(list))]
   }, [products])
 
-  const filtered = useMemo(() => {
+  const filteredProducts = useMemo(() => {
     const keyword = normalizeText(search)
 
     return products.filter((p) => {
       const target = normalizeText(
-        `${p.name} ${p.product_code} ${p.manufacturer} ${p.barcode}`
+        `${p.name || ""} ${p.product_code || ""} ${p.manufacturer || ""} ${p.barcode || ""}`
       )
 
-      return (
-        (!keyword || target.includes(keyword)) &&
-        (category === "すべて" || p.category === category)
-      )
+      const matchSearch = !keyword || target.includes(keyword)
+      const matchCategory = category === "すべて" || p.category === category
+
+      return matchSearch && matchCategory
     })
   }, [products, search, category])
 
-  // 🛒 カート
+  const frequentProducts = useMemo(() => {
+    const clinicOrderIds = orders.map((o) => o.id)
+    const countMap: Record<string, number> = {}
+
+    orderItems
+      .filter((item) => clinicOrderIds.includes(item.order_id))
+      .forEach((item) => {
+        countMap[item.product_id] =
+          (countMap[item.product_id] || 0) + Number(item.quantity || 0)
+      })
+
+    return products
+      .map((product) => ({
+        ...product,
+        used_count: countMap[product.id] || 0,
+      }))
+      .filter((product) => product.used_count > 0)
+      .sort((a, b) => b.used_count - a.used_count)
+      .slice(0, 8)
+  }, [products, orders, orderItems])
+
+  const recentProducts = useMemo(() => {
+    const clinicOrderIds = orders.slice(0, 10).map((o) => o.id)
+
+    const recentProductIds = orderItems
+      .filter((item) => clinicOrderIds.includes(item.order_id))
+      .map((item) => item.product_id)
+
+    const uniqueIds = Array.from(new Set(recentProductIds)).slice(0, 8)
+
+    return uniqueIds
+      .map((id) => products.find((p) => p.id === id))
+      .filter(Boolean)
+  }, [products, orders, orderItems])
+
   function addToCart(product: any) {
-    setCart((prev) => {
-      const existing = prev.find((c) => c.id === product.id)
+    const existing = cart.find((item) => item.id === product.id)
 
-      if (existing) {
-        return prev.map((c) =>
-          c.id === product.id ? { ...c, qty: c.qty + 1 } : c
+    if (existing) {
+      setCart((prev) =>
+        prev.map((item) =>
+          item.id === product.id
+            ? { ...item, quantity: Number(item.quantity || 0) + 1 }
+            : item
         )
-      }
+      )
+    } else {
+      setCart((prev) => [...prev, { ...product, quantity: 1 }])
+    }
 
-      return [...prev, { ...product, qty: 1 }]
-    })
+    setOrderComplete(false)
   }
 
-  function changeQty(id: string, diff: number) {
+  function decreaseQuantity(productId: string) {
     setCart((prev) =>
       prev
-        .map((c) =>
-          c.id === id ? { ...c, qty: c.qty + diff } : c
-        )
-        .filter((c) => c.qty > 0)
+        .map((item) => {
+          if (item.id !== productId) return item
+          return { ...item, quantity: Number(item.quantity || 0) - 1 }
+        })
+        .filter((item) => Number(item.quantity || 0) > 0)
     )
   }
 
-  const total = cart.reduce(
-    (sum, c) => sum + c.price * c.qty,
-    0
-  )
+  function increaseQuantity(productId: string) {
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.id !== productId) return item
+        return { ...item, quantity: Number(item.quantity || 0) + 1 }
+      })
+    )
+  }
 
-  // 🧾 注文確定
+  function setCartQuantity(productId: string, value: string) {
+    const quantity = Number(value)
+
+    if (Number.isNaN(quantity) || quantity < 0) return
+
+    setCart((prev) =>
+      prev
+        .map((item) =>
+          item.id === productId ? { ...item, quantity } : item
+        )
+        .filter((item) => Number(item.quantity || 0) > 0)
+    )
+  }
+
+  function removeFromCart(productId: string) {
+    setCart((prev) => prev.filter((item) => item.id !== productId))
+  }
+
+  async function startScan() {
+    setScanning(true)
+
+    const scanner = new Html5Qrcode("reader")
+
+    await scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 220 },
+      async (decodedText) => {
+        await scanner.stop()
+        setScanning(false)
+
+        const product = products.find(
+          (p) =>
+            String(p.barcode || "") === decodedText ||
+            String(p.product_code || "") === decodedText
+        )
+
+        if (!product) {
+          alert("商品が見つかりません")
+          return
+        }
+
+        addToCart(product)
+      },
+      () => {}
+    )
+  }
+
+  async function generateDeliveryNumber() {
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = String(now.getMonth() + 1).padStart(2, "0")
+    const d = String(now.getDate()).padStart(2, "0")
+    const dateStr = `${y}${m}${d}`
+
+    const { data } = await supabase
+      .from("orders")
+      .select("id")
+      .gte("created_at", `${y}-${m}-${d}T00:00:00`)
+      .lte("created_at", `${y}-${m}-${d}T23:59:59`)
+
+    const count = (data?.length || 0) + 1
+    return `DN-${dateStr}-${String(count).padStart(4, "0")}`
+  }
+
   async function submitOrder() {
     if (!clinicId) {
-      alert("医院情報が取得できません")
+      alert("医院情報がありません")
       return
     }
 
@@ -120,34 +263,76 @@ export default function OrderPage() {
       return
     }
 
-    const { data: order } = await supabase
+    const totalPrice = cart.reduce(
+      (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
+      0
+    )
+
+    const deliveryNumber = await generateDeliveryNumber()
+
+    const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert([
         {
           clinic_id: clinicId,
-          total_price: total,
           status: "注文受付",
+          total_price: totalPrice,
+          delivery_number: deliveryNumber,
         },
       ])
       .select()
       .single()
 
-    const items = cart.map((c) => ({
+    if (orderError) {
+      console.error(orderError)
+      alert("注文作成でエラー")
+      return
+    }
+
+    const orderItemsData = cart.map((item) => ({
       order_id: order.id,
-      product_id: c.id,
-      product_name: c.name,
-      quantity: c.qty,
-      price: c.price,
+      product_id: item.id,
+      product_name: item.name,
+      quantity: item.quantity,
+      price: item.price,
     }))
 
-    await supabase.from("order_items").insert(items)
+    const { error: itemError } = await supabase
+      .from("order_items")
+      .insert(orderItemsData)
 
-    alert("注文完了")
+    if (itemError) {
+      console.error(itemError)
+      alert("注文明細でエラー")
+      return
+    }
+
+    setLastOrderId(order.id)
     setCart([])
+    setShowConfirm(false)
+    setShowCartEdit(false)
+    setOrderComplete(true)
+    await fetchData(clinicId)
   }
 
+  async function logout() {
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
+
+  const totalPrice = cart.reduce(
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0),
+    0
+  )
+
+  const totalQuantity = cart.reduce(
+    (sum, item) => sum + Number(item.quantity || 0),
+    0
+  )
+
+  if (loading) return <p style={{ padding: 20 }}>読み込み中...</p>
+
   return (
-<<<<<<< HEAD
     <main style={pageStyle}>
       <style>{`
         @media (min-width: 768px) {
@@ -173,49 +358,53 @@ export default function OrderPage() {
       </div>
 
       <div style={stickyArea}>
-=======
-    <main style={container}>
-      {/* 上部 */}
-      <div style={header}>
->>>>>>> 4e28ef0 (fix login guard)
         <input
-          placeholder="検索"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={input}
+          placeholder="商品名・コード・メーカーで検索"
+          style={inputStyle}
         />
 
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          style={input}
-        >
-          {categories.map((c) => (
-            <option key={c}>{c}</option>
+        <div style={categoryScroll}>
+          {categories.map((c: any) => (
+            <button
+              key={c}
+              onClick={() => setCategory(c)}
+              style={category === c ? activeCategoryButton : categoryButton}
+            >
+              {c}
+            </button>
           ))}
-        </select>
+        </div>
 
-        <button style={orderBtn} onClick={submitOrder}>
-          注文確定（{total.toLocaleString()}円）
+        <button onClick={startScan} style={scanButtonStyle}>
+          📷 バーコードで追加
         </button>
+
+        {cart.length > 0 && (
+          <div style={topCartStyle}>
+            <p style={{ margin: 0, fontWeight: "bold" }}>
+              🛒 {totalQuantity}点 / 税抜 {totalPrice.toLocaleString()}円
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <button onClick={() => setShowCartEdit(true)} style={subButtonStyle}>
+                カート編集
+              </button>
+              <button onClick={() => setShowConfirm(true)} style={submitButtonStyle}>
+                注文確認
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* レイアウト */}
-      <div style={layout}>
-        {/* 商品 */}
-        <div style={grid}>
-          {filtered.map((p) => (
-            <div key={p.id} style={card}>
-              {p.image_url ? (
-                <img src={p.image_url} style={img} />
-              ) : (
-                <div style={noimg}>NO IMAGE</div>
-              )}
+      {scanning && <div id="reader" style={{ width: "100%", marginBottom: 16 }} />}
 
-              <p style={{ fontWeight: "bold" }}>{p.name}</p>
-              <p>{p.price}円</p>
+      {orderComplete && (
+        <div style={completeStyle}>
+          <p style={{ fontWeight: "bold" }}>注文が完了しました</p>
 
-<<<<<<< HEAD
           <button
             onClick={() => router.push(`/order-edit/${lastOrderId}`)}
             style={submitButtonStyle}
@@ -327,45 +516,50 @@ export default function OrderPage() {
               onRemove={removeFromCart}
               onChangeQuantity={setCartQuantity}
             />
-=======
-              <button onClick={() => addToCart(p)}>
-                カートに追加
-              </button>
-            </div>
->>>>>>> 4e28ef0 (fix login guard)
-          ))}
-        </div>
-
-        {/* カート */}
-        <div style={cartBox}>
-          <h3>カート</h3>
-
-          {cart.map((c) => (
-            <div key={c.id}>
-              <p>{c.name}</p>
-
-              <button onClick={() => changeQty(c.id, -1)}>
-                -
-              </button>
-              {c.qty}
-              <button onClick={() => changeQty(c.id, 1)}>
-                +
-              </button>
-            </div>
           ))}
 
-          <h4>合計：{total.toLocaleString()}円</h4>
+          <button onClick={() => setShowCartEdit(false)} style={submitButtonStyle}>
+            戻る
+          </button>
+        </Modal>
+      )}
 
-          <button style={orderBtn} onClick={submitOrder}>
+      {showConfirm && (
+        <Modal>
+          <h2>注文確認</h2>
+
+          <p>医院：{clinicName}</p>
+
+          {cart.map((item) => (
+            <div key={item.id} style={confirmItemStyle}>
+              <strong>{item.name}</strong>
+              <p style={{ margin: "4px 0" }}>
+                {item.quantity}個 × 税抜 {Number(item.price || 0).toLocaleString()}円
+              </p>
+              <p style={{ margin: 0 }}>
+                小計：税抜{" "}
+                {(Number(item.price || 0) * Number(item.quantity || 0)).toLocaleString()}円
+              </p>
+            </div>
+          ))}
+
+          <p style={{ fontWeight: "bold", fontSize: 18 }}>
+            合計：税抜 {totalPrice.toLocaleString()}円
+          </p>
+
+          <button onClick={submitOrder} style={submitButtonStyle}>
             注文確定
           </button>
-        </div>
-      </div>
+
+          <button onClick={() => setShowConfirm(false)} style={subButtonStyle}>
+            戻る
+          </button>
+        </Modal>
+      )}
     </main>
   )
 }
 
-<<<<<<< HEAD
 function MiniProductCard({ product, onAdd }: any) {
   return (
     <div style={miniCardStyle}>
@@ -428,68 +622,187 @@ function Modal({ children }: any) {
 
 const pageStyle: React.CSSProperties = {
   maxWidth: 1200,
-=======
-/* UI */
-const container = {
-  maxWidth: 1100,
->>>>>>> 4e28ef0 (fix login guard)
   margin: "0 auto",
   padding: 16,
+  paddingBottom: 180,
 }
 
-const header = {
+const logoutButton: React.CSSProperties = {
+  marginBottom: 12,
+  padding: 8,
+  borderRadius: 8,
+  border: "1px solid #ddd",
+  background: "#fff",
+}
+
+const clinicBox: React.CSSProperties = {
+  background: "#f8fafc",
+  border: "1px solid #ddd",
+  borderRadius: 10,
+  padding: 12,
+  marginBottom: 12,
+}
+
+const stickyArea: React.CSSProperties = {
   position: "sticky",
   top: 0,
-  background: "#fff",
-  display: "flex",
-  gap: 8,
   zIndex: 10,
+  background: "#fff",
+  paddingBottom: 12,
+  borderBottom: "1px solid #eee",
 }
 
-const layout = {
-  display: "flex",
-  gap: 16,
-}
-
-const grid = {
-  flex: 1,
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))",
-  gap: 12,
-}
-
-const cartBox = {
-  width: 260,
-  position: "sticky",
-  top: 80,
-}
-
-const card = {
-  border: "1px solid #ddd",
-  padding: 10,
-}
-
-const img = {
+const inputStyle: React.CSSProperties = {
   width: "100%",
-  height: 100,
-  objectFit: "cover",
+  padding: 12,
+  marginBottom: 10,
+  borderRadius: 10,
+  border: "1px solid #ddd",
+  boxSizing: "border-box",
 }
 
-const noimg = {
-  height: 100,
-  background: "#eee",
+const categoryScroll: React.CSSProperties = {
+  display: "flex",
+  overflowX: "auto",
+  gap: 8,
+  marginBottom: 10,
+  paddingBottom: 4,
 }
 
-const input = {
-  flex: 1,
-  padding: 8,
+const categoryButton: React.CSSProperties = {
+  whiteSpace: "nowrap",
+  padding: "8px 12px",
+  borderRadius: 999,
+  border: "1px solid #ddd",
+  background: "#fff",
 }
 
-const orderBtn = {
-  background: "black",
-  color: "white",
+const activeCategoryButton: React.CSSProperties = {
+  ...categoryButton,
+  background: "#111",
+  color: "#fff",
+}
+
+const scanButtonStyle: React.CSSProperties = {
+  width: "100%",
+  padding: 14,
+  marginBottom: 10,
+  borderRadius: 10,
+  background: "#0ea5e9",
+  color: "#fff",
+  border: "none",
+  fontWeight: "bold",
+}
+
+const topCartStyle: React.CSSProperties = {
+  background: "#f8fafc",
+  border: "1px solid #ddd",
+  borderRadius: 12,
+  padding: 12,
+}
+
+const horizontalList: React.CSSProperties = {
+  display: "flex",
+  overflowX: "auto",
+  gap: 10,
+  paddingBottom: 8,
+}
+
+const miniCardStyle: React.CSSProperties = {
+  minWidth: 140,
+  background: "#fff",
+  border: "1px solid #eee",
+  borderRadius: 12,
   padding: 10,
-<<<<<<< HEAD
+}
+
+const miniImageStyle: React.CSSProperties = {
+  width: "100%",
+  height: 70,
+  objectFit: "cover",
+  borderRadius: 8,
+}
+
+const miniNoImageStyle: React.CSSProperties = {
+  height: 70,
+  borderRadius: 8,
+  background: "#f1f5f9",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#94a3b8",
+  fontSize: 11,
+}
+
+const miniAddButtonStyle: React.CSSProperties = {
+  width: "100%",
+  padding: 8,
+  borderRadius: 8,
+  border: "none",
+  background: "#111",
+  color: "#fff",
+}
+
+const cardStyle: React.CSSProperties = {
+  background: "#fff",
+  borderRadius: 14,
+  padding: 14,
+  marginBottom: 12,
+  boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+  border: "1px solid #eee",
+}
+
+const imageStyle: React.CSSProperties = {
+  width: "100%",
+  height: 130,
+  objectFit: "cover",
+  borderRadius: 8,
+  marginBottom: 8,
+}
+
+const noImageStyle: React.CSSProperties = {
+  height: 70,
+  borderRadius: 8,
+  marginBottom: 8,
+  background: "#f1f5f9",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#94a3b8",
+  fontSize: 12,
+}
+
+const productNameStyle: React.CSSProperties = {
+  fontWeight: "bold",
+  marginBottom: 6,
+  fontSize: 15,
+}
+
+const smallText: React.CSSProperties = {
+  margin: "2px 0",
+  fontSize: 12,
+  color: "#555",
+}
+
+const priceText: React.CSSProperties = {
+  margin: "6px 0",
+  fontWeight: "bold",
+}
+
+const addButtonStyle: React.CSSProperties = {
+  width: "100%",
+  padding: 11,
+  borderRadius: 10,
+  background: "#111",
+  color: "#fff",
+  border: "none",
+}
+
+const cartItemStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: 10,
   borderBottom: "1px solid #eee",
   gap: 10,
 }
@@ -593,6 +906,4 @@ const modalStyle: React.CSSProperties = {
 const confirmItemStyle: React.CSSProperties = {
   borderBottom: "1px solid #eee",
   padding: "10px 0",
-=======
->>>>>>> 4e28ef0 (fix login guard)
 }
