@@ -61,7 +61,7 @@ export default function AdminOrdersPage() {
       const names = items.map((i) => i.product_name).join(" ")
 
       const target = normalizeText(
-        ${order.delivery_number} ${order.status} ${names}
+        ${order.delivery_number || ""} ${order.status} ${names || ""}`
       )
 
       const matchSearch = !keyword || target.includes(keyword)
