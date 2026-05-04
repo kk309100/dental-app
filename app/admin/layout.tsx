@@ -6,18 +6,21 @@ import { useState } from "react"
 import { Ic } from "./_lib/icons"
 
 const NAV = [
-  { id: "dashboard", href: "/admin", label: "ホーム", icon: Ic.dash, exact: true },
-  { id: "clinics", href: "/admin/clinics", label: "得意先", icon: Ic.clinic },
+  { id: "home", href: "/admin", label: "HOME", icon: Ic.dash, exact: true },
+  { id: "receiving", href: "/admin/receiving", label: "仕入", icon: Ic.purchase },
+  { id: "purchase-order", href: "/admin/purchase-order", label: "発注", icon: Ic.truck },
   { id: "orders", href: "/admin/orders", label: "注文", icon: Ic.order },
-  { id: "delivery", href: "/admin/delivery", label: "納品書", icon: Ic.doc },
-  { id: "invoices", href: "/admin/invoices", label: "請求書", icon: Ic.sales },
-  { id: "quotes", href: "/admin/quotes", label: "見積書", icon: Ic.doc },
+  { id: "delivery", href: "/admin/delivery", label: "納品", icon: Ic.doc },
+  { id: "invoices", href: "/admin/invoices", label: "請求", icon: Ic.sales },
+  { id: "inventory", href: "/admin/inventory", label: "在庫", icon: Ic.product },
+  { id: "clinics", href: "/admin/clinics", label: "得意先", icon: Ic.clinic },
+  { id: "suppliers", href: "/admin/suppliers", label: "仕入先", icon: Ic.truck },
+  { id: "palladium", href: "/admin/palladium", label: "パラ", icon: Ic.product },
+  { id: "quotes", href: "/admin/quotes", label: "見積", icon: Ic.doc },
   { id: "sales", href: "/admin/sales", label: "売上", icon: Ic.sales },
   { id: "products", href: "/admin/products", label: "商品", icon: Ic.product },
-  { id: "inventory", href: "/admin/inventory", label: "在庫", icon: Ic.product },
-  { id: "receiving", href: "/admin/receiving", label: "仕入入力", icon: Ic.purchase },
-  { id: "suppliers", href: "/admin/suppliers", label: "仕入先", icon: Ic.truck },
-  { id: "palladium", href: "/admin/palladium", label: "パラ価格", icon: Ic.product },
+  // 一番右にダッシュボード
+  { id: "dashboard", href: "/admin/dashboard", label: "📊 ダッシュ", icon: Ic.dash },
 ]
 
 const SUB = [
