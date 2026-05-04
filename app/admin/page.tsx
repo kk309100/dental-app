@@ -80,6 +80,8 @@ export default function AdminHomePage() {
             { href: "/admin/invoices/bulk", label: "一括請求" },
             { href: "/admin/receivables", label: "売掛金台帳" },
             { href: "/admin/purchase-order", label: "推奨発注リスト（旧）" },
+            { href: "/admin/stocktakes", label: "棚卸" },
+            { href: "/admin/stock-movements", label: "在庫履歴" },
             { href: "/admin/products", label: "商品マスタ" },
             { href: "/admin/delivery-search", label: "納品書検索" },
             { href: "/admin/delivered", label: "納品済み一覧" },
