@@ -41,6 +41,7 @@ export default function AdminPage() {
         <h2 style={sectionTitleStyle}>④ 設定</h2>
 
         <AdminLink href="/admin/clinics" label="医院管理" />
+        <AdminLink href="/admin/suppliers" label="仕入先管理" />
 
         <button style={disabledButtonStyle} disabled>
           ユーザー管理（今後実装）
