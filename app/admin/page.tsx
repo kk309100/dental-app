@@ -32,9 +32,7 @@ export default function AdminPage() {
         <AdminLink href="/admin/barcodes" label="バーコード生成" />
          <AdminLink href="/admin/products" label="商品編集" />
          <AdminLink href="/admin/receiving" label="入荷処理" />
-        <button style={disabledButtonStyle} disabled>
-          商品編集（今後実装）
-        </button>
+        <AdminLink href="/admin/palladium" label="パラ価格管理" />
       </section>
 
       <section style={sectionStyle}>
