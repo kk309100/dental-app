@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import Seal from "@/app/components/Seal"
 
 export default function DeliveryPage() {
   const [orders, setOrders] = useState<any[]>([])
@@ -102,7 +103,7 @@ export default function DeliveryPage() {
           </div>
 
           {/* 右：自社 */}
-          <div className="company">
+          <div className="company" style={{ position: "relative" }}>
             <div>発行日：{new Date(order.created_at).toLocaleDateString()}</div>
 
             <div className="company-name">株式会社 清新</div>
@@ -113,6 +114,11 @@ export default function DeliveryPage() {
 
             <div>TEL：052-526-3223</div>
             <div>FAX：052-655-5977</div>
+
+            {/* 印影 */}
+            <div style={{ position: "absolute", top: -4, right: -4 }}>
+              <Seal size={50} />
+            </div>
           </div>
         </div>
 

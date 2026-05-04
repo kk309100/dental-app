@@ -5,6 +5,7 @@ import { use } from "react"
 import { supabase } from "@/lib/supabase"
 import { COMPANY } from "@/lib/company"
 import { fmtYen, fmtDate, INVOICE_STATUSES, getClinicPrefix, type InvoiceStatus } from "@/lib/invoice"
+import Seal from "@/app/components/Seal"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -192,12 +193,16 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
           </div>
 
           {/* 右: 自社 */}
-          <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, textAlign: "left" }}>
+          <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, textAlign: "left", position: "relative", paddingRight: 70 }}>
             <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{COMPANY.name}</p>
             <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
             <p style={{ margin: 0 }}>{COMPANY.address}</p>
             <p style={{ margin: 0 }}>TEL {COMPANY.phone} / FAX {COMPANY.fax}</p>
             <p style={{ margin: "4px 0 0" }}>登録番号: {COMPANY.invoiceNumber}</p>
+            {/* 印影 */}
+            <div style={{ position: "absolute", top: 0, right: 0 }}>
+              <Seal size={64} />
+            </div>
           </div>
         </div>
 
