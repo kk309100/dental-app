@@ -283,20 +283,20 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
           </div>
         )}
 
-        {/* 入金済みスタンプ */}
+        {/* 入金済みスタンプ（左下、金額にかぶらない） */}
         {invoice.status === "paid" && (
           <div style={paidStamp}>
-            <p style={{ margin: 0, transform: "rotate(-15deg)", color: "#10b981", fontSize: 36, fontWeight: 800, border: "4px solid #10b981", padding: "8px 24px", borderRadius: 8, letterSpacing: "0.1em" }}>
+            <p style={{ margin: 0, transform: "rotate(-12deg)", color: "#10b981", fontSize: 22, fontWeight: 800, border: "3px solid #10b981", padding: "4px 14px", borderRadius: 6, letterSpacing: "0.1em", display: "inline-block", opacity: 0.85 }}>
               入金済
             </p>
-            {invoice.paid_at && <p style={{ margin: "8px 0 0", fontSize: 11, color: "#10b981" }}>入金日: {fmtDate(invoice.paid_at)}</p>}
+            {invoice.paid_at && <p style={{ margin: "4px 0 0", fontSize: 10, color: "#10b981" }}>入金日: {fmtDate(invoice.paid_at)}</p>}
           </div>
         )}
 
         {/* 取消スタンプ */}
         {invoice.status === "cancelled" && (
           <div style={paidStamp}>
-            <p style={{ margin: 0, transform: "rotate(-15deg)", color: "#9ca3af", fontSize: 36, fontWeight: 800, border: "4px solid #9ca3af", padding: "8px 24px", borderRadius: 8, letterSpacing: "0.1em" }}>
+            <p style={{ margin: 0, transform: "rotate(-12deg)", color: "#9ca3af", fontSize: 22, fontWeight: 800, border: "3px solid #9ca3af", padding: "4px 14px", borderRadius: 6, letterSpacing: "0.1em", display: "inline-block", opacity: 0.85 }}>
               取  消
             </p>
           </div>
@@ -362,7 +362,7 @@ const th: React.CSSProperties = { borderBottom: "2px solid #111", padding: "6px 
 const td: React.CSSProperties = { borderBottom: "1px solid #eee", padding: "5px 8px", fontSize: 11 }
 const tdTotal: React.CSSProperties = { borderTop: "2px solid #111", padding: "8px", fontSize: 13, fontWeight: 700 }
 const bankBox: React.CSSProperties = { marginTop: 14, padding: 10, border: "1px solid #ddd", borderRadius: 4, background: "#fafafa" }
-const paidStamp: React.CSSProperties = { position: "absolute", top: "30%", right: "10%", textAlign: "center", pointerEvents: "none" }
+const paidStamp: React.CSSProperties = { position: "absolute", bottom: 16, left: 24, textAlign: "left", pointerEvents: "none" }
 const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 80, zIndex: 50 }
 const modal: React.CSSProperties = { background: "#fff", borderRadius: 10, padding: 20, width: "100%", maxWidth: 360 }
 const modalInput: React.CSSProperties = { width: "100%", padding: 8, borderRadius: 6, border: "1px solid #ddd", fontSize: 13, marginBottom: 8, boxSizing: "border-box" }
