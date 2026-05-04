@@ -42,13 +42,14 @@ export default function AdminHomePage() {
     return { pendingOrders, undeliveredCount, unbilled, unpaidInvoices, lowStock }
   }, [orders, invoices, products])
 
-  // ボタン定義（9つ）
+  // ボタン定義（10つ）
   const buttons: ButtonItem[] = [
     { href: "/admin/receiving", label: "仕入", desc: "入荷・仕入価格更新", icon: Ic.purchase, color: "#7c3aed" },
     { href: "/admin/purchase-order", label: "発注", desc: "仕入先への発注書", icon: Ic.truck, color: "#0891b2" },
     { href: "/admin/orders", label: "注文", desc: "医院からの注文管理", icon: Ic.order, color: "#3b82f6", badge: badges.pendingOrders, badgeLabel: "未処理" },
     { href: "/admin/delivery", label: "納品", desc: "納品書の発行・印刷", icon: Ic.doc, color: "#10b981", badge: badges.undeliveredCount, badgeLabel: "未納品" },
     { href: "/admin/invoices", label: "請求", desc: "請求書発行・入金", icon: Ic.sales, color: "#dc2626", badge: badges.unbilled || badges.unpaidInvoices, badgeLabel: badges.unbilled > 0 ? "未請求" : "未収" },
+    { href: "/admin/sales", label: "売上", desc: "月次・医院・商品別分析", icon: Ic.sales, color: "#059669" },
     { href: "/admin/inventory", label: "在庫", desc: "在庫数・最低在庫", icon: Ic.product, color: "#d97706", badge: badges.lowStock, badgeLabel: "在庫不足" },
     { href: "/admin/clinics", label: "得意先", desc: "医院マスタ", icon: Ic.clinic, color: "#0d9488" },
     { href: "/admin/suppliers", label: "仕入先", desc: "仕入先マスタ", icon: Ic.truck, color: "#475569" },
@@ -62,8 +63,8 @@ export default function AdminHomePage() {
         <p className="text-xs text-gray-400 mt-1" style={{ fontFamily: "'Josefin Sans',sans-serif", letterSpacing: "0.2em" }}>SELECT WHAT YOU&apos;D LIKE TO DO</p>
       </div>
 
-      {/* 大きなボタングリッド */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 max-w-5xl mx-auto">
+      {/* 大きなボタングリッド (mobile: 2col×5row / tablet: 3col / desktop: 5col×2row) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 max-w-6xl mx-auto">
         {buttons.map((b) => (
           <BigButton key={b.href} {...b} loading={loading} />
         ))}
@@ -76,7 +77,6 @@ export default function AdminHomePage() {
           {[
             { href: "/admin/dashboard", label: "📊 ダッシュボード", featured: true },
             { href: "/admin/quotes", label: "見積書" },
-            { href: "/admin/sales", label: "売上分析" },
             { href: "/admin/invoices/bulk", label: "一括請求" },
             { href: "/admin/products", label: "商品マスタ" },
             { href: "/admin/delivery-search", label: "納品書検索" },
