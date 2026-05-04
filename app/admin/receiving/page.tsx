@@ -360,7 +360,14 @@ export default function ReceivingPage() {
                   </td>
                   <td className="px-1.5 py-0.5 text-right text-[11px] font-bold">{stockDelta > 0 ? stockDelta : ""}</td>
                   <td className="px-1.5 py-0.5">
-                    <input type="number" value={row.unitPrice} onChange={(e) => updateRow(i, { unitPrice: e.target.value })} placeholder="¥" className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={row.unitPrice ? Number(row.unitPrice).toLocaleString("ja-JP") : ""}
+                      onChange={(e) => updateRow(i, { unitPrice: e.target.value.replace(/[^\d.]/g, "") })}
+                      placeholder="¥"
+                      className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]"
+                    />
                   </td>
                   <td className="px-1.5 py-0.5 text-right text-[11px] font-bold">{subtotal > 0 ? fmtYen(subtotal) : ""}</td>
                   <td className="px-1.5 py-0.5">
