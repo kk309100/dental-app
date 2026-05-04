@@ -124,7 +124,7 @@ export default function PurchaseOrderPage() {
 
           <div className="right-info">
             <p>発注年月日：{new Date().toLocaleDateString()}</p>
-            <p className="company-name">株式会社 BIODENT</p>
+            <p className="company-name">株式会社 清新</p>
             <p>〒454-0812</p>
             <p>名古屋市中川区五月通2-37</p>
             <p>黄金ステーションビル3階</p>

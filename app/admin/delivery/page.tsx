@@ -105,7 +105,7 @@ export default function DeliveryPage() {
           <div className="company">
             <div>発行日：{new Date(order.created_at).toLocaleDateString()}</div>
 
-            <div className="company-name">株式会社 BIODENT</div>
+            <div className="company-name">株式会社 清新</div>
 
             <div>〒454-0812</div>
             <div>名古屋市中川区五月通2-37</div>
