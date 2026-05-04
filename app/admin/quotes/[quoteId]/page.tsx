@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { use } from "react"
 import { supabase } from "@/lib/supabase"
 import { COMPANY } from "@/lib/company"
-import { fmtYen, fmtDate, getClinicPrefix, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
+import { fmtYen, fmtDate, getClinicPrefix, getCorporateLabel, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
 import { QUOTE_STATUSES, type QuoteStatus } from "@/lib/quote"
 import Seal from "@/app/components/Seal"
 import Link from "next/link"
@@ -127,6 +127,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
 
   const status = QUOTE_STATUSES[quote.status]
   const clinicPrefix = clinic ? getClinicPrefix(clinic.name, clinic.corporate_name, clinic.clinic_type) : ""
+  const corporateLabel = clinic ? getCorporateLabel(clinic.corporate_name, clinic.name, clinic.clinic_type) : ""
 
   return (
     <>
@@ -157,7 +158,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
           <div style={{ flex: 1 }}>
             {clinic ? (
               <>
-                {clinic.corporate_name && <p style={{ margin: "0 0 4px", fontSize: 13 }}>{clinic.corporate_name}</p>}
+                {corporateLabel && <p style={{ margin: "0 0 4px", fontSize: 13 }}>{corporateLabel}</p>}
                 <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
                   {clinicPrefix}{clinic.name}　御中
                 </p>
