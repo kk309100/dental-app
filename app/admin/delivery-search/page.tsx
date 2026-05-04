@@ -8,10 +8,12 @@ export default function DeliverySearchPage() {
   const [order, setOrder] = useState<any>(null)
 
   async function search() {
+    // 半角/全角統一（"ＤＮ-..." でも "DN-..." でもヒット）
+    const normalized = number.normalize("NFKC").trim()
     const { data } = await supabase
       .from("orders")
       .select("*")
-      .eq("delivery_number", number)
+      .eq("delivery_number", normalized)
       .single()
 
     setOrder(data)
