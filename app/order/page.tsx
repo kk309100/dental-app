@@ -334,6 +334,18 @@ export default function OrderPage() {
 
   return (
     <main style={pageStyle}>
+      <style>{`
+        @media (min-width: 768px) {
+          .order-product-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+          }
+          .order-product-grid > * {
+            margin-bottom: 0 !important;
+          }
+        }
+      `}</style>
       <button onClick={logout} style={logoutButton}>
         ログアウト
       </button>
@@ -430,6 +442,7 @@ export default function OrderPage() {
 
       <h2>商品一覧</h2>
 
+      <div className="order-product-grid">
       {filteredProducts.map((product) => (
         <div key={product.id} style={cardStyle}>
           {product.image_url ? (
@@ -452,6 +465,7 @@ export default function OrderPage() {
           </button>
         </div>
       ))}
+      </div>
 
       <h2>カート</h2>
 
@@ -470,17 +484,19 @@ export default function OrderPage() {
 
       {cart.length > 0 && (
         <div style={bottomCartStyle}>
-          <p style={{ margin: 0, fontWeight: "bold" }}>
-            🛒 {totalQuantity}点 / 税抜 {totalPrice.toLocaleString()}円
-          </p>
+          <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+            <p style={{ margin: 0, fontWeight: "bold" }}>
+              🛒 {totalQuantity}点 / 税抜 {totalPrice.toLocaleString()}円
+            </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <button onClick={() => setShowCartEdit(true)} style={subButtonStyle}>
-              カート編集
-            </button>
-            <button onClick={() => setShowConfirm(true)} style={submitButtonStyle}>
-              注文確認
-            </button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <button onClick={() => setShowCartEdit(true)} style={subButtonStyle}>
+                カート編集
+              </button>
+              <button onClick={() => setShowConfirm(true)} style={submitButtonStyle}>
+                注文確認
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -605,7 +621,7 @@ function Modal({ children }: any) {
 }
 
 const pageStyle: React.CSSProperties = {
-  maxWidth: 560,
+  maxWidth: 1200,
   margin: "0 auto",
   padding: 16,
   paddingBottom: 180,
@@ -880,7 +896,7 @@ const modalBgStyle: React.CSSProperties = {
 }
 
 const modalStyle: React.CSSProperties = {
-  maxWidth: 520,
+  maxWidth: 680,
   margin: "40px auto",
   background: "#fff",
   borderRadius: 14,
