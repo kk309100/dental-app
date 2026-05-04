@@ -32,6 +32,7 @@ type Clinic = {
 type Order = { id: string; clinic_id: string; created_at: string; total_price: number; delivery_number: string | null; status: string; invoice_id: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
 type Product = { id: string; name: string }
+type Payment = { id: string; invoice_id: string; paid_at: string; amount: number; method: string | null; note: string | null }
 
 export default function InvoiceDetailPage({ params }: { params: Promise<{ invoiceId: string }> }) {
   const { invoiceId } = use(params)
@@ -48,6 +49,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
   const [showPaidModal, setShowPaidModal] = useState(false)
   const [paidAmount, setPaidAmount] = useState("")
   const [paidDate, setPaidDate] = useState("")
+  const [paidMethod, setPaidMethod] = useState("振込")
+  const [paidNote, setPaidNote] = useState("")
+  const [payments, setPayments] = useState<Payment[]>([])
 
   useEffect(() => { fetchData() }, [invoiceId])
 
@@ -84,8 +88,21 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
       setProducts([])
     }
 
+    // 入金履歴（テーブル無い場合は空のまま）
+    try {
+      const { data: pays } = await supabase.from("invoice_payments").select("*").eq("invoice_id", invoiceId).order("paid_at")
+      setPayments((pays as Payment[]) || [])
+    } catch { setPayments([]) }
+
     setLoading(false)
   }
+
+  // 累計入金 / 残額
+  const totalPaid = useMemo(
+    () => payments.reduce((s, p) => s + Number(p.amount || 0), 0) || (invoice?.paid_amount || 0),
+    [payments, invoice]
+  )
+  const remaining = useMemo(() => (invoice ? Number(invoice.total) - totalPaid : 0), [invoice, totalPaid])
 
   // 明細を「商品名で集約」したサマリ表示
   // product_name が null の場合は products テーブルから補完。
@@ -115,16 +132,53 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
   // 商品名が null の明細件数（警告表示用）
   const missingNameCount = useMemo(() => items.filter((it) => !it.product_name).length, [items])
 
-  async function markAsPaid() {
+  async function recordPayment() {
     if (!invoice) return
-    const amt = Number(paidAmount.replace(/[^\d]/g, "")) || invoice.total
-    const dt = paidDate || new Date().toISOString()
-    const { error: e } = await supabase
-      .from("invoices")
-      .update({ status: "paid", paid_at: dt, paid_amount: amt })
-      .eq("id", invoice.id)
-    if (e) { alert("入金記録に失敗: " + e.message); return }
+    const amt = Number(paidAmount.replace(/[^\d]/g, "")) || remaining
+    if (amt <= 0) { alert("入金額を入力してください"); return }
+    const dt = paidDate ? new Date(paidDate + "T12:00:00").toISOString() : new Date().toISOString()
+
+    // 1) invoice_payments に追加（テーブル無い場合は invoices.paid_amount を使う旧方式へフォールバック）
+    let usePayments = true
+    const { error: peErr } = await supabase.from("invoice_payments").insert({
+      invoice_id: invoice.id,
+      paid_at: dt,
+      amount: amt,
+      method: paidMethod || "振込",
+      note: paidNote || null,
+    })
+    if (peErr) {
+      usePayments = false
+      // 旧方式: invoices.paid_amount/paid_at/status だけ更新
+      const total = invoice.total
+      const sumAmt = (invoice.paid_amount || 0) + amt
+      const newStatus = sumAmt >= total ? "paid" : invoice.status
+      const { error: e } = await supabase.from("invoices")
+        .update({ status: newStatus, paid_at: dt, paid_amount: sumAmt }).eq("id", invoice.id)
+      if (e) { alert("入金記録失敗: " + e.message); return }
+    } else {
+      // 累計入金で status を判定
+      const newTotal = totalPaid + amt
+      const newStatus = newTotal >= Number(invoice.total) ? "paid" : (newTotal > 0 ? "partial" : invoice.status)
+      const updPayload: Record<string, unknown> = { status: newStatus, paid_at: dt, paid_amount: newTotal }
+      const { error: e } = await supabase.from("invoices").update(updPayload).eq("id", invoice.id)
+      if (e) { /* status 列が partial を許さない場合があるので状態だけ落として再試行 */
+        await supabase.from("invoices").update({ paid_at: dt, paid_amount: newTotal }).eq("id", invoice.id)
+      }
+    }
+
     setShowPaidModal(false)
+    setPaidAmount(""); setPaidDate(""); setPaidNote(""); setPaidMethod("振込")
+    fetchData()
+    if (!usePayments) {
+      alert("⚠ invoice_payments テーブルが未作成のため、簡易方式（入金合計のみ）で記録しました。\nマイグレーションSQL適用後は明細管理ができるようになります。")
+    }
+  }
+
+  async function deletePayment(id: string) {
+    if (!confirm("この入金記録を削除しますか？")) return
+    const { error } = await supabase.from("invoice_payments").delete().eq("id", id)
+    if (error) { alert("削除失敗: " + error.message); return }
     fetchData()
   }
 
@@ -337,20 +391,53 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
         </div>
       </div>
 
-      {/* 入金確認モーダル */}
+      {/* 入金確認モーダル（部分入金対応） */}
       {showPaidModal && (
         <div style={overlay} onClick={() => setShowPaidModal(false)} className="no-print">
           <div style={modal} onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>入金確認</h2>
+            <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>入金記録</h2>
+            <div style={{ background: "#f8fafc", padding: 10, borderRadius: 6, marginBottom: 12, fontSize: 12 }}>
+              <p style={{ margin: 0 }}>請求額: <strong>{fmtYen(invoice.total)}</strong></p>
+              <p style={{ margin: "2px 0 0" }}>累計入金: <strong>{fmtYen(totalPaid)}</strong></p>
+              <p style={{ margin: "2px 0 0", color: remaining > 0 ? "#dc2626" : "#10b981", fontWeight: 700 }}>
+                残額: {fmtYen(remaining)}
+              </p>
+            </div>
             <label style={{ fontSize: 11, color: "#777" }}>入金日</label>
             <input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} style={modalInput} />
-            <label style={{ fontSize: 11, color: "#777" }}>入金金額</label>
-            <input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} style={modalInput} />
-            <p style={{ fontSize: 11, color: "#999", margin: "0 0 12px" }}>請求額: {fmtYen(invoice.total)}</p>
+            <label style={{ fontSize: 11, color: "#777" }}>入金金額（空なら残額全額）</label>
+            <input type="number" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)}
+              placeholder={String(remaining)} style={modalInput} />
+            <label style={{ fontSize: 11, color: "#777" }}>方法</label>
+            <select value={paidMethod} onChange={(e) => setPaidMethod(e.target.value)} style={modalInput}>
+              {["振込", "現金", "相殺", "値引", "手数料相殺", "その他"].map(m => <option key={m}>{m}</option>)}
+            </select>
+            <label style={{ fontSize: 11, color: "#777" }}>備考</label>
+            <input value={paidNote} onChange={(e) => setPaidNote(e.target.value)}
+              placeholder="例: 振込手数料330円差し引き / 端数値引き" style={modalInput} />
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={markAsPaid} style={btnGreen}>記録する</button>
+              <button onClick={recordPayment} style={btnGreen}>記録する</button>
               <button onClick={() => setShowPaidModal(false)} style={btnGray}>キャンセル</button>
             </div>
+
+            {payments.length > 0 && (
+              <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #eee" }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "#555", margin: "0 0 6px" }}>入金履歴 ({payments.length}件)</p>
+                {payments.map(p => (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0", fontSize: 11, borderBottom: "1px solid #f3f4f6" }}>
+                    <div>
+                      <span>{new Date(p.paid_at).toLocaleDateString("ja-JP")}</span>
+                      <span style={{ marginLeft: 8, padding: "1px 6px", background: "#eef2ff", color: "#3730a3", borderRadius: 99, fontSize: 10 }}>{p.method || "振込"}</span>
+                      {p.note && <span style={{ marginLeft: 8, color: "#777" }}>{p.note}</span>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <strong>{fmtYen(p.amount)}</strong>
+                      <button onClick={() => deletePayment(p.id)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 12 }}>×</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

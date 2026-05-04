@@ -78,6 +78,7 @@ export default function AdminHomePage() {
             { href: "/admin/dashboard", label: "📊 ダッシュボード", featured: true },
             { href: "/admin/quotes", label: "見積書" },
             { href: "/admin/invoices/bulk", label: "一括請求" },
+            { href: "/admin/receivables", label: "売掛金台帳" },
             { href: "/admin/products", label: "商品マスタ" },
             { href: "/admin/delivery-search", label: "納品書検索" },
             { href: "/admin/delivered", label: "納品済み一覧" },
