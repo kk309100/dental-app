@@ -90,13 +90,15 @@ export default function ReceivingPage() {
     setParseError("")
   }
 
-  async function uploadAndParse() {
-    if (!pdfFile) { setParseError("PDF を選択してください"); return }
+  async function uploadAndParse(file?: File) {
+    const target = file || pdfFile
+    if (!target) { setParseError("PDF を選択してください"); return }
+    if (file) setPdfFile(file)
     setParsing(true)
     setParseError("")
     setParsedMeta(null)
     try {
-      const buf = await pdfFile.arrayBuffer()
+      const buf = await target.arrayBuffer()
       const base64 = Buffer.from(buf).toString("base64")
       const r = await fetch("/api/parse-receiving", {
         method: "POST",
@@ -250,50 +252,63 @@ export default function ReceivingPage() {
 
   return (
     <div className="space-y-3">
-      <div>
+      {/* タイトル + PDF読込ボタン */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-gray-900">
           仕入入力
           <span className="ml-2 text-xs font-normal text-gray-400">手打ち or PDF読込 ・ 商品マスタは自動更新</span>
         </h1>
+        <label
+          htmlFor="pdf-upload"
+          className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors " + (parsing ? "bg-gray-300 text-gray-600 cursor-wait" : "bg-blue-600 text-white hover:bg-blue-700")}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {parsing ? "AI解析中…" : "📄 PDFから読込"}
+        </label>
+        <input
+          id="pdf-upload"
+          type="file"
+          accept="application/pdf"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) uploadAndParse(f)
+            // ファイル選択をリセット（同じファイル再選択可能に）
+            e.target.value = ""
+          }}
+          className="hidden"
+          disabled={parsing}
+        />
       </div>
+
+      {/* 解析結果バナー（あるときだけ） */}
+      {parseError && (
+        <div className="bg-red-50 text-red-700 text-xs p-2 rounded" style={{ border: "1px solid #fca5a5" }}>
+          ⚠ PDF解析失敗: {parseError}
+        </div>
+      )}
+      {parsedMeta && (
+        <div className="bg-blue-50 text-blue-800 text-xs p-2 rounded" style={{ border: "1px solid #c7d2fe" }}>
+          ✅ <strong>{pdfFile?.name}</strong> 解析成功: {parsedMeta.supplier_name || "—"} / No.{parsedMeta.invoice_number || "—"} / 合計 {parsedMeta.total ? fmtYen(parsedMeta.total) : "—"} → 下の表に流し込み済み
+        </div>
+      )}
 
       {/* 共通設定 */}
       <div className="bg-white rounded-lg p-3" style={{ border: "1px solid #e8eaed" }}>
-        <p className="text-xs font-bold text-gray-500 mb-2">① 仕入先 + 入荷日</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
-            <option value="">— 仕入先を選択 —</option>
-            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.maker_name ? ` (${s.maker_name})` : ""}</option>)}
-          </select>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+          <div>
+            <label className="block text-[10px] text-gray-500 mb-0.5 font-bold">仕入先</label>
+            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
+              <option value="">— 仕入先を選択 —</option>
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.maker_name ? ` (${s.maker_name})` : ""}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] text-gray-500 mb-0.5 font-bold">入荷日</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+          </div>
         </div>
-      </div>
-
-      {/* PDF読込 */}
-      <div className="bg-blue-50 rounded-xl p-4" style={{ border: "1px solid #c7d2fe" }}>
-        <p className="text-sm font-bold text-blue-900 mb-2">② PDFから自動入力（任意）</p>
-        <p className="text-xs text-blue-700 mb-3">仕入納品書PDFをアップロードすると、AIが明細を読み取って下の表に流し込みます</p>
-
-        <div className="flex flex-col sm:flex-row gap-3 items-stretch">
-          <label htmlFor="pdf-upload" className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 hover:border-blue-500 transition-colors">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-600">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="text-sm font-bold text-blue-700">{pdfFile ? `📄 ${pdfFile.name}` : "PDFファイルを選択"}</span>
-          </label>
-          <input id="pdf-upload" type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} className="hidden" />
-
-          <button onClick={uploadAndParse} disabled={!pdfFile || parsing} className="px-6 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold disabled:opacity-40 hover:bg-blue-700">
-            {parsing ? "🔄 AI解析中…" : "🤖 AI解析する"}
-          </button>
-        </div>
-
-        {parseError && <p className="text-xs text-red-700 mt-2 bg-red-50 p-2 rounded">⚠ {parseError}</p>}
-        {parsedMeta && (
-          <p className="text-xs text-blue-800 mt-2 bg-white p-2 rounded">
-            ✅ 解析成功: <strong>{parsedMeta.supplier_name || "—"}</strong> / No.{parsedMeta.invoice_number || "—"} / 合計 {parsedMeta.total ? fmtYen(parsedMeta.total) : "—"}
-          </p>
-        )}
       </div>
 
       {/* 入力表 */}
