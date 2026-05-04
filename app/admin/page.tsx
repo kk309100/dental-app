@@ -44,7 +44,7 @@ export default function AdminHomePage() {
 
   // ボタン定義（10つ）
   const buttons: ButtonItem[] = [
-    { href: "/admin/receiving/import", label: "仕入", desc: "PDF取込・一括入荷", icon: Ic.purchase, color: "#7c3aed" },
+    { href: "/admin/receiving", label: "仕入", desc: "手入力・PDF読込", icon: Ic.purchase, color: "#7c3aed" },
     { href: "/admin/purchase-order", label: "発注", desc: "仕入先への発注書", icon: Ic.truck, color: "#0891b2" },
     { href: "/admin/orders", label: "注文", desc: "医院からの注文管理", icon: Ic.order, color: "#3b82f6", badge: badges.pendingOrders, badgeLabel: "未処理" },
     { href: "/admin/delivery", label: "納品", desc: "納品書の発行・印刷", icon: Ic.doc, color: "#10b981", badge: badges.undeliveredCount, badgeLabel: "未納品" },
