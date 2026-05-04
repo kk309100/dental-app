@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
+import { parseCSV, toCSV, downloadCSV } from "@/lib/csv"
 
 type Product = {
   id: string
@@ -14,6 +15,8 @@ type Product = {
   reorder_level: number | null
   cost: number | null
   price: number | null
+  active?: boolean | null
+  location?: string | null
 }
 
 const PAGE_SIZE = 100
@@ -27,6 +30,10 @@ export default function AdminProductsPage() {
   const [page, setPage] = useState(1)
   const [editId, setEditId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<Partial<Product>>({})
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState("")
+  const [showInactive, setShowInactive] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchProducts() }, [])
 
@@ -34,10 +41,89 @@ export default function AdminProductsPage() {
     setLoading(true)
     const { data } = await supabase
       .from("products")
-      .select("id,name,product_code,manufacturer,category,stock,reorder_level,cost,price")
+      .select("id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location")
       .order("name", { ascending: true })
     setProducts((data as Product[]) || [])
     setLoading(false)
+  }
+
+  async function importProductsCSV(file: File) {
+    setImporting(true); setImportMsg("")
+    try {
+      const text = await file.text()
+      const rows = parseCSV(text)
+      if (rows.length === 0) { setImportMsg("CSVが空です"); setImporting(false); return }
+      const pickKey = (r: Record<string, string>, ...keys: string[]) => {
+        for (const k of keys) if (r[k] !== undefined && r[k] !== "") return r[k]
+        return ""
+      }
+      // 既存マスタ（コード優先・名前fallback）
+      const byCode = new Map(products.filter(p => p.product_code).map(p => [norm(p.product_code!), p]))
+      const byName = new Map(products.map(p => [norm(p.name), p]))
+
+      let created = 0, updated = 0, skipped = 0
+      const errors: string[] = []
+      for (const r of rows) {
+        const name = pickKey(r, "商品名", "name").trim()
+        const code = pickKey(r, "商品コード", "コード", "product_code").trim()
+        if (!name && !code) { skipped++; continue }
+        const payload: Record<string, unknown> = {
+          name: name || code,
+          product_code: code || null,
+          manufacturer: pickKey(r, "メーカー", "manufacturer") || null,
+          category: pickKey(r, "カテゴリ", "category") || null,
+          cost: Number(pickKey(r, "仕入価格", "原価", "cost").replace(/[¥,]/g, "")) || null,
+          price: Number(pickKey(r, "定価", "売価", "price").replace(/[¥,]/g, "")) || null,
+          reorder_level: Number(pickKey(r, "発注点", "reorder_level")) || null,
+          location: pickKey(r, "棚番号", "ロケーション", "location") || null,
+        }
+        const existing = (code && byCode.get(norm(code))) || byName.get(norm(name))
+        if (existing) {
+          const { error } = await supabase.from("products").update(payload).eq("id", existing.id)
+          if (error) { errors.push(`${name}: ${error.message}`); continue }
+          updated++
+        } else {
+          const { error } = await supabase.from("products").insert(payload)
+          if (error) { errors.push(`${name}: ${error.message}`); continue }
+          created++
+        }
+      }
+      let msg = `✅ 取込完了: 新規${created}件 / 更新${updated}件 / スキップ${skipped}件`
+      if (errors.length) msg += `\n⚠ エラー${errors.length}件: ${errors.slice(0, 3).join(" / ")}`
+      setImportMsg(msg)
+      await fetchProducts()
+    } catch (e) {
+      setImportMsg(`取込失敗: ${(e as Error).message}`)
+    } finally {
+      setImporting(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
+
+  function exportProductsCSV() {
+    const csv = toCSV(
+      products.map(p => ({
+        商品名: p.name,
+        商品コード: p.product_code || "",
+        メーカー: p.manufacturer || "",
+        カテゴリ: p.category || "",
+        仕入価格: p.cost || "",
+        定価: p.price || "",
+        発注点: p.reorder_level || "",
+        在庫: p.stock || 0,
+        棚番号: p.location || "",
+        active: p.active === false ? "0" : "1",
+      })),
+      ["商品名", "商品コード", "メーカー", "カテゴリ", "仕入価格", "定価", "発注点", "在庫", "棚番号", "active"]
+    )
+    downloadCSV(`商品マスタ_${new Date().toISOString().slice(0, 10)}.csv`, csv)
+  }
+
+  async function toggleActive(p: Product) {
+    const newActive = p.active === false ? true : false
+    const { error } = await supabase.from("products").update({ active: newActive }).eq("id", p.id)
+    if (error) { alert("更新失敗: " + error.message); return }
+    fetchProducts()
   }
 
   const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s+/g, "")
@@ -51,13 +137,31 @@ export default function AdminProductsPage() {
     const k = norm(search)
     const m = norm(maker)
     return products.filter((p) => {
+      if (!showInactive && p.active === false) return false
       if (category !== "すべて" && p.category !== category) return false
       if (m && !norm(p.manufacturer || "").includes(m)) return false
       if (!k) return true
       const target = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""}`)
       return target.includes(k)
     })
-  }, [products, search, maker, category])
+  }, [products, search, maker, category, showInactive])
+
+  // 重複検出（同じ商品コード or 同じ名前）
+  const duplicates = useMemo(() => {
+    const codeMap = new Map<string, number>()
+    const nameMap = new Map<string, number>()
+    products.forEach(p => {
+      if (p.product_code) {
+        const k = norm(p.product_code)
+        codeMap.set(k, (codeMap.get(k) || 0) + 1)
+      }
+      const n = norm(p.name)
+      if (n) nameMap.set(n, (nameMap.get(n) || 0) + 1)
+    })
+    const dupCodes = Array.from(codeMap.entries()).filter(([, n]) => n >= 2).length
+    const dupNames = Array.from(nameMap.entries()).filter(([, n]) => n >= 2).length
+    return { dupCodes, dupNames }
+  }, [products])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -90,7 +194,32 @@ export default function AdminProductsPage() {
           商品マスタ
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{products.length}件</span>
         </h1>
+        <div className="flex items-center gap-2">
+          <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importProductsCSV(f) }} />
+          <button onClick={() => fileRef.current?.click()} disabled={importing}
+            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
+            {importing ? "取込中…" : "📥 CSV取込"}
+          </button>
+          <button onClick={exportProductsCSV}
+            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
+            📤 CSV出力
+          </button>
+        </div>
       </div>
+
+      {importMsg && (
+        <div className="text-xs px-3 py-2 rounded whitespace-pre-line"
+          style={{ background: importMsg.startsWith("✅") ? "#ecfdf5" : "#fff5f5", color: importMsg.startsWith("✅") ? "#065f46" : "#dc2626", border: "1px solid " + (importMsg.startsWith("✅") ? "#bbf7d0" : "#fcc") }}>
+          {importMsg}
+        </div>
+      )}
+
+      {(duplicates.dupCodes > 0 || duplicates.dupNames > 0) && (
+        <div className="text-xs px-3 py-2 rounded bg-amber-50 text-amber-700" style={{ border: "1px solid #fde68a" }}>
+          ⚠ 重複検出: 商品コード重複 {duplicates.dupCodes}組 / 商品名重複 {duplicates.dupNames}組
+        </div>
+      )}
 
       {/* 検索バー */}
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
@@ -109,6 +238,10 @@ export default function AdminProductsPage() {
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
           {categories.map((c) => <option key={c}>{c}</option>)}
         </select>
+        <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer ml-2">
+          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+          廃番含む
+        </label>
       </div>
 
       {/* 密テーブル */}
@@ -155,7 +288,12 @@ export default function AdminProductsPage() {
                     <td className="px-2 py-1 text-right text-[11px] text-gray-700" style={td0}>{p.price ? p.price.toLocaleString() : ""}</td>
                     <td className="px-2 py-1 text-right text-[11px]" style={td0}>{p.stock ?? 0}</td>
                     <td className="px-1 py-1 text-center" style={td0}>
-                      <button onClick={() => startEdit(p)} className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600">編集</button>
+                      <button onClick={() => startEdit(p)} className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編</button>
+                      <button onClick={() => toggleActive(p)}
+                        className={"text-[10px] px-1.5 py-0.5 rounded " + (p.active === false ? "bg-gray-200 text-gray-600" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100")}
+                        title={p.active === false ? "廃番（クリックで復活）" : "販売中（クリックで廃番）"}>
+                        {p.active === false ? "廃" : "活"}
+                      </button>
                     </td>
                   </>
                 )}
