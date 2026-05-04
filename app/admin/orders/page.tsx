@@ -58,10 +58,10 @@ export default function AdminOrdersPage() {
 
     return orders.filter((order) => {
       const items = getItems(order.id)
-      const names = items.map((i) => i.product_name).join(" ")
+      const names = items.map((i) => i.product_name || "").join(" ")
 
       const target = normalizeText(
-        ${order.delivery_number || ""} ${order.status} ${names || ""}`
+        `${order.delivery_number || ""} ${order.status || ""} ${names}`
       )
 
       const matchSearch = !keyword || target.includes(keyword)
@@ -74,7 +74,13 @@ export default function AdminOrdersPage() {
     })
   }, [orders, orderItems, search, statusFilter, clinicFilter])
 
-  const statuses = ["すべて", "注文受付", "確認中", "準備中", "納品済み", "キャンセル"]
+  const statuses = [
+    "注文受付",
+    "確認中",
+    "準備中",
+    "納品済み",
+    "キャンセル",
+  ]
 
   async function updateStatus(orderId: string, status: string) {
     await supabase.from("orders").update({ status }).eq("id", orderId)
@@ -106,6 +112,7 @@ export default function AdminOrdersPage() {
         onChange={(e) => setStatusFilter(e.target.value)}
         style={input}
       >
+        <option value="すべて">すべて</option>
         {statuses.map((s) => (
           <option key={s}>{s}</option>
         ))}
@@ -116,7 +123,7 @@ export default function AdminOrdersPage() {
         onChange={(e) => setClinicFilter(e.target.value)}
         style={input}
       >
-        <option>すべて</option>
+        <option value="すべて">すべて</option>
         {clinics.map((c) => (
           <option key={c.id} value={c.id}>
             {c.name}
@@ -143,7 +150,7 @@ export default function AdminOrdersPage() {
                   updateStatus(order.id, e.target.value)
                 }
               >
-                {statuses.slice(1).map((s) => (
+                {statuses.map((s) => (
                   <option key={s}>{s}</option>
                 ))}
               </select>
