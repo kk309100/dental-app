@@ -117,7 +117,6 @@ export default function OrderPage() {
 
   const frequentProducts = useMemo(() => {
     const clinicOrderIds = orders.map((o) => o.id)
-
     const countMap: Record<string, number> = {}
 
     orderItems
@@ -186,6 +185,20 @@ export default function OrderPage() {
         if (item.id !== productId) return item
         return { ...item, quantity: Number(item.quantity || 0) + 1 }
       })
+    )
+  }
+
+  function setCartQuantity(productId: string, value: string) {
+    const quantity = Number(value)
+
+    if (Number.isNaN(quantity) || quantity < 0) return
+
+    setCart((prev) =>
+      prev
+        .map((item) =>
+          item.id === productId ? { ...item, quantity } : item
+        )
+        .filter((item) => Number(item.quantity || 0) > 0)
     )
   }
 
@@ -451,6 +464,7 @@ export default function OrderPage() {
           onMinus={decreaseQuantity}
           onPlus={increaseQuantity}
           onRemove={removeFromCart}
+          onChangeQuantity={setCartQuantity}
         />
       ))}
 
@@ -475,6 +489,8 @@ export default function OrderPage() {
         <Modal>
           <h2>カート編集</h2>
 
+          {cart.length === 0 && <p>カートは空です</p>}
+
           {cart.map((item) => (
             <CartItem
               key={item.id}
@@ -482,6 +498,7 @@ export default function OrderPage() {
               onMinus={decreaseQuantity}
               onPlus={increaseQuantity}
               onRemove={removeFromCart}
+              onChangeQuantity={setCartQuantity}
             />
           ))}
 
@@ -544,7 +561,7 @@ function MiniProductCard({ product, onAdd }: any) {
   )
 }
 
-function CartItem({ item, onMinus, onPlus, onRemove }: any) {
+function CartItem({ item, onMinus, onPlus, onRemove, onChangeQuantity }: any) {
   return (
     <div style={cartItemStyle}>
       <div>
@@ -559,7 +576,13 @@ function CartItem({ item, onMinus, onPlus, onRemove }: any) {
           −
         </button>
 
-        <span style={quantityTextStyle}>{item.quantity}</span>
+        <input
+          type="number"
+          min="0"
+          value={item.quantity}
+          onChange={(e) => onChangeQuantity(item.id, e.target.value)}
+          style={quantityInputStyle}
+        />
 
         <button type="button" onClick={() => onPlus(item.id)} style={qtyBtn}>
           ＋
@@ -775,10 +798,14 @@ const quantityBoxStyle: React.CSSProperties = {
   flexShrink: 0,
 }
 
-const quantityTextStyle: React.CSSProperties = {
-  minWidth: 24,
+const quantityInputStyle: React.CSSProperties = {
+  width: 58,
+  height: 38,
   textAlign: "center",
+  borderRadius: 8,
+  border: "1px solid #ddd",
   fontWeight: "bold",
+  fontSize: 16,
 }
 
 const qtyBtn: React.CSSProperties = {
