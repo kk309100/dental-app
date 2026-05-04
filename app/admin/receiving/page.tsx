@@ -319,18 +319,45 @@ export default function ReceivingPage() {
       </div>
 
       {/* PDF読込 */}
-      <div className="bg-blue-50 rounded-lg p-3" style={{ border: "1px solid #c7d2fe" }}>
-        <p className="text-xs font-bold text-blue-900 mb-2">② PDFから自動入力（任意）</p>
-        <div className="flex gap-2 items-center flex-wrap">
-          <input type="file" accept="application/pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} className="text-xs flex-1 min-w-[200px]" />
-          <button onClick={uploadAndParse} disabled={!pdfFile || parsing} className="px-4 py-1.5 bg-blue-600 text-white rounded text-xs font-bold disabled:opacity-50">
-            {parsing ? "AI解析中…" : "AI解析して下の表に流し込み"}
+      <div className="bg-blue-50 rounded-xl p-4" style={{ border: "1px solid #c7d2fe" }}>
+        <p className="text-sm font-bold text-blue-900 mb-2">② PDFから自動入力（任意）</p>
+        <p className="text-xs text-blue-700 mb-3">仕入納品書PDFをアップロードすると、AIが明細を読み取って下の表に流し込みます</p>
+
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch">
+          {/* ファイル選択（大きなボタン） */}
+          <label
+            htmlFor="pdf-upload"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 hover:border-blue-500 transition-colors"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-600">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-sm font-bold text-blue-700">
+              {pdfFile ? `📄 ${pdfFile.name}` : "PDFファイルを選択"}
+            </span>
+          </label>
+          <input
+            id="pdf-upload"
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+            className="hidden"
+          />
+
+          {/* 解析実行ボタン */}
+          <button
+            onClick={uploadAndParse}
+            disabled={!pdfFile || parsing}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-blue-700"
+          >
+            {parsing ? "🔄 AI解析中…" : "🤖 AI解析する"}
           </button>
         </div>
-        {parseError && <p className="text-xs text-red-700 mt-1">⚠ {parseError}</p>}
+
+        {parseError && <p className="text-xs text-red-700 mt-2 bg-red-50 p-2 rounded">⚠ {parseError}</p>}
         {parsedMeta && (
-          <p className="text-xs text-blue-800 mt-2">
-            ✓ 解析成功: {parsedMeta.supplier_name || "—"} / No.{parsedMeta.invoice_number || "—"} / 合計 {parsedMeta.total ? fmtYen(parsedMeta.total) : "—"}
+          <p className="text-xs text-blue-800 mt-2 bg-white p-2 rounded">
+            ✅ 解析成功: <strong>{parsedMeta.supplier_name || "—"}</strong> / No.{parsedMeta.invoice_number || "—"} / 合計 {parsedMeta.total ? fmtYen(parsedMeta.total) : "—"}
           </p>
         )}
       </div>
