@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -20,28 +20,29 @@ export default function LoginPage() {
     })
 
     if (error) {
-      alert("ログイン失敗")
+      alert("ログインできません。メールアドレスかパスワードを確認してください。")
       setLoading(false)
       return
     }
 
-    // プロフィール確認
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", data.user.id)
       .single()
 
-   if (profile?.role === "admin") {
-  router.push("/admin")
-  return
-}
+    if (!profile) {
+      alert("プロフィールがありません。profilesテーブルを確認してください。")
+      setLoading(false)
+      return
+    }
 
-if (profile?.role === "clinic") {
-  router.push("/order")
-  return
-}
-    setLoading(false)
+    if (profile.role === "admin") {
+      router.push("/admin")
+      return
+    }
+
+    router.push("/order")
   }
 
   return (
@@ -49,40 +50,42 @@ if (profile?.role === "clinic") {
       <h1>ログイン</h1>
 
       <input
-        placeholder="メールアドレス"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        style={input}
+        placeholder="メールアドレス"
+        style={inputStyle}
       />
 
       <input
-        placeholder="パスワード"
-        type="password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        style={input}
+        placeholder="パスワード"
+        type="password"
+        style={inputStyle}
       />
 
-      <button onClick={handleLogin} style={button} disabled={loading}>
+      <button onClick={handleLogin} disabled={loading} style={buttonStyle}>
         {loading ? "ログイン中..." : "ログイン"}
       </button>
     </main>
   )
 }
 
-const input = {
+const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: 12,
   marginBottom: 12,
   borderRadius: 8,
   border: "1px solid #ddd",
+  boxSizing: "border-box",
 }
 
-const button = {
+const buttonStyle: React.CSSProperties = {
   width: "100%",
   padding: 14,
   borderRadius: 10,
+  border: "none",
   background: "#111",
   color: "#fff",
-  border: "none",
+  fontWeight: "bold",
 }
