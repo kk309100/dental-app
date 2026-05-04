@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
+import { parseCSV } from "@/lib/csv"
 
 type Supplier = {
   id: string
@@ -37,6 +38,9 @@ export default function AdminSuppliersPage() {
   const [form, setForm] = useState<Form>(empty)
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState("")
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState("")
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchData() }, [])
 
@@ -56,6 +60,63 @@ export default function AdminSuppliersPage() {
       return target.includes(k)
     })
   }, [suppliers, search])
+
+  const duplicates = useMemo(() => {
+    const m = new Map<string, number>()
+    suppliers.forEach((s) => {
+      const k = norm(s.name)
+      if (k) m.set(k, (m.get(k) || 0) + 1)
+    })
+    return Array.from(m.entries()).filter(([, n]) => n >= 2)
+  }, [suppliers])
+
+  async function importCSV(file: File) {
+    setImporting(true); setImportMsg("")
+    try {
+      const text = await file.text()
+      const rows = parseCSV(text)
+      if (rows.length === 0) { setImportMsg("CSVが空です"); setImporting(false); return }
+      const pickKey = (r: Record<string, string>, ...keys: string[]) => {
+        for (const k of keys) if (r[k] !== undefined && r[k] !== "") return r[k]
+        return ""
+      }
+      const existingByName = new Map(suppliers.map(s => [norm(s.name), s]))
+      let created = 0, updated = 0, skipped = 0
+      const errors: string[] = []
+      for (const r of rows) {
+        const name = pickKey(r, "仕入先名", "name").trim()
+        if (!name) { skipped++; continue }
+        const payload: Record<string, unknown> = {
+          name,
+          maker_name: pickKey(r, "メーカー名", "メーカー", "maker_name") || null,
+          contact: pickKey(r, "担当者", "contact") || null,
+          phone: pickKey(r, "電話", "電話番号", "phone") || null,
+          email: pickKey(r, "メール", "email") || null,
+          address: pickKey(r, "住所", "address") || null,
+          notes: pickKey(r, "備考", "notes") || null,
+        }
+        const existing = existingByName.get(norm(name))
+        if (existing) {
+          const { error } = await supabase.from("suppliers").update(payload).eq("id", existing.id)
+          if (error) { errors.push(`${name}: ${error.message}`); continue }
+          updated++
+        } else {
+          const { error } = await supabase.from("suppliers").insert(payload)
+          if (error) { errors.push(`${name}: ${error.message}`); continue }
+          created++
+        }
+      }
+      let msg = `✅ 取込完了: 新規${created}件 / 更新${updated}件 / スキップ${skipped}件`
+      if (errors.length) msg += `\n⚠ エラー${errors.length}件: ${errors.slice(0, 3).join(" / ")}`
+      setImportMsg(msg)
+      await fetchData()
+    } catch (e) {
+      setImportMsg(`取込失敗: ${(e as Error).message}`)
+    } finally {
+      setImporting(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
 
   function openAdd() { setForm(empty); setEditId(null); setErrMsg(""); setShowForm(true) }
   function openEdit(s: Supplier) {
@@ -120,11 +181,26 @@ export default function AdminSuppliersPage() {
           <h1 style={{ fontSize: 26, margin: 0 }}>仕入先管理</h1>
           <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{suppliers.length}件</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={downloadCSV} style={btnGray}>CSV</button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f) }} />
+          <button onClick={() => fileRef.current?.click()} disabled={importing} style={btnGray}>
+            {importing ? "取込中…" : "📥 CSV取込"}
+          </button>
+          <button onClick={downloadCSV} style={btnGray}>📤 CSV出力</button>
           <button onClick={openAdd} style={btnDark}>＋ 仕入先を追加</button>
         </div>
       </div>
+
+      {importMsg && (
+        <div style={{ ...errBox, background: importMsg.startsWith("✅") ? "#ecfdf5" : "#fff5f5", borderColor: importMsg.startsWith("✅") ? "#bbf7d0" : "#fcc", color: importMsg.startsWith("✅") ? "#065f46" : "#dc2626", whiteSpace: "pre-line" }}>{importMsg}</div>
+      )}
+
+      {duplicates.length > 0 && (
+        <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 6, padding: 10, marginBottom: 12, fontSize: 12, color: "#92400e" }}>
+          ⚠ 同名の仕入先が {duplicates.length} 組あります
+        </div>
+      )}
 
       <input
         value={search}

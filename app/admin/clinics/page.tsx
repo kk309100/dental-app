@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
+import { parseCSV } from "@/lib/csv"
 
 // ── 型 ─────────────────────────────────────────────────────────────────
 type Clinic = {
@@ -61,6 +62,9 @@ export default function AdminClinicsPage() {
   const [form, setForm] = useState<Form>(empty)
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState("")
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState("")
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchData() }, [])
 
@@ -84,6 +88,18 @@ export default function AdminClinicsPage() {
       return target.includes(k)
     })
   }, [clinics, search])
+
+  // 重複検出: 名前 (NFKC正規化) で同じものが2件以上
+  const duplicates = useMemo(() => {
+    const m = new Map<string, Clinic[]>()
+    clinics.forEach((c) => {
+      const k = norm(c.name)
+      if (!k) return
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push(c)
+    })
+    return Array.from(m.entries()).filter(([, arr]) => arr.length >= 2)
+  }, [clinics])
 
   function openAdd() {
     setForm(empty)
@@ -143,6 +159,62 @@ export default function AdminClinicsPage() {
     fetchData()
   }
 
+  async function importCSV(file: File) {
+    setImporting(true)
+    setImportMsg("")
+    try {
+      const text = await file.text()
+      const rows = parseCSV(text)
+      if (rows.length === 0) { setImportMsg("CSVが空です"); setImporting(false); return }
+
+      // ヘッダ名を柔軟にマッチ（日本語/英語）
+      const pickKey = (r: Record<string, string>, ...keys: string[]) => {
+        for (const k of keys) if (r[k] !== undefined && r[k] !== "") return r[k]
+        return ""
+      }
+
+      const existingByName = new Map(clinics.map((c) => [norm(c.name), c]))
+      let created = 0, updated = 0, skipped = 0
+      const errors: string[] = []
+
+      for (const r of rows) {
+        const name = pickKey(r, "医院名", "name").trim()
+        if (!name) { skipped++; continue }
+        const payload: Record<string, string | null> = {
+          name,
+          corporate_name: pickKey(r, "法人名", "corporate_name") || null,
+          contact: pickKey(r, "先方担当", "contact") || null,
+          phone: pickKey(r, "電話", "電話番号", "phone") || null,
+          email: pickKey(r, "メール", "メールアドレス", "email") || null,
+          sales_rep: pickKey(r, "自社担当", "営業担当", "sales_rep") || null,
+          closing_day: pickKey(r, "締日", "closing_day") || "月末",
+          adress: pickKey(r, "住所", "address", "adress") || null,
+          clinic_type: pickKey(r, "種別", "clinic_type") || null,
+        }
+        const existing = existingByName.get(norm(name))
+        if (existing) {
+          const { error } = await supabase.from("clinics").update(payload).eq("id", existing.id)
+          if (error) { errors.push(`${name}: ${error.message}`); continue }
+          updated++
+        } else {
+          const { error } = await supabase.from("clinics").insert(payload)
+          if (error) { errors.push(`${name}: ${error.message}`); continue }
+          created++
+        }
+      }
+
+      let msg = `✅ 取込完了: 新規${created}件 / 更新${updated}件 / スキップ${skipped}件`
+      if (errors.length) msg += `\n⚠ エラー${errors.length}件: ${errors.slice(0, 3).join(" / ")}`
+      setImportMsg(msg)
+      await fetchData()
+    } catch (e) {
+      setImportMsg(`取込失敗: ${(e as Error).message}`)
+    } finally {
+      setImporting(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
+
   function downloadCSV() {
     const rows: string[][] = [
       ["医院名", "法人名", "先方担当", "電話", "メール", "自社担当", "締日", "住所", "種別"],
@@ -177,11 +249,35 @@ export default function AdminClinicsPage() {
           <h1 style={{ fontSize: 26, margin: 0 }}>医院管理</h1>
           <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{clinics.length}件</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={downloadCSV} style={btnGray}>CSV</button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f) }}
+          />
+          <button onClick={() => fileRef.current?.click()} disabled={importing} style={btnGray}>
+            {importing ? "取込中…" : "📥 CSV取込"}
+          </button>
+          <button onClick={downloadCSV} style={btnGray}>📤 CSV出力</button>
           <button onClick={openAdd} style={btnDark}>＋ 医院を追加</button>
         </div>
       </div>
+
+      {importMsg && (
+        <div style={{ ...errBox, background: importMsg.startsWith("✅") ? "#ecfdf5" : "#fff5f5", borderColor: importMsg.startsWith("✅") ? "#bbf7d0" : "#fcc", color: importMsg.startsWith("✅") ? "#065f46" : "#dc2626", whiteSpace: "pre-line" }}>{importMsg}</div>
+      )}
+
+      {duplicates.length > 0 && (
+        <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 6, padding: 10, marginBottom: 12, fontSize: 12, color: "#92400e" }}>
+          ⚠ 同名の医院が {duplicates.length} 組あります:
+          {duplicates.slice(0, 5).map(([name, arr]) => (
+            <span key={name} style={{ marginLeft: 8 }}>「{arr[0].name}」×{arr.length}</span>
+          ))}
+          {duplicates.length > 5 && <span> 他</span>}
+        </div>
+      )}
 
       <input
         value={search}
