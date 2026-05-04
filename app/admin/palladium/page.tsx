@@ -179,7 +179,7 @@ export default function PalladiumPage() {
             <table style={table}>
               <thead>
                 <tr>
-                  <th style={th}>日付</th>
+                  <th style={{ ...th, textAlign: "center" }}>日付</th>
                   {PRODUCTS.map((p) => (
                     <th key={p.key} style={{ ...th, textAlign: "right", color: p.color }}>{p.label}</th>
                   ))}
@@ -190,14 +190,16 @@ export default function PalladiumPage() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id}>
-                    <td style={td}>{r.date}</td>
+                    <td style={{ ...td, textAlign: "center" }}>{r.date}</td>
                     {PRODUCTS.map((p) => {
                       const price = r[`${p.key}_price` as `${ProductKey}_price`]
                       const toka = r[`${p.key}_toka` as `${ProductKey}_toka`]
                       return (
-                        <td key={p.key} style={{ ...td, textAlign: "right" }}>
-                          {price !== null ? fmtYen(price) : "—"}
-                          {toka && <span style={tokaBadgeSmall}>特</span>}
+                        <td key={p.key} style={td}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+                            {toka && <span style={tokaBadgeSmall}>特</span>}
+                            <span style={{ minWidth: 70, textAlign: "right" }}>{price !== null ? fmtYen(price) : "—"}</span>
+                          </div>
                         </td>
                       )
                     })}
@@ -283,7 +285,7 @@ const latestGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: 
 const latestCard: React.CSSProperties = { background: "#fafafa", borderRadius: 8, padding: 12, textAlign: "center" }
 const productLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, marginBottom: 4 }
 const tokaBadge: React.CSSProperties = { display: "inline-block", marginTop: 4, padding: "1px 6px", borderRadius: 4, background: "#fef3c7", color: "#92400e", fontSize: 10, fontWeight: 700 }
-const tokaBadgeSmall: React.CSSProperties = { display: "inline-block", marginLeft: 4, padding: "0 4px", borderRadius: 3, background: "#fef3c7", color: "#92400e", fontSize: 9, fontWeight: 700 }
+const tokaBadgeSmall: React.CSSProperties = { display: "inline-block", padding: "0 4px", borderRadius: 3, background: "#fef3c7", color: "#92400e", fontSize: 9, fontWeight: 700 }
 const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse", background: "#fff", border: "1px solid #eee", borderRadius: 8 }
 const th: React.CSSProperties = { borderBottom: "2px solid #111", padding: "8px 10px", textAlign: "left", fontSize: 11, fontWeight: 700, background: "#fafafa" }
 const td: React.CSSProperties = { borderBottom: "1px solid #eee", padding: "8px 10px", fontSize: 12 }
