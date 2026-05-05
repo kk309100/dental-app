@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
@@ -17,8 +17,23 @@ type Clinic = { id: string; name: string; corporate_name?: string | null; sales_
 // 全件取得 → クライアント側で EXCLUDE_STATUSES を除外する方式に変更
 const EXCLUDE_STATUSES = ["納品済み", "納品済", "キャンセル", "取消"]
 
-export default function ShippingPage() {
+export default function ShippingPageWrapper() {
+  return (
+    <Suspense fallback={<p className="text-gray-400 text-center py-12">読み込み中…</p>}>
+      <ShippingPage />
+    </Suspense>
+  )
+}
+
+function ShippingPage() {
   const router = useRouter()
+  const sp = useSearchParams()
+  // 仕入入荷ページから渡された「事前選択する注文ID」(カンマ区切り)
+  const presetOrderIds = useMemo(() => {
+    const param = sp.get("orders") || ""
+    return param.split(",").map(s => s.trim()).filter(Boolean)
+  }, [sp])
+
   const [orders, setOrders] = useState<Order[]>([])
   const [items, setItems] = useState<OrderItem[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -30,8 +45,21 @@ export default function ShippingPage() {
   const [stockFilter, setStockFilter] = useState<"all" | "ready" | "short">("all")
   const [busy, setBusy] = useState(false)
   const [groupView, setGroupView] = useGroupView()
+  const [highlightFromReceiving, setHighlightFromReceiving] = useState(false)
 
   useEffect(() => { fetchData() }, [])
+
+  // データ読込後、URL クエリで指定された注文IDを事前選択 + その医院グループを開く
+  useEffect(() => {
+    if (loading || presetOrderIds.length === 0 || orders.length === 0) return
+    const validIds = presetOrderIds.filter(id => orders.some(o => o.id === id))
+    if (validIds.length === 0) return
+    setSelected(new Set(validIds))
+    // 該当注文の医院グループを自動展開
+    const clinicIdsToOpen = new Set(orders.filter(o => validIds.includes(o.id)).map(o => o.clinic_id))
+    setOpenClinics(prev => { const n = new Set(prev); clinicIdsToOpen.forEach(c => n.add(c)); return n })
+    setHighlightFromReceiving(true)
+  }, [loading, orders, presetOrderIds])
 
   async function fetchData() {
     setLoading(true)
@@ -264,6 +292,24 @@ export default function ShippingPage() {
         </h1>
         <Link href="/admin/orders" className="text-xs text-gray-500 underline">← 注文一覧</Link>
       </div>
+
+      {/* 仕入入荷から遷移してきた時の通知バナー */}
+      {highlightFromReceiving && presetOrderIds.length > 0 && (
+        <div className="bg-emerald-50 rounded-lg p-3 flex items-center gap-3 no-print" style={{ border: "2px solid #10b981" }}>
+          <span className="text-2xl">📦→🚚</span>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-emerald-900">
+              仕入入荷で出荷可能になった注文 {selected.size}件 を選択しました
+            </p>
+            <p className="text-[11px] text-emerald-700 mt-0.5">
+              下に該当医院グループが自動展開されています。「✓ 出荷確定」ボタンで一括処理できます。
+            </p>
+          </div>
+          <button
+            onClick={() => { setHighlightFromReceiving(false); setSelected(new Set()); router.replace("/admin/shipping") }}
+            className="text-xs text-gray-500 underline">通常表示に戻す</button>
+        </div>
+      )}
 
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap no-print" style={{ border: "1px solid #e8eaed" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="医院名で検索"

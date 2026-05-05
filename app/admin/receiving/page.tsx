@@ -54,6 +54,13 @@ export default function ReceivingPage() {
   const [submitting, setSubmitting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [logs, setLogs] = useState<string[]>([])
+  // 仕入登録後の「これで出荷可能になった注文」結果
+  const [postReceiveResult, setPostReceiveResult] = useState<null | {
+    receivedRows: number
+    totalAmount: number
+    nowShippable: { orderId: string; clinicId: string; clinicName: string; deliveryNumber: string; itemCount: number; totalPrice: number }[]
+    partiallyImpacted: number  // 入庫商品を含むがまだ出荷不可な注文数
+  }>(null)
 
   useEffect(() => { fetchData() }, [])
 
@@ -87,6 +94,7 @@ export default function ReceivingPage() {
     setParsedMeta(null)
     setPdfFile(null)
     setParseError("")
+    setPostReceiveResult(null)
   }
 
   async function uploadAndParse(file?: File) {
@@ -160,6 +168,7 @@ export default function ReceivingPage() {
     if (!confirm(`${validRows.length}行を仕入登録します。\n合計仕入額: ${fmtYen(totalAmount)}\n\n商品マスタに無い商品は自動で新規登録されます。\nよろしいですか？`)) return
 
     setSubmitting(true)
+    setPostReceiveResult(null)  // 前回の結果をクリア
     setLogs([])
     setProgress({ done: 0, total: validRows.length })
     const newLogs: string[] = []
@@ -259,28 +268,95 @@ export default function ReceivingPage() {
     }
     fetchData()
 
-    // 入庫した商品で「出荷可能になった注文」を抽出して通知
+    // 入庫した商品で「出荷可能になった注文」を全件出力
+    // 1) この入庫商品を含む未納品注文を取得
+    // 2) その注文の全 items について現在庫を確認
+    // 3) 全 items の在庫が足りる注文だけ "出荷可能" として通知
+    let nowShippableList: typeof postReceiveResult extends infer T ? (T extends { nowShippable: infer L } ? L : never) : never = [] as any
+    let partiallyImpacted = 0
     if (stockedProductIds.length > 0) {
       try {
-        const { data: pendingOrders } = await supabase
+        // 未納品注文（表記ゆれ「納品済」も除外。完了系を除いた active のみ）
+        const { data: allOrders } = await supabase
           .from("orders")
-          .select("id,clinic_id")
-          .in("status", ["注文受付", "確認中", "準備中"])
-        const orderIds = (pendingOrders || []).map(o => o.id)
-        if (orderIds.length > 0) {
-          const { data: pendingItems } = await supabase
+          .select("id,clinic_id,status,total_price,delivery_number")
+          .limit(50000)
+        const pendingOrders = (allOrders || []).filter(
+          (o: any) => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)
+        )
+        const pendingOrderIds = pendingOrders.map((o: any) => o.id)
+
+        if (pendingOrderIds.length > 0) {
+          // 入庫商品を含む注文だけに絞り込み
+          const { data: hitItems } = await supabase
             .from("order_items")
-            .select("order_id,product_id")
-            .in("order_id", orderIds)
+            .select("order_id,product_id,quantity")
+            .in("order_id", pendingOrderIds)
             .in("product_id", stockedProductIds)
-          const affected = new Set((pendingItems || []).map(i => i.order_id))
-          if (affected.size > 0) {
-            const ok = confirm(`✅ 仕入登録完了。\n\n入庫した商品を含む未納品注文が ${affected.size} 件あります。\n出荷準備画面に移動しますか？`)
-            if (ok) window.location.href = "/admin/shipping"
+            .limit(50000)
+          const affectedOrderIds = Array.from(new Set((hitItems || []).map((it: any) => it.order_id)))
+
+          if (affectedOrderIds.length > 0) {
+            // 全 items を取得（影響注文の全行を見て出荷可否判定）
+            const { data: allItemsForAffected } = await supabase
+              .from("order_items")
+              .select("id,order_id,product_id,quantity")
+              .in("order_id", affectedOrderIds)
+              .limit(50000)
+
+            // 必要な全 product_id の現在庫を取得
+            const allProductIds = Array.from(new Set((allItemsForAffected || []).map((it: any) => it.product_id).filter(Boolean)))
+            const { data: prodStocks } = await supabase
+              .from("products")
+              .select("id,stock")
+              .in("id", allProductIds)
+            const stockMap = new Map<string, number>((prodStocks || []).map((p: any) => [p.id, Number(p.stock || 0)]))
+
+            // 医院名取得
+            const clinicIds = Array.from(new Set(pendingOrders.filter((o: any) => affectedOrderIds.includes(o.id)).map((o: any) => o.clinic_id)))
+            const { data: cls } = await supabase.from("clinics").select("id,name").in("id", clinicIds)
+            const clinicMap = new Map<string, string>((cls || []).map((c: any) => [c.id, c.name]))
+
+            // 注文ごとに「全 items の在庫充足？」判定
+            const itemsByOrder = new Map<string, any[]>()
+            ;(allItemsForAffected || []).forEach((it: any) => {
+              if (!itemsByOrder.has(it.order_id)) itemsByOrder.set(it.order_id, [])
+              itemsByOrder.get(it.order_id)!.push(it)
+            })
+
+            const shippable: any[] = []
+            let partial = 0
+            for (const oid of affectedOrderIds) {
+              const its = itemsByOrder.get(oid) || []
+              const allOk = its.every(it => Number(stockMap.get(it.product_id) || 0) >= Number(it.quantity || 0))
+              const ord = pendingOrders.find((o: any) => o.id === oid)
+              if (!ord) continue
+              if (allOk) {
+                shippable.push({
+                  orderId: oid,
+                  clinicId: ord.clinic_id,
+                  clinicName: clinicMap.get(ord.clinic_id) || "(医院不明)",
+                  deliveryNumber: ord.delivery_number || oid.slice(0, 8),
+                  itemCount: its.length,
+                  totalPrice: Number(ord.total_price || 0),
+                })
+              } else {
+                partial++
+              }
+            }
+            nowShippableList = shippable
+            partiallyImpacted = partial
           }
         }
       } catch { /* スキップ */ }
     }
+
+    setPostReceiveResult({
+      receivedRows: validRows.length,
+      totalAmount,
+      nowShippable: nowShippableList,
+      partiallyImpacted,
+    })
   }
 
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
@@ -326,6 +402,61 @@ export default function ReceivingPage() {
       {parsedMeta && (
         <div className="bg-blue-50 text-blue-800 text-xs p-2 rounded" style={{ border: "1px solid #c7d2fe" }}>
           ✅ <strong>{pdfFile?.name}</strong> 解析成功: {parsedMeta.supplier_name || "—"} / No.{parsedMeta.invoice_number || "—"} / 合計 {parsedMeta.total ? fmtYen(parsedMeta.total) : "—"} → 下の表に流し込み済み
+        </div>
+      )}
+
+      {/* 仕入登録後の「これで出荷可能になった注文」自動通知 */}
+      {postReceiveResult && (
+        <div className="bg-emerald-50 rounded-lg p-3" style={{ border: "2px solid #10b981" }}>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-bold text-emerald-900">
+              ✅ 仕入登録完了 ({postReceiveResult.receivedRows}行 / {fmtYen(postReceiveResult.totalAmount)})
+            </h2>
+            <button
+              onClick={() => setPostReceiveResult(null)}
+              className="text-xs text-gray-500 hover:text-gray-700">✕ 閉じる</button>
+          </div>
+
+          {postReceiveResult.nowShippable.length === 0 && postReceiveResult.partiallyImpacted === 0 && (
+            <p className="text-xs text-emerald-800">
+              入庫商品を待っていた未納品注文はありませんでした。
+            </p>
+          )}
+
+          {postReceiveResult.nowShippable.length > 0 && (
+            <div>
+              <p className="text-xs font-bold text-emerald-900 mb-1">
+                🚚 これで出荷可能になった注文 <span className="text-base">{postReceiveResult.nowShippable.length}件</span>
+              </p>
+              <div className="bg-white rounded p-2 mb-2 max-h-48 overflow-auto" style={{ border: "1px solid #d1fae5" }}>
+                {postReceiveResult.nowShippable.map((o) => (
+                  <div key={o.orderId} className="flex items-center justify-between text-xs py-0.5 border-b border-gray-100 last:border-0">
+                    <span>
+                      <strong>{o.clinicName}</strong>
+                      <span className="ml-2 text-gray-500 font-mono text-[10px]">{o.deliveryNumber}</span>
+                      <span className="ml-2 text-gray-400 text-[10px]">{o.itemCount}品</span>
+                    </span>
+                    <span className="font-bold tabular-nums">{fmtYen(o.totalPrice)}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  const ids = postReceiveResult.nowShippable.map(o => o.orderId).join(",")
+                  window.location.href = `/admin/shipping?orders=${ids}`
+                }}
+                className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700 mr-2"
+              >
+                → 出荷準備へ（{postReceiveResult.nowShippable.length}件を選択済みで開く）
+              </button>
+            </div>
+          )}
+
+          {postReceiveResult.partiallyImpacted > 0 && (
+            <p className="text-[11px] text-amber-700 mt-2">
+              ⚠ 入庫商品を含むがまだ他の品が在庫不足の注文: {postReceiveResult.partiallyImpacted}件（追加入荷待ち）
+            </p>
+          )}
         </div>
       )}
 
