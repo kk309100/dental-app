@@ -1,11 +1,19 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { calcTax, fmtYen, fmtDate, ymd } from "@/lib/invoice"
 import { generateQuoteNumber, defaultExpiryDate } from "@/lib/quote"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+
+export default function CreateQuotePageWrapper() {
+  return (
+    <Suspense fallback={<p className="text-gray-400 text-center py-12">読み込み中…</p>}>
+      <CreateQuotePage />
+    </Suspense>
+  )
+}
 
 type Clinic = { id: string; name: string; corporate_name?: string | null }
 type Product = { id: string; name: string; price: number | null }
@@ -17,8 +25,10 @@ type Line = {
   price: number
 }
 
-export default function CreateQuotePage() {
+function CreateQuotePage() {
   const router = useRouter()
+  const sp = useSearchParams()
+  const fromOrderId = sp.get("from_order")
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +54,22 @@ export default function CreateQuotePage() {
     ])
     setClinics(c.data || [])
     setProducts((p.data as Product[]) || [])
+
+    // ?from_order=xxx で注文から見積コピー
+    if (fromOrderId) {
+      const { data: o } = await supabase.from("orders").select("clinic_id").eq("id", fromOrderId).single()
+      const { data: items } = await supabase.from("order_items").select("product_id,product_name,quantity,price").eq("order_id", fromOrderId)
+      if (o?.clinic_id) setClinicId(o.clinic_id)
+      if (items && items.length > 0) {
+        setLines(items.map((it: { product_id: string | null; product_name: string | null; quantity: number; price: number }) => ({
+          productId: it.product_id,
+          productName: it.product_name || "",
+          quantity: Number(it.quantity || 1),
+          price: Number(it.price || 0),
+        })))
+        setNotes(`注文 #${fromOrderId.slice(0, 8)} から作成`)
+      }
+    }
     setLoading(false)
   }
 
