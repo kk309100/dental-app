@@ -42,7 +42,7 @@ export default function AdminHomePage() {
     return { pendingOrders, undeliveredCount, unbilled, unpaidInvoices, lowStock }
   }, [orders, invoices, products])
 
-  // ボタン定義（10つ）
+  // ボタン定義（業務系8つ + マスター + 見積）
   const buttons: ButtonItem[] = [
     { href: "/admin/receiving", label: "仕入", desc: "手入力・PDF読込", icon: Ic.purchase, color: "#7c3aed" },
     { href: "/admin/purchase-orders", label: "発注", desc: "発注書管理・自動提案", icon: Ic.truck, color: "#0891b2" },
@@ -51,9 +51,9 @@ export default function AdminHomePage() {
     { href: "/admin/invoices", label: "請求", desc: "請求書発行・入金", icon: Ic.sales, color: "#dc2626", badge: badges.unbilled || badges.unpaidInvoices, badgeLabel: badges.unbilled > 0 ? "未請求" : "未収" },
     { href: "/admin/sales", label: "売上", desc: "月次・医院・商品別分析", icon: Ic.sales, color: "#059669" },
     { href: "/admin/inventory", label: "在庫", desc: "在庫数・最低在庫", icon: Ic.product, color: "#d97706", badge: badges.lowStock, badgeLabel: "在庫不足" },
-    { href: "/admin/clinics", label: "得意先", desc: "医院マスタ", icon: Ic.clinic, color: "#0d9488" },
-    { href: "/admin/suppliers", label: "仕入先", desc: "仕入先マスタ", icon: Ic.truck, color: "#475569" },
-    { href: "/admin/palladium", label: "パラ", desc: "パラジウム価格管理", icon: Ic.product, color: "#a855f7" },
+    { href: "/admin/quotes", label: "見積", desc: "見積書発行・売上化", icon: Ic.doc, color: "#6366f1" },
+    { href: "/admin/masters", label: "マスター", desc: "得意先・仕入先・商品・設定", icon: Ic.dash, color: "#475569" },
+    { href: "/admin/dashboard", label: "ダッシュ", desc: "KPIサマリ", icon: Ic.dash, color: "#1f2937" },
   ]
 
   return (
@@ -75,22 +75,16 @@ export default function AdminHomePage() {
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 text-center">QUICK ACCESS</p>
         <div className="flex flex-wrap justify-center gap-2 text-xs">
           {[
-            { href: "/admin/dashboard", label: "📊 ダッシュボード", featured: true },
-            { href: "/admin/quotes", label: "見積書" },
             { href: "/admin/invoices/bulk", label: "一括請求" },
             { href: "/admin/receivables", label: "売掛金台帳" },
             { href: "/admin/purchase-order", label: "推奨発注リスト（旧）" },
             { href: "/admin/stocktakes", label: "棚卸" },
             { href: "/admin/stock-movements", label: "在庫履歴" },
-            { href: "/admin/audit-logs", label: "監査ログ" },
             { href: "/admin/inventory-valuation", label: "在庫評価" },
             { href: "/admin/bank-import", label: "📥 銀行CSV消込" },
-            { href: "/admin/settings", label: "⚙ 自社情報設定" },
-            { href: "/admin/products", label: "商品マスタ" },
             { href: "/admin/delivery-search", label: "納品書検索" },
             { href: "/admin/orders?status=delivered", label: "納品済み一覧" },
-            { href: "/admin/barcodes", label: "バーコード" },
-          ].map((l) => (
+          ].map((l: { href: string; label: string; featured?: boolean }) => (
             <Link key={l.href} href={l.href}
               className={"px-3 py-1.5 rounded-full border " + (l.featured ? "bg-gray-900 text-white border-gray-900 hover:bg-gray-700" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900")}>
               {l.label}
