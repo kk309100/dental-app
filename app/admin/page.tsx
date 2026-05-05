@@ -35,8 +35,8 @@ export default function AdminHomePage() {
   // バッジ用カウント
   const badges = useMemo(() => {
     const pendingOrders = orders.filter((o) => ["注文受付", "確認中", "準備中"].includes(o.status)).length
-    const undeliveredCount = orders.filter((o) => o.status !== "納品済み" && o.status !== "キャンセル").length
-    const unbilled = orders.filter((o) => o.status === "納品済み" && !o.invoice_id).length
+    const undeliveredCount = orders.filter((o) => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)).length
+    const unbilled = orders.filter((o) => ["納品済み", "納品済"].includes(o.status) && !o.invoice_id).length
     const unpaidInvoices = invoices.filter((i) => i.status === "issued").length
     const lowStock = products.filter((p) => p.stock !== null && p.reorder_level !== null && p.stock <= p.reorder_level).length
     return { pendingOrders, undeliveredCount, unbilled, unpaidInvoices, lowStock }

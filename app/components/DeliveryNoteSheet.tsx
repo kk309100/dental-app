@@ -32,7 +32,9 @@ export default function DeliveryNoteSheet({
         position: "relative",
         padding: "8mm 10mm",
         boxSizing: "border-box",
-        height: "138mm", // A4の半分弱
+        // A4 (297mm) - 切取線 8mm = 289mm を上下で2分 → 144.5mm
+        // border 1.5mm 等を考慮しても 297mm を超えないように calc で正確に半分に
+        height: "calc((297mm - 8mm) / 2)",
       }}>
         {/* 控え種別タグ */}
         <div style={{
@@ -127,12 +129,15 @@ export default function DeliveryNoteSheet({
       background: "#fff",
       pageBreakAfter: "always" as const,
       position: "relative",
+      boxSizing: "border-box",
+      overflow: "hidden", // 印刷時の空白ページ防止: 297mm を絶対に超えないようにクリップ
     }}>
       <Half kind="customer" />
-      {/* 切り取り線 */}
+      {/* 切り取り線 (高さ8mm; border は box-sizing: border-box でも別計算されるため、box-sizing 必須) */}
       <div style={{
         height: "8mm", display: "flex", alignItems: "center", justifyContent: "center",
         borderTop: "1.5px dashed #888", borderBottom: "1.5px dashed #888",
+        boxSizing: "border-box",
         position: "relative",
       }}>
         <span style={{ background: "#fff", padding: "0 12px", fontSize: 10, color: "#666", letterSpacing: "0.2em" }}>

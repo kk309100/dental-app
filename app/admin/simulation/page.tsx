@@ -227,7 +227,7 @@ export default function SimulationPage() {
       let nowDelivered = 0
       for (const orderId of allCreatedOrderIds) {
         const { data: ord } = await supabase.from("orders").select("status").eq("id", orderId).single()
-        if (ord?.status === "納品済み") continue
+        if (ord?.status && ["納品済み", "納品済"].includes(ord.status)) continue
         const items = itemsByOrder.get(orderId) || []
         // 在庫から減算
         for (const it of items) {

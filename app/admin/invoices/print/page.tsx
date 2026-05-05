@@ -32,25 +32,36 @@ function BulkPrint() {
 
   useEffect(() => {
     if (ids.length === 0) return
-    (async () => {
+    let cancelled = false
+    let printTimer: ReturnType<typeof setTimeout> | null = null
+    ;(async () => {
       const { data: invs } = await supabase.from("invoices").select("*").in("id", ids)
+      if (cancelled) return
       setInvoices((invs as Invoice[]) || [])
       const { data: ords } = await supabase.from("orders").select("id,clinic_id,invoice_id").in("invoice_id", ids)
+      if (cancelled) return
       setOrders((ords as Order[]) || [])
       const orderIds = (ords || []).map(o => o.id)
       if (orderIds.length > 0) {
         const { data: its } = await supabase.from("order_items").select("*").in("order_id", orderIds)
+        if (cancelled) return
         setItems((its as Item[]) || [])
         const pids = Array.from(new Set((its || []).map(i => i.product_id).filter(Boolean) as string[]))
         if (pids.length > 0) {
           const { data: prods } = await supabase.from("products").select("id,name").in("id", pids)
+          if (cancelled) return
           setProducts((prods as Product[]) || [])
         }
       }
-      const { data: cls } = await supabase.from("clinics").select("*")
+      const { data: cls } = await supabase.from("clinics").select("*").limit(50000)
+      if (cancelled) return
       setClinics((cls as Clinic[]) || [])
-      setTimeout(() => window.print(), 1000)
+      printTimer = setTimeout(() => { if (!cancelled) window.print() }, 1000)
     })()
+    return () => {
+      cancelled = true
+      if (printTimer) clearTimeout(printTimer)
+    }
   }, [ids.join(",")])
 
   const clinicBy = new Map(clinics.map(c => [c.id, c]))

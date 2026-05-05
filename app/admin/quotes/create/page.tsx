@@ -49,7 +49,7 @@ function CreateQuotePage() {
   async function fetchData() {
     setLoading(true)
     const [c, p] = await Promise.all([
-      supabase.from("clinics").select("id,name,corporate_name").order("name"),
+      supabase.from("clinics").select("id,name,corporate_name").order("name").limit(50000),
       supabase.from("products").select("id,name,price").order("name").limit(50000),
     ])
     setClinics(c.data || [])

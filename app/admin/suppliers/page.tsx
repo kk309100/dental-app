@@ -46,7 +46,7 @@ export default function AdminSuppliersPage() {
 
   async function fetchData() {
     setLoading(true)
-    const { data, error } = await supabase.from("suppliers").select("*").order("name", { ascending: true })
+    const { data, error } = await supabase.from("suppliers").select("*").order("name", { ascending: true }).limit(50000)
     if (error) setErrMsg(`読込エラー: ${error.message}`)
     setSuppliers(data || [])
     setLoading(false)

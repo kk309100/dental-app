@@ -52,7 +52,7 @@ export default function BankImportPage() {
     setLoading(true)
     const [i, c] = await Promise.all([
       supabase.from("invoices").select("id,clinic_id,invoice_number,total,paid_amount,status,due_date").neq("status", "cancelled").limit(50000),
-      supabase.from("clinics").select("id,name"),
+      supabase.from("clinics").select("id,name").limit(50000),
     ])
     setInvoices((i.data as Invoice[]) || [])
     setClinics((c.data as Clinic[]) || [])

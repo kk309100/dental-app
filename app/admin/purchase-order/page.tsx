@@ -60,7 +60,7 @@ export default function PurchaseOrderPage() {
       supabase.from("orders").select("id,clinic_id,created_at,delivery_number").limit(50000),
       supabase.from("order_items").select("*").limit(50000),
       supabase.from("products").select("id,name,manufacturer,unit,cost").limit(50000),
-      supabase.from("clinics").select("id,name"),
+      supabase.from("clinics").select("id,name").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
     setOrderItems((i.data as OrderItem[]) || [])

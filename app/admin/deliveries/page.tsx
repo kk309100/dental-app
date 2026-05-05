@@ -29,9 +29,9 @@ export default function DeliveriesPage() {
   async function fetchData() {
     setLoading(true)
     const [o, i, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep,invoice_id").eq("status", "納品済み").order("delivered_at", { ascending: false }),
+      supabase.from("orders").select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep,invoice_id").in("status", ["納品済み", "納品済"]).order("delivered_at", { ascending: false }).limit(50000),
       supabase.from("order_items").select("id,order_id,product_name,quantity,price").limit(50000),
-      supabase.from("clinics").select("id,name,corporate_name"),
+      supabase.from("clinics").select("id,name,corporate_name").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
     setItems((i.data as OrderItem[]) || [])

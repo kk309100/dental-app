@@ -17,7 +17,8 @@ type Order = {
   invoice_id: string | null
 }
 
-const TARGET_STATUSES = ["納品済み"]
+// 「納品済」「納品済み」両方を請求書発行対象として扱う（DB の表記ゆれを吸収）
+const TARGET_STATUSES = ["納品済み", "納品済"]
 
 export default function CreateInvoicePage() {
   const router = useRouter()
@@ -40,7 +41,7 @@ export default function CreateInvoicePage() {
   async function fetchData() {
     setLoading(true)
     const [c, o] = await Promise.all([
-      supabase.from("clinics").select("id,name,corporate_name,closing_day").order("name"),
+      supabase.from("clinics").select("id,name,corporate_name,closing_day").order("name").limit(50000),
       supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,invoice_id").limit(50000),
     ])
     setClinics(c.data || [])
@@ -77,6 +78,11 @@ export default function CreateInvoicePage() {
     setSelected(new Set(candidateOrders.map((o) => o.id)))
   }, [candidateOrders])
 
+  // 税計算規約:
+  //   orders.total_price は **税抜** で保存される（orders/new/page.tsx と order/page.tsx の total = price×qty 計算と一致）
+  //   ここで calcTax で消費税を加算 → total = subtotal + tax （税抜 + 10%）
+  //   ★ もし将来 products.price を税込に変える場合、この箇所と invoices/bulk/page.tsx と
+  //     delivery/page.tsx の同じ計算を「subtotal = total_price / 1.1」「tax = total_price - subtotal」に変更すること
   const subtotal = useMemo(
     () => candidateOrders.filter((o) => selected.has(o.id)).reduce((s, o) => s + (o.total_price || 0), 0),
     [candidateOrders, selected]

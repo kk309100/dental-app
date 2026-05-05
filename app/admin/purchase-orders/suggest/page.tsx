@@ -69,10 +69,12 @@ function SuggestPOPage() {
       supabase.from("products").select("id,name,product_code,manufacturer,stock,reorder_level,cost,default_supplier_id").limit(50000),
       fetchSuppliersByUsage("id,name"),
       supabase.from("order_items").select("product_id,quantity,order_id").limit(50000),
-      supabase.from("orders").select("id,status,clinic_id").not("status", "in", '("納品済み","キャンセル")').limit(50000),
+      // 全件取得→クライアントで「納品済」「納品済み」「キャンセル」「取消」を除外
+      // PostgREST .not in は日本語値で 400 エラーになるため
+      supabase.from("orders").select("id,status,clinic_id").limit(50000),
       supabase.from("stock_receipts").select("id,product_id,supplier_id,quantity,unit_price,created_at").order("created_at", { ascending: false }).limit(50000),
       supabase.from("purchase_orders").select("id,po_number,supplier_id,total_amount").eq("status", "下書き"),
-      supabase.from("clinics").select("id,name"),
+      supabase.from("clinics").select("id,name").limit(50000),
     ])
     const products = (p.data as Product[]) || []
     setSuppliers(sups)
@@ -86,7 +88,9 @@ function SuggestPOPage() {
       histMap.get(r.product_id)!.push(r)
     })
     setHistoryByProduct(histMap)
-    const orders = (o.data as Order[]) || []
+    // 「納品済」「納品済み」「キャンセル」「取消」を除外（表記ゆれ吸収）
+    const allOrders = (o.data as Order[]) || []
+    const orders = allOrders.filter(o => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status))
     const orderIds = new Set(orders.map(o => o.id))
     const items = ((oi.data as OrderItem[]) || []).filter(i => i.order_id && orderIds.has(i.order_id))
 

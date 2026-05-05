@@ -18,7 +18,7 @@ export default function DeliveryPage() {
     const { data: ordersData } = await supabase.from("orders").select("*").limit(50000)
     const { data: itemsData } = await supabase.from("order_items").select("*").limit(50000)
     const { data: productsData } = await supabase.from("products").select("*").limit(50000)
-    const { data: clinicsData } = await supabase.from("clinics").select("*")
+    const { data: clinicsData } = await supabase.from("clinics").select("*").limit(50000)
 
     setOrders(ordersData || [])
     setOrderItems(itemsData || [])
@@ -185,9 +185,9 @@ export default function DeliveryPage() {
         印刷（実行で納品済みになります）
       </button>
 
-      {/* 🔥 納品済みは非表示 */}
+      {/* 🔥 納品済みは非表示（表記ゆれ「納品済」も対象） */}
       {orders
-        .filter((o) => o.status !== "納品済み")
+        .filter((o) => !["納品済み", "納品済"].includes(o.status))
         .map((order) => (
           <div key={order.id} className="a4">
             <div className="half">

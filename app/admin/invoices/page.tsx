@@ -43,7 +43,7 @@ export default function InvoicesPage() {
     setLoading(true)
     const [i, c] = await Promise.all([
       supabase.from("invoices").select("*").order("issue_date", { ascending: false }).limit(50000),
-      supabase.from("clinics").select("id,name").order("name"),
+      supabase.from("clinics").select("id,name").order("name").limit(50000),
     ])
     setInvoices((i.data as Invoice[]) || [])
     setClinics(c.data || [])

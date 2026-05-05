@@ -366,8 +366,8 @@ const totalStyle: React.CSSProperties = {
 }
 
 function statusBadge(status: string): React.CSSProperties {
-  const isDone = status === "納品済み"
-  const isCancel = status === "キャンセル"
+  const isDone = status === "納品済み" || status === "納品済"
+  const isCancel = status === "キャンセル" || status === "取消"
 
   return {
     padding: "6px 10px",

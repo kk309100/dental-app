@@ -55,7 +55,7 @@ function AdminOrdersPage() {
     const [o, i, c, p] = await Promise.all([
       supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(50000),
       supabase.from("order_items").select("*").limit(50000),  // デフォルト1000件 limit を回避
-      supabase.from("clinics").select("id,name,corporate_name"),
+      supabase.from("clinics").select("id,name,corporate_name").limit(50000),
       supabase.from("products").select("id,name,stock").limit(50000),
     ])
     const orders = (o.data as Order[]) || []
@@ -64,7 +64,7 @@ function AdminOrdersPage() {
     setClinics((c.data as Clinic[]) || [])
     setProducts((p.data as Product[]) || [])
     // 未納品の注文は商品明細をデフォルトで展開
-    setOpenOrderIds(new Set(orders.filter(o => !["納品済み", "キャンセル"].includes(o.status)).map(o => o.id)))
+    setOpenOrderIds(new Set(orders.filter(o => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)).map(o => o.id)))
     setLoading(false)
   }
 
@@ -102,8 +102,8 @@ function AdminOrdersPage() {
       const target = norm(`${o.delivery_number || ""} ${o.status} ${clinic?.name || ""} ${items.map((i) => i.product_name || "").join(" ")}`)
       const matchSearch = !k || target.includes(k)
 
-      if (statusFilter === "undelivered" && (o.status === "納品済み" || o.status === "キャンセル")) return false
-      if (statusFilter === "delivered" && o.status !== "納品済み") return false
+      if (statusFilter === "undelivered" && ["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)) return false
+      if (statusFilter === "delivered" && !["納品済み", "納品済"].includes(o.status)) return false
       if (statusFilter !== "undelivered" && statusFilter !== "delivered" && statusFilter !== "all" && o.status !== statusFilter) return false
 
       if (clinicFilter !== "all" && o.clinic_id !== clinicFilter) return false
@@ -128,8 +128,8 @@ function AdminOrdersPage() {
 
   // 統計
   const counts = useMemo(() => ({
-    undelivered: orders.filter((o) => !["納品済み", "キャンセル"].includes(o.status)).length,
-    delivered: orders.filter((o) => o.status === "納品済み").length,
+    undelivered: orders.filter((o) => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)).length,
+    delivered: orders.filter((o) => ["納品済み", "納品済"].includes(o.status)).length,
     total: orders.length,
   }), [orders])
 
@@ -342,9 +342,9 @@ function AdminOrdersPage() {
             const clinic = clinicById.get(clinicId)
             const open = openClinicIds.has(clinicId)
             const total = clinicOrders.reduce((s, o) => s + (o.total_price || 0), 0)
-            const undelivered = clinicOrders.filter((o) => !["納品済み", "キャンセル"].includes(o.status)).length
+            const undelivered = clinicOrders.filter((o) => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)).length
             // 在庫サマリ（未納品の注文のみ集計）
-            const undeliveredOrders = clinicOrders.filter((o) => !["納品済み", "キャンセル"].includes(o.status))
+            const undeliveredOrders = clinicOrders.filter((o) => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status))
             const stockSummary = undeliveredOrders.reduce((s, o) => {
               const ss = stockState(o.id)
               return { ok: s.ok + ss.ok, short: s.short + ss.short }

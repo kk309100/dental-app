@@ -50,7 +50,7 @@ export default function PurchaseOrdersListPage() {
 
   async function fetchData() {
     setLoading(true)
-    const { data: s } = await supabase.from("suppliers").select("id,name").order("name")
+    const { data: s } = await supabase.from("suppliers").select("id,name").order("name").limit(50000)
     setSuppliers((s as Supplier[]) || [])
     const { data: p, error } = await supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }).limit(50000)
     if (error) { setTableMissing(true); setPos([]) }

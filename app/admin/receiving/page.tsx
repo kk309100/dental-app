@@ -61,7 +61,7 @@ export default function ReceivingPage() {
     setLoading(true)
     const [p, s, r] = await Promise.all([
       supabase.from("products").select("id,name,product_code,manufacturer,stock,cost,barcode").limit(50000),
-      supabase.from("suppliers").select("id,name,maker_name").order("name"),
+      supabase.from("suppliers").select("id,name,maker_name").order("name").limit(50000),
       supabase.from("stock_receipts").select("*").order("created_at", { ascending: false }).limit(20),
     ])
     setProducts((p.data as Product[]) || [])
@@ -163,6 +163,7 @@ export default function ReceivingPage() {
     setLogs([])
     setProgress({ done: 0, total: validRows.length })
     const newLogs: string[] = []
+    const stockedProductIds: string[] = []  // 入庫した商品IDをループ内で蓄積
 
     let invoiceId: string | null = null
     if (parsedMeta) {
@@ -242,6 +243,7 @@ export default function ReceivingPage() {
         } catch { /* スキップ */ }
 
         newLogs.push(`✓ ${product.name} +${qty}`)
+        stockedProductIds.push(product.id)  // 後の「出荷可能注文」判定で使用
       } catch (e) {
         newLogs.push(`✗ ${row.productName}: ${(e as Error).message}`)
       }
@@ -258,7 +260,6 @@ export default function ReceivingPage() {
     fetchData()
 
     // 入庫した商品で「出荷可能になった注文」を抽出して通知
-    const stockedProductIds = validRows.map(r => r.matched?.id).filter(Boolean) as string[]
     if (stockedProductIds.length > 0) {
       try {
         const { data: pendingOrders } = await supabase

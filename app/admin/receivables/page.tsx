@@ -24,7 +24,7 @@ export default function ReceivablesPage() {
     setLoading(true)
     const [i, c] = await Promise.all([
       supabase.from("invoices").select("id,clinic_id,invoice_number,issue_date,due_date,total,status,paid_amount").neq("status", "cancelled").limit(50000),
-      supabase.from("clinics").select("id,name,corporate_name"),
+      supabase.from("clinics").select("id,name,corporate_name").limit(50000),
     ])
     setInvoices((i.data as Invoice[]) || [])
     setClinics((c.data as Clinic[]) || [])

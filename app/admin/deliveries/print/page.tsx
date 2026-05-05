@@ -28,16 +28,23 @@ function BulkPrint() {
 
   useEffect(() => {
     if (ids.length === 0) return
+    let cancelled = false
+    let printTimer: ReturnType<typeof setTimeout> | null = null
     Promise.all([
       supabase.from("orders").select("*").in("id", ids),
       supabase.from("order_items").select("*").in("order_id", ids),
-      supabase.from("clinics").select("*"),
+      supabase.from("clinics").select("*").limit(50000),
     ]).then(([o, i, c]) => {
+      if (cancelled) return
       setOrders((o.data as Order[]) || [])
       setItems((i.data as Item[]) || [])
       setClinics((c.data as Clinic[]) || [])
-      setTimeout(() => window.print(), 800)
+      printTimer = setTimeout(() => { if (!cancelled) window.print() }, 800)
     })
+    return () => {
+      cancelled = true
+      if (printTimer) clearTimeout(printTimer)
+    }
   }, [ids.join(",")])
 
   const clinicBy = new Map(clinics.map(c => [c.id, c]))

@@ -12,7 +12,8 @@ type Clinic = { id: string; name: string; sales_rep?: string | null }
 
 type TabKey = "monthly" | "clinic" | "product" | "rep" | "profit" | "abc"
 
-const SALES_STATUSES = ["納品済み"]
+// 「納品済」「納品済み」両方を売上対象として扱う（DB の表記ゆれを吸収）
+const SALES_STATUSES = ["納品済み", "納品済"]
 const FY_START_KEY = "dental-app:fy_start_month"
 
 export default function SalesPage() {
@@ -39,7 +40,7 @@ export default function SalesPage() {
       supabase.from("orders").select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep").limit(50000),
       supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price").limit(50000),
       supabase.from("products").select("id,name,cost").limit(50000),
-      supabase.from("clinics").select("id,name,sales_rep"),
+      supabase.from("clinics").select("id,name,sales_rep").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
     setItems((i.data as OrderItem[]) || [])

@@ -27,6 +27,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   const [supplier, setSupplier] = useState<Supplier | null>(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState("")
+  const [receivingIds, setReceivingIds] = useState<Set<string>>(new Set())  // 行ごとの入荷処理中ロック
 
   useEffect(() => { fetchData() }, [poId])
 
@@ -53,35 +54,63 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   }
 
   async function updateReceived(itemId: string, qty: number, autoStock = true) {
-    const { error } = await supabase.from("purchase_order_items").update({ received_quantity: qty }).eq("id", itemId)
-    if (error) { alert("更新失敗: " + error.message); return }
-    if (autoStock) {
-      // 商品マスタの stock を加算（差分のみ）
-      const item = items.find(i => i.id === itemId)
-      if (item?.product_id) {
-        const diff = qty - Number(item.received_quantity || 0)
-        if (diff !== 0) {
-          // 現在 stock 取得 → 加算
-          const { data: prod } = await supabase.from("products").select("stock").eq("id", item.product_id).single()
-          if (prod) {
-            const newStock = Number(prod.stock || 0) + diff
-            await supabase.from("products").update({ stock: newStock }).eq("id", item.product_id)
-          }
+    // 連打防止: 同じ行が処理中なら無視（state の古い received_quantity で diff を再計算してしまう競合防止）
+    if (receivingIds.has(itemId)) return
+    setReceivingIds(prev => new Set(prev).add(itemId))
+    try {
+      // ★ DB から最新の received_quantity を取得して diff を計算（state スナップショットだと連打で重複加算）
+      const { data: latestItem } = await supabase
+        .from("purchase_order_items")
+        .select("product_id,received_quantity")
+        .eq("id", itemId)
+        .single()
+      if (!latestItem) { alert("明細が見つかりません"); return }
+
+      const beforeReceived = Number(latestItem.received_quantity || 0)
+      const diff = qty - beforeReceived
+
+      // 1) received_quantity 更新
+      const { error } = await supabase.from("purchase_order_items").update({ received_quantity: qty }).eq("id", itemId)
+      if (error) { alert("更新失敗: " + error.message); return }
+
+      // 2) 在庫加算（diff のみ）
+      if (autoStock && latestItem.product_id && diff !== 0) {
+        const { data: prod } = await supabase.from("products").select("stock").eq("id", latestItem.product_id).single()
+        if (prod) {
+          const newStock = Number(prod.stock || 0) + diff
+          await supabase.from("products").update({ stock: newStock }).eq("id", latestItem.product_id)
+          // stock_movements 履歴
+          try {
+            await supabase.from("stock_movements").insert({
+              product_id: latestItem.product_id,
+              movement_type: diff > 0 ? "入庫" : "入庫修正",
+              quantity: diff,
+              before_stock: Number(prod.stock || 0),
+              after_stock: newStock,
+              ref_type: "purchase_order_item",
+              ref_id: itemId,
+              reason: `発注書 ${po?.po_number || poId.slice(0,8)} 入荷`,
+            })
+          } catch { /* テーブル無いとスキップ */ }
         }
       }
-    }
-    fetchData()
-    // 全行入荷済みなら status を 入荷済 に
-    const { data: re } = await supabase.from("purchase_order_items").select("quantity,received_quantity").eq("purchase_order_id", poId)
-    if (re) {
-      const all = re.every(r => Number(r.received_quantity || 0) >= Number(r.quantity))
-      const some = re.some(r => Number(r.received_quantity || 0) > 0)
-      const newStatus = all ? "入荷済" : (some ? "部分入荷" : po?.status)
-      if (newStatus && newStatus !== po?.status) {
-        await supabase.from("purchase_orders").update({ status: newStatus }).eq("id", poId)
+
+      // 3) 全行入荷済みなら status を 入荷済 に（最新 DB から判定）
+      const { data: re } = await supabase.from("purchase_order_items").select("quantity,received_quantity").eq("purchase_order_id", poId)
+      if (re) {
+        const all = re.every(r => Number(r.received_quantity || 0) >= Number(r.quantity))
+        const some = re.some(r => Number(r.received_quantity || 0) > 0)
+        const newStatus = all ? "入荷済" : (some ? "部分入荷" : po?.status)
+        if (newStatus && newStatus !== po?.status) {
+          await supabase.from("purchase_orders").update({ status: newStatus }).eq("id", poId)
+        }
       }
+
+      // 4) 最後に1回だけ fetch（旧コードは2回呼んでいた）
+      await fetchData()
+    } finally {
+      setReceivingIds(prev => { const n = new Set(prev); n.delete(itemId); return n })
     }
-    fetchData()
   }
 
   async function deletePO() {
@@ -270,7 +299,8 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
                 <td style={{ ...tdCell, textAlign: "right" }} className="no-print">
                   <input type="number" defaultValue={i.received_quantity || 0}
                     onBlur={(e) => updateReceived(i.id, Number(e.target.value))}
-                    className="w-16 px-1 py-0.5 border border-gray-200 rounded text-xs text-right" />
+                    disabled={receivingIds.has(i.id)}
+                    className={"w-16 px-1 py-0.5 border border-gray-200 rounded text-xs text-right " + (receivingIds.has(i.id) ? "opacity-50 bg-gray-100" : "")} />
                 </td>
               </tr>
             ))}

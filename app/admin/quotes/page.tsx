@@ -36,7 +36,7 @@ export default function QuotesPage() {
     setLoading(true)
     const [q, c] = await Promise.all([
       supabase.from("quotes").select("*").order("issue_date", { ascending: false }),
-      supabase.from("clinics").select("id,name").order("name"),
+      supabase.from("clinics").select("id,name").order("name").limit(50000),
     ])
     setQuotes((q.data as Quote[]) || [])
     setClinics(c.data || [])

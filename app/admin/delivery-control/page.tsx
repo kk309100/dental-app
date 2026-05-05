@@ -18,12 +18,15 @@ export default function DeliveryControlPage() {
   }, [])
 
   async function fetchData() {
-    const { data: ordersData } = await supabase
+    // 全件取得→クライアントで表記ゆれ「納品済」も除外（.neq だと「納品済」を取り逃す）
+    const { data: ordersDataAll } = await supabase
       .from("orders")
       .select("*")
-      .neq("status", "納品済み")
       .order("created_at", { ascending: false })
       .limit(50000)
+    const ordersData = (ordersDataAll || []).filter(
+      (o: any) => !["納品済み", "納品済"].includes(o.status)
+    )
 
     const { data: itemsData } = await supabase.from("order_items").select("*").limit(50000)
     const { data: productsData } = await supabase.from("products").select("*").limit(10000)

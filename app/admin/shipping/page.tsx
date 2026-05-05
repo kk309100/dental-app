@@ -13,6 +13,8 @@ type Product = { id: string; name: string; stock: number | null; location: strin
 type Clinic = { id: string; name: string; corporate_name?: string | null; sales_rep?: string | null }
 
 // 出荷準備対象 = 納品済み・キャンセル以外すべて（status 値の表記ゆれを吸収）
+// PostgREST の .not("status","in",...) は日本語値で構文エラーになるため
+// 全件取得 → クライアント側で EXCLUDE_STATUSES を除外する方式に変更
 const EXCLUDE_STATUSES = ["納品済み", "納品済", "キャンセル", "取消"]
 
 export default function ShippingPage() {
@@ -34,13 +36,16 @@ export default function ShippingPage() {
   async function fetchData() {
     setLoading(true)
     const [o, i, p, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note").not("status", "in", `(${EXCLUDE_STATUSES.map(s => `"${s}"`).join(",")})`).order("created_at").limit(50000),
+      // 全件取得 → クライアント側で EXCLUDE_STATUSES を除外（PostgREST .not in は日本語値で壊れる + 表記ゆれ吸収）
+      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note").order("created_at").limit(50000),
       supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price").limit(50000),
       supabase.from("products").select("id,name,stock,location").limit(50000),
-      supabase.from("clinics").select("id,name,corporate_name,sales_rep"),
+      supabase.from("clinics").select("id,name,corporate_name,sales_rep").limit(50000),
     ])
-    setOrders((o.data as Order[]) || [])
-    const orderIds = new Set((o.data as Order[] || []).map(x => x.id))
+    const allOrders = (o.data as Order[]) || []
+    const activeOrders = allOrders.filter(x => !EXCLUDE_STATUSES.includes(x.status))
+    setOrders(activeOrders)
+    const orderIds = new Set(activeOrders.map(x => x.id))
     setItems(((i.data as OrderItem[]) || []).filter(x => orderIds.has(x.order_id)))
     setProducts((p.data as Product[]) || [])
     setClinics((c.data as Clinic[]) || [])
@@ -354,8 +359,15 @@ export default function ShippingPage() {
                                       const v = Number(e.target.value)
                                       if (v > 0) {
                                         await supabase.from("order_items").update({ price: v }).eq("id", it.id)
-                                        // total_price も再計算
-                                        const sum = its.reduce((s, x) => s + Number(x.price || (x.id === it.id ? v : 0)) * Number(x.quantity || 0), 0)
+                                        // total_price は DB の最新値で再計算（state スナップショットだと連続入力で 0 上書きになる）
+                                        const { data: latest } = await supabase
+                                          .from("order_items")
+                                          .select("price,quantity")
+                                          .eq("order_id", o.id)
+                                          .limit(1000)
+                                        const sum = (latest || []).reduce(
+                                          (s, x) => s + Number(x.price || 0) * Number(x.quantity || 0), 0
+                                        )
                                         await supabase.from("orders").update({ total_price: sum }).eq("id", o.id)
                                         fetchData()
                                       }
