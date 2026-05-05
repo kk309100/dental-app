@@ -60,74 +60,101 @@ function BulkPrint() {
         const dateStr = (o.delivered_at || o.created_at).slice(0, 10)
         const corporateLabel = cl ? getCorporateLabel(cl.corporate_name, cl.name, cl.clinic_type) : ""
         const prefix = cl ? getClinicPrefix(cl.name, cl.corporate_name, cl.clinic_type) : ""
+
+        function Sheet({ kind }: { kind: "customer" | "self" }) {
+          return (
+            <main className="bg-white max-w-3xl mx-auto p-8 mb-8 print-page" style={{ pageBreakAfter: "always", minHeight: "27cm", position: "relative" }}>
+              {/* 控えタグ */}
+              <div style={{ position: "absolute", top: 12, right: 12, fontSize: 11, fontWeight: 700, padding: "3px 10px", border: `1.5px solid ${kind === "customer" ? "#0d9488" : "#dc2626"}`, color: kind === "customer" ? "#0d9488" : "#dc2626", borderRadius: 4 }}>
+                {kind === "customer" ? "【 得意先控え 】" : "【 自社控え 】"}
+              </div>
+              <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
+                <h1 style={{ fontSize: 28, letterSpacing: "0.3em", margin: "20px 0 4px", textAlign: "center" }}>納 品 書</h1>
+                <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {o.delivery_number || o.id.slice(0, 8)}</p>
+              </header>
+              <div style={{ display: "flex", gap: 20, marginTop: 24 }}>
+                <div style={{ flex: 1 }}>
+                  {corporateLabel && <p style={{ margin: "0 0 4px", fontSize: 13, color: "#444" }}>{corporateLabel}</p>}
+                  <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
+                    {prefix}{cl?.name || "(医院不明)"}　御中
+                  </p>
+                  {cl?.adress && <p style={{ margin: "6px 0 0", fontSize: 11, color: "#666" }}>{cl.adress}</p>}
+                  {cl?.phone && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#666" }}>TEL {cl.phone}</p>}
+                </div>
+                <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, position: "relative", paddingRight: 70 }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{COMPANY.name}</p>
+                  <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
+                  <p style={{ margin: 0 }}>{COMPANY.address}</p>
+                  <p style={{ margin: 0 }}>TEL {COMPANY.phone}</p>
+                  {COMPANY.fax && <p style={{ margin: 0 }}>FAX {COMPANY.fax}</p>}
+                  <div style={{ position: "absolute", top: 0, right: 0 }}><Seal size={64} /></div>
+                </div>
+              </div>
+              <p style={{ margin: "16px 0 6px", fontSize: 11, color: "#666" }}>
+                納品日: {dateStr.replace(/-/g, "/")}
+              </p>
+              <table style={{ width: "100%", marginTop: 6, borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f3f4f6" }}>
+                    <th style={th}>商品名</th>
+                    <th style={{ ...th, textAlign: "right", width: 60 }}>数量</th>
+                    <th style={{ ...th, textAlign: "right", width: 80 }}>単価</th>
+                    <th style={{ ...th, textAlign: "right", width: 90 }}>金額</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {its.map(i => (
+                    <tr key={i.id} style={{ borderBottom: "1px solid #eee" }}>
+                      <td style={tdC}>{i.product_name || "—"}</td>
+                      <td style={{ ...tdC, textAlign: "right" }}>{i.quantity}</td>
+                      <td style={{ ...tdC, textAlign: "right" }}>{fmtYen(i.price)}</td>
+                      <td style={{ ...tdC, textAlign: "right", fontWeight: 700 }}>{fmtYen(Number(i.quantity) * Number(i.price))}</td>
+                    </tr>
+                  ))}
+                  {Array.from({ length: Math.max(0, 12 - its.length) }).map((_, i) => (
+                    <tr key={"e"+i} style={{ borderBottom: "1px solid #eee" }}>
+                      <td style={tdC}>&nbsp;</td><td style={tdC}></td><td style={tdC}></td><td style={tdC}></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: "#f9fafb" }}>
+                    <td colSpan={3} style={{ ...tdC, textAlign: "right" }}>小計</td>
+                    <td style={{ ...tdC, textAlign: "right" }}>{fmtYen(subtotal)}</td>
+                  </tr>
+                  <tr style={{ background: "#f9fafb" }}>
+                    <td colSpan={3} style={{ ...tdC, textAlign: "right" }}>消費税(10%)</td>
+                    <td style={{ ...tdC, textAlign: "right" }}>{fmtYen(tax)}</td>
+                  </tr>
+                  <tr style={{ background: "#f9fafb" }}>
+                    <td colSpan={3} style={{ ...tdC, textAlign: "right", fontWeight: 700 }}>合計</td>
+                    <td style={{ ...tdC, textAlign: "right", fontWeight: 700, fontSize: 14 }}>{fmtYen(total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+              {/* 自社控えのみ受領印枠 */}
+              {kind === "self" && (
+                <div style={{ marginTop: 24, display: "flex", gap: 20, alignItems: "flex-end", justifyContent: "flex-end" }}>
+                  <div style={{ textAlign: "center", border: "2px solid #111", borderRadius: 4, padding: 8, minWidth: 130 }}>
+                    <p style={{ margin: 0, fontSize: 11, color: "#666" }}>受領印</p>
+                    <div style={{ width: 80, height: 80, margin: "8px auto 4px", border: "1.5px dashed #aaa", borderRadius: 4 }}></div>
+                    <p style={{ margin: 0, fontSize: 9, color: "#999" }}>（受領サイン or 印鑑）</p>
+                  </div>
+                  <div style={{ textAlign: "center", border: "2px solid #111", borderRadius: 4, padding: 8, minWidth: 180 }}>
+                    <p style={{ margin: 0, fontSize: 11, color: "#666" }}>受領日</p>
+                    <div style={{ height: 40, lineHeight: "40px", margin: "8px 8px 4px", borderBottom: "1px solid #aaa", color: "#bbb", fontSize: 12 }}>　　　年　　月　　日</div>
+                  </div>
+                </div>
+              )}
+            </main>
+          )
+        }
+
         return (
-          <main key={o.id} className="bg-white max-w-3xl mx-auto p-8 mb-8 print-page" style={{ pageBreakAfter: "always", minHeight: "27cm" }}>
-            <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
-              <h1 style={{ fontSize: 28, letterSpacing: "0.3em", margin: "20px 0 4px", textAlign: "center" }}>納 品 書</h1>
-              <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {o.delivery_number || o.id.slice(0, 8)}</p>
-            </header>
-            <div style={{ display: "flex", gap: 20, marginTop: 24 }}>
-              <div style={{ flex: 1 }}>
-                {corporateLabel && <p style={{ margin: "0 0 4px", fontSize: 13, color: "#444" }}>{corporateLabel}</p>}
-                <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
-                  {prefix}{cl?.name || "(医院不明)"}　御中
-                </p>
-                {cl?.adress && <p style={{ margin: "6px 0 0", fontSize: 11, color: "#666" }}>{cl.adress}</p>}
-                {cl?.phone && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#666" }}>TEL {cl.phone}</p>}
-              </div>
-              <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, position: "relative", paddingRight: 70 }}>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{COMPANY.name}</p>
-                <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
-                <p style={{ margin: 0 }}>{COMPANY.address}</p>
-                <p style={{ margin: 0 }}>TEL {COMPANY.phone}</p>
-                {COMPANY.fax && <p style={{ margin: 0 }}>FAX {COMPANY.fax}</p>}
-                <div style={{ position: "absolute", top: 0, right: 0 }}><Seal size={64} /></div>
-              </div>
-            </div>
-            <p style={{ margin: "16px 0 6px", fontSize: 11, color: "#666" }}>
-              納品日: {dateStr.replace(/-/g, "/")}
-            </p>
-            <table style={{ width: "100%", marginTop: 6, borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: "#f3f4f6" }}>
-                  <th style={th}>商品名</th>
-                  <th style={{ ...th, textAlign: "right", width: 60 }}>数量</th>
-                  <th style={{ ...th, textAlign: "right", width: 80 }}>単価</th>
-                  <th style={{ ...th, textAlign: "right", width: 90 }}>金額</th>
-                </tr>
-              </thead>
-              <tbody>
-                {its.map(i => (
-                  <tr key={i.id} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={tdC}>{i.product_name || "—"}</td>
-                    <td style={{ ...tdC, textAlign: "right" }}>{i.quantity}</td>
-                    <td style={{ ...tdC, textAlign: "right" }}>{fmtYen(i.price)}</td>
-                    <td style={{ ...tdC, textAlign: "right", fontWeight: 700 }}>{fmtYen(Number(i.quantity) * Number(i.price))}</td>
-                  </tr>
-                ))}
-                {/* 空行で 12 行確保 */}
-                {Array.from({ length: Math.max(0, 12 - its.length) }).map((_, i) => (
-                  <tr key={"e"+i} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={tdC}>&nbsp;</td><td style={tdC}></td><td style={tdC}></td><td style={tdC}></td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ background: "#f9fafb" }}>
-                  <td colSpan={3} style={{ ...tdC, textAlign: "right" }}>小計</td>
-                  <td style={{ ...tdC, textAlign: "right" }}>{fmtYen(subtotal)}</td>
-                </tr>
-                <tr style={{ background: "#f9fafb" }}>
-                  <td colSpan={3} style={{ ...tdC, textAlign: "right" }}>消費税(10%)</td>
-                  <td style={{ ...tdC, textAlign: "right" }}>{fmtYen(tax)}</td>
-                </tr>
-                <tr style={{ background: "#f9fafb" }}>
-                  <td colSpan={3} style={{ ...tdC, textAlign: "right", fontWeight: 700 }}>合計</td>
-                  <td style={{ ...tdC, textAlign: "right", fontWeight: 700, fontSize: 14 }}>{fmtYen(total)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </main>
+          <div key={o.id}>
+            <Sheet kind="customer" />
+            <Sheet kind="self" />
+          </div>
         )
       })}
       <style jsx global>{`

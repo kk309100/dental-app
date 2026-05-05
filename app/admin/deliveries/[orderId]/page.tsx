@@ -41,17 +41,16 @@ export default function DeliveryDetail({ params }: { params: Promise<{ orderId: 
   const corporateLabel = clinic ? getCorporateLabel(clinic.corporate_name, clinic.name, clinic.clinic_type) : ""
   const prefix = clinic ? getClinicPrefix(clinic.name, clinic.corporate_name, clinic.clinic_type) : ""
 
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between flex-wrap gap-2 no-print">
-        <Link href="/admin/deliveries" className="text-xs text-gray-500 underline">← 一覧</Link>
-        <button onClick={() => window.print()} className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded">🖨 印刷</button>
-      </div>
-
-      <main className="bg-white max-w-3xl mx-auto p-8 print-area" style={{ border: "1px solid #e8eaed" }}>
+  function NoteSheet({ kind }: { kind: "customer" | "self" }) {
+    return (
+      <main className="bg-white max-w-3xl mx-auto p-8 print-area" style={{ border: "1px solid #e8eaed", marginBottom: 16, pageBreakAfter: "always" as const, position: "relative" }}>
+        {/* 控えタグ（右上） */}
+        <div style={{ position: "absolute", top: 12, right: 12, fontSize: 11, fontWeight: 700, padding: "3px 10px", border: `1.5px solid ${kind === "customer" ? "#0d9488" : "#dc2626"}`, color: kind === "customer" ? "#0d9488" : "#dc2626", borderRadius: 4 }}>
+          {kind === "customer" ? "【 得意先控え 】" : "【 自社控え 】"}
+        </div>
         <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
           <h1 style={{ fontSize: 28, letterSpacing: "0.3em", margin: "20px 0 4px", textAlign: "center" }}>納 品 書</h1>
-          <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {order.delivery_number || order.id.slice(0, 8)}</p>
+          <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {order!.delivery_number || order!.id.slice(0, 8)}</p>
         </header>
         <div style={{ display: "flex", gap: 20, marginTop: 24 }}>
           <div style={{ flex: 1 }}>
@@ -106,13 +105,40 @@ export default function DeliveryDetail({ params }: { params: Promise<{ orderId: 
             </tr>
           </tfoot>
         </table>
-        {order.note && <div style={{ marginTop: 16, padding: 10, background: "#f9fafb", borderRadius: 4, fontSize: 11, color: "#555" }}>備考: {order.note}</div>}
+        {order!.note && <div style={{ marginTop: 16, padding: 10, background: "#f9fafb", borderRadius: 4, fontSize: 11, color: "#555" }}>備考: {order!.note}</div>}
+
+        {/* 自社控えのみ受領印枠 */}
+        {kind === "self" && (
+          <div style={{ marginTop: 24, display: "flex", gap: 20, alignItems: "flex-end", justifyContent: "flex-end" }}>
+            <div style={{ textAlign: "center", border: "2px solid #111", borderRadius: 4, padding: 8, minWidth: 130 }}>
+              <p style={{ margin: 0, fontSize: 11, color: "#666" }}>受領印</p>
+              <div style={{ width: 80, height: 80, margin: "8px auto 4px", border: "1.5px dashed #aaa", borderRadius: 4 }}></div>
+              <p style={{ margin: 0, fontSize: 9, color: "#999" }}>（受領サイン or 印鑑）</p>
+            </div>
+            <div style={{ textAlign: "center", border: "2px solid #111", borderRadius: 4, padding: 8, minWidth: 180 }}>
+              <p style={{ margin: 0, fontSize: 11, color: "#666" }}>受領日</p>
+              <div style={{ height: 40, lineHeight: "40px", margin: "8px 8px 4px", borderBottom: "1px solid #aaa", color: "#bbb", fontSize: 12 }}>　　　年　　月　　日</div>
+            </div>
+          </div>
+        )}
       </main>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2 no-print">
+        <Link href="/admin/deliveries" className="text-xs text-gray-500 underline">← 一覧</Link>
+        <button onClick={() => window.print()} className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded">🖨 印刷（2部: 得意先控+自社控）</button>
+      </div>
+
+      <NoteSheet kind="customer" />
+      <NoteSheet kind="self" />
 
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
-          .print-area { box-shadow: none !important; border: none !important; max-width: none !important; }
+          .print-area { box-shadow: none !important; border: none !important; max-width: none !important; margin-bottom: 0 !important; }
           @page { size: A4; margin: 10mm; }
         }
       `}</style>
