@@ -1,9 +1,18 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { fmtYen } from "@/lib/invoice"
+
+export default function AdminOrdersPageWrapper() {
+  return (
+    <Suspense fallback={<p className="text-gray-400 text-center py-12">読み込み中…</p>}>
+      <AdminOrdersPage />
+    </Suspense>
+  )
+}
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; invoice_id: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
@@ -20,14 +29,16 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 
 type ViewMode = "flat" | "byClinic"
 
-export default function AdminOrdersPage() {
+function AdminOrdersPage() {
+  const sp = useSearchParams()
+  const initialStatus = sp.get("status") === "delivered" ? "delivered" : sp.get("status") === "all" ? "all" : "undelivered"
   const [orders, setOrders] = useState<Order[]>([])
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<ViewMode>("byClinic")
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"undelivered" | "delivered" | "all" | string>("undelivered")
+  const [statusFilter, setStatusFilter] = useState<"undelivered" | "delivered" | "all" | string>(initialStatus)
   const [clinicFilter, setClinicFilter] = useState("all")
   const [openOrderIds, setOpenOrderIds] = useState<Set<string>>(new Set())
   const [openClinicIds, setOpenClinicIds] = useState<Set<string>>(new Set())

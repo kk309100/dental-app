@@ -88,7 +88,7 @@ export default function AdminHomePage() {
             { href: "/admin/settings", label: "⚙ 自社情報設定" },
             { href: "/admin/products", label: "商品マスタ" },
             { href: "/admin/delivery-search", label: "納品書検索" },
-            { href: "/admin/delivered", label: "納品済み一覧" },
+            { href: "/admin/orders?status=delivered", label: "納品済み一覧" },
             { href: "/admin/barcodes", label: "バーコード" },
           ].map((l) => (
             <Link key={l.href} href={l.href}
