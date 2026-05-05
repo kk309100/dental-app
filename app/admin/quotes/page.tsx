@@ -27,7 +27,8 @@ export default function QuotesPage() {
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | QuoteStatus>("all")
+  const [statusFilter, setStatusFilter] = useState<"all" | QuoteStatus | "active">("active")
+  const [clinicFilter, setClinicFilter] = useState("all")
 
   useEffect(() => { fetchData() }, [])
 
@@ -42,122 +43,118 @@ export default function QuotesPage() {
     setLoading(false)
   }
 
-  const clinicName = (id: string | null) => id ? (clinics.find((c) => c.id === id)?.name || "(削除済み)") : "-"
+  const clinicById = useMemo(() => new Map(clinics.map(c => [c.id, c])), [clinics])
+  const clinicName = (id: string | null) => id ? (clinicById.get(id)?.name || "(削除済み)") : "—"
 
+  const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC")
   const filtered = useMemo(() => {
-    const k = search.toLowerCase().normalize("NFKC")
+    const k = norm(search)
     return quotes.filter((q) => {
-      if (statusFilter !== "all" && q.status !== statusFilter) return false
+      // active = draft / sent / accepted（売上化前）
+      if (statusFilter === "active" && (q.status === "converted" || q.status === "rejected" || q.status === "cancelled")) return false
+      if (statusFilter !== "all" && statusFilter !== "active" && q.status !== statusFilter) return false
+      if (clinicFilter !== "all" && q.clinic_id !== clinicFilter) return false
       if (!k) return true
-      const target = `${q.quote_number} ${clinicName(q.clinic_id)}`.toLowerCase().normalize("NFKC")
+      const target = norm(`${q.quote_number} ${clinicName(q.clinic_id)}`)
       return target.includes(k)
     })
-  }, [quotes, search, statusFilter])
+  }, [quotes, search, statusFilter, clinicFilter])
 
-  const totalDraft = filtered.filter((q) => q.status === "draft" || q.status === "sent").reduce((s, q) => s + q.total, 0)
-  const totalConverted = filtered.filter((q) => q.status === "converted").reduce((s, q) => s + q.total, 0)
+  const counts = useMemo(() => ({
+    active: quotes.filter(q => !["converted", "rejected", "cancelled"].includes(q.status)).length,
+    converted: quotes.filter(q => q.status === "converted").length,
+    total: quotes.length,
+  }), [quotes])
 
-  if (loading) return <main style={page}><p>読み込み中…</p></main>
+  if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   return (
-    <main style={page}>
+    <div className="space-y-2">
       {/* 注文 / 見積 サブタブ */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4, borderBottom: "1px solid #e5e7eb", marginBottom: 16 }}>
-        <Link href="/admin/orders" style={{ padding: "8px 16px", fontSize: 13, color: "#6b7280", textDecoration: "none" }}>
+      <div className="flex items-center gap-1 border-b border-gray-200 mb-2">
+        <Link href="/admin/orders" className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-t">
           🛒 注文
         </Link>
-        <div style={{ padding: "8px 16px", fontSize: 13, fontWeight: 700, color: "#111", borderBottom: "2px solid #6366f1", marginBottom: -1 }}>
+        <div className="px-4 py-2 text-sm font-bold text-gray-900 border-b-2 border-emerald-500 -mb-px">
           📋 見積
         </div>
       </div>
 
-      <div style={header}>
-        <div>
-          <h1 style={{ fontSize: 26, margin: 0 }}>見積書管理</h1>
-          <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{quotes.length}件</p>
-        </div>
-        <Link href="/admin/quotes/create"><button style={btnDark}>＋ 見積書を作成</button></Link>
+      {/* ヘッダ + アクションボタン */}
+      <div className="flex items-center flex-wrap gap-2">
+        <h1 className="text-lg font-bold text-gray-900">
+          見積書管理
+          <span className="ml-2 text-xs font-normal text-gray-400">
+            該当 {filtered.length}/全{quotes.length} ・ 進行中 {counts.active} ・ 売上化済 {counts.converted}
+          </span>
+        </h1>
+        <Link href="/admin/quotes/create" className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
+          ＋ 見積書を作成
+        </Link>
       </div>
 
-      <div style={kpiGrid}>
-        <Kpi label="下書き・送付済" val={fmtYen(totalDraft)} sub={`${filtered.filter((q) => q.status === "draft" || q.status === "sent").length}件`} />
-        <Kpi label="売上化済" val={fmtYen(totalConverted)} sub={`${filtered.filter((q) => q.status === "converted").length}件`} />
-        <Kpi label="合計" val={`${filtered.length}件`} sub="" />
-      </div>
-
-      <div style={filters}>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="見積書番号・医院名で検索" style={searchInput} />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as "all" | QuoteStatus)} style={select}>
-          <option value="all">すべての状態</option>
-          {Object.entries(QUOTE_STATUSES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+      {/* フィルタ */}
+      <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="見積書番号・医院で検索"
+          className="flex-1 min-w-[180px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
+        />
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as typeof statusFilter)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
+          <option value="active">進行中のみ ({counts.active})</option>
+          <option value="converted">売上化済のみ ({counts.converted})</option>
+          <option value="all">すべて ({counts.total})</option>
+          <optgroup label="細かいステータス">
+            {Object.entries(QUOTE_STATUSES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </optgroup>
+        </select>
+        <select value={clinicFilter} onChange={(e) => setClinicFilter(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white max-w-[200px]">
+          <option value="all">全医院</option>
+          {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </div>
 
-      <div style={listWrap}>
-        {filtered.length === 0 ? (
-          <p style={{ padding: 32, textAlign: "center", color: "#999" }}>見積書がありません</p>
-        ) : (
-          filtered.map((q) => (
-            <Link key={q.id} href={`/admin/quotes/${q.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-              <div style={card}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={cardHead}>
-                    <span style={cardNum}>{q.quote_number}</span>
-                    <StatusBadge status={q.status} />
-                  </div>
-                  <p style={cardClinic}>{clinicName(q.clinic_id)}</p>
-                  <div style={cardMeta}>
-                    <span>📅 {fmtDate(q.issue_date)}</span>
-                    {q.expiry_date && <span>⏰ 期限 {fmtDate(q.expiry_date)}</span>}
-                    {q.invoice_id && <span style={{ color: "#8b5cf6" }}>→ 請求書済</span>}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <p style={cardAmount}>{fmtYen(q.total)}</p>
-                  <p style={cardSubtotal}>税抜 {fmtYen(q.subtotal)}</p>
-                </div>
-              </div>
-            </Link>
-          ))
-        )}
+      {/* テーブル */}
+      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 240px)" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <thead className="sticky top-0 bg-gray-100">
+            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-left w-32">見積書No</th>
+              <th className="px-2 py-1.5 text-center w-24">状態</th>
+              <th className="px-2 py-1.5 text-left">医院</th>
+              <th className="px-2 py-1.5 text-center w-24">発行日</th>
+              <th className="px-2 py-1.5 text-center w-24">期限</th>
+              <th className="px-2 py-1.5 text-right w-28">金額(税込)</th>
+              <th className="px-2 py-1.5 text-center w-20">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">該当見積書なし</td></tr>
+            ) : filtered.map((q, i) => {
+              const sc = QUOTE_STATUSES[q.status]
+              return (
+                <tr key={q.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                  <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700">{q.quote_number}</td>
+                  <td className="px-2 py-1.5 text-center">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: sc.color + "22", color: sc.color }}>
+                      {sc.label}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1.5">{clinicName(q.clinic_id)}</td>
+                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{fmtDate(q.issue_date)}</td>
+                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{q.expiry_date ? fmtDate(q.expiry_date) : "—"}</td>
+                  <td className="px-2 py-1.5 text-right text-[12px] font-bold">{fmtYen(q.total)}</td>
+                  <td className="px-2 py-1.5 text-center">
+                    <Link href={`/admin/quotes/${q.id}`} className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
-    </main>
-  )
-}
-
-function Kpi({ label, val, sub }: { label: string; val: string; sub: string }) {
-  return (
-    <div style={kpiCard}>
-      <p style={{ fontSize: 11, color: "#777", margin: 0 }}>{label}</p>
-      <p style={{ fontSize: 22, fontWeight: 700, margin: "4px 0" }}>{val}</p>
-      {sub && <p style={{ fontSize: 10, color: "#999", margin: 0 }}>{sub}</p>}
     </div>
   )
 }
-
-function StatusBadge({ status }: { status: QuoteStatus }) {
-  const s = QUOTE_STATUSES[status]
-  return (
-    <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 99, background: s.color + "22", color: s.color, fontSize: 11, fontWeight: 700 }}>
-      {s.label}
-    </span>
-  )
-}
-
-const page: React.CSSProperties = { maxWidth: 960, margin: "0 auto", padding: 20 }
-const back: React.CSSProperties = { padding: "6px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", marginBottom: 16, cursor: "pointer" }
-const header: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 12 }
-const btnDark: React.CSSProperties = { padding: "8px 16px", borderRadius: 8, border: "none", background: "#111", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }
-const kpiGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 12 }
-const kpiCard: React.CSSProperties = { background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: 14 }
-const filters: React.CSSProperties = { display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }
-const searchInput: React.CSSProperties = { flex: 1, minWidth: 180, padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 13 }
-const select: React.CSSProperties = { padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 13, background: "#fff" }
-const listWrap: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 8 }
-const card: React.CSSProperties = { background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: 14, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer" }
-const cardHead: React.CSSProperties = { display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }
-const cardNum: React.CSSProperties = { fontSize: 14, fontWeight: 700, color: "#111" }
-const cardClinic: React.CSSProperties = { fontSize: 13, color: "#444", margin: "2px 0", fontWeight: 600 }
-const cardMeta: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", fontSize: 11, color: "#777", marginTop: 4 }
-const cardAmount: React.CSSProperties = { fontSize: 18, fontWeight: 800, color: "#111", margin: 0 }
-const cardSubtotal: React.CSSProperties = { fontSize: 10, color: "#999", margin: "2px 0 0" }

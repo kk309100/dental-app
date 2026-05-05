@@ -204,6 +204,42 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
           </tbody>
         </table>
 
+        {items.length === 0 && (
+          <div className="no-print" style={{ marginTop: 16, padding: 16, background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8 }}>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#92400e" }}>⚠️ この発注書には明細がありません</p>
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: "#78350f" }}>
+              これは <strong>RLS（行レベルセキュリティ）エラー</strong> で明細作成が失敗した残骸の可能性があります。
+            </p>
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: "#78350f" }}>
+              <strong>対処:</strong>
+            </p>
+            <ol style={{ margin: "4px 0 8px 20px", fontSize: 12, color: "#78350f", lineHeight: 1.7 }}>
+              <li>右上の「削除」ボタンでこの空発注書を削除</li>
+              <li>Supabase Studio で <code style={{ background: "#fff", padding: "2px 6px", borderRadius: 3 }}>db/migrations/2026-05-05_disable_rls_again.sql</code> を実行</li>
+              <li>もう一度 <a href="/admin/purchase-orders/suggest" style={{ color: "#1d4ed8", textDecoration: "underline" }}>発注書の自動提案</a> から作り直す</li>
+            </ol>
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ fontSize: 11, color: "#92400e", cursor: "pointer" }}>SQL を直接コピー（クリックで展開）</summary>
+              <pre style={{ marginTop: 6, padding: 8, background: "#fff", border: "1px solid #fde68a", borderRadius: 4, fontSize: 10, overflow: "auto", maxHeight: 200 }}>{`ALTER TABLE IF EXISTS purchase_orders DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS purchase_order_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS stock_movements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS stocktakes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS stocktake_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS audit_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS sales_reps DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS invoice_payments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS clinic_product_prices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS order_drafts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS company_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS notification_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS email_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS bank_imports DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS bank_payment_lines DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS delivery_slips DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
+            </details>
+          </div>
+        )}
         <table style={{ width: "100%", marginTop: 16, borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr style={{ background: "#f3f4f6" }}>
