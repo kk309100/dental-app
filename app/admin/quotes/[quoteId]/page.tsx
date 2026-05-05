@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { use } from "react"
 import { supabase } from "@/lib/supabase"
-import { COMPANY } from "@/lib/company"
+import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
 import { fmtYen, fmtDate, getClinicPrefix, getCorporateLabel, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
 import { QUOTE_STATUSES, type QuoteStatus } from "@/lib/quote"
 import Seal from "@/app/components/Seal"
@@ -31,6 +31,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
   const [clinic, setClinic] = useState<Clinic | null>(null)
   const [items, setItems] = useState<QuoteItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [company, setCompany] = useState<Company>(COMPANY_DEFAULT)
+  useEffect(() => { getCompany().then(setCompany) }, [])
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
 
@@ -166,10 +168,10 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
             ) : <p style={{ color: "#999" }}>(医院情報なし)</p>}
           </div>
           <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, position: "relative", paddingRight: 70 }}>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{COMPANY.name}</p>
-            <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
-            <p style={{ margin: 0 }}>{COMPANY.address}</p>
-            <p style={{ margin: 0 }}>TEL {COMPANY.phone}</p>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{company.name}</p>
+            <p style={{ margin: 0 }}>〒{company.postalCode}</p>
+            <p style={{ margin: 0 }}>{company.address}</p>
+            <p style={{ margin: 0 }}>TEL {company.phone}</p>
             {/* 印影 */}
             <div style={{ position: "absolute", top: 0, right: 0 }}>
               <Seal size={64} />

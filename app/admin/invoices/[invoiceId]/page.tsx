@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { use } from "react"
 import { supabase } from "@/lib/supabase"
-import { COMPANY } from "@/lib/company"
+import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
 import { fmtYen, fmtDate, INVOICE_STATUSES, getClinicPrefix, getCorporateLabel, type InvoiceStatus } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
 import Link from "next/link"
@@ -44,6 +44,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
   const [items, setItems] = useState<OrderItem[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [company, setCompany] = useState<Company>(COMPANY_DEFAULT)
+  useEffect(() => { getCompany().then(setCompany) }, [])
   const [error, setError] = useState("")
 
   const [showPaidModal, setShowPaidModal] = useState(false)
@@ -131,6 +133,20 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
 
   // 商品名が null の明細件数（警告表示用）
   const missingNameCount = useMemo(() => items.filter((it) => !it.product_name).length, [items])
+
+  // 適格請求書（インボイス）要件チェック
+  const invoiceCompliance = useMemo(() => {
+    const issues: string[] = []
+    if (!company.invoiceNumber || !/^T\d{13}$/.test(company.invoiceNumber)) {
+      issues.push("自社の適格請求書発行事業者登録番号が未設定または形式不正（T+13桁）")
+    }
+    if (!company.name) issues.push("自社名なし")
+    if (!company.address) issues.push("自社住所なし")
+    if (!clinic) issues.push("取引先（医院）情報なし")
+    if (!invoice?.issue_date) issues.push("発行日なし")
+    if (invoice && invoice.tax === undefined) issues.push("税額の表示なし")
+    return { issues, ok: issues.length === 0 }
+  }, [company, clinic, invoice])
 
   async function recordPayment() {
     if (!invoice) return
@@ -262,11 +278,11 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
 
           {/* 右: 自社 */}
           <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, textAlign: "left", position: "relative", paddingRight: 70 }}>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{COMPANY.name}</p>
-            <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
-            <p style={{ margin: 0 }}>{COMPANY.address}</p>
-            <p style={{ margin: 0 }}>TEL {COMPANY.phone} / FAX {COMPANY.fax}</p>
-            <p style={{ margin: "4px 0 0" }}>登録番号: {COMPANY.invoiceNumber}</p>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{company.name}</p>
+            <p style={{ margin: 0 }}>〒{company.postalCode}</p>
+            <p style={{ margin: 0 }}>{company.address}</p>
+            <p style={{ margin: 0 }}>TEL {company.phone} / FAX {company.fax}</p>
+            <p style={{ margin: "4px 0 0" }}>登録番号: {company.invoiceNumber}</p>
             {/* 印影 */}
             <div style={{ position: "absolute", top: 0, right: 0 }}>
               <Seal size={64} />
@@ -290,6 +306,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
         <p style={{ fontSize: 11, color: "#666", margin: "16px 0 6px" }}>
           下記のとおりご請求申し上げます。
         </p>
+        {!invoiceCompliance.ok && (
+          <p className="no-print" style={{ fontSize: 11, color: "#b91c1c", background: "#fee2e2", padding: "6px 10px", borderRadius: 4, margin: "0 0 8px" }}>
+            ⚠ 適格請求書要件を満たしていません: {invoiceCompliance.issues.join(" / ")}
+            {(!company.invoiceNumber || !/^T\d{13}$/.test(company.invoiceNumber)) && (
+              <>　<Link href="/admin/settings" className="underline">→ 自社情報設定</Link></>
+            )}
+          </p>
+        )}
         {missingNameCount > 0 && (
           <p className="no-print" style={{ fontSize: 11, color: "#92400e", background: "#fef3c7", padding: "6px 10px", borderRadius: 4, margin: "0 0 8px" }}>
             ⚠ 商品名が記録されていない明細が {missingNameCount} 件あります（旧データ）。Supabase で
@@ -344,10 +368,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
         <div style={bankBox}>
           <p style={{ fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>お振込先</p>
           <p style={{ fontSize: 12, margin: 0 }}>
-            {COMPANY.bankName}　{COMPANY.bankBranch}　{COMPANY.bankType}　{COMPANY.bankAccount}
+            {company.bankName}　{company.bankBranch}　{company.bankType}　{company.bankAccount}
           </p>
-          <p style={{ fontSize: 12, margin: "2px 0 0" }}>名義: {COMPANY.bankHolder}</p>
-          <p style={{ fontSize: 10, color: "#666", margin: "4px 0 0" }}>{COMPANY.notes}</p>
+          <p style={{ fontSize: 12, margin: "2px 0 0" }}>名義: {company.bankHolder}</p>
+          <p style={{ fontSize: 10, color: "#666", margin: "4px 0 0" }}>{company.notes}</p>
         </div>
 
         {/* 備考 */}
