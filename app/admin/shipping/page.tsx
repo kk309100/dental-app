@@ -210,10 +210,9 @@ export default function ShippingPage() {
     window.print()
   }
 
-  if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
-
-  const selectedOrders = orders.filter(o => selected.has(o.id))
-  const selectedItems = items.filter(it => selected.has(it.order_id))
+  // ⚠️ フックは early return の前に必ず呼ぶ（React Rules of Hooks）
+  const selectedOrders = useMemo(() => orders.filter(o => selected.has(o.id)), [orders, selected])
+  const selectedItems = useMemo(() => items.filter(it => selected.has(it.order_id)), [items, selected])
   // ピッキングリスト用: 棚番号順に集約
   const pickList = useMemo(() => {
     const m = new Map<string, { product_id: string; name: string; location: string; qty: number; clinics: Set<string> }>()
@@ -231,6 +230,8 @@ export default function ShippingPage() {
     })
     return Array.from(m.values()).sort((a, b) => (a.location || "zzz").localeCompare(b.location || "zzz"))
   }, [selectedItems, productById, orders, clinicById])
+
+  if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   return (
     <div className="space-y-3">
