@@ -26,8 +26,10 @@ type Product = {
   default_supplier_id?: string | null
 }
 type OrderItem = { product_id: string | null; quantity: number; order_id: string }
-type Order = { id: string; status: string }
+type Order = { id: string; status: string; clinic_id: string | null }
+type Clinic = { id: string; name: string }
 type StockReceipt = { id: string; product_id: string; supplier_id: string | null; quantity: number; unit_price: number | null; created_at: string }
+type DraftPO = { id: string; po_number: string | null; supplier_id: string | null; total_amount: number | null }
 
 type Suggestion = {
   product: Product
@@ -39,6 +41,8 @@ type Suggestion = {
   unitPrice: number
   selected: boolean
   supplierOverride?: string
+  deliveryTarget?: string   // 納品先: clinic_id / "stock" / "tbd"
+  deliveryLabel?: string    // 表示用ラベル
 }
 
 function SuggestPOPage() {
@@ -54,20 +58,26 @@ function SuggestPOPage() {
   const [groupSupplier, setGroupSupplier] = useState<string>("")
   const [historyByProduct, setHistoryByProduct] = useState<Map<string, StockReceipt[]>>(new Map())
   const [openHistoryProductId, setOpenHistoryProductId] = useState<string | null>(null)
+  const [draftPOs, setDraftPOs] = useState<DraftPO[]>([])
+  const [clinics, setClinics] = useState<Clinic[]>([])
 
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setLoading(true)
-    const [p, sups, oi, o, sr] = await Promise.all([
+    const [p, sups, oi, o, sr, dr, cl] = await Promise.all([
       supabase.from("products").select("id,name,product_code,manufacturer,stock,reorder_level,cost,default_supplier_id"),
       fetchSuppliersByUsage("id,name"),
       supabase.from("order_items").select("product_id,quantity,order_id"),
-      supabase.from("orders").select("id,status").not("status", "in", '("納品済み","キャンセル")'),
+      supabase.from("orders").select("id,status,clinic_id").not("status", "in", '("納品済み","キャンセル")'),
       supabase.from("stock_receipts").select("id,product_id,supplier_id,quantity,unit_price,created_at").order("created_at", { ascending: false }),
+      supabase.from("purchase_orders").select("id,po_number,supplier_id,total_amount").eq("status", "下書き"),
+      supabase.from("clinics").select("id,name"),
     ])
     const products = (p.data as Product[]) || []
     setSuppliers(sups)
+    setDraftPOs((dr.data as DraftPO[]) || [])
+    setClinics((cl.data as Clinic[]) || [])
     // 商品ごとの過去仕入履歴をマップ化
     const histMap = new Map<string, StockReceipt[]>()
     ;((sr.data as StockReceipt[]) || []).forEach(r => {
@@ -101,12 +111,21 @@ function SuggestPOPage() {
       // 【from_order/from_orders 指定モード】
       // その注文に含まれる商品だけを、注文数量ベースで「不足分だけ」発注候補にする
       const orderQtyByProduct = new Map<string, number>()
+      // 商品ごとに「どの医院の注文か」をトラッキング（納品先初期値用）
+      const productClinicMap = new Map<string, string>()
+      const ordersList = (o.data as Order[]) || []
+      const orderClinicMap = new Map(ordersList.map(o => [o.id, o.clinic_id]))
       ;((oi.data as OrderItem[]) || [])
         .filter(i => i.order_id && sourceOrderIds.includes(i.order_id) && i.product_id)
         .forEach(i => {
           const cur = orderQtyByProduct.get(i.product_id as string) || 0
           orderQtyByProduct.set(i.product_id as string, cur + Number(i.quantity || 0))
+          const cid = orderClinicMap.get(i.order_id)
+          if (cid && !productClinicMap.has(i.product_id as string)) {
+            productClinicMap.set(i.product_id as string, cid)
+          }
         })
+      const clinicNameMap = new Map(((cl.data as Clinic[]) || []).map(c => [c.id, c.name]))
       products.forEach(p => {
         const orderQty = orderQtyByProduct.get(p.id) || 0
         if (orderQty === 0) return
@@ -115,6 +134,7 @@ function SuggestPOPage() {
         if (shortBy <= 0) return
         // 過去仕入の最後の仕入先・単価を初期値に
         const last = lastSupplier(p.id)
+        const clinicId = productClinicMap.get(p.id)
         list.push({
           product: p,
           systemStock: stock,
@@ -125,6 +145,8 @@ function SuggestPOPage() {
           unitPrice: last.lastPrice ?? Number(p.cost || 0),
           selected: true,
           supplierOverride: last.supplierId || p.default_supplier_id || undefined,
+          deliveryTarget: clinicId || "stock",
+          deliveryLabel: clinicId ? (clinicNameMap.get(clinicId) || "医院") : "在庫",
         })
       })
     } else {
@@ -148,6 +170,8 @@ function SuggestPOPage() {
             unitPrice: last.lastPrice ?? Number(p.cost || 0),
             selected: true,
             supplierOverride: last.supplierId || p.default_supplier_id || undefined,
+            deliveryTarget: "stock",
+            deliveryLabel: "在庫",
           })
         }
       })
@@ -181,10 +205,51 @@ function SuggestPOPage() {
     setSuggestions(prev => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)))
   }
 
+  function deliveryNoteFor(s: Suggestion): string {
+    const parts: string[] = []
+    if (s.deliveryLabel) parts.push(`納品先:${s.deliveryLabel}`)
+    if (s.shortBy > 0) parts.push(`在庫${s.systemStock}/不足${s.shortBy}`)
+    return parts.join(" / ")
+  }
+
   async function createPOForSupplier(supId: string) {
     const target = suggestions.filter(s => s.selected && (s.supplierOverride || s.product.default_supplier_id || "") === supId && s.suggestQty > 0)
     if (target.length === 0) { alert("対象なし"); return }
-    if (!confirm(`「${supplierName(supId)}」宛に ${target.length} 件の発注書を作成します。`)) return
+
+    // 同じ仕入先の下書き発注書があるか
+    const existingDraft = draftPOs.find(d => d.supplier_id === supId)
+
+    if (existingDraft) {
+      // 既存に追加 or 新規作成 を選択
+      const choice = window.confirm(
+        `「${supplierName(supId)}」宛の作成中（下書き）の発注書があります（No.${existingDraft.po_number || existingDraft.id.slice(0, 8)}・¥${(existingDraft.total_amount || 0).toLocaleString()}）。\n\n` +
+        `[OK] 既存の下書きに追加\n[キャンセル] 新規作成`
+      )
+      if (choice) {
+        // 既存に追加
+        const items = target.map(s => ({
+          purchase_order_id: existingDraft.id,
+          product_id: s.product.id,
+          product_name: s.product.name,
+          quantity: s.suggestQty,
+          unit_price: s.unitPrice,
+          note: deliveryNoteFor(s),
+        }))
+        const { error: ie } = await supabase.from("purchase_order_items").insert(items)
+        if (ie) { alert("追加失敗: " + ie.message); return }
+        // 合計額を再計算
+        const { data: allItems } = await supabase.from("purchase_order_items")
+          .select("quantity,unit_price").eq("purchase_order_id", existingDraft.id)
+        const newTotal = (allItems || []).reduce((s, i: { quantity: number; unit_price: number }) => s + Number(i.quantity || 0) * Number(i.unit_price || 0), 0)
+        await supabase.from("purchase_orders").update({ total_amount: newTotal }).eq("id", existingDraft.id)
+        alert(`✅ 既存の下書き発注書 No.${existingDraft.po_number || existingDraft.id.slice(0, 8)} に ${items.length} 件追加しました`)
+        router.push(`/admin/purchase-orders/${existingDraft.id}`)
+        return
+      }
+    }
+
+    // 新規作成
+    if (!confirm(`「${supplierName(supId)}」宛に新規発注書を作成します（${target.length}件）。よろしいですか？`)) return
     const draft = {
       supplier_id: supId,
       rows: target.map(s => ({
@@ -192,9 +257,9 @@ function SuggestPOPage() {
         product_name: s.product.name,
         quantity: s.suggestQty,
         unit_price: s.unitPrice,
-        note: s.shortBy > 0 ? `在庫${s.systemStock}/予約${s.reservedQty}/不足${s.shortBy}` : "",
+        note: deliveryNoteFor(s),
       })),
-      note: "在庫不足から自動生成",
+      note: sourceOrderIds.length > 0 ? `注文 ${sourceOrderIds.length}件 から自動生成` : "在庫不足から自動生成",
     }
     sessionStorage.setItem("po:draft", JSON.stringify(draft))
     router.push("/admin/purchase-orders/new")
@@ -235,17 +300,24 @@ function SuggestPOPage() {
 
       {summary.size > 0 && (
         <div className="bg-blue-50 rounded-lg p-3" style={{ border: "1px solid #c7d2fe" }}>
-          <p className="text-xs font-bold text-blue-900 mb-1">仕入先別 発注予定</p>
+          <p className="text-xs font-bold text-blue-900 mb-1">
+            仕入先別 発注予定
+            <span className="ml-2 text-[10px] font-normal text-gray-500">※ 同じ仕入先で「下書き」発注書がある場合は追加 or 新規を選択できます</span>
+          </p>
           <div className="flex flex-wrap gap-2">
-            {Array.from(summary.entries()).map(([sid, amt]) => (
-              <button key={sid} onClick={() => sid !== "(未設定)" && createPOForSupplier(sid)}
-                disabled={sid === "(未設定)"}
-                className="text-xs px-3 py-1.5 bg-white border border-blue-200 rounded hover:bg-blue-100 disabled:opacity-50">
-                <span className="font-bold">{supplierName(sid as string)}</span>
-                <span className="ml-2 text-blue-700 tabular-nums">{fmtYen(amt)}</span>
-                {sid !== "(未設定)" && <span className="ml-2 text-blue-500">→ 発注書作成</span>}
-              </button>
-            ))}
+            {Array.from(summary.entries()).map(([sid, amt]) => {
+              const draft = draftPOs.find(d => d.supplier_id === sid)
+              return (
+                <button key={sid} onClick={() => sid !== "(未設定)" && createPOForSupplier(sid)}
+                  disabled={sid === "(未設定)"}
+                  className={"text-xs px-3 py-1.5 border rounded hover:bg-blue-100 disabled:opacity-50 " + (draft ? "bg-amber-50 border-amber-300" : "bg-white border-blue-200")}>
+                  <span className="font-bold">{supplierName(sid as string)}</span>
+                  <span className="ml-2 text-blue-700 tabular-nums">{fmtYen(amt)}</span>
+                  {draft && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded font-bold">📝 下書きあり</span>}
+                  {sid !== "(未設定)" && <span className="ml-2 text-blue-500">→ 発注書{draft ? "に追加" : "作成"}</span>}
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -264,11 +336,12 @@ function SuggestPOPage() {
               <th className="px-2 py-1.5 text-right w-24">単価</th>
               <th className="px-2 py-1.5 text-right w-24">小計</th>
               <th className="px-2 py-1.5 text-left w-44">仕入先</th>
+              <th className="px-2 py-1.5 text-left w-32">納品先</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">不足商品なし 🎉</td></tr>
+              <tr><td colSpan={11} className="px-4 py-6 text-center text-gray-400">不足商品なし 🎉</td></tr>
             ) : filtered.map((s, idx) => {
               const realIdx = suggestions.indexOf(s)
               const history = historyByProduct.get(s.product.id) || []
@@ -313,10 +386,25 @@ function SuggestPOPage() {
                         {suppliers.map(sup => <option key={sup.id} value={sup.id}>{supplierOptionLabel(sup)}</option>)}
                       </select>
                     </td>
+                    <td className="px-2 py-1">
+                      <select value={s.deliveryTarget || "stock"}
+                        onChange={e => {
+                          const v = e.target.value
+                          const lbl = v === "stock" ? "在庫" : v === "tbd" ? "未定" : (clinics.find(c => c.id === v)?.name || "医院")
+                          update(realIdx, { deliveryTarget: v, deliveryLabel: lbl })
+                        }}
+                        className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs">
+                        <option value="stock">📦 在庫補充</option>
+                        <option value="tbd">未定</option>
+                        <optgroup label="医院（納品先）">
+                          {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </optgroup>
+                      </select>
+                    </td>
                   </tr>
                   {isHistoryOpen && history.length > 0 && (
                     <tr className="bg-blue-50/30 border-b border-gray-100">
-                      <td colSpan={10} className="px-4 py-2">
+                      <td colSpan={11} className="px-4 py-2">
                         <p className="text-[10px] font-bold text-gray-500 mb-1">過去の仕入履歴（クリックで仕入先・単価セット）</p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1">
                           {history.slice(0, 12).map(h => {
