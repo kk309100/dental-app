@@ -107,23 +107,24 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
   const remaining = useMemo(() => (invoice ? Number(invoice.total) - totalPaid : 0), [invoice, totalPaid])
 
   // 明細を「商品名で集約」したサマリ表示
-  // product_name が null の場合は products テーブルから補完。
-  // それでも分からない場合は (削除済み商品) として product_id ごとに別行で表示
+  // 商品名が無い明細は product_id ごとにグループ化（編集対象として識別可能に）
   const itemSummary = useMemo(() => {
     const productById = new Map(products.map((p) => [p.id, p.name]))
-    const map = new Map<string, { name: string; qty: number; amount: number }>()
+    const map = new Map<string, { name: string; qty: number; amount: number; missingProductId: string | null }>()
     items.forEach((it) => {
       let key: string
+      let missingProductId: string | null = null
       if (it.product_name) {
         key = it.product_name
       } else if (it.product_id && productById.has(it.product_id)) {
         key = productById.get(it.product_id)!
       } else if (it.product_id) {
-        key = `(削除済み商品 #${it.product_id.slice(0, 8)})`
+        key = `__missing__${it.product_id}`
+        missingProductId = it.product_id
       } else {
         key = "(商品名なし)"
       }
-      const e = map.get(key) || { name: key, qty: 0, amount: 0 }
+      const e = map.get(key) || { name: key.startsWith("__missing__") ? "(商品名なし)" : key, qty: 0, amount: 0, missingProductId }
       e.qty += it.quantity || 0
       e.amount += (it.price || 0) * (it.quantity || 0)
       map.set(key, e)
@@ -133,6 +134,20 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
 
   // 商品名が null の明細件数（警告表示用）
   const missingNameCount = useMemo(() => items.filter((it) => !it.product_name).length, [items])
+
+  // 商品名を一括設定（product_id がマッチする全 order_items を更新）
+  async function nameMissingProduct(productId: string) {
+    const current = items.find(it => it.product_id === productId)
+    const example = current ? `数量${current.quantity} × ¥${current.price}` : ""
+    const name = window.prompt(`この商品（${example}）の商品名を入力してください。\n同じ商品ID(${productId.slice(0, 8)})の全明細に反映されます。`)
+    if (!name || !name.trim()) return
+    const { error } = await supabase.from("order_items")
+      .update({ product_name: name.trim() })
+      .eq("product_id", productId)
+      .is("product_name", null)
+    if (error) { alert("更新失敗: " + error.message); return }
+    fetchData()
+  }
 
   // 適格請求書（インボイス）要件チェック
   const invoiceCompliance = useMemo(() => {
@@ -316,9 +331,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
         )}
         {missingNameCount > 0 && (
           <p className="no-print" style={{ fontSize: 11, color: "#92400e", background: "#fef3c7", padding: "6px 10px", borderRadius: 4, margin: "0 0 8px" }}>
-            ⚠ 商品名が記録されていない明細が {missingNameCount} 件あります（旧データ）。Supabase で
-            <code style={{ background: "#fff", padding: "0 4px", borderRadius: 2, margin: "0 4px", fontSize: 10 }}>UPDATE order_items SET product_name = p.name FROM products p WHERE order_items.product_id = p.id AND order_items.product_name IS NULL;</code>
-            を実行すると、商品マスタに残っているものは復元されます。
+            ⚠ 商品名が記録されていない明細が {missingNameCount} 件あります（旧データ）。
+            下の表の「✏」ボタンで商品名を入力してください（同じ商品IDの全明細に反映されます）。
           </p>
         )}
         <table style={table}>
@@ -334,7 +348,17 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
               <tr><td colSpan={3} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
             ) : itemSummary.map((it, i) => (
               <tr key={i}>
-                <td style={td}>{it.name}</td>
+                <td style={td}>
+                  {it.name}
+                  {it.missingProductId && (
+                    <button
+                      className="no-print"
+                      onClick={() => nameMissingProduct(it.missingProductId!)}
+                      style={{ marginLeft: 8, padding: "2px 8px", fontSize: 10, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 4, cursor: "pointer" }}
+                      title="商品名を入力（同じ商品IDの全明細に反映）"
+                    >✏ 商品名を入力</button>
+                  )}
+                </td>
                 <td style={{ ...td, textAlign: "right" }}>{it.qty}</td>
                 <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.amount)}</td>
               </tr>

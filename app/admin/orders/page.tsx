@@ -195,6 +195,16 @@ function AdminOrdersPage() {
 
   return (
     <div className="space-y-2">
+      {/* 見積 / 注文 サブタブ */}
+      <div className="flex items-center gap-1 border-b border-gray-200 mb-2">
+        <Link href="/admin/quotes" className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-t">
+          📋 見積
+        </Link>
+        <div className="px-4 py-2 text-sm font-bold text-gray-900 border-b-2 border-emerald-500 -mb-px">
+          🛒 注文
+        </div>
+      </div>
+
       <div className="flex items-center flex-wrap gap-2">
         <h1 className="text-lg font-bold text-gray-900">
           注文管理
