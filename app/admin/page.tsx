@@ -84,6 +84,7 @@ export default function AdminHomePage() {
             { href: "/admin/stock-movements", label: "在庫履歴" },
             { href: "/admin/audit-logs", label: "監査ログ" },
             { href: "/admin/inventory-valuation", label: "在庫評価" },
+            { href: "/admin/bank-import", label: "📥 銀行CSV消込" },
             { href: "/admin/settings", label: "⚙ 自社情報設定" },
             { href: "/admin/products", label: "商品マスタ" },
             { href: "/admin/delivery-search", label: "納品書検索" },

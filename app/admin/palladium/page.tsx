@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { fmtYen, fmtDate, ymd } from "@/lib/invoice"
 import Link from "next/link"
+import { parseCSV, toCSV, downloadCSV } from "@/lib/csv"
 
 type Row = {
   id: string
@@ -49,6 +50,9 @@ export default function PalladiumPage() {
   const [form, setForm] = useState(emptyForm())
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState("")
+  const [importMsg, setImportMsg] = useState("")
+  const [importing, setImporting] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchData() }, [])
 
@@ -130,6 +134,80 @@ export default function PalladiumPage() {
     fetchData()
   }
 
+  // 前日比チェック（変動アラート用）
+  const variations = useMemo(() => {
+    if (rows.length < 2) return []
+    const today = rows[0]
+    const yesterday = rows[1]
+    return PRODUCTS.map(p => {
+      const a = Number(today[`${p.key}_price` as `${ProductKey}_price`] || 0)
+      const b = Number(yesterday[`${p.key}_price` as `${ProductKey}_price`] || 0)
+      if (b === 0 || a === 0) return null
+      const diff = a - b
+      const pct = Math.round((diff / b) * 1000) / 10
+      return { ...p, diff, pct, abs: Math.abs(pct) }
+    }).filter(Boolean) as Array<{ key: ProductKey; label: string; color: string; diff: number; pct: number; abs: number }>
+  }, [rows])
+
+  async function importCSV(file: File) {
+    setImporting(true); setImportMsg("")
+    try {
+      const text = await file.text()
+      const parsed = parseCSV(text)
+      if (parsed.length === 0) { setImportMsg("CSVが空です"); setImporting(false); return }
+      const pickKey = (r: Record<string, string>, ...keys: string[]) => {
+        for (const k of keys) if (r[k] !== undefined && r[k] !== "") return r[k]
+        return ""
+      }
+      let created = 0, updated = 0, skipped = 0
+      const errors: string[] = []
+      for (const r of parsed) {
+        const dateStr = pickKey(r, "日付", "date").trim()
+        if (!dateStr) { skipped++; continue }
+        const date = dateStr.replace(/[年月]/g, "-").replace(/日/g, "").replace(/\//g, "-")
+        const payload: Record<string, unknown> = {
+          date,
+          cast_well_price: Number(pickKey(r, "キャストウェル", "cast_well_price").replace(/[¥,]/g, "")) || null,
+          para_z_price: Number(pickKey(r, "パラZ", "para_z_price").replace(/[¥,]/g, "")) || null,
+          cast_master_price: Number(pickKey(r, "キャストマスター", "cast_master_price").replace(/[¥,]/g, "")) || null,
+          ishifuku_price: Number(pickKey(r, "石福", "ishifuku_price").replace(/[¥,]/g, "")) || null,
+          memo: pickKey(r, "備考", "memo") || null,
+        }
+        const existing = rows.find(x => x.date === date)
+        if (existing) {
+          const { error } = await supabase.from("palladium_prices").update(payload).eq("id", existing.id)
+          if (error) { errors.push(`${date}: ${error.message}`); continue }
+          updated++
+        } else {
+          const { error } = await supabase.from("palladium_prices").insert(payload)
+          if (error) { errors.push(`${date}: ${error.message}`); continue }
+          created++
+        }
+      }
+      let msg = `✅ 取込完了: 新規${created}件 / 更新${updated}件 / スキップ${skipped}件`
+      if (errors.length) msg += `\n⚠ エラー${errors.length}件`
+      setImportMsg(msg)
+      await fetchData()
+    } catch (e) {
+      setImportMsg(`取込失敗: ${(e as Error).message}`)
+    } finally {
+      setImporting(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
+
+  function exportCSV() {
+    const csv = toCSV(rows.map(r => ({
+      日付: r.date,
+      キャストウェル: r.cast_well_price || "",
+      パラZ: r.para_z_price || "",
+      キャストマスター: r.cast_master_price || "",
+      石福: r.ishifuku_price || "",
+      備考: r.memo || "",
+    })))
+    downloadCSV(`パラ価格_${new Date().toISOString().slice(0, 10)}.csv`, csv)
+  }
+
   if (loading) return <main style={page}><p>読み込み中…</p></main>
 
   return (
@@ -141,8 +219,30 @@ export default function PalladiumPage() {
           <h1 style={{ fontSize: 26, margin: 0 }}>パラ価格管理</h1>
           <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{rows.length}件</p>
         </div>
-        <button onClick={openAdd} style={btnDark}>＋ 価格を追加</button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) importCSV(f) }} />
+          <button onClick={() => fileRef.current?.click()} disabled={importing}
+            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #ddd", background: "#f7f7f7", fontSize: 13, cursor: "pointer", color: "#333" }}>
+            {importing ? "取込中…" : "📥 CSV取込"}
+          </button>
+          <button onClick={exportCSV}
+            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #ddd", background: "#f7f7f7", fontSize: 13, cursor: "pointer", color: "#333" }}>
+            📤 CSV出力
+          </button>
+          <button onClick={openAdd} style={btnDark}>＋ 価格を追加</button>
+        </div>
       </div>
+
+      {importMsg && (
+        <div style={{ padding: 10, background: importMsg.startsWith("✅") ? "#ecfdf5" : "#fff5f5", border: "1px solid " + (importMsg.startsWith("✅") ? "#bbf7d0" : "#fcc"), borderRadius: 6, color: importMsg.startsWith("✅") ? "#065f46" : "#dc2626", fontSize: 12, marginBottom: 12, whiteSpace: "pre-line" }}>{importMsg}</div>
+      )}
+
+      {variations.filter(v => v.abs >= 5).length > 0 && (
+        <div style={{ padding: 10, background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 6, color: "#92400e", fontSize: 12, marginBottom: 12 }}>
+          ⚠ 前日比 5% 以上の変動: {variations.filter(v => v.abs >= 5).map(v => `${v.label}: ${v.pct >= 0 ? "+" : ""}${v.pct}%`).join(" / ")}
+        </div>
+      )}
 
       {/* 最新価格カード */}
       {latest && (
