@@ -246,6 +246,30 @@ export default function ReceivingPage() {
       setPdfFile(null)
     }
     fetchData()
+
+    // 入庫した商品で「出荷可能になった注文」を抽出して通知
+    const stockedProductIds = validRows.map(r => r.matched?.id).filter(Boolean) as string[]
+    if (stockedProductIds.length > 0) {
+      try {
+        const { data: pendingOrders } = await supabase
+          .from("orders")
+          .select("id,clinic_id")
+          .in("status", ["注文受付", "確認中", "準備中"])
+        const orderIds = (pendingOrders || []).map(o => o.id)
+        if (orderIds.length > 0) {
+          const { data: pendingItems } = await supabase
+            .from("order_items")
+            .select("order_id,product_id")
+            .in("order_id", orderIds)
+            .in("product_id", stockedProductIds)
+          const affected = new Set((pendingItems || []).map(i => i.order_id))
+          if (affected.size > 0) {
+            const ok = confirm(`✅ 仕入登録完了。\n\n入庫した商品を含む未納品注文が ${affected.size} 件あります。\n出荷準備画面に移動しますか？`)
+            if (ok) window.location.href = "/admin/shipping"
+          }
+        }
+      } catch { /* スキップ */ }
+    }
   }
 
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>

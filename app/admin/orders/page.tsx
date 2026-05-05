@@ -192,6 +192,9 @@ export default function AdminOrdersPage() {
         <Link href="/admin/orders/new" className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
           ＋ 新規注文
         </Link>
+        <Link href="/admin/shipping" className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">
+          🚚 出荷準備
+        </Link>
         {/* ビュー切替 */}
         <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs">
           <button onClick={() => setView("byClinic")} className={"px-3 py-1.5 rounded font-bold " + (view === "byClinic" ? "bg-white shadow text-gray-900" : "text-gray-500")}>
