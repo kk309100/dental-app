@@ -60,7 +60,7 @@ export default function ReceivingPage() {
   async function fetchData() {
     setLoading(true)
     const [p, s, r] = await Promise.all([
-      supabase.from("products").select("id,name,product_code,manufacturer,stock,cost,barcode"),
+      supabase.from("products").select("id,name,product_code,manufacturer,stock,cost,barcode").limit(50000),
       supabase.from("suppliers").select("id,name,maker_name").order("name"),
       supabase.from("stock_receipts").select("*").order("created_at", { ascending: false }).limit(20),
     ])

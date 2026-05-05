@@ -298,14 +298,14 @@ export default function SimulationPage() {
       await supabase.from("stock_receipts").delete().like("memo", "📊 シミュ%")
       log("ok", "✓ シミュ仕入記録削除")
       // 3. purchase_order_items (PO ベース)
-      const { data: pos } = await supabase.from("purchase_orders").select("id").like("po_number", "PO-SIM-%")
+      const { data: pos } = await supabase.from("purchase_orders").select("id").like("po_number", "PO-SIM-%").limit(50000)
       if (pos && pos.length > 0) {
         await supabase.from("purchase_order_items").delete().in("purchase_order_id", pos.map(p => p.id))
         await supabase.from("purchase_orders").delete().like("po_number", "PO-SIM-%")
       }
       log("ok", "✓ シミュ発注書削除")
       // 4. order_items + orders
-      const { data: orders } = await supabase.from("orders").select("id").like("delivery_number", "DN-SIM-%")
+      const { data: orders } = await supabase.from("orders").select("id").like("delivery_number", "DN-SIM-%").limit(50000)
       if (orders && orders.length > 0) {
         await supabase.from("order_items").delete().in("order_id", orders.map(o => o.id))
         await supabase.from("orders").delete().like("delivery_number", "DN-SIM-%")

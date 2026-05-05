@@ -51,10 +51,10 @@ function AdminOrdersPage() {
   async function fetchData() {
     setLoading(true)
     const [o, i, c, p] = await Promise.all([
-      supabase.from("orders").select("*").order("created_at", { ascending: false }),
-      supabase.from("order_items").select("*"),
+      supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(50000),
+      supabase.from("order_items").select("*").limit(50000),  // デフォルト1000件 limit を回避
       supabase.from("clinics").select("id,name,corporate_name"),
-      supabase.from("products").select("id,name,stock"),
+      supabase.from("products").select("id,name,stock").limit(50000),
     ])
     const orders = (o.data as Order[]) || []
     setOrders(orders)

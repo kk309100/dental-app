@@ -31,7 +31,7 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
     if (!s) { setLoading(false); return }
     setSt(s as Stocktake)
     const { data: it } = await supabase.from("stocktake_items").select("*").eq("stocktake_id", stId)
-    const { data: ps } = await supabase.from("products").select("id,name,product_code,manufacturer,category,cost,location,active")
+    const { data: ps } = await supabase.from("products").select("id,name,product_code,manufacturer,category,cost,location,active").limit(50000)
     setItems((it as Item[]) || [])
     const m = new Map<string, Product>()
     ;(ps as Product[] | null)?.forEach(p => m.set(p.id, p))

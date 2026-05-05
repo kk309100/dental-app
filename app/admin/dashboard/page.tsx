@@ -22,9 +22,9 @@ export default function AdminDashboard() {
 
   async function fetchData() {
     const [o, i, p, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,invoice_id"),
-      supabase.from("invoices").select("id,clinic_id,invoice_number,issue_date,total,status").order("issue_date", { ascending: false }),
-      supabase.from("products").select("id,name,stock,reorder_level"),
+      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,invoice_id").limit(50000),
+      supabase.from("invoices").select("id,clinic_id,invoice_number,issue_date,total,status").order("issue_date", { ascending: false }).limit(50000),
+      supabase.from("products").select("id,name,stock,reorder_level").limit(50000),
       supabase.from("clinics").select("id,name,corporate_name"),
     ])
     setOrders((o.data as Order[]) || [])

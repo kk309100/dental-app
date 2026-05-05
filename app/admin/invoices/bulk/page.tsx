@@ -43,7 +43,7 @@ export default function BulkInvoicePage() {
     setLoading(true)
     const [c, o] = await Promise.all([
       supabase.from("clinics").select("id,name,corporate_name,closing_day").order("name"),
-      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,invoice_id"),
+      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,invoice_id").limit(50000),
     ])
     setClinics(c.data || [])
     setOrders((o.data as Order[]) || [])

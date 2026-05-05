@@ -57,9 +57,9 @@ export default function PurchaseOrderPage() {
   async function fetchData() {
     setLoading(true)
     const [o, i, p, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,created_at,delivery_number"),
-      supabase.from("order_items").select("*"),
-      supabase.from("products").select("id,name,manufacturer,unit,cost"),
+      supabase.from("orders").select("id,clinic_id,created_at,delivery_number").limit(50000),
+      supabase.from("order_items").select("*").limit(50000),
+      supabase.from("products").select("id,name,manufacturer,unit,cost").limit(50000),
       supabase.from("clinics").select("id,name"),
     ])
     setOrders((o.data as Order[]) || [])

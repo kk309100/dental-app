@@ -22,9 +22,9 @@ export default function AdminHomePage() {
 
   async function fetchData() {
     const [o, i, p] = await Promise.all([
-      supabase.from("orders").select("id,status,invoice_id"),
-      supabase.from("invoices").select("id,status"),
-      supabase.from("products").select("id,stock,reorder_level"),
+      supabase.from("orders").select("id,status,invoice_id").limit(50000),
+      supabase.from("invoices").select("id,status").limit(50000),
+      supabase.from("products").select("id,stock,reorder_level").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
     setInvoices((i.data as Invoice[]) || [])

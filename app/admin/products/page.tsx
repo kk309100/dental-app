@@ -43,6 +43,7 @@ export default function AdminProductsPage() {
       .from("products")
       .select("id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location")
       .order("name", { ascending: true })
+      .limit(50000)
     setProducts((data as Product[]) || [])
     setLoading(false)
   }

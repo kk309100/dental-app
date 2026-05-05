@@ -16,6 +16,7 @@ export default function BarcodePage() {
       .from("products")
       .select("*")
       .order("name", { ascending: true })
+      .limit(50000)
 
     setProducts(data || [])
   }

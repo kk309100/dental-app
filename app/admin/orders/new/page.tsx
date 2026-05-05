@@ -58,7 +58,7 @@ function NewOrderPage() {
     (async () => {
       const [c, p] = await Promise.all([
         supabase.from("clinics").select("id,name,corporate_name").order("name"),
-        supabase.from("products").select("id,name,product_code,price,stock,manufacturer,category").order("name"),
+        supabase.from("products").select("id,name,product_code,price,stock,manufacturer,category").order("name").limit(50000),
       ])
       setClinics((c.data as Clinic[]) || [])
       setProducts((p.data as Product[]) || [])

@@ -28,7 +28,7 @@ export default function DeliveriesPage() {
     setLoading(true)
     const [o, i, c] = await Promise.all([
       supabase.from("orders").select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep,invoice_id").eq("status", "納品済み").order("delivered_at", { ascending: false }),
-      supabase.from("order_items").select("id,order_id,product_name,quantity,price"),
+      supabase.from("order_items").select("id,order_id,product_name,quantity,price").limit(50000),
       supabase.from("clinics").select("id,name,corporate_name"),
     ])
     setOrders((o.data as Order[]) || [])

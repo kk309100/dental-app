@@ -61,7 +61,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
   const [nameInput, setNameInput] = useState("")
   const [allProducts, setAllProducts] = useState<{ id: string; name: string; price: number | null; product_code: string | null }[]>([])
   useEffect(() => {
-    supabase.from("products").select("id,name,price,product_code").then(({ data }) => {
+    supabase.from("products").select("id,name,price,product_code").limit(50000).then(({ data }) => {
       if (data) setAllProducts(data)
     })
   }, [])

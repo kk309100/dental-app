@@ -39,7 +39,7 @@ export default function InvoicesPage() {
   async function fetchData() {
     setLoading(true)
     const [i, c] = await Promise.all([
-      supabase.from("invoices").select("*").order("issue_date", { ascending: false }),
+      supabase.from("invoices").select("*").order("issue_date", { ascending: false }).limit(50000),
       supabase.from("clinics").select("id,name").order("name"),
     ])
     setInvoices((i.data as Invoice[]) || [])

@@ -53,7 +53,7 @@ function NewPOPage() {
     (async () => {
       const [sups, p] = await Promise.all([
         fetchSuppliersByUsage("id,name"),
-        supabase.from("products").select("id,name,product_code,cost,default_supplier_id").order("name"),
+        supabase.from("products").select("id,name,product_code,cost,default_supplier_id").order("name").limit(50000),
       ])
       setSuppliers(sups)
       setProducts((p.data as Product[]) || [])

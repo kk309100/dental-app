@@ -29,7 +29,7 @@ export default function InventoryValuationPage() {
 
   async function fetchData() {
     setLoading(true)
-    const { data } = await supabase.from("products").select("*").or("active.is.null,active.eq.true")
+    const { data } = await supabase.from("products").select("*").or("active.is.null,active.eq.true").limit(50000)
     setProducts((data as Product[]) || [])
     setLoading(false)
   }

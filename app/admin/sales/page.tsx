@@ -36,9 +36,9 @@ export default function SalesPage() {
 
   async function fetchData() {
     const [o, i, p, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep"),
-      supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price"),
-      supabase.from("products").select("id,name,cost"),
+      supabase.from("orders").select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep").limit(50000),
+      supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price").limit(50000),
+      supabase.from("products").select("id,name,cost").limit(50000),
       supabase.from("clinics").select("id,name,sales_rep"),
     ])
     setOrders((o.data as Order[]) || [])

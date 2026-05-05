@@ -15,9 +15,9 @@ export default function DeliveryPage() {
   }, [])
 
   async function fetchData() {
-    const { data: ordersData } = await supabase.from("orders").select("*")
-    const { data: itemsData } = await supabase.from("order_items").select("*")
-    const { data: productsData } = await supabase.from("products").select("*")
+    const { data: ordersData } = await supabase.from("orders").select("*").limit(50000)
+    const { data: itemsData } = await supabase.from("order_items").select("*").limit(50000)
+    const { data: productsData } = await supabase.from("products").select("*").limit(50000)
     const { data: clinicsData } = await supabase.from("clinics").select("*")
 
     setOrders(ordersData || [])

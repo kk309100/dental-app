@@ -23,10 +23,11 @@ export default function DeliveryControlPage() {
       .select("*")
       .neq("status", "納品済み")
       .order("created_at", { ascending: false })
+      .limit(50000)
 
-    const { data: itemsData } = await supabase.from("order_items").select("*")
-    const { data: productsData } = await supabase.from("products").select("*")
-    const { data: clinicsData } = await supabase.from("clinics").select("*")
+    const { data: itemsData } = await supabase.from("order_items").select("*").limit(50000)
+    const { data: productsData } = await supabase.from("products").select("*").limit(10000)
+    const { data: clinicsData } = await supabase.from("clinics").select("*").limit(10000)
 
     setOrders(ordersData || [])
     setItems(itemsData || [])

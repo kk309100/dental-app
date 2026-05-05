@@ -33,6 +33,7 @@ export default function InventoryPage() {
       .from("products")
       .select("id,name,product_code,manufacturer,stock,reorder_level,cost,price,category,location")
       .order("name", { ascending: true })
+      .limit(50000)
     setProducts((data as Product[]) || [])
     setLoading(false)
   }

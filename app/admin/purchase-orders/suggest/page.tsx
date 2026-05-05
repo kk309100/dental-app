@@ -66,11 +66,11 @@ function SuggestPOPage() {
   async function fetchData() {
     setLoading(true)
     const [p, sups, oi, o, sr, dr, cl] = await Promise.all([
-      supabase.from("products").select("id,name,product_code,manufacturer,stock,reorder_level,cost,default_supplier_id"),
+      supabase.from("products").select("id,name,product_code,manufacturer,stock,reorder_level,cost,default_supplier_id").limit(50000),
       fetchSuppliersByUsage("id,name"),
-      supabase.from("order_items").select("product_id,quantity,order_id"),
-      supabase.from("orders").select("id,status,clinic_id").not("status", "in", '("納品済み","キャンセル")'),
-      supabase.from("stock_receipts").select("id,product_id,supplier_id,quantity,unit_price,created_at").order("created_at", { ascending: false }),
+      supabase.from("order_items").select("product_id,quantity,order_id").limit(50000),
+      supabase.from("orders").select("id,status,clinic_id").not("status", "in", '("納品済み","キャンセル")').limit(50000),
+      supabase.from("stock_receipts").select("id,product_id,supplier_id,quantity,unit_price,created_at").order("created_at", { ascending: false }).limit(50000),
       supabase.from("purchase_orders").select("id,po_number,supplier_id,total_amount").eq("status", "下書き"),
       supabase.from("clinics").select("id,name"),
     ])

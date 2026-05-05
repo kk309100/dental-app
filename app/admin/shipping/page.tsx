@@ -32,9 +32,9 @@ export default function ShippingPage() {
   async function fetchData() {
     setLoading(true)
     const [o, i, p, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note").not("status", "in", `(${EXCLUDE_STATUSES.map(s => `"${s}"`).join(",")})`).order("created_at"),
-      supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price"),
-      supabase.from("products").select("id,name,stock,location"),
+      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note").not("status", "in", `(${EXCLUDE_STATUSES.map(s => `"${s}"`).join(",")})`).order("created_at").limit(50000),
+      supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price").limit(50000),
+      supabase.from("products").select("id,name,stock,location").limit(50000),
       supabase.from("clinics").select("id,name,corporate_name,sales_rep"),
     ])
     setOrders((o.data as Order[]) || [])

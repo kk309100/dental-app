@@ -50,7 +50,7 @@ function CreateQuotePage() {
     setLoading(true)
     const [c, p] = await Promise.all([
       supabase.from("clinics").select("id,name,corporate_name").order("name"),
-      supabase.from("products").select("id,name,price").order("name"),
+      supabase.from("products").select("id,name,price").order("name").limit(50000),
     ])
     setClinics(c.data || [])
     setProducts((p.data as Product[]) || [])
