@@ -6,8 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
 import { COMPANY } from "@/lib/company"
-
-type Supplier = { id: string; name: string }
+import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
 
 type Order = { id: string; clinic_id: string; created_at: string; delivery_number: string | null }
 type OrderItem = {
@@ -67,8 +66,7 @@ export default function PurchaseOrderPage() {
     setOrderItems((i.data as OrderItem[]) || [])
     setProducts((p.data as Product[]) || [])
     setClinics((c.data as Clinic[]) || [])
-    const { data: sup } = await supabase.from("suppliers").select("id,name").order("name")
-    setSuppliers((sup as Supplier[]) || [])
+    setSuppliers(await fetchSuppliersByUsage("id,name"))
     setLoading(false)
   }
 
@@ -442,7 +440,7 @@ export default function PurchaseOrderPage() {
                         className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
                       >
                         <option value="">仕入先を選択（未指定でも作成可）</option>
-                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        {suppliers.map(s => <option key={s.id} value={s.id}>{supplierOptionLabel(s)}</option>)}
                       </select>
                     </div>
                   ))}

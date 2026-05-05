@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
-
-type Supplier = { id: string; name: string }
+import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
 type Product = { id: string; name: string; product_code: string | null; cost: number | null; default_supplier_id?: string | null }
 type Row = { product_id: string | null; product_name: string; quantity: number; unit_price: number; note?: string }
 
@@ -49,11 +48,11 @@ function NewPOPage() {
 
   useEffect(() => {
     (async () => {
-      const [s, p] = await Promise.all([
-        supabase.from("suppliers").select("id,name").order("name"),
+      const [sups, p] = await Promise.all([
+        fetchSuppliersByUsage("id,name"),
         supabase.from("products").select("id,name,product_code,cost,default_supplier_id").order("name"),
       ])
-      setSuppliers((s.data as Supplier[]) || [])
+      setSuppliers(sups)
       setProducts((p.data as Product[]) || [])
     })()
   }, [])
@@ -127,7 +126,7 @@ function NewPOPage() {
         <select value={supplierId} onChange={e => setSupplierId(e.target.value)}
           className="sm:col-span-5 px-2 py-2 border border-gray-200 rounded text-sm bg-white">
           <option value="">選択してください</option>
-          {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {suppliers.map(s => <option key={s.id} value={s.id}>{supplierOptionLabel(s)}</option>)}
         </select>
         <label className="sm:col-span-1 text-xs font-bold text-gray-700">発注日</label>
         <input type="date" value={orderedAt} onChange={e => setOrderedAt(e.target.value)}

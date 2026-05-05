@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
+import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
 
 type Product = {
   id: string
@@ -16,7 +17,6 @@ type Product = {
   cost: number | null
   default_supplier_id?: string | null
 }
-type Supplier = { id: string; name: string }
 type OrderItem = { product_id: string | null; quantity: number; order_id: string }
 type Order = { id: string; status: string }
 
@@ -44,14 +44,14 @@ export default function SuggestPOPage() {
 
   async function fetchData() {
     setLoading(true)
-    const [p, s, oi, o] = await Promise.all([
+    const [p, sups, oi, o] = await Promise.all([
       supabase.from("products").select("id,name,product_code,manufacturer,stock,reorder_level,cost,default_supplier_id"),
-      supabase.from("suppliers").select("id,name").order("name"),
+      fetchSuppliersByUsage("id,name"),
       supabase.from("order_items").select("product_id,quantity,order_id"),
       supabase.from("orders").select("id,status").not("status", "in", '("納品済み","キャンセル")'),
     ])
     const products = (p.data as Product[]) || []
-    setSuppliers((s.data as Supplier[]) || [])
+    setSuppliers(sups)
     const orders = (o.data as Order[]) || []
     const orderIds = new Set(orders.map(o => o.id))
     const items = ((oi.data as OrderItem[]) || []).filter(i => i.order_id && orderIds.has(i.order_id))
@@ -221,7 +221,7 @@ export default function SuggestPOPage() {
                       onChange={e => update(realIdx, { supplierOverride: e.target.value })}
                       className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs">
                       <option value="">(未設定)</option>
-                      {suppliers.map(sup => <option key={sup.id} value={sup.id}>{sup.name}</option>)}
+                      {suppliers.map(sup => <option key={sup.id} value={sup.id}>{supplierOptionLabel(sup)}</option>)}
                     </select>
                   </td>
                 </tr>
