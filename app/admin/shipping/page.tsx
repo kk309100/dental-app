@@ -316,22 +316,46 @@ export default function ShippingPage() {
                           </span>
                           <span className="text-xs font-bold tabular-nums">{fmtYen(o.total_price)}</span>
                         </div>
-                        <div className="ml-6 grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+                        <div className="ml-6">
                           {its.map(it => {
                             const stock = it.product_id ? Number(productById.get(it.product_id)?.stock || 0) : 0
                             const enough = stock >= Number(it.quantity)
                             const loc = it.product_id ? productById.get(it.product_id)?.location : null
+                            const noPrice = !it.price || Number(it.price) === 0
                             return (
-                              <div key={it.id} className="flex items-center text-[11px] py-0.5">
+                              <div key={it.id} className={"flex items-center text-[11px] py-0.5 " + (noPrice ? "bg-amber-50" : "")}>
                                 {loc && <span className="font-mono text-gray-500 w-12">[{loc}]</span>}
                                 <span className="flex-1 truncate">{it.product_name || "(商品名なし)"}</span>
                                 <span className="tabular-nums w-8 text-right">×{it.quantity}</span>
+                                {noPrice ? (
+                                  <input
+                                    type="number"
+                                    defaultValue={0}
+                                    placeholder="単価"
+                                    onBlur={async (e) => {
+                                      const v = Number(e.target.value)
+                                      if (v > 0) {
+                                        await supabase.from("order_items").update({ price: v }).eq("id", it.id)
+                                        // total_price も再計算
+                                        const sum = its.reduce((s, x) => s + Number(x.price || (x.id === it.id ? v : 0)) * Number(x.quantity || 0), 0)
+                                        await supabase.from("orders").update({ total_price: sum }).eq("id", o.id)
+                                        fetchData()
+                                      }
+                                    }}
+                                    className="w-20 ml-2 px-1 py-0.5 border border-amber-400 rounded text-right text-[11px] bg-white"
+                                  />
+                                ) : (
+                                  <span className="tabular-nums w-20 ml-2 text-right text-gray-700">¥{Number(it.price).toLocaleString()}</span>
+                                )}
                                 <span className={"tabular-nums w-16 text-right " + (enough ? "text-gray-500" : "text-red-600 font-bold")}>
                                   在庫{stock}
                                 </span>
                               </div>
                             )
                           })}
+                          {its.some(it => !it.price || Number(it.price) === 0) && (
+                            <p className="ml-2 text-[10px] text-amber-700 font-bold mt-1">⚠ 単価0円の商品があります。納品書発行前に必ず単価を入力してください（黄色の入力欄）</p>
+                          )}
                         </div>
                       </div>
                     )

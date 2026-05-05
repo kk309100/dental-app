@@ -354,8 +354,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
         )}
         {missingNameCount > 0 && (
           <p className="no-print" style={{ fontSize: 11, color: "#92400e", background: "#fef3c7", padding: "6px 10px", borderRadius: 4, margin: "0 0 8px" }}>
-            商品名が記録されていない明細が {missingNameCount} 件あります（旧データ）。
-            下の表の「商品名を入力」ボタンで商品名を入れてください。同じ商品IDの全明細に反映されます。
+            ⚠ 商品名が無い明細が {missingNameCount} 件あります（旧 dental-order データの欠損）。
+            請求書発行後の修正は基本不可ですが、明細の <Link href="/admin/orders" style={{ color: "#1d4ed8", textDecoration: "underline" }}>元の注文</Link> から商品名を補完すれば反映されます。
           </p>
         )}
         <table style={table}>
@@ -371,17 +371,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
               <tr><td colSpan={3} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
             ) : itemSummary.map((it, i) => (
               <tr key={i}>
-                <td style={td}>
-                  {it.name}
-                  {it.missingProductId && (
-                    <button
-                      className="no-print"
-                      onClick={() => openNameModal(it.missingProductId!)}
-                      style={{ marginLeft: 8, padding: "4px 10px", fontSize: 11, background: "#dc2626", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 700 }}
-                      title="商品名を入力（同じ商品IDの全明細に反映）"
-                    >＋商品名を入力</button>
-                  )}
-                </td>
+                <td style={td}>{it.name}</td>
                 <td style={{ ...td, textAlign: "right" }}>{it.qty}</td>
                 <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.amount)}</td>
               </tr>

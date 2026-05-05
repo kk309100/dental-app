@@ -82,6 +82,7 @@ export default function AdminHomePage() {
             { href: "/admin/bank-import", label: "📥 銀行CSV消込" },
             { href: "/admin/delivery-search", label: "納品書検索" },
             { href: "/admin/orders?status=delivered", label: "納品済み一覧" },
+            { href: "/admin/simulation", label: "📊 シミュレーション" },
           ].map((l: { href: string; label: string; featured?: boolean }) => (
             <Link key={l.href} href={l.href}
               className={"px-3 py-1.5 rounded-full border " + (l.featured ? "bg-gray-900 text-white border-gray-900 hover:bg-gray-700" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900")}>
