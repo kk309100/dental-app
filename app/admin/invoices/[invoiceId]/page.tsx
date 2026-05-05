@@ -55,6 +55,16 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
   const [paidNote, setPaidNote] = useState("")
   const [payments, setPayments] = useState<Payment[]>([])
 
+  // 商品名入力モーダル
+  const [nameModal, setNameModal] = useState<{ productId: string; current: { quantity: number; price: number } | null } | null>(null)
+  const [nameInput, setNameInput] = useState("")
+  const [allProducts, setAllProducts] = useState<{ id: string; name: string; price: number | null; product_code: string | null }[]>([])
+  useEffect(() => {
+    supabase.from("products").select("id,name,price,product_code").then(({ data }) => {
+      if (data) setAllProducts(data)
+    })
+  }, [])
+
   useEffect(() => { fetchData() }, [invoiceId])
 
   async function fetchData() {
@@ -135,18 +145,31 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
   // 商品名が null の明細件数（警告表示用）
   const missingNameCount = useMemo(() => items.filter((it) => !it.product_name).length, [items])
 
-  // 商品名を一括設定（product_id がマッチする全 order_items を更新）
-  async function nameMissingProduct(productId: string) {
+  // 商品名入力モーダルを開く
+  function openNameModal(productId: string) {
     const current = items.find(it => it.product_id === productId)
-    const example = current ? `数量${current.quantity} × ¥${current.price}` : ""
-    const name = window.prompt(`この商品（${example}）の商品名を入力してください。\n同じ商品ID(${productId.slice(0, 8)})の全明細に反映されます。`)
-    if (!name || !name.trim()) return
+    setNameModal({ productId, current: current ? { quantity: current.quantity, price: current.price } : null })
+    setNameInput("")
+  }
+
+  // 商品名を一括設定（product_id がマッチする全 order_items を更新）
+  async function saveProductName(productId: string, name: string) {
+    if (!name.trim()) { alert("商品名を入力してください"); return }
     const { error } = await supabase.from("order_items")
       .update({ product_name: name.trim() })
       .eq("product_id", productId)
       .is("product_name", null)
     if (error) { alert("更新失敗: " + error.message); return }
+    setNameModal(null)
+    setNameInput("")
     fetchData()
+  }
+
+  // 単価から類似商品候補（±5%以内）
+  function similarProducts(price: number) {
+    if (!price) return []
+    const tolerance = price * 0.05
+    return allProducts.filter(p => p.price && Math.abs(p.price - price) <= tolerance).slice(0, 10)
   }
 
   // 適格請求書（インボイス）要件チェック
@@ -331,8 +354,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
         )}
         {missingNameCount > 0 && (
           <p className="no-print" style={{ fontSize: 11, color: "#92400e", background: "#fef3c7", padding: "6px 10px", borderRadius: 4, margin: "0 0 8px" }}>
-            ⚠ 商品名が記録されていない明細が {missingNameCount} 件あります（旧データ）。
-            下の表の「✏」ボタンで商品名を入力してください（同じ商品IDの全明細に反映されます）。
+            商品名が記録されていない明細が {missingNameCount} 件あります（旧データ）。
+            下の表の「商品名を入力」ボタンで商品名を入れてください。同じ商品IDの全明細に反映されます。
           </p>
         )}
         <table style={table}>
@@ -353,10 +376,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
                   {it.missingProductId && (
                     <button
                       className="no-print"
-                      onClick={() => nameMissingProduct(it.missingProductId!)}
-                      style={{ marginLeft: 8, padding: "2px 8px", fontSize: 10, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", borderRadius: 4, cursor: "pointer" }}
+                      onClick={() => openNameModal(it.missingProductId!)}
+                      style={{ marginLeft: 8, padding: "4px 10px", fontSize: 11, background: "#dc2626", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 700 }}
                       title="商品名を入力（同じ商品IDの全明細に反映）"
-                    >✏ 商品名を入力</button>
+                    >＋商品名を入力</button>
                   )}
                 </td>
                 <td style={{ ...td, textAlign: "right" }}>{it.qty}</td>
@@ -440,6 +463,57 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
       </div>
 
       {/* 入金確認モーダル（部分入金対応） */}
+      {/* 商品名入力モーダル */}
+      {nameModal && (
+        <div style={overlay} onClick={() => setNameModal(null)} className="no-print">
+          <div style={{ ...modal, maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>商品名を入力</h2>
+            <div style={{ background: "#f8fafc", padding: 10, borderRadius: 6, marginBottom: 12, fontSize: 12 }}>
+              <p style={{ margin: 0 }}>商品ID: <code style={{ fontSize: 10, color: "#666" }}>{nameModal.productId.slice(0, 8)}...</code></p>
+              {nameModal.current && (
+                <p style={{ margin: "4px 0 0" }}>明細例: 数量 <strong>{nameModal.current.quantity}</strong> × 単価 <strong>¥{nameModal.current.price.toLocaleString()}</strong></p>
+              )}
+            </div>
+
+            {nameModal.current && nameModal.current.price > 0 && similarProducts(nameModal.current.price).length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <p style={{ fontSize: 11, color: "#777", margin: "0 0 6px" }}>商品マスタの単価が近い候補（クリックで選択）:</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 200, overflowY: "auto" }}>
+                  {similarProducts(nameModal.current.price).map(p => (
+                    <button key={p.id} onClick={() => setNameInput(p.name)}
+                      style={{ padding: "6px 10px", fontSize: 12, textAlign: "left", background: "#fff", border: "1px solid #ddd", borderRadius: 4, cursor: "pointer" }}>
+                      <strong>{p.name}</strong>
+                      <span style={{ marginLeft: 8, color: "#777", fontSize: 10 }}>{p.product_code} ¥{p.price?.toLocaleString()}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <label style={{ fontSize: 11, color: "#777" }}>商品名</label>
+            <input
+              autoFocus
+              value={nameInput}
+              onChange={e => setNameInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && nameInput.trim()) saveProductName(nameModal.productId, nameInput)
+                if (e.key === "Escape") setNameModal(null)
+              }}
+              placeholder="例: アルコール綿球 100入"
+              style={{ ...modalInput, fontSize: 14, padding: "10px 12px" }}
+            />
+            <p style={{ fontSize: 10, color: "#999", margin: "0 0 12px" }}>
+              ※ 同じ商品ID（{nameModal.productId.slice(0, 8)}...）の全明細に一括反映されます
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => saveProductName(nameModal.productId, nameInput)}
+                disabled={!nameInput.trim()} style={btnGreen}>保存</button>
+              <button onClick={() => setNameModal(null)} style={btnGray}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPaidModal && (
         <div style={overlay} onClick={() => setShowPaidModal(false)} className="no-print">
           <div style={modal} onClick={(e) => e.stopPropagation()}>

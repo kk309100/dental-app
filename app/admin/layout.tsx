@@ -8,9 +8,10 @@ import UserBadge from "@/app/components/UserBadge"
 
 const NAV = [
   { id: "home", href: "/admin", label: "HOME", icon: Ic.dash, exact: true },
-  { id: "receiving", href: "/admin/receiving", label: "仕入", icon: Ic.purchase },
-  { id: "purchase-orders", href: "/admin/purchase-orders", label: "発注", icon: Ic.truck },
+  // 業務フロー順: 注文 → 発注 → 仕入 → 納品 → 請求
   { id: "orders", href: "/admin/orders", label: "注文", icon: Ic.order },
+  { id: "purchase-orders", href: "/admin/purchase-orders", label: "発注", icon: Ic.truck },
+  { id: "receiving", href: "/admin/receiving", label: "仕入", icon: Ic.purchase },
   { id: "shipping", href: "/admin/shipping", label: "納品", icon: Ic.doc },
   { id: "invoices", href: "/admin/invoices", label: "請求", icon: Ic.sales },
   { id: "inventory", href: "/admin/inventory", label: "在庫", icon: Ic.product },

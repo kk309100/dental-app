@@ -61,14 +61,14 @@ export default function QuotesPage() {
 
   return (
     <main style={page}>
-      {/* 見積 / 注文 サブタブ */}
+      {/* 注文 / 見積 サブタブ */}
       <div style={{ display: "flex", alignItems: "center", gap: 4, borderBottom: "1px solid #e5e7eb", marginBottom: 16 }}>
-        <div style={{ padding: "8px 16px", fontSize: 13, fontWeight: 700, color: "#111", borderBottom: "2px solid #6366f1", marginBottom: -1 }}>
-          📋 見積
-        </div>
         <Link href="/admin/orders" style={{ padding: "8px 16px", fontSize: 13, color: "#6b7280", textDecoration: "none" }}>
           🛒 注文
         </Link>
+        <div style={{ padding: "8px 16px", fontSize: 13, fontWeight: 700, color: "#111", borderBottom: "2px solid #6366f1", marginBottom: -1 }}>
+          📋 見積
+        </div>
       </div>
 
       <div style={header}>

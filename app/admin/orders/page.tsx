@@ -214,14 +214,14 @@ function AdminOrdersPage() {
 
   return (
     <div className="space-y-2">
-      {/* 見積 / 注文 サブタブ */}
+      {/* 注文 / 見積 サブタブ */}
       <div className="flex items-center gap-1 border-b border-gray-200 mb-2">
-        <Link href="/admin/quotes" className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-t">
-          📋 見積
-        </Link>
         <div className="px-4 py-2 text-sm font-bold text-gray-900 border-b-2 border-emerald-500 -mb-px">
           🛒 注文
         </div>
+        <Link href="/admin/quotes" className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-t">
+          📋 見積
+        </Link>
       </div>
 
       <div className="flex items-center flex-wrap gap-2">
@@ -268,39 +268,51 @@ function AdminOrdersPage() {
         </select>
       </div>
 
-      {/* バルクアクション: 業務フロー順（見積→注文→納品） */}
-      {selectedOrderIds.size > 0 && (
-        <div className="bg-blue-50 rounded-lg p-2 flex items-center gap-2 text-xs flex-wrap" style={{ border: "1px solid #c7d2fe" }}>
-          <span className="font-bold text-blue-900">{selectedOrderIds.size}件選択中</span>
-          <button
-            onClick={() => {
-              const ids = Array.from(selectedOrderIds)
-              if (ids.length === 1) {
-                window.location.href = `/admin/quotes/create?from_order=${ids[0]}`
-              } else {
-                if (!confirm(`${ids.length}件を1つの見積書にまとめて作成します。よろしいですか？\n（最初の1件の医院を採用、複数医院は警告）`)) return
-                window.location.href = `/admin/quotes/create?from_orders=${ids.join(",")}`
-              }
-            }}
-            className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded font-bold"
-          >📋 見積書作成</button>
-          <button
-            onClick={() => bulkUpdate("準備中")}
-            className="px-3 py-1 bg-blue-600 text-white rounded font-bold"
-            title="注文として確定（出荷準備の段階に進める）"
-          >🛒 注文として確定</button>
-          <button
-            onClick={() => {
-              const ids = Array.from(selectedOrderIds)
-              window.location.href = `/admin/shipping?orders=${ids.join(",")}`
-            }}
-            className="px-3 py-1 bg-emerald-600 text-white rounded font-bold"
-            title="出荷準備ページで納品書を発行"
-          >📄 納品書作成</button>
-          <button onClick={() => bulkUpdate("キャンセル")} className="px-3 py-1 bg-gray-400 text-white rounded">キャンセル</button>
-          <button onClick={() => setSelectedOrderIds(new Set())} className="ml-auto text-gray-500 underline">選択解除</button>
-        </div>
-      )}
+      {/* バルクアクション: 業務フロー順（見積→納品 + 不足発注） */}
+      {selectedOrderIds.size > 0 && (() => {
+        const ids = Array.from(selectedOrderIds)
+        // 選択された注文すべての在庫不足品をカウント
+        const selectedShort = ids.reduce((sum, oid) => sum + stockState(oid).short, 0)
+        const selectedItems = ids.reduce((sum, oid) => sum + (itemsByOrder.get(oid)?.length || 0), 0)
+        const selectedOk = selectedItems - selectedShort
+        return (
+          <div className="bg-blue-50 rounded-lg p-2 flex items-center gap-2 text-xs flex-wrap" style={{ border: "1px solid #c7d2fe" }}>
+            <span className="font-bold text-blue-900">{selectedOrderIds.size}件選択中</span>
+            <span className="text-[10px] text-gray-600">
+              在庫: <span className="text-emerald-700 font-bold">🟢{selectedOk}</span> / <span className={selectedShort > 0 ? "text-red-600 font-bold" : "text-gray-400"}>🔴{selectedShort}不足</span>
+            </span>
+            <button
+              onClick={() => {
+                if (ids.length === 1) {
+                  window.location.href = `/admin/quotes/create?from_order=${ids[0]}`
+                } else {
+                  if (!confirm(`${ids.length}件を1つの見積書にまとめて作成します。よろしいですか？`)) return
+                  window.location.href = `/admin/quotes/create?from_orders=${ids.join(",")}`
+                }
+              }}
+              className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded font-bold"
+            >📋 見積書作成</button>
+            {selectedShort > 0 && (
+              <button
+                onClick={() => {
+                  window.location.href = `/admin/purchase-orders/suggest?from_orders=${ids.join(",")}`
+                }}
+                className="px-3 py-1 bg-amber-500 text-white rounded font-bold"
+                title="在庫不足の商品を仕入先へ発注"
+              >🛒 不足分を発注 ({selectedShort})</button>
+            )}
+            <button
+              onClick={() => {
+                window.location.href = `/admin/shipping?orders=${ids.join(",")}`
+              }}
+              className="px-3 py-1 bg-emerald-600 text-white rounded font-bold"
+              title="出荷準備ページで納品書を発行"
+            >📄 納品書作成</button>
+            <button onClick={() => bulkUpdate("キャンセル")} className="px-3 py-1 bg-gray-400 text-white rounded">キャンセル</button>
+            <button onClick={() => setSelectedOrderIds(new Set())} className="ml-auto text-gray-500 underline">選択解除</button>
+          </div>
+        )
+      })()}
 
       {/* 医院別ビュー */}
       {view === "byClinic" && (
@@ -312,6 +324,12 @@ function AdminOrdersPage() {
             const open = openClinicIds.has(clinicId)
             const total = clinicOrders.reduce((s, o) => s + (o.total_price || 0), 0)
             const undelivered = clinicOrders.filter((o) => !["納品済み", "キャンセル"].includes(o.status)).length
+            // 在庫サマリ（未納品の注文のみ集計）
+            const undeliveredOrders = clinicOrders.filter((o) => !["納品済み", "キャンセル"].includes(o.status))
+            const stockSummary = undeliveredOrders.reduce((s, o) => {
+              const ss = stockState(o.id)
+              return { ok: s.ok + ss.ok, short: s.short + ss.short }
+            }, { ok: 0, short: 0 })
             const allSelected = clinicOrders.every((o) => selectedOrderIds.has(o.id))
             const someSelected = clinicOrders.some((o) => selectedOrderIds.has(o.id))
             return (
@@ -329,6 +347,26 @@ function AdminOrdersPage() {
                   <span className="font-bold text-gray-900">{clinic?.name || "医院不明"}</span>
                   <span className="text-xs text-gray-500">{clinicOrders.length}件</span>
                   {undelivered > 0 && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">未納品 {undelivered}</span>}
+                  {undelivered > 0 && (stockSummary.ok > 0 || stockSummary.short > 0) && (
+                    <span className="text-[10px] flex items-center gap-1">
+                      <span className="text-emerald-700 font-bold">🟢{stockSummary.ok}</span>
+                      {stockSummary.short > 0 && (
+                        <span className="text-red-600 font-bold">🔴{stockSummary.short}不足</span>
+                      )}
+                    </span>
+                  )}
+                  {/* 医院単位で「不足分を発注」ボタン */}
+                  {stockSummary.short > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const ids = undeliveredOrders.map(o => o.id).join(",")
+                        window.location.href = `/admin/purchase-orders/suggest?from_orders=${ids}`
+                      }}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500 text-white hover:bg-amber-600"
+                      title="この医院の不足分を発注"
+                    >🛒 発注</button>
+                  )}
                   <div className="flex-1" />
                   <span className="text-sm font-bold text-gray-900">{fmtYen(total)}</span>
                 </div>

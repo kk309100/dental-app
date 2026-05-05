@@ -1,11 +1,19 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
+
+export default function SuggestPOPageWrapper() {
+  return (
+    <Suspense fallback={<p className="text-gray-400 text-center py-12">読み込み中…</p>}>
+      <SuggestPOPage />
+    </Suspense>
+  )
+}
 
 type Product = {
   id: string
@@ -32,8 +40,12 @@ type Suggestion = {
   supplierOverride?: string
 }
 
-export default function SuggestPOPage() {
+function SuggestPOPage() {
   const router = useRouter()
+  const sp = useSearchParams()
+  const fromOrders = sp.get("from_orders")?.split(",").filter(Boolean) || []
+  const fromOrder = sp.get("from_order")
+  const sourceOrderIds = fromOrder ? [fromOrder] : fromOrders
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,8 +75,19 @@ export default function SuggestPOPage() {
       reserved.set(i.product_id, (reserved.get(i.product_id) || 0) + Number(i.quantity || 0))
     })
 
+    // ?from_orders=xxx,yyy が指定されたら、そのオーダーに含まれる product_id だけ表示
+    const fromOrderProductIds = new Set<string>()
+    if (sourceOrderIds.length > 0) {
+      ((oi.data as OrderItem[]) || [])
+        .filter(i => i.order_id && sourceOrderIds.includes(i.order_id) && i.product_id)
+        .forEach(i => fromOrderProductIds.add(i.product_id as string))
+    }
+
     const list: Suggestion[] = []
     products.forEach(p => {
+      // from_orders 指定時はそれに含まれる商品だけ
+      if (sourceOrderIds.length > 0 && !fromOrderProductIds.has(p.id)) return
+
       const stock = Number(p.stock || 0)
       const reorderLv = Number(p.reorder_level || 0)
       const reservedQty = reserved.get(p.id) || 0
@@ -73,16 +96,17 @@ export default function SuggestPOPage() {
       const shortBy = Math.max(0, (reorderLv + reservedQty) - stock)
       // 提案数: 不足量が0でも reorderLv より下回ってたら半月分くらい補充。シンプルに shortBy + reorderLv で発注。
       const suggestQty = shortBy > 0 ? Math.max(shortBy, Math.ceil(reorderLv * 0.5)) : 0
-      if (suggestQty > 0 || effectiveStock < 0) {
+      // from_orders 指定時は不足してなくても表示（ユーザーが選んで発注できる）
+      if (sourceOrderIds.length > 0 || suggestQty > 0 || effectiveStock < 0) {
         list.push({
           product: p,
           systemStock: stock,
           reorderLevel: reorderLv,
           reservedQty,
-          shortBy: Math.max(shortBy, -effectiveStock),
-          suggestQty: Math.max(suggestQty, -effectiveStock, 1),
+          shortBy: Math.max(shortBy, -effectiveStock, 0),
+          suggestQty: Math.max(suggestQty, -effectiveStock, sourceOrderIds.length > 0 ? 1 : 0, 1),
           unitPrice: Number(p.cost || 0),
-          selected: true,
+          selected: shortBy > 0 || effectiveStock < 0,
         })
       }
     })
