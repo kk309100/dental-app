@@ -39,7 +39,20 @@ export async function fetchSuppliersByUsage(fields = "id,name"): Promise<Supplie
     usage_count: usage.get(s.id)?.count || 0,
     last_used_at: usage.get(s.id)?.lastAt || null,
   }))
+  // 主力仕入先のキーワード（名前に含まれていれば最上位に固定）
+  const PINNED_KEYWORDS = ["リンク", "ササキ", "イシダ"]
+  const isPinned = (name: string) => PINNED_KEYWORDS.some(kw => name.includes(kw))
+
   return list.sort((a, b) => {
+    const ap = isPinned(a.name) ? 1 : 0
+    const bp = isPinned(b.name) ? 1 : 0
+    if (ap !== bp) return bp - ap
+    // ピン留め同士は PINNED_KEYWORDS の順序で
+    if (ap === 1) {
+      const ai = PINNED_KEYWORDS.findIndex(kw => a.name.includes(kw))
+      const bi = PINNED_KEYWORDS.findIndex(kw => b.name.includes(kw))
+      if (ai !== bi) return ai - bi
+    }
     if ((b.usage_count || 0) !== (a.usage_count || 0)) return (b.usage_count || 0) - (a.usage_count || 0)
     if ((b.last_used_at || "") !== (a.last_used_at || "")) return (b.last_used_at || "").localeCompare(a.last_used_at || "")
     return a.name.localeCompare(b.name, "ja")

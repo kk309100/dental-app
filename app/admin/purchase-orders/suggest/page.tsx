@@ -327,21 +327,19 @@ function SuggestPOPage() {
           <thead className="bg-gray-100 sticky top-0">
             <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-center w-8"></th>
-              <th className="px-2 py-1.5 text-left">商品</th>
+              <th className="px-2 py-1.5 text-left" colSpan={2}>商品 / 過去仕入履歴（クリックで選択）</th>
               <th className="px-2 py-1.5 text-right w-16">在庫</th>
-              <th className="px-2 py-1.5 text-right w-16">{sourceOrderIds.length > 0 ? "注文" : "予約"}</th>
-              <th className="px-2 py-1.5 text-right w-16">{sourceOrderIds.length > 0 ? "必要" : "発注点"}</th>
+              <th className="px-2 py-1.5 text-right w-16">{sourceOrderIds.length > 0 ? "必要" : "予約"}</th>
               <th className="px-2 py-1.5 text-right w-16">不足</th>
               <th className="px-2 py-1.5 text-right w-20">発注数</th>
               <th className="px-2 py-1.5 text-right w-24">単価</th>
               <th className="px-2 py-1.5 text-right w-24">小計</th>
-              <th className="px-2 py-1.5 text-left w-44">仕入先</th>
-              <th className="px-2 py-1.5 text-left w-32">納品先</th>
+              <th className="px-2 py-1.5 text-left w-40">納品先 / 仕入先</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={11} className="px-4 py-6 text-center text-gray-400">不足商品なし 🎉</td></tr>
+              <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">不足商品なし 🎉</td></tr>
             ) : filtered.map((s, idx) => {
               const realIdx = suggestions.indexOf(s)
               const history = historyByProduct.get(s.product.id) || []
@@ -349,25 +347,48 @@ function SuggestPOPage() {
               return (
                 <>
                   <tr key={s.product.id} className={"border-b border-gray-100 " + (idx % 2 === 0 ? "" : "bg-gray-50/30")}>
-                    <td className="px-2 py-1 text-center">
+                    <td className="px-2 py-1 text-center align-top pt-3">
                       <input type="checkbox" checked={s.selected} onChange={e => update(realIdx, { selected: e.target.checked })} />
                     </td>
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1" colSpan={2}>
+                      {/* 商品名 */}
                       <div className="font-bold text-gray-900">{s.product.name}</div>
-                      <div className="text-[10px] text-gray-500 flex items-center gap-2">
-                        <span>{s.product.product_code || ""} {s.product.manufacturer || ""}</span>
-                        {history.length > 0 && (
-                          <button
-                            onClick={() => setOpenHistoryProductId(isHistoryOpen ? null : s.product.id)}
-                            className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
-                            title="過去の仕入履歴"
-                          >📜 履歴 {history.length}</button>
-                        )}
+                      <div className="text-[10px] text-gray-500 mb-1.5">
+                        {s.product.product_code || ""} {s.product.manufacturer || ""}
                       </div>
+                      {/* 過去仕入候補（常時表示・クリックで選択） */}
+                      {history.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {history.slice(0, 8).map(h => {
+                            const sup = suppliers.find(x => x.id === h.supplier_id)
+                            const isSelected = (s.supplierOverride === h.supplier_id) && (s.unitPrice === Number(h.unit_price || 0))
+                            return (
+                              <button
+                                key={h.id}
+                                onClick={() => update(realIdx, {
+                                  supplierOverride: h.supplier_id || undefined,
+                                  unitPrice: Number(h.unit_price || 0),
+                                })}
+                                className={"text-[10px] px-2 py-1 border rounded hover:bg-emerald-100 " +
+                                  (isSelected ? "bg-emerald-100 border-emerald-400 ring-1 ring-emerald-400" : "bg-white border-gray-200")}
+                                title={`${sup?.name || "(未設定)"} ¥${Number(h.unit_price || 0).toLocaleString()} / ${new Date(h.created_at).toLocaleDateString("ja-JP")}`}
+                              >
+                                <span className="font-bold text-gray-900">{sup?.name || "(未設定)"}</span>
+                                <span className="ml-1.5 text-emerald-700 font-bold">¥{Number(h.unit_price || 0).toLocaleString()}</span>
+                                <span className="ml-1 text-gray-400">{new Date(h.created_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}</span>
+                              </button>
+                            )
+                          })}
+                          {history.length > 8 && (
+                            <span className="text-[10px] text-gray-400 px-1.5 py-1">他 {history.length - 8} 件</span>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-gray-400">過去仕入履歴なし</div>
+                      )}
                     </td>
                     <td className={"px-2 py-1 text-right tabular-nums " + (s.systemStock <= 0 ? "text-red-600 font-bold" : "text-gray-700")}>{s.systemStock}</td>
                     <td className="px-2 py-1 text-right tabular-nums text-gray-500">{s.reservedQty || "—"}</td>
-                    <td className="px-2 py-1 text-right tabular-nums text-gray-500">{s.reorderLevel || "—"}</td>
                     <td className="px-2 py-1 text-right tabular-nums text-amber-700 font-bold">{s.shortBy || "—"}</td>
                     <td className="px-2 py-1">
                       <input type="number" value={s.suggestQty} onChange={e => update(realIdx, { suggestQty: Number(e.target.value) })}
@@ -378,14 +399,6 @@ function SuggestPOPage() {
                         className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs text-right" min={0} />
                     </td>
                     <td className="px-2 py-1 text-right tabular-nums font-bold">{fmtYen(s.suggestQty * s.unitPrice)}</td>
-                    <td className="px-2 py-1">
-                      <select value={s.supplierOverride || s.product.default_supplier_id || ""}
-                        onChange={e => update(realIdx, { supplierOverride: e.target.value })}
-                        className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs">
-                        <option value="">(未設定)</option>
-                        {suppliers.map(sup => <option key={sup.id} value={sup.id}>{supplierOptionLabel(sup)}</option>)}
-                      </select>
-                    </td>
                     <td className="px-2 py-1">
                       <select value={s.deliveryTarget || "stock"}
                         onChange={e => {
@@ -400,9 +413,16 @@ function SuggestPOPage() {
                           {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </optgroup>
                       </select>
+                      {/* 仕入先（小さく表示・編集可） */}
+                      <select value={s.supplierOverride || s.product.default_supplier_id || ""}
+                        onChange={e => update(realIdx, { supplierOverride: e.target.value })}
+                        className="w-full mt-0.5 px-1.5 py-0.5 border border-gray-200 rounded text-[10px] bg-blue-50/30">
+                        <option value="">仕入先(未設定)</option>
+                        {suppliers.map(sup => <option key={sup.id} value={sup.id}>{supplierOptionLabel(sup)}</option>)}
+                      </select>
                     </td>
                   </tr>
-                  {isHistoryOpen && history.length > 0 && (
+                  {false && isHistoryOpen && history.length > 0 && (
                     <tr className="bg-blue-50/30 border-b border-gray-100">
                       <td colSpan={11} className="px-4 py-2">
                         <p className="text-[10px] font-bold text-gray-500 mb-1">過去の仕入履歴（クリックで仕入先・単価セット）</p>
