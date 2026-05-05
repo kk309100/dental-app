@@ -105,22 +105,21 @@ function BulkPrint() {
             <p style={{ margin: "16px 0 6px", fontSize: 11, color: "#666" }}>
               発行日: {fmtDate(inv.issue_date)}　お支払期限: {inv.due_date ? fmtDate(inv.due_date) : "—"}
             </p>
-            <div style={{ position: "relative", margin: "12px 0" }}>
-              <div style={{ background: "#f9fafb", border: "1px solid #ddd", borderRadius: 4, padding: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 14 }}>ご請求金額（税込）</span>
-                  <span style={{ fontSize: 28, fontWeight: 800 }}>{fmtYen(inv.total)}</span>
-                </div>
-              </div>
-              {cl?.payment_method === "カード" && (
+            {cl?.payment_method === "カード" && (
+              <div style={{ marginTop: 8 }}>
                 <div style={{
-                  position: "absolute", top: -8, right: 16,
-                  padding: "8px 18px", border: "3px double #dc2626", color: "#dc2626",
-                  fontWeight: 800, fontSize: 18, letterSpacing: "0.15em",
-                  transform: "rotate(-8deg)", background: "rgba(255,255,255,0.9)",
-                  borderRadius: 6, boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-                }}>カード決済</div>
-              )}
+                  display: "inline-block",
+                  padding: "6px 16px", border: "2px solid #dc2626", color: "#dc2626",
+                  fontWeight: 700, fontSize: 14, letterSpacing: "0.15em",
+                  background: "rgba(255,255,255,0.9)", borderRadius: 4,
+                }}>💳 カード決済</div>
+              </div>
+            )}
+            <div style={{ background: "#f9fafb", border: "1px solid #ddd", borderRadius: 4, padding: 16, margin: "12px 0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 14 }}>ご請求金額（税込）</span>
+                <span style={{ fontSize: 28, fontWeight: 800 }}>{fmtYen(inv.total)}</span>
+              </div>
             </div>
             <p style={{ fontSize: 11, color: "#666", margin: "16px 0 6px" }}>下記のとおりご請求申し上げます。</p>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
