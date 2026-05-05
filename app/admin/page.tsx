@@ -83,6 +83,7 @@ export default function AdminHomePage() {
             { href: "/admin/stocktakes", label: "棚卸" },
             { href: "/admin/stock-movements", label: "在庫履歴" },
             { href: "/admin/audit-logs", label: "監査ログ" },
+            { href: "/admin/settings", label: "⚙ 自社情報設定" },
             { href: "/admin/products", label: "商品マスタ" },
             { href: "/admin/delivery-search", label: "納品書検索" },
             { href: "/admin/delivered", label: "納品済み一覧" },
