@@ -60,11 +60,9 @@ export async function fetchSuppliersByUsage(fields = "id,name"): Promise<Supplie
 }
 
 /**
- * select option 用にラベルを生成（例: "リンク (12回・5/3)"）
+ * select option 用ラベル。シンプルに名前だけ。
+ * (使用頻度・最終使用日は内部ソートのみに使い、表示には出さない)
  */
 export function supplierOptionLabel(s: Supplier): string {
-  const cnt = s.usage_count || 0
-  if (cnt === 0) return s.name
-  const last = s.last_used_at ? new Date(s.last_used_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" }) : ""
-  return `${s.name}  (${cnt}回${last ? "・" + last : ""})`
+  return s.name
 }

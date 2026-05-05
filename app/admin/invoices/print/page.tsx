@@ -10,7 +10,7 @@ import Seal from "@/app/components/Seal"
 type Invoice = { id: string; clinic_id: string | null; invoice_number: string; issue_date: string; due_date: string | null; subtotal: number; tax: number; total: number; status: string; notes: string | null }
 type Order = { id: string; clinic_id: string; invoice_id: string | null }
 type Item = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
-type Clinic = { id: string; name: string; corporate_name: string | null; clinic_type: string | null; adress: string | null; phone: string | null }
+type Clinic = { id: string; name: string; corporate_name: string | null; clinic_type: string | null; adress: string | null; phone: string | null; payment_method?: string | null }
 type Product = { id: string; name: string }
 
 export default function BulkPrintWrapper() {
@@ -105,11 +105,22 @@ function BulkPrint() {
             <p style={{ margin: "16px 0 6px", fontSize: 11, color: "#666" }}>
               発行日: {fmtDate(inv.issue_date)}　お支払期限: {inv.due_date ? fmtDate(inv.due_date) : "—"}
             </p>
-            <div style={{ background: "#f9fafb", border: "1px solid #ddd", borderRadius: 4, padding: 16, margin: "12px 0" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 14 }}>ご請求金額（税込）</span>
-                <span style={{ fontSize: 28, fontWeight: 800 }}>{fmtYen(inv.total)}</span>
+            <div style={{ position: "relative", margin: "12px 0" }}>
+              <div style={{ background: "#f9fafb", border: "1px solid #ddd", borderRadius: 4, padding: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 14 }}>ご請求金額（税込）</span>
+                  <span style={{ fontSize: 28, fontWeight: 800 }}>{fmtYen(inv.total)}</span>
+                </div>
               </div>
+              {cl?.payment_method === "カード" && (
+                <div style={{
+                  position: "absolute", top: -8, right: 16,
+                  padding: "8px 18px", border: "3px double #dc2626", color: "#dc2626",
+                  fontWeight: 800, fontSize: 18, letterSpacing: "0.15em",
+                  transform: "rotate(-8deg)", background: "rgba(255,255,255,0.9)",
+                  borderRadius: 6, boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                }}>カード決済</div>
+              )}
             </div>
             <p style={{ fontSize: 11, color: "#666", margin: "16px 0 6px" }}>下記のとおりご請求申し上げます。</p>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>

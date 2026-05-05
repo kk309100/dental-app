@@ -28,6 +28,7 @@ type Clinic = {
   id: string; name: string; corporate_name: string | null
   contact: string | null; sales_rep: string | null; clinic_type: string | null
   adress: string | null; phone: string | null
+  payment_method?: string | null
 }
 type Order = { id: string; clinic_id: string; created_at: string; total_price: number; delivery_number: string | null; status: string; invoice_id: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
@@ -334,10 +335,29 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
           {invoice.due_date && <div><strong>お支払期限:</strong> {fmtDate(invoice.due_date)}</div>}
         </div>
 
-        {/* 合計強調ボックス */}
-        <div style={totalBox}>
-          <span style={{ fontSize: 13 }}>ご請求金額（税込）</span>
-          <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: "0.05em" }}>{fmtYen(invoice.total)}</span>
+        {/* 合計強調ボックス + カード決済スタンプ */}
+        <div style={{ position: "relative" }}>
+          <div style={totalBox}>
+            <span style={{ fontSize: 13 }}>ご請求金額（税込）</span>
+            <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: "0.05em" }}>{fmtYen(invoice.total)}</span>
+          </div>
+          {clinic?.payment_method === "カード" && (
+            <div style={{
+              position: "absolute", top: -8, right: 16,
+              padding: "8px 18px",
+              border: "3px double #dc2626",
+              color: "#dc2626",
+              fontWeight: 800,
+              fontSize: 18,
+              letterSpacing: "0.15em",
+              transform: "rotate(-8deg)",
+              background: "rgba(255,255,255,0.9)",
+              borderRadius: 6,
+              boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+            }}>
+              カード決済
+            </div>
+          )}
         </div>
 
         {/* 明細表 */}

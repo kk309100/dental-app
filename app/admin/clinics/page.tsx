@@ -17,6 +17,7 @@ type Clinic = {
   sales_rep?: string | null
   closing_day?: string | null
   clinic_type?: string | null
+  payment_method?: string | null
   created_at?: string
 }
 
@@ -30,6 +31,7 @@ type Form = {
   sales_rep: string
   closing_day: string
   clinic_type: string
+  payment_method: string
 }
 
 const empty: Form = {
@@ -42,6 +44,7 @@ const empty: Form = {
   sales_rep: "",
   closing_day: "月末",
   clinic_type: "",
+  payment_method: "振込",
 }
 
 const CLOSING_DAYS = ["月末", "20日", "15日", "10日", "5日", "その他"]
@@ -119,6 +122,7 @@ export default function AdminClinicsPage() {
       sales_rep: c.sales_rep || "",
       closing_day: c.closing_day || "月末",
       clinic_type: c.clinic_type || "",
+      payment_method: c.payment_method || "振込",
     })
     setEditId(c.id)
     setErrMsg("")
@@ -356,6 +360,21 @@ export default function AdminClinicsPage() {
                   style={fieldInput}
                 >
                   {CLINIC_TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
+                </select>
+              </div>
+
+              <div style={fieldWrap}>
+                <label style={fieldLabel}>決済方法（請求書にスタンプ表示）</label>
+                <select
+                  value={form.payment_method}
+                  onChange={(e) => setForm((f) => ({ ...f, payment_method: e.target.value }))}
+                  style={fieldInput}
+                >
+                  <option value="振込">振込</option>
+                  <option value="カード">カード（請求書に「カード決済」スタンプ）</option>
+                  <option value="現金">現金</option>
+                  <option value="口座引落">口座引落</option>
+                  <option value="その他">その他</option>
                 </select>
               </div>
 
