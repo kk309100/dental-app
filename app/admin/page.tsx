@@ -46,14 +46,12 @@ export default function AdminHomePage() {
   const buttons: ButtonItem[] = [
     { href: "/admin/receiving", label: "仕入", desc: "手入力・PDF読込", icon: Ic.purchase, color: "#7c3aed" },
     { href: "/admin/purchase-orders", label: "発注", desc: "発注書管理・自動提案", icon: Ic.truck, color: "#0891b2" },
-    { href: "/admin/orders", label: "注文", desc: "注文・見積一括管理", icon: Ic.order, color: "#3b82f6", badge: badges.pendingOrders, badgeLabel: "未処理" },
+    { href: "/admin/orders", label: "注文", desc: "注文管理（→見積も発行可）", icon: Ic.order, color: "#3b82f6", badge: badges.pendingOrders, badgeLabel: "未処理" },
     { href: "/admin/shipping", label: "納品", desc: "出荷準備→納品書発行→納品済", icon: Ic.doc, color: "#10b981", badge: badges.undeliveredCount, badgeLabel: "未納品" },
     { href: "/admin/invoices", label: "請求", desc: "請求書発行・入金", icon: Ic.sales, color: "#dc2626", badge: badges.unbilled || badges.unpaidInvoices, badgeLabel: badges.unbilled > 0 ? "未請求" : "未収" },
     { href: "/admin/sales", label: "売上", desc: "月次・医院・商品別分析", icon: Ic.sales, color: "#059669" },
     { href: "/admin/inventory", label: "在庫", desc: "在庫数・最低在庫", icon: Ic.product, color: "#d97706", badge: badges.lowStock, badgeLabel: "在庫不足" },
-    { href: "/admin/quotes", label: "見積", desc: "見積書発行・売上化", icon: Ic.doc, color: "#6366f1" },
     { href: "/admin/masters", label: "マスター", desc: "得意先・仕入先・商品・設定", icon: Ic.dash, color: "#475569" },
-    { href: "/admin/dashboard", label: "ダッシュ", desc: "KPIサマリ", icon: Ic.dash, color: "#1f2937" },
   ]
 
   return (
@@ -64,7 +62,7 @@ export default function AdminHomePage() {
       </div>
 
       {/* 大きなボタングリッド (mobile: 2col×5row / tablet: 3col / desktop: 5col×2row) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 max-w-6xl mx-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 max-w-6xl mx-auto">
         {buttons.map((b) => (
           <BigButton key={b.href} {...b} loading={loading} />
         ))}

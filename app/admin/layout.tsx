@@ -15,7 +15,6 @@ const NAV = [
   { id: "invoices", href: "/admin/invoices", label: "請求", icon: Ic.sales },
   { id: "inventory", href: "/admin/inventory", label: "在庫", icon: Ic.product },
   { id: "sales", href: "/admin/sales", label: "売上", icon: Ic.sales },
-  { id: "quotes", href: "/admin/quotes", label: "見積", icon: Ic.doc },
   { id: "masters", href: "/admin/masters", label: "マスター", icon: Ic.dash },
   // 一番右にダッシュボード
   { id: "dashboard", href: "/admin/dashboard", label: "📊 ダッシュ", icon: Ic.dash },
