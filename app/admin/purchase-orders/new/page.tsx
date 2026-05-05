@@ -6,6 +6,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
+import { COMPANY } from "@/lib/company"
 type Product = { id: string; name: string; product_code: string | null; cost: number | null; default_supplier_id?: string | null }
 type Row = { product_id: string | null; product_name: string; quantity: number; unit_price: number; note?: string }
 
@@ -31,6 +32,7 @@ function NewPOPage() {
   const [note, setNote] = useState("")
   const [rows, setRows] = useState<Row[]>([{ product_id: null, product_name: "", quantity: 1, unit_price: 0 }])
   const [saving, setSaving] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
 
   // 自動提案からのデータ
   useEffect(() => {
@@ -109,7 +111,12 @@ function NewPOPage() {
       note: r.note || null,
     }))
     const { error: ie } = await supabase.from("purchase_order_items").insert(items)
-    if (ie) { alert("明細作成失敗: " + ie.message); setSaving(false); return }
+    if (ie) {
+      // 明細失敗 → ヘッダもロールバック削除
+      await supabase.from("purchase_orders").delete().eq("id", po.id)
+      alert(`明細作成失敗: ${ie.message}\n\n発注書も取消しました。\n\n💡 RLS エラーの場合は db/migrations/2026-05-05_disable_rls_again.sql を Supabase Studio で実行してください。`)
+      setSaving(false); return
+    }
     alert(`発注書を${asDraft ? "下書き保存" : "発注済として作成"}しました（${poNumber}）`)
     router.push(`/admin/purchase-orders/${po.id}`)
   }
@@ -204,6 +211,10 @@ function NewPOPage() {
 
       <div className="flex items-center justify-end gap-2 pt-2">
         <Link href="/admin/purchase-orders" className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">キャンセル</Link>
+        <button onClick={() => setShowPreview(true)} disabled={!supplierId || rows.filter(r => r.product_name).length === 0}
+          className="px-4 py-2 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200 disabled:opacity-50">
+          🔍 プレビュー
+        </button>
         <button onClick={() => save(true)} disabled={saving}
           className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50">
           {saving ? "保存中…" : "下書き保存"}
@@ -213,6 +224,105 @@ function NewPOPage() {
           {saving ? "保存中…" : "✓ 発注書を発行"}
         </button>
       </div>
+
+      {/* プレビューモーダル */}
+      {showPreview && (() => {
+        const sup = suppliers.find(s => s.id === supplierId)
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowPreview(false)}>
+            <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="p-3 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
+                <h2 className="text-base font-bold">📄 発注書プレビュー</h2>
+                <div className="flex gap-2">
+                  <button onClick={() => window.print()} className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded">🖨 印刷</button>
+                  <button onClick={() => setShowPreview(false)} className="text-xs px-3 py-1.5 text-gray-500">閉じる</button>
+                </div>
+              </div>
+              <div className="p-8 print-area" style={{ color: "#222", fontSize: 12 }}>
+                <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
+                  <h1 style={{ fontSize: 28, letterSpacing: "0.3em", margin: "20px 0 4px", textAlign: "center" }}>発 注 書</h1>
+                  <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>(プレビュー)</p>
+                </header>
+                <div style={{ display: "flex", gap: 20, marginTop: 24 }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
+                      {sup?.name || "(仕入先未選択)"} 御中
+                    </p>
+                  </div>
+                  <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6 }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{COMPANY.name}</p>
+                    <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
+                    <p style={{ margin: 0 }}>{COMPANY.address}</p>
+                    <p style={{ margin: 0 }}>TEL {COMPANY.phone}</p>
+                    {COMPANY.fax && <p style={{ margin: 0 }}>FAX {COMPANY.fax}</p>}
+                  </div>
+                </div>
+                <table style={{ width: "100%", marginTop: 18, borderCollapse: "collapse", fontSize: 12 }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: "4px 8px", background: "#f9fafb", fontSize: 11, color: "#555", width: 80, borderRight: "1px solid #eee" }}>発注日</td>
+                      <td style={{ padding: "4px 8px", fontSize: 11, color: "#111", borderRight: "1px solid #eee" }}>{orderedAt ? new Date(orderedAt).toLocaleDateString("ja-JP") : "—"}</td>
+                      <td style={{ padding: "4px 8px", background: "#f9fafb", fontSize: 11, color: "#555", width: 80, borderRight: "1px solid #eee" }}>納期希望</td>
+                      <td style={{ padding: "4px 8px", fontSize: 11, color: "#111" }}>{expectedAt ? new Date(expectedAt).toLocaleDateString("ja-JP") : "—"}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ padding: "4px 8px", background: "#f9fafb", fontSize: 11, color: "#555", borderRight: "1px solid #eee" }}>送付方法</td>
+                      <td colSpan={3} style={{ padding: "4px 8px", fontSize: 11, color: "#111" }}>{sentMethod}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <table style={{ width: "100%", marginTop: 16, borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: "#f3f4f6" }}>
+                      <th style={{ padding: "6px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 11, color: "#555" }}>商品名</th>
+                      <th style={{ padding: "6px 8px", textAlign: "right", borderBottom: "2px solid #ddd", fontSize: 11, color: "#555", width: 60 }}>数量</th>
+                      <th style={{ padding: "6px 8px", textAlign: "right", borderBottom: "2px solid #ddd", fontSize: 11, color: "#555", width: 80 }}>単価</th>
+                      <th style={{ padding: "6px 8px", textAlign: "right", borderBottom: "2px solid #ddd", fontSize: 11, color: "#555", width: 90 }}>金額</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.filter(r => r.product_name).map((r, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
+                        <td style={{ padding: "6px 8px", fontSize: 12 }}>
+                          {r.product_name}
+                          {r.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{r.note}</p>}
+                        </td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", fontSize: 12 }}>{r.quantity}</td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", fontSize: 12 }}>{fmtYen(r.unit_price)}</td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", fontSize: 12, fontWeight: 700 }}>{fmtYen(Number(r.quantity) * Number(r.unit_price))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: "#f9fafb" }}>
+                      <td colSpan={3} style={{ padding: "6px 8px", textAlign: "right", fontSize: 12, fontWeight: 700 }}>合計</td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontSize: 14, fontWeight: 700 }}>{fmtYen(total)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+                {note && (
+                  <div style={{ marginTop: 16, padding: 10, background: "#f9fafb", borderRadius: 4, fontSize: 11, color: "#555" }}>
+                    備考: {note}
+                  </div>
+                )}
+              </div>
+              <div className="p-3 border-t border-gray-200 sticky bottom-0 bg-white flex items-center justify-end gap-2">
+                <button onClick={() => setShowPreview(false)} className="px-4 py-2 text-sm text-gray-600">閉じる</button>
+                <button onClick={() => { setShowPreview(false); save(false) }} disabled={saving || !supplierId}
+                  className="px-5 py-2 text-sm font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-gray-300">
+                  {saving ? "保存中…" : "✓ この内容で発注書を発行"}
+                </button>
+              </div>
+            </div>
+            <style jsx global>{`
+              @media print {
+                body > div:not(.print-keep) { display: none !important; }
+                .print-area { padding: 0 !important; }
+              }
+            `}</style>
+          </div>
+        )
+      })()}
     </div>
   )
 }

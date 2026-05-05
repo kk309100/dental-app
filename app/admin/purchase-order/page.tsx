@@ -200,7 +200,12 @@ export default function PurchaseOrderPage() {
           source_order_item_id: r.item_id,
         }))
         const { error: ie } = await supabase.from("purchase_order_items").insert(items)
-        if (ie) { alert(`明細作成失敗: ${ie.message}`); setPoBusy(false); return }
+        if (ie) {
+          // 明細失敗 → ヘッダもロールバック
+          await supabase.from("purchase_orders").delete().eq("id", po.id)
+          alert(`明細作成失敗: ${ie.message}\n\n発注書も取消しました。\n💡 RLS エラーの場合は db/migrations/2026-05-05_disable_rls_again.sql を Supabase Studio で実行してください。`)
+          setPoBusy(false); return
+        }
         // 元の order_items を発注済みに更新
         rows.forEach(r => allItemIdsToMark.push(r.item_id))
         created.push({ id: po.id, po_number: poNumber, supplier_name: supName })

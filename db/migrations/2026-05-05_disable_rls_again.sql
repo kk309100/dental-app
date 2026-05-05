@@ -1,0 +1,49 @@
+-- ============================================================================
+-- RLS 全テーブル無効化（緊急修正）
+-- 2026-05-05
+--
+-- 原因: 一部テーブルで RLS が有効になっていて、publishable key からの
+--       INSERT/UPDATE が拒否される
+--   ERROR: new row violates row-level security policy
+--
+-- 修正: 該当テーブルの RLS を確実に無効化（再実行安全）
+-- Supabase Studio の SQL Editor で1回実行してください。
+-- ============================================================================
+
+-- 既存のテーブルすべて
+ALTER TABLE IF EXISTS orders DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS order_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS clinics DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS products DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS suppliers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS invoices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS quotes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS quote_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS stock_receipts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS supplier_invoices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS palladium_prices DISABLE ROW LEVEL SECURITY;
+
+-- 新規追加テーブル
+ALTER TABLE IF EXISTS purchase_orders DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS purchase_order_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS stock_movements DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS stocktakes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS stocktake_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS audit_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS sales_reps DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS invoice_payments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS clinic_product_prices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS order_drafts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS company_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS notification_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS email_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS bank_imports DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS bank_payment_lines DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS delivery_slips DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;
+
+-- 確認: 以下を実行すると RLS 状態が見える
+-- SELECT schemaname, tablename, rowsecurity
+-- FROM pg_tables
+-- WHERE schemaname = 'public'
+-- ORDER BY tablename;
