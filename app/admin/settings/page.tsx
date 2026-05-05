@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import { clearCompanyCache } from "@/lib/company"
+import { clearCompanyCache, COMPANY_FALLBACK } from "@/lib/company"
 
 type Settings = {
   company_name: string
@@ -24,11 +24,24 @@ type Settings = {
   invoice_footer: string
 }
 
+// 初回ロード時のデフォルト値（DBに行が無い場合のフォールバック）
 const empty: Settings = {
-  company_name: "", postal_code: "", address: "", phone: "", fax: "", email: "",
-  representative: "", invoice_registration_number: "",
-  bank_name: "", bank_branch: "", bank_type: "普通", bank_number: "", bank_holder: "",
-  seal_image_url: "", logo_image_url: "", invoice_footer: "",
+  company_name: COMPANY_FALLBACK.name,
+  postal_code: COMPANY_FALLBACK.postalCode,
+  address: COMPANY_FALLBACK.address,
+  phone: COMPANY_FALLBACK.phone,
+  fax: COMPANY_FALLBACK.fax,
+  email: COMPANY_FALLBACK.email,
+  representative: COMPANY_FALLBACK.representative,
+  invoice_registration_number: COMPANY_FALLBACK.invoiceNumber,
+  bank_name: COMPANY_FALLBACK.bankName,
+  bank_branch: COMPANY_FALLBACK.bankBranch,
+  bank_type: COMPANY_FALLBACK.bankType,
+  bank_number: COMPANY_FALLBACK.bankAccount,
+  bank_holder: COMPANY_FALLBACK.bankHolder,
+  seal_image_url: COMPANY_FALLBACK.sealUrl,
+  logo_image_url: "",
+  invoice_footer: COMPANY_FALLBACK.notes,
 }
 
 export default function SettingsPage() {
