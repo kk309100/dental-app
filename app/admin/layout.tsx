@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 import { Ic } from "./_lib/icons"
+import UserBadge from "@/app/components/UserBadge"
 
 const NAV = [
   { id: "home", href: "/admin", label: "HOME", icon: Ic.dash, exact: true },
@@ -94,6 +95,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             })}
           </nav>
           <div className="hidden md:flex items-center gap-2 ml-4 shrink-0">
+            <UserBadge />
             <Link href="/" className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs text-gray-400 hover:bg-gray-50 hover:text-gray-700">
               医院側 →
             </Link>
