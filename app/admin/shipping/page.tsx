@@ -11,7 +11,8 @@ type OrderItem = { id: string; order_id: string; product_id: string | null; prod
 type Product = { id: string; name: string; stock: number | null; location: string | null }
 type Clinic = { id: string; name: string; corporate_name?: string | null; sales_rep?: string | null }
 
-const TARGET_STATUSES = ["注文受付", "確認中", "準備中"]
+// 出荷準備対象 = 納品済み・キャンセル以外すべて（status 値の表記ゆれを吸収）
+const EXCLUDE_STATUSES = ["納品済み", "納品済", "キャンセル", "取消"]
 
 export default function ShippingPage() {
   const router = useRouter()
@@ -31,7 +32,7 @@ export default function ShippingPage() {
   async function fetchData() {
     setLoading(true)
     const [o, i, p, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note").in("status", TARGET_STATUSES).order("created_at"),
+      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note").not("status", "in", `(${EXCLUDE_STATUSES.map(s => `"${s}"`).join(",")})`).order("created_at"),
       supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price"),
       supabase.from("products").select("id,name,stock,location"),
       supabase.from("clinics").select("id,name,corporate_name,sales_rep"),
@@ -237,8 +238,8 @@ export default function ShippingPage() {
     <div className="space-y-3">
       <div className="flex items-center flex-wrap gap-2 no-print">
         <h1 className="text-lg font-bold text-gray-900">
-          🚚 出荷準備
-          <span className="ml-2 text-xs font-normal text-gray-400">注文→在庫確認→納品書発行→納品済まで一画面で</span>
+          🚚 医院納品（出荷準備→納品書発行）
+          <span className="ml-2 text-xs font-normal text-gray-400">医院への出荷準備・在庫減算・納品書発行</span>
         </h1>
         <Link href="/admin/orders" className="text-xs text-gray-500 underline">← 注文一覧</Link>
       </div>

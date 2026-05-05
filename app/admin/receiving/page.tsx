@@ -289,7 +289,7 @@ export default function ReceivingPage() {
       {/* タイトル + PDF読込ボタン（タイトル直右に） */}
       <div className="flex items-center flex-wrap gap-3">
         <h1 className="text-lg font-bold text-gray-900">
-          仕入入力
+          📦 仕入納品（仕入先からの入荷登録）
           <span className="ml-2 text-xs font-normal text-gray-400">手打ち or PDF読込 ・ 商品マスタは自動更新</span>
         </h1>
         <label
