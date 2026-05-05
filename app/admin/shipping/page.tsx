@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
+import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; sales_rep?: string | null; note?: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
@@ -26,6 +27,7 @@ export default function ShippingPage() {
   const [search, setSearch] = useState("")
   const [stockFilter, setStockFilter] = useState<"all" | "ready" | "short">("all")
   const [busy, setBusy] = useState(false)
+  const [groupView, setGroupView] = useGroupView()
 
   useEffect(() => { fetchData() }, [])
 
@@ -214,6 +216,20 @@ export default function ShippingPage() {
   // ⚠️ フックは early return の前に必ず呼ぶ（React Rules of Hooks）
   const selectedOrders = useMemo(() => orders.filter(o => selected.has(o.id)), [orders, selected])
   const selectedItems = useMemo(() => items.filter(it => selected.has(it.order_id)), [items, selected])
+
+  // GroupViewTabs 用の行データ（フィルタ後の orders を使う）
+  const filteredOrdersForGroup = useMemo(() => byClinic.flatMap(g => g.orders), [byClinic])
+  const groupRows: GroupableRow[] = useMemo(() => filteredOrdersForGroup.map(o => ({
+    id: o.id,
+    date: (o.created_at || "").slice(0, 10),
+    party: clinicById.get(o.clinic_id)?.name || "(医院不明)",
+    amount: Number(o.total_price || 0),
+    items: (itemsByOrder.get(o.id) || []).map(it => ({
+      name: it.product_name || "(不明)",
+      quantity: Number(it.quantity || 0),
+      price: Number(it.price || 0),
+    })),
+  })), [filteredOrdersForGroup, clinicById, itemsByOrder])
   // ピッキングリスト用: 棚番号順に集約
   const pickList = useMemo(() => {
     const m = new Map<string, { product_id: string; name: string; location: string; qty: number; clinics: Set<string> }>()
@@ -268,8 +284,10 @@ export default function ShippingPage() {
         </div>
       )}
 
+      <div className="no-print">
+      <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
       {/* 通常表示: 医院別グループ */}
-      <div className="space-y-2 no-print">
+      <div className="space-y-2">
         {byClinic.length === 0 ? (
           <p className="text-center py-12 text-gray-400">出荷予定の注文はありません 🎉</p>
         ) : byClinic.map(g => {
@@ -365,6 +383,8 @@ export default function ShippingPage() {
             </div>
           )
         })}
+      </div>
+      </GroupViewTabs>
       </div>
 
       {/* 印刷時: ピッキングリスト */}

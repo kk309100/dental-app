@@ -5,6 +5,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { downloadCSV, toCSV } from "@/lib/csv"
+import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; delivered_at: string | null; total_price: number; delivery_number: string | null; sales_rep?: string | null; invoice_id: string | null }
 type OrderItem = { id: string; order_id: string; product_name: string | null; quantity: number; price: number }
@@ -21,6 +22,7 @@ export default function DeliveriesPage() {
   const [to, setTo] = useState("")
   const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc")
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [groupView, setGroupView] = useGroupView()
 
   useEffect(() => { fetchData() }, [])
 
@@ -71,6 +73,19 @@ export default function DeliveriesPage() {
   }, [orders, clinicById, search, clinicFilter, from, to, sortBy])
 
   const totalAmount = useMemo(() => filtered.reduce((s, o) => s + Number(o.total_price || 0), 0), [filtered])
+
+  // GroupViewTabs 用の行データ
+  const groupRows: GroupableRow[] = useMemo(() => filtered.map(o => ({
+    id: o.id,
+    date: ((o.delivered_at || o.created_at) || "").slice(0, 10),
+    party: clinicById.get(o.clinic_id)?.name || "(医院不明)",
+    amount: Number(o.total_price || 0),
+    items: (itemsByOrder.get(o.id) || []).map(it => ({
+      name: it.product_name || "(不明)",
+      quantity: Number(it.quantity || 0),
+      price: Number(it.price || 0),
+    })),
+  })), [filtered, clinicById, itemsByOrder])
 
   function toggleSel(id: string) {
     setSelected(prev => {
@@ -149,6 +164,7 @@ export default function DeliveriesPage() {
       </div>
 
       {/* テーブル */}
+      <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 240px)" }}>
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-gray-100">
@@ -193,6 +209,7 @@ export default function DeliveriesPage() {
           </tbody>
         </table>
       </div>
+      </GroupViewTabs>
     </div>
   )
 }

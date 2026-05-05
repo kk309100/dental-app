@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { fmtYen } from "@/lib/invoice"
+import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 
 export default function AdminOrdersPageWrapper() {
   return (
@@ -45,6 +46,7 @@ function AdminOrdersPage() {
   const [openOrderIds, setOpenOrderIds] = useState<Set<string>>(new Set())
   const [openClinicIds, setOpenClinicIds] = useState<Set<string>>(new Set())
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
+  const [groupView, setGroupView] = useGroupView()
 
   useEffect(() => { fetchData() }, [])
 
@@ -130,6 +132,19 @@ function AdminOrdersPage() {
     delivered: orders.filter((o) => o.status === "納品済み").length,
     total: orders.length,
   }), [orders])
+
+  // GroupViewTabs 用の行データ（filtered を集計用に変換）
+  const groupRows: GroupableRow[] = useMemo(() => filtered.map(o => ({
+    id: o.id,
+    date: o.created_at || "",
+    party: clinicById.get(o.clinic_id)?.name || "(医院不明)",
+    amount: Number(o.total_price || 0),
+    items: (itemsByOrder.get(o.id) || []).map(it => ({
+      name: it.product_name || "(不明)",
+      quantity: Number(it.quantity || 0),
+      price: Number(it.price || 0),
+    })),
+  })), [filtered, clinicById, itemsByOrder])
 
   function buildStatusPatch(status: string) {
     const now = new Date().toISOString()
@@ -317,6 +332,7 @@ function AdminOrdersPage() {
         )
       })()}
 
+      <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
       {/* 医院別ビュー */}
       {view === "byClinic" && (
         <div className="space-y-2">
@@ -558,6 +574,7 @@ function AdminOrdersPage() {
           </table>
         </div>
       )}
+      </GroupViewTabs>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { fmtYen, fmtDate, INVOICE_STATUSES, type InvoiceStatus } from "@/lib/invoice"
 import Link from "next/link"
+import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 
 type Invoice = {
   id: string
@@ -33,6 +34,8 @@ export default function InvoicesPage() {
   const [to, setTo] = useState("")
   const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc")
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [groupView, setGroupView] = useGroupView()
+  const [invoiceItems, setInvoiceItems] = useState<{ invoice_id: string; product_name: string | null; quantity: number; unit_price: number }[]>([])
 
   useEffect(() => { fetchData() }, [])
 
@@ -44,6 +47,11 @@ export default function InvoicesPage() {
     ])
     setInvoices((i.data as Invoice[]) || [])
     setClinics(c.data || [])
+    // 商品別集計用に明細も取得（テーブル無い時はスキップ）
+    try {
+      const { data: items } = await supabase.from("invoice_items").select("invoice_id,product_name,quantity,unit_price").limit(50000)
+      setInvoiceItems((items as any[]) || [])
+    } catch { setInvoiceItems([]) }
     setLoading(false)
   }
 
@@ -68,6 +76,29 @@ export default function InvoicesPage() {
       return 0
     })
   }, [invoices, search, statusFilter, clinicFilter, from, to, sortBy])
+
+  // 明細を請求書IDでグループ化
+  const itemsByInvoice = useMemo(() => {
+    const m = new Map<string, { product_name: string | null; quantity: number; unit_price: number }[]>()
+    invoiceItems.forEach(it => {
+      if (!m.has(it.invoice_id)) m.set(it.invoice_id, [])
+      m.get(it.invoice_id)!.push(it)
+    })
+    return m
+  }, [invoiceItems])
+
+  // GroupViewTabs 用の行データ
+  const groupRows: GroupableRow[] = useMemo(() => filtered.map(iv => ({
+    id: iv.id,
+    date: (iv.issue_date || "").slice(0, 10),
+    party: clinicName(iv.clinic_id),
+    amount: Number(iv.total || 0),
+    items: (itemsByInvoice.get(iv.id) || []).map(it => ({
+      name: it.product_name || "(不明)",
+      quantity: Number(it.quantity || 0),
+      price: Number(it.unit_price || 0),
+    })),
+  })), [filtered, clinics, itemsByInvoice])
 
   function toggleSel(id: string) { setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n }) }
   function selectAll() { setSelected(new Set(filtered.map(i => i.id))) }
@@ -141,6 +172,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* 一覧 */}
+      <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
       <div style={listWrap}>
         {filtered.length === 0 ? (
           <p style={{ padding: 32, textAlign: "center", color: "#999" }}>請求書がありません</p>
@@ -170,6 +202,7 @@ export default function InvoicesPage() {
           ))
         )}
       </div>
+      </GroupViewTabs>
     </main>
   )
 }

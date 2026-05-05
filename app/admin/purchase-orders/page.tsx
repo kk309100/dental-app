@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
+import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 
 type PO = {
   id: string
@@ -19,6 +20,7 @@ type PO = {
   created_at: string
 }
 type Supplier = { id: string; name: string }
+type POItem = { id: string; po_id: string; product_name: string | null; quantity: number; unit_price: number | null }
 
 const STATUSES = ["下書き", "発注済", "部分入荷", "入荷済", "取消"] as const
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -32,6 +34,7 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 export default function PurchaseOrdersListPage() {
   const [pos, setPos] = useState<PO[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [poItems, setPoItems] = useState<POItem[]>([])
   const [loading, setLoading] = useState(true)
   const [tableMissing, setTableMissing] = useState(false)
   const [search, setSearch] = useState("")
@@ -41,6 +44,7 @@ export default function PurchaseOrdersListPage() {
   const [to, setTo] = useState("")
   const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc")
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [groupView, setGroupView] = useGroupView()
 
   useEffect(() => { fetchData() }, [])
 
@@ -51,6 +55,11 @@ export default function PurchaseOrdersListPage() {
     const { data: p, error } = await supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }).limit(50000)
     if (error) { setTableMissing(true); setPos([]) }
     else setPos((p as PO[]) || [])
+    // 商品別集計用に明細も取得（テーブル無い時はスキップ）
+    try {
+      const { data: items } = await supabase.from("purchase_order_items").select("id,po_id,product_name,quantity,unit_price").limit(50000)
+      setPoItems((items as POItem[]) || [])
+    } catch { setPoItems([]) }
     setLoading(false)
   }
 
@@ -78,6 +87,29 @@ export default function PurchaseOrdersListPage() {
       return 0
     })
   }, [pos, statusFilter, supplierFilter, from, to, sortBy, search, suppliers])
+
+  // 明細を発注書IDでグループ化
+  const itemsByPo = useMemo(() => {
+    const m = new Map<string, POItem[]>()
+    poItems.forEach(it => {
+      if (!m.has(it.po_id)) m.set(it.po_id, [])
+      m.get(it.po_id)!.push(it)
+    })
+    return m
+  }, [poItems])
+
+  // GroupViewTabs 用の行データ
+  const groupRows: GroupableRow[] = useMemo(() => filtered.map(p => ({
+    id: p.id,
+    date: (p.ordered_at || p.created_at || "").slice(0, 10),
+    party: supplierName(p.supplier_id),
+    amount: Number(p.total_amount || 0),
+    items: (itemsByPo.get(p.id) || []).map(it => ({
+      name: it.product_name || "(不明)",
+      quantity: Number(it.quantity || 0),
+      price: Number(it.unit_price || 0),
+    })),
+  })), [filtered, itemsByPo, suppliers])
 
   function toggleSel(id: string) {
     setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -153,6 +185,7 @@ export default function PurchaseOrdersListPage() {
         </select>
       </div>
 
+      <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="仕入先">
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs">
           <thead className="bg-gray-100">
@@ -202,6 +235,7 @@ export default function PurchaseOrdersListPage() {
           </tbody>
         </table>
       </div>
+      </GroupViewTabs>
     </div>
   )
 }
