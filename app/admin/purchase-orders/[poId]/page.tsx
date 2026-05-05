@@ -112,10 +112,10 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
     lines.push("")
     lines.push("【明細】")
     items.forEach((i, idx) => {
-      lines.push(`  ${idx + 1}. ${i.product_name} × ${i.quantity}  @${i.unit_price.toLocaleString()}円  =  ${(i.quantity * i.unit_price).toLocaleString()}円`)
+      lines.push(`  ${idx + 1}. ${i.product_name} × ${i.quantity}`)
     })
     lines.push("")
-    lines.push(`合計: ${total.toLocaleString()}円（税抜）`)
+    lines.push("※ 単価・金額は貴社見積書にてご確認ください。")
     if (po.note) { lines.push(""); lines.push(`備考: ${po.note}`) }
     lines.push("")
     lines.push("────────────────────")
@@ -251,8 +251,9 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
             <tr style={{ background: "#f3f4f6" }}>
               <th style={th}>商品名</th>
               <th style={{ ...th, textAlign: "right", width: 60 }}>数量</th>
-              <th style={{ ...th, textAlign: "right", width: 80 }}>単価</th>
-              <th style={{ ...th, textAlign: "right", width: 90 }}>金額</th>
+              {/* 単価・金額は画面のみ表示。印刷時は非表示（発注時は仕入先に価格を伝えない） */}
+              <th style={{ ...th, textAlign: "right", width: 80 }} className="no-print">単価</th>
+              <th style={{ ...th, textAlign: "right", width: 90 }} className="no-print">金額</th>
               <th style={{ ...th, textAlign: "right", width: 80 }} className="no-print">入荷</th>
             </tr>
           </thead>
@@ -264,8 +265,8 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
                   {i.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{i.note}</p>}
                 </td>
                 <td style={{ ...tdCell, textAlign: "right" }}>{i.quantity}</td>
-                <td style={{ ...tdCell, textAlign: "right" }}>{fmtYen(i.unit_price)}</td>
-                <td style={{ ...tdCell, textAlign: "right", fontWeight: 700 }}>{fmtYen(Number(i.quantity) * Number(i.unit_price))}</td>
+                <td style={{ ...tdCell, textAlign: "right" }} className="no-print">{fmtYen(i.unit_price)}</td>
+                <td style={{ ...tdCell, textAlign: "right", fontWeight: 700 }} className="no-print">{fmtYen(Number(i.quantity) * Number(i.unit_price))}</td>
                 <td style={{ ...tdCell, textAlign: "right" }} className="no-print">
                   <input type="number" defaultValue={i.received_quantity || 0}
                     onBlur={(e) => updateReceived(i.id, Number(e.target.value))}
@@ -275,10 +276,10 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
             ))}
           </tbody>
           <tfoot>
-            <tr style={{ background: "#f9fafb" }}>
-              <td colSpan={3} style={{ ...tdCell, textAlign: "right", fontWeight: 700 }}>合計</td>
+            <tr style={{ background: "#f9fafb" }} className="no-print">
+              <td colSpan={3} style={{ ...tdCell, textAlign: "right", fontWeight: 700 }}>合計（社内管理用）</td>
               <td style={{ ...tdCell, textAlign: "right", fontWeight: 700, fontSize: 14 }}>{fmtYen(total)}</td>
-              <td className="no-print" style={tdCell}>{receivedTotal} / {expectedTotal}</td>
+              <td style={tdCell}>{receivedTotal} / {expectedTotal}</td>
             </tr>
           </tfoot>
         </table>

@@ -89,9 +89,7 @@ function BulkPrint() {
               <thead>
                 <tr style={{ background: "#f3f4f6" }}>
                   <th style={th}>商品名</th>
-                  <th style={{ ...th, textAlign: "right", width: 60 }}>数量</th>
-                  <th style={{ ...th, textAlign: "right", width: 80 }}>単価</th>
-                  <th style={{ ...th, textAlign: "right", width: 90 }}>金額</th>
+                  <th style={{ ...th, textAlign: "right", width: 80 }}>数量</th>
                 </tr>
               </thead>
               <tbody>
@@ -99,18 +97,11 @@ function BulkPrint() {
                   <tr key={i.id} style={{ borderBottom: "1px solid #eee" }}>
                     <td style={tdC}>{i.product_name}{i.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{i.note}</p>}</td>
                     <td style={{ ...tdC, textAlign: "right" }}>{i.quantity}</td>
-                    <td style={{ ...tdC, textAlign: "right" }}>{fmtYen(i.unit_price)}</td>
-                    <td style={{ ...tdC, textAlign: "right", fontWeight: 700 }}>{fmtYen(Number(i.quantity) * Number(i.unit_price))}</td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr style={{ background: "#f9fafb" }}>
-                  <td colSpan={3} style={{ ...tdC, textAlign: "right", fontWeight: 700 }}>合計</td>
-                  <td style={{ ...tdC, textAlign: "right", fontWeight: 700, fontSize: 14 }}>{fmtYen(po.total_amount || 0)}</td>
-                </tr>
-              </tfoot>
             </table>
+            <p style={{ marginTop: 12, fontSize: 10, color: "#666" }}>※ 単価・金額は貴社見積書にてご確認ください。</p>
             {po.note && <div style={{ marginTop: 16, padding: 10, background: "#f9fafb", borderRadius: 4, fontSize: 11, color: "#555" }}>備考: {po.note}</div>}
           </main>
         )

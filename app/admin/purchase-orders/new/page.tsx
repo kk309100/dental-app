@@ -279,9 +279,7 @@ function NewPOPage() {
                   <thead>
                     <tr style={{ background: "#f3f4f6" }}>
                       <th style={{ padding: "6px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 11, color: "#555" }}>商品名</th>
-                      <th style={{ padding: "6px 8px", textAlign: "right", borderBottom: "2px solid #ddd", fontSize: 11, color: "#555", width: 60 }}>数量</th>
-                      <th style={{ padding: "6px 8px", textAlign: "right", borderBottom: "2px solid #ddd", fontSize: 11, color: "#555", width: 80 }}>単価</th>
-                      <th style={{ padding: "6px 8px", textAlign: "right", borderBottom: "2px solid #ddd", fontSize: 11, color: "#555", width: 90 }}>金額</th>
+                      <th style={{ padding: "6px 8px", textAlign: "right", borderBottom: "2px solid #ddd", fontSize: 11, color: "#555", width: 80 }}>数量</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -292,18 +290,11 @@ function NewPOPage() {
                           {r.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{r.note}</p>}
                         </td>
                         <td style={{ padding: "6px 8px", textAlign: "right", fontSize: 12 }}>{r.quantity}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "right", fontSize: 12 }}>{fmtYen(r.unit_price)}</td>
-                        <td style={{ padding: "6px 8px", textAlign: "right", fontSize: 12, fontWeight: 700 }}>{fmtYen(Number(r.quantity) * Number(r.unit_price))}</td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot>
-                    <tr style={{ background: "#f9fafb" }}>
-                      <td colSpan={3} style={{ padding: "6px 8px", textAlign: "right", fontSize: 12, fontWeight: 700 }}>合計</td>
-                      <td style={{ padding: "6px 8px", textAlign: "right", fontSize: 14, fontWeight: 700 }}>{fmtYen(total)}</td>
-                    </tr>
-                  </tfoot>
                 </table>
+                <p style={{ marginTop: 12, fontSize: 10, color: "#666" }}>※ 単価・金額は貴社見積書にてご確認ください。</p>
                 {note && (
                   <div style={{ marginTop: 16, padding: 10, background: "#f9fafb", borderRadius: 4, fontSize: 11, color: "#555" }}>
                     備考: {note}
