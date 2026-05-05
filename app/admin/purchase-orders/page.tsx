@@ -36,6 +36,11 @@ export default function PurchaseOrdersListPage() {
   const [tableMissing, setTableMissing] = useState(false)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("active")
+  const [supplierFilter, setSupplierFilter] = useState<string>("all")
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
+  const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc")
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchData() }, [])
 
@@ -55,12 +60,35 @@ export default function PurchaseOrdersListPage() {
     return pos.filter(p => {
       if (statusFilter === "active" && (p.status === "入荷済" || p.status === "取消")) return false
       if (statusFilter !== "active" && statusFilter !== "all" && p.status !== statusFilter) return false
+      if (supplierFilter !== "all" && p.supplier_id !== supplierFilter) return false
+      const dateStr = (p.ordered_at || p.created_at).slice(0, 10)
+      if (from && dateStr < from) return false
+      if (to && dateStr > to) return false
       if (!search) return true
       const k = search.toLowerCase()
       const target = `${p.po_number || ""} ${supplierName(p.supplier_id)} ${p.note || ""}`.toLowerCase()
       return target.includes(k)
+    }).sort((a, b) => {
+      const ad = a.ordered_at || a.created_at
+      const bd = b.ordered_at || b.created_at
+      if (sortBy === "date_desc") return bd.localeCompare(ad)
+      if (sortBy === "date_asc") return ad.localeCompare(bd)
+      if (sortBy === "amount_desc") return Number(b.total_amount || 0) - Number(a.total_amount || 0)
+      if (sortBy === "amount_asc") return Number(a.total_amount || 0) - Number(b.total_amount || 0)
+      return 0
     })
-  }, [pos, statusFilter, search, suppliers])
+  }, [pos, statusFilter, supplierFilter, from, to, sortBy, search, suppliers])
+
+  function toggleSel(id: string) {
+    setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }
+  function selectAll() { setSelected(new Set(filtered.map(p => p.id))) }
+  function clearSel() { setSelected(new Set()) }
+  function bulkPrint() {
+    if (selected.size === 0) { alert("選択がありません"); return }
+    const ids = Array.from(selected).join(",")
+    window.open(`/admin/purchase-orders/print?ids=${ids}`, "_blank")
+  }
 
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
@@ -85,6 +113,10 @@ export default function PurchaseOrdersListPage() {
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全 {pos.length} 件</span>
         </h1>
         <div className="flex items-center gap-2">
+          <button onClick={bulkPrint} disabled={selected.size === 0}
+            className="px-3 py-1.5 bg-gray-800 text-white text-xs font-bold rounded hover:bg-gray-700 disabled:opacity-40">
+            🖨 選択を一括印刷 ({selected.size})
+          </button>
           <Link href="/admin/purchase-orders/suggest"
             className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">
             🤖 在庫不足から自動作成
@@ -105,12 +137,29 @@ export default function PurchaseOrdersListPage() {
           <option value="all">すべて</option>
           {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        <select value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)}
+          className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white max-w-[200px]">
+          <option value="all">全仕入先</option>
+          {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <input type="date" value={from} onChange={e => setFrom(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+        <span className="text-xs text-gray-400">〜</span>
+        <input type="date" value={to} onChange={e => setTo(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+        <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
+          <option value="date_desc">📅 新しい順</option>
+          <option value="date_asc">📅 古い順</option>
+          <option value="amount_desc">💰 金額大→小</option>
+          <option value="amount_asc">💰 金額小→大</option>
+        </select>
       </div>
 
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs">
           <thead className="bg-gray-100">
             <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-center w-8">
+                <input type="checkbox" checked={filtered.length > 0 && selected.size === filtered.length} onChange={e => e.target.checked ? selectAll() : clearSel()} />
+              </th>
               <th className="px-3 py-1.5 text-left w-32">発注書No</th>
               <th className="px-3 py-1.5 text-left">仕入先</th>
               <th className="px-2 py-1.5 text-center w-20">状態</th>
@@ -123,11 +172,12 @@ export default function PurchaseOrdersListPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">該当なし</td></tr>
+              <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-400">該当なし</td></tr>
             ) : filtered.map(p => {
               const sc = STATUS_COLORS[p.status] || STATUS_COLORS["下書き"]
               return (
-                <tr key={p.id} className="border-b border-gray-100 hover:bg-blue-50/40">
+                <tr key={p.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (selected.has(p.id) ? "bg-blue-100" : "")}>
+                  <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSel(p.id)} /></td>
                   <td className="px-3 py-1.5 font-mono text-[11px] text-gray-700">{p.po_number || p.id.slice(0, 8)}</td>
                   <td className="px-3 py-1.5">{supplierName(p.supplier_id)}</td>
                   <td className="px-2 py-1.5 text-center">

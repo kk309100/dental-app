@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
 import { COMPANY } from "@/lib/company"
+import Seal from "@/app/components/Seal"
 type Product = { id: string; name: string; product_code: string | null; cost: number | null; default_supplier_id?: string | null }
 type Row = { product_id: string | null; product_name: string; quantity: number; unit_price: number; note?: string }
 
@@ -249,12 +250,15 @@ function NewPOPage() {
                       {sup?.name || "(仕入先未選択)"} 御中
                     </p>
                   </div>
-                  <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6 }}>
+                  <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, position: "relative", paddingRight: 70 }}>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{COMPANY.name}</p>
                     <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
                     <p style={{ margin: 0 }}>{COMPANY.address}</p>
                     <p style={{ margin: 0 }}>TEL {COMPANY.phone}</p>
                     {COMPANY.fax && <p style={{ margin: 0 }}>FAX {COMPANY.fax}</p>}
+                    <div style={{ position: "absolute", top: 0, right: 0 }}>
+                      <Seal size={64} />
+                    </div>
                   </div>
                 </div>
                 <table style={{ width: "100%", marginTop: 18, borderCollapse: "collapse", fontSize: 12 }}>

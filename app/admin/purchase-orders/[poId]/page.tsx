@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { COMPANY } from "@/lib/company"
+import Seal from "@/app/components/Seal"
 
 type PO = {
   id: string; po_number: string | null; supplier_id: string | null; status: string
@@ -183,11 +184,16 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
             {supplier?.phone && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#666" }}>TEL {supplier.phone}{supplier.fax && ` / FAX ${supplier.fax}`}</p>}
             {supplier?.contact && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#666" }}>担当: {supplier.contact}</p>}
           </div>
-          <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6 }}>
+          <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, position: "relative", paddingRight: 70 }}>
             <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{COMPANY.name}</p>
             <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
             <p style={{ margin: 0 }}>{COMPANY.address}</p>
             <p style={{ margin: 0 }}>TEL {COMPANY.phone}</p>
+            {COMPANY.fax && <p style={{ margin: 0 }}>FAX {COMPANY.fax}</p>}
+            {/* 印影 */}
+            <div style={{ position: "absolute", top: 0, right: 0 }}>
+              <Seal size={64} />
+            </div>
           </div>
         </div>
 

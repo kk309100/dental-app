@@ -29,6 +29,10 @@ export default function InvoicesPage() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | InvoiceStatus>("all")
   const [clinicFilter, setClinicFilter] = useState<string>("all")
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
+  const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc")
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchData() }, [])
 
@@ -50,11 +54,28 @@ export default function InvoicesPage() {
     return invoices.filter((iv) => {
       if (statusFilter !== "all" && iv.status !== statusFilter) return false
       if (clinicFilter !== "all" && iv.clinic_id !== clinicFilter) return false
+      const dateStr = (iv.issue_date || "").slice(0, 10)
+      if (from && dateStr < from) return false
+      if (to && dateStr > to) return false
       if (!k) return true
       const target = `${iv.invoice_number} ${clinicName(iv.clinic_id)}`.toLowerCase().normalize("NFKC")
       return target.includes(k)
+    }).sort((a, b) => {
+      if (sortBy === "date_desc") return (b.issue_date || "").localeCompare(a.issue_date || "")
+      if (sortBy === "date_asc") return (a.issue_date || "").localeCompare(b.issue_date || "")
+      if (sortBy === "amount_desc") return Number(b.total) - Number(a.total)
+      if (sortBy === "amount_asc") return Number(a.total) - Number(b.total)
+      return 0
     })
-  }, [invoices, search, statusFilter, clinicFilter])
+  }, [invoices, search, statusFilter, clinicFilter, from, to, sortBy])
+
+  function toggleSel(id: string) { setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n }) }
+  function selectAll() { setSelected(new Set(filtered.map(i => i.id))) }
+  function clearSel() { setSelected(new Set()) }
+  function bulkPrint() {
+    if (selected.size === 0) { alert("選択がありません"); return }
+    window.open(`/admin/invoices/print?ids=${Array.from(selected).join(",")}`, "_blank")
+  }
 
   // 集計
   const totalIssued = filtered.filter((i) => i.status === "issued").reduce((s, i) => s + i.total, 0)
@@ -72,6 +93,9 @@ export default function InvoicesPage() {
           <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{invoices.length}件</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={bulkPrint} disabled={selected.size === 0} style={{ ...btnGray, background: "#1f2937", color: "#fff", opacity: selected.size === 0 ? 0.4 : 1 }}>
+            🖨 選択を一括印刷 ({selected.size})
+          </button>
           <Link href="/admin/invoices/bulk"><button style={btnGray}>📋 一括発行</button></Link>
           <Link href="/admin/invoices/create"><button style={btnDark}>＋ 請求書を発行</button></Link>
         </div>
@@ -100,6 +124,20 @@ export default function InvoicesPage() {
           <option value="all">すべての医院</option>
           {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={select} />
+        <span style={{ color: "#999", fontSize: 12 }}>〜</span>
+        <input type="date" value={to} onChange={e => setTo(e.target.value)} style={select} />
+        <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} style={select}>
+          <option value="date_desc">📅 新しい順</option>
+          <option value="date_asc">📅 古い順</option>
+          <option value="amount_desc">💰 金額大→小</option>
+          <option value="amount_asc">💰 金額小→大</option>
+        </select>
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11, padding: "0 4px" }}>
+        <button onClick={selectAll} style={{ padding: "2px 8px", border: "1px solid #ddd", borderRadius: 4, background: "#fff", cursor: "pointer" }}>全選択</button>
+        <button onClick={clearSel} style={{ padding: "2px 8px", border: "1px solid #ddd", borderRadius: 4, background: "#fff", cursor: "pointer", color: "#666" }}>解除</button>
+        <span style={{ color: "#666" }}>{selected.size}件選択中</span>
       </div>
 
       {/* 一覧 */}
@@ -108,8 +146,9 @@ export default function InvoicesPage() {
           <p style={{ padding: 32, textAlign: "center", color: "#999" }}>請求書がありません</p>
         ) : (
           filtered.map((iv) => (
-            <Link key={iv.id} href={`/admin/invoices/${iv.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-              <div style={card}>
+            <div key={iv.id} style={{ ...card, background: selected.has(iv.id) ? "#dbeafe" : "#fff" }}>
+              <input type="checkbox" checked={selected.has(iv.id)} onChange={() => toggleSel(iv.id)} style={{ marginRight: 8, marginTop: 4 }} />
+              <Link href={`/admin/invoices/${iv.id}`} style={{ textDecoration: "none", color: "inherit", display: "flex", flex: 1, gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={cardHead}>
                     <span style={cardNum}>{iv.invoice_number}</span>
@@ -126,8 +165,8 @@ export default function InvoicesPage() {
                   <p style={cardAmount}>{fmtYen(iv.total)}</p>
                   <p style={cardSubtotal}>税抜 {fmtYen(iv.subtotal)}</p>
                 </div>
-              </div>
-            </Link>
+              </Link>
+            </div>
           ))
         )}
       </div>
