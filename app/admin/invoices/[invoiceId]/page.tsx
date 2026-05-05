@@ -276,7 +276,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
         <span style={{ marginRight: 8, padding: "4px 12px", borderRadius: 99, background: status.color + "22", color: status.color, fontSize: 12, fontWeight: 700 }}>
           {status.label}
         </span>
-        <button onClick={doPrint} style={btnDark}>🖨 印刷</button>
+        <button onClick={doPrint} style={btnDark}>🖨 シンプル印刷</button>
+        <Link href={`/admin/invoices/${invoiceId}/detailed-print`}>
+          <button style={{ ...btnDark, background: "#1d4ed8" }}>📄 請求明細書（詳細）</button>
+        </Link>
         {invoice.status === "issued" && (
           <>
             <button onClick={() => { setPaidAmount(String(invoice.total)); setPaidDate(new Date().toISOString().slice(0, 10)); setShowPaidModal(true) }} style={btnGreen}>✓ 入金確認</button>

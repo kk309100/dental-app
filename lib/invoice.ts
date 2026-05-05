@@ -131,3 +131,50 @@ export function calcTaxFor(amount: number, rate = 0.10, rounding: "floor" | "rou
   if (rounding === "ceil") return Math.ceil(raw)
   return Math.round(raw)
 }
+
+// ── 経費分類（茶屋歯科フォーマット） ─────────────────────────────────
+// products.category がこれらのいずれかにマッチする → そのカテゴリ
+// マッチしない or null → 「その他」に集約
+export const EXPENSE_CATEGORIES = [
+  "材料費", "消耗品", "薬品", "備品・設備", "貴金属", "銀合金",
+  "図書研究費", "衛生管理費", "修繕費", "事務用品費", "8%軽減食品", "その他",
+] as const
+export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]
+
+// 軽減税率対象カテゴリ
+const REDUCED_TAX_CATEGORIES: ExpenseCategory[] = ["8%軽減食品"]
+
+/**
+ * products.category 文字列を 12 区分のいずれかに正規化
+ * - "材料" "材料費" など部分一致も拾う
+ * - マッチしないものは「その他」
+ */
+export function normalizeExpenseCategory(raw: string | null | undefined): ExpenseCategory {
+  if (!raw) return "その他"
+  const s = String(raw).trim()
+  // 完全一致優先
+  if ((EXPENSE_CATEGORIES as readonly string[]).includes(s)) return s as ExpenseCategory
+  // 部分一致
+  const pairs: [ExpenseCategory, RegExp][] = [
+    ["材料費", /材料/],
+    ["消耗品", /消耗/],
+    ["薬品", /薬品|医薬|薬剤/],
+    ["備品・設備", /備品|設備|機器|機械/],
+    ["貴金属", /貴金属|金合金|プラチナ|パラジウム/],
+    ["銀合金", /銀合金/],
+    ["図書研究費", /図書|書籍|研究|学会/],
+    ["衛生管理費", /衛生|歯ブラシ|オーラル|歯磨/],
+    ["修繕費", /修繕|修理|メンテ/],
+    ["事務用品費", /事務|文具|オフィス/],
+    ["8%軽減食品", /軽減|食品/],
+  ]
+  for (const [cat, re] of pairs) if (re.test(s)) return cat
+  return "その他"
+}
+
+/**
+ * 軽減税率対象か判定
+ */
+export function isReducedTax(cat: ExpenseCategory): boolean {
+  return REDUCED_TAX_CATEGORIES.includes(cat)
+}
