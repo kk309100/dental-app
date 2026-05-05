@@ -10,7 +10,7 @@ type OrderItem = { id: string; order_id: string; product_id: string; product_nam
 type Product = { id: string; name: string; cost: number | null }
 type Clinic = { id: string; name: string; sales_rep?: string | null }
 
-type TabKey = "monthly" | "clinic" | "product" | "rep" | "profit"
+type TabKey = "monthly" | "clinic" | "product" | "rep" | "profit" | "abc"
 
 const SALES_STATUSES = ["納品済み"]
 const FY_START_KEY = "dental-app:fy_start_month"
@@ -168,6 +168,21 @@ export default function SalesPage() {
   const totalProfit = useMemo(() => byProduct.reduce((s, p) => s + p.profit, 0), [byProduct])
   const profitMargin = totalGross > 0 ? Math.round((totalProfit / totalGross) * 100) : 0
 
+  // ABC分析（商品別 + 医院別）
+  function abcClassify<T extends { name: string; a: number }>(arr: T[]) {
+    const total = arr.reduce((s, x) => s + x.a, 0)
+    let cum = 0
+    return arr.map(x => {
+      cum += x.a
+      const ratio = total > 0 ? x.a / total : 0
+      const cumRatio = total > 0 ? cum / total : 0
+      const cls = cumRatio <= 0.7 ? "A" : cumRatio <= 0.9 ? "B" : "C"
+      return { ...x, ratio, cumRatio, cls }
+    })
+  }
+  const abcProducts = useMemo(() => abcClassify(byProduct), [byProduct])
+  const abcClinics = useMemo(() => abcClassify(byClinic), [byClinic])
+
   function exportSalesCSV() {
     const csv = toCSV(
       thisYear.map((o) => ({
@@ -236,7 +251,7 @@ export default function SalesPage() {
       </div>
 
       <div style={tabs}>
-        {([["monthly", "📅 月次"], ["clinic", "🏥 医院別"], ["product", "📦 商品別"], ["rep", "👤 営業マン別"], ["profit", "💰 粗利分析"]] as const).map(([k, l]) => (
+        {([["monthly", "📅 月次"], ["clinic", "🏥 医院別"], ["product", "📦 商品別"], ["rep", "👤 営業マン別"], ["profit", "💰 粗利分析"], ["abc", "📊 ABC分析"]] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)} style={tab === k ? tabActive : tabBtn}>{l}</button>
         ))}
       </div>
@@ -367,6 +382,73 @@ export default function SalesPage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {tab === "abc" && (
+        <div className="space-y-3">
+          <div style={{ background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: 16 }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 15 }}>📦 商品ABC分析</h2>
+            <p style={{ fontSize: 11, color: "#777", margin: "0 0 12px" }}>
+              累積売上比率で分類: <span style={{ color: "#dc2626", fontWeight: 700 }}>A=70%</span>{"<"}
+              <span style={{ color: "#f59e0b", fontWeight: 700 }}>B=90%</span>{"<"}
+              <span style={{ color: "#9ca3af", fontWeight: 700 }}>C=残り</span>
+              ・パレート: A商品に集中投資、C商品は廃番候補
+            </p>
+            <table style={table}>
+              <thead><tr style={tr}>
+                <th style={{ ...th, width: 50, textAlign: "center" }}>分類</th>
+                <th style={th}>商品名</th>
+                <th style={thR}>売上</th>
+                <th style={thR}>構成比</th>
+                <th style={thR}>累積比</th>
+              </tr></thead>
+              <tbody>
+                {abcProducts.length === 0 ? (
+                  <tr><td colSpan={5} style={empty}>データなし</td></tr>
+                ) : abcProducts.slice(0, 100).map(p => (
+                  <tr key={p.name} style={tr}>
+                    <td style={{ ...td, textAlign: "center" }}>
+                      <span style={{ display: "inline-block", width: 20, padding: "2px 6px", borderRadius: 4, background: p.cls === "A" ? "#fee2e2" : p.cls === "B" ? "#fef3c7" : "#f3f4f6", color: p.cls === "A" ? "#dc2626" : p.cls === "B" ? "#92400e" : "#6b7280", fontSize: 11, fontWeight: 700 }}>{p.cls}</span>
+                    </td>
+                    <td style={td}>{p.name}</td>
+                    <td style={tdRBold}>{fmt(p.a)}</td>
+                    <td style={tdR}>{(p.ratio * 100).toFixed(1)}%</td>
+                    <td style={tdRSub}>{(p.cumRatio * 100).toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: 16 }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 15 }}>🏥 医院ABC分析</h2>
+            <p style={{ fontSize: 11, color: "#777", margin: "0 0 12px" }}>A=主要顧客、C=取引縮小傾向</p>
+            <table style={table}>
+              <thead><tr style={tr}>
+                <th style={{ ...th, width: 50, textAlign: "center" }}>分類</th>
+                <th style={th}>医院名</th>
+                <th style={thR}>売上</th>
+                <th style={thR}>構成比</th>
+                <th style={thR}>累積比</th>
+              </tr></thead>
+              <tbody>
+                {abcClinics.length === 0 ? (
+                  <tr><td colSpan={5} style={empty}>データなし</td></tr>
+                ) : abcClinics.slice(0, 100).map(c => (
+                  <tr key={c.id} style={tr}>
+                    <td style={{ ...td, textAlign: "center" }}>
+                      <span style={{ display: "inline-block", width: 20, padding: "2px 6px", borderRadius: 4, background: c.cls === "A" ? "#fee2e2" : c.cls === "B" ? "#fef3c7" : "#f3f4f6", color: c.cls === "A" ? "#dc2626" : c.cls === "B" ? "#92400e" : "#6b7280", fontSize: 11, fontWeight: 700 }}>{c.cls}</span>
+                    </td>
+                    <td style={tdBold}>{c.name}</td>
+                    <td style={tdRBold}>{fmt(c.a)}</td>
+                    <td style={tdR}>{(c.ratio * 100).toFixed(1)}%</td>
+                    <td style={tdRSub}>{(c.cumRatio * 100).toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </main>

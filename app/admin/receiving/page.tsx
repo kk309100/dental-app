@@ -20,9 +20,8 @@ type Row = {
   supplierJan: string         // PDF由来
   supplierCode: string        // PDF由来
   packSize: string            // 「20枚入」等
-  quantity: string
-  unitPrice: string
-  unitQuantityPerPack: number // 換算
+  quantity: string            // 数量（在庫加算数 = この数だけ stock 増える）
+  unitPrice: string           // 単価（1個あたり）
   memo: string
   manufacturer: string        // 新規作成時用
 }
@@ -30,7 +29,7 @@ type Row = {
 const newRow = (): Row => ({
   productName: "", supplierJan: "", supplierCode: "",
   packSize: "", quantity: "", unitPrice: "",
-  unitQuantityPerPack: 1, memo: "", manufacturer: "",
+  memo: "", manufacturer: "",
 })
 
 const INITIAL_ROWS = 10
@@ -125,7 +124,6 @@ export default function ReceivingPage() {
         packSize: it.pack_size || "",
         quantity: String(it.quantity || ""),
         unitPrice: String(it.unit_price || ""),
-        unitQuantityPerPack: 1,
         memo: "",
         manufacturer: "",
       }))
@@ -186,7 +184,6 @@ export default function ReceivingPage() {
       try {
         const qty = Number(row.quantity)
         const price = row.unitPrice === "" ? null : Number(row.unitPrice)
-        const stockDelta = qty * row.unitQuantityPerPack
 
         // 商品検索 or 新規作成
         let product = findProduct(row)
@@ -207,12 +204,13 @@ export default function ReceivingPage() {
           if (cpe) throw new Error("商品新規作成失敗: " + cpe.message)
           product = newP as Product
           newLogs.push(`+ 新規商品作成: ${product.name}`)
-          // ローカルにも追加して以後のループで再利用可能に
           setProducts((prev) => [...prev, product!])
         }
 
-        // 在庫 + cost 更新
-        const productUpdate: { stock: number; cost?: number } = { stock: (product.stock || 0) + stockDelta }
+        // 在庫 + cost 更新（数量 = 在庫加算）
+        const before = Number(product.stock || 0)
+        const after = before + qty
+        const productUpdate: { stock: number; cost?: number } = { stock: after }
         if (price !== null && updateCost) productUpdate.cost = price
         const { error: pe } = await supabase.from("products").update(productUpdate).eq("id", product.id)
         if (pe) throw new Error(pe.message)
@@ -220,18 +218,30 @@ export default function ReceivingPage() {
         const memoStr = [
           row.memo,
           parsedMeta?.invoice_number ? `伝票:${parsedMeta.invoice_number}` : "",
-          row.unitQuantityPerPack !== 1 ? `(${qty}×${row.unitQuantityPerPack})` : "",
         ].filter(Boolean).join(" / ")
         const { error: re } = await supabase.from("stock_receipts").insert({
           product_id: product.id,
-          quantity: stockDelta,
+          quantity: qty,
           memo: memoStr || null,
           supplier_id: supplierId || null,
           unit_price: price,
         })
         if (re) throw new Error(re.message)
 
-        newLogs.push(`✓ ${product.name} +${stockDelta}${row.unitQuantityPerPack !== 1 ? ` (${qty}×${row.unitQuantityPerPack})` : ""}`)
+        // stock_movements にも記録（テーブル無い場合スキップ）
+        try {
+          await supabase.from("stock_movements").insert({
+            product_id: product.id,
+            movement_type: "入庫",
+            quantity: qty,
+            before_stock: before,
+            after_stock: after,
+            ref_type: "stock_receipt",
+            reason: parsedMeta?.invoice_number ? `仕入伝票 ${parsedMeta.invoice_number}` : "仕入入力",
+          })
+        } catch { /* スキップ */ }
+
+        newLogs.push(`✓ ${product.name} +${qty}`)
       } catch (e) {
         newLogs.push(`✗ ${row.productName}: ${(e as Error).message}`)
       }
@@ -343,21 +353,42 @@ export default function ReceivingPage() {
               <th className="px-1.5 py-1.5 text-center w-8">#</th>
               <th className="px-1.5 py-1.5 text-left">商品名</th>
               <th className="px-1.5 py-1.5 text-left w-32">JAN / 商品コード</th>
-              <th className="px-1.5 py-1.5 text-right w-12">数量</th>
-              <th className="px-1.5 py-1.5 text-right w-12" title="1パッケージあたりの個数">×</th>
-              <th className="px-1.5 py-1.5 text-right w-16">在庫加算</th>
-              <th className="px-1.5 py-1.5 text-right w-20">仕入単価</th>
-              <th className="px-1.5 py-1.5 text-right w-20">小計</th>
-              <th className="px-1.5 py-1.5 text-left w-32">メモ</th>
+              <th className="px-1.5 py-1.5 text-right w-16">数量</th>
+              <th className="px-1.5 py-1.5 text-right w-20">単価</th>
+              <th className="px-1.5 py-1.5 text-right w-24">小計</th>
+              <th className="px-1.5 py-1.5 text-center w-12" title="1パックを N個に分割（小計固定）">分割</th>
+              <th className="px-1.5 py-1.5 text-left w-28">メモ</th>
               <th className="px-1.5 py-1.5 text-center w-8"></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, i) => {
-              const stockDelta = Number(row.quantity || 0) * row.unitQuantityPerPack
-              const subtotal = (Number(row.unitPrice) || 0) * Number(row.quantity || 0)
+              const qty = Number(row.quantity || 0)
+              const price = Number(row.unitPrice || 0)
+              const subtotal = price * qty
               const existing = findProduct(row)
               const isPdfRow = !!(row.supplierJan || row.supplierCode)
+
+              // 小計を直接編集 → 単価 = 小計 / 数量
+              const onSubtotalChange = (v: string) => {
+                const newSub = Number(v.replace(/[^\d.]/g, "")) || 0
+                if (qty > 0) {
+                  const newPrice = newSub / qty
+                  updateRow(i, { unitPrice: String(Math.round(newPrice * 100) / 100) })
+                }
+              }
+
+              // ばらす: 1パックを N個に分割 → 数量×N、単価÷N、小計同じ
+              const split = () => {
+                if (qty <= 0) { alert("先に数量を入力してください"); return }
+                const factor = Number(prompt(`「${row.productName}」を何個に分割しますか？\n例: 1パック → 10個 で在庫管理したい場合は 10\n（小計は変わらず、単価が ${fmtYen(price)} → ${fmtYen(price / 10)} のように調整されます）`, "10"))
+                if (!factor || factor <= 0) return
+                updateRow(i, {
+                  quantity: String(qty * factor),
+                  unitPrice: String(Math.round((price / factor) * 100) / 100),
+                })
+              }
+
               return (
                 <tr key={i} className={"border-b border-gray-100 " + (existing ? "bg-emerald-50/30" : isPdfRow && row.productName ? "bg-yellow-50/40" : "")}>
                   <td className="px-1.5 py-0.5 text-center text-gray-400">{i + 1}</td>
@@ -377,23 +408,32 @@ export default function ReceivingPage() {
                     {row.supplierCode && <div>{row.supplierCode}</div>}
                   </td>
                   <td className="px-1.5 py-0.5">
-                    <input type="number" value={row.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" />
+                    <input type="number" value={row.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" title="数量 = 在庫に加算される数" />
                   </td>
-                  <td className="px-1.5 py-0.5">
-                    <input type="number" min={1} value={row.unitQuantityPerPack} onChange={(e) => updateRow(i, { unitQuantityPerPack: Math.max(1, Number(e.target.value) || 1) })} className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" title="1パッケージ=N個。例: 20枚入を「枚」管理なら20" />
-                  </td>
-                  <td className="px-1.5 py-0.5 text-right text-[11px] font-bold">{stockDelta > 0 ? stockDelta : ""}</td>
                   <td className="px-1.5 py-0.5">
                     <input
                       type="text"
-                      inputMode="numeric"
-                      value={row.unitPrice ? Number(row.unitPrice).toLocaleString("ja-JP") : ""}
+                      inputMode="decimal"
+                      value={row.unitPrice ? Number(row.unitPrice).toLocaleString("ja-JP", { maximumFractionDigits: 2 }) : ""}
                       onChange={(e) => updateRow(i, { unitPrice: e.target.value.replace(/[^\d.]/g, "") })}
                       placeholder="¥"
                       className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]"
                     />
                   </td>
-                  <td className="px-1.5 py-0.5 text-right text-[11px] font-bold">{subtotal > 0 ? fmtYen(subtotal) : ""}</td>
+                  <td className="px-1.5 py-0.5">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={subtotal > 0 ? Math.round(subtotal).toLocaleString("ja-JP") : ""}
+                      onChange={(e) => onSubtotalChange(e.target.value)}
+                      placeholder="¥"
+                      className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px] font-bold"
+                      title="小計を編集すると単価が自動逆算（数量固定）"
+                    />
+                  </td>
+                  <td className="px-1.5 py-0.5 text-center">
+                    <button onClick={split} disabled={qty <= 0} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 disabled:opacity-30" title="1パックを複数個に分割（小計固定）">📦 分割</button>
+                  </td>
                   <td className="px-1.5 py-0.5">
                     <input value={row.memo} onChange={(e) => updateRow(i, { memo: e.target.value })} placeholder="伝票No等" className="w-full px-1 py-0.5 border border-gray-200 rounded text-[11px]" />
                   </td>
@@ -406,9 +446,9 @@ export default function ReceivingPage() {
           </tbody>
           <tfoot className="bg-gray-50 sticky bottom-0">
             <tr className="border-t-2 border-gray-300">
-              <td colSpan={7} className="px-2 py-2 text-right text-xs font-bold text-gray-700">合計</td>
+              <td colSpan={5} className="px-2 py-2 text-right text-xs font-bold text-gray-700">合計</td>
               <td className="px-2 py-2 text-right text-base font-bold text-gray-900">{fmtYen(totalAmount)}</td>
-              <td colSpan={2}></td>
+              <td colSpan={3}></td>
             </tr>
           </tfoot>
         </table>

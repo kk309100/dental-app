@@ -46,26 +46,40 @@ export default function ReceivablesPage() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
+  // エイジングバケット（経過日数で分類）
+  function bucketOf(dueDate: string | null): "current" | "0-30" | "30-60" | "60-90" | "90+" {
+    if (!dueDate) return "current"
+    const due = new Date(dueDate)
+    if (due >= today) return "current"
+    const days = Math.floor((today.getTime() - due.getTime()) / 86400000)
+    if (days <= 30) return "0-30"
+    if (days <= 60) return "30-60"
+    if (days <= 90) return "60-90"
+    return "90+"
+  }
+
   const enriched = useMemo(() => invoices.map(inv => {
     const paid = paymentsByInvoice.get(inv.id) || Number(inv.paid_amount || 0)
     const remaining = Number(inv.total) - paid
     const overdue = inv.due_date ? new Date(inv.due_date) < today && remaining > 0 : false
-    return { inv, paid, remaining, overdue }
+    const bucket = remaining > 0 ? bucketOf(inv.due_date) : "current"
+    return { inv, paid, remaining, overdue, bucket }
   }), [invoices, paymentsByInvoice, today])
 
-  // 医院別に集計
+  // 医院別に集計（エイジング含む）
   const byClinic = useMemo(() => {
-    const m = new Map<string, { name: string; total: number; paid: number; remaining: number; overdueAmount: number; invoiceCount: number; oldestDue: string | null }>()
-    enriched.forEach(({ inv, paid, remaining, overdue }) => {
+    const m = new Map<string, { name: string; total: number; paid: number; remaining: number; overdueAmount: number; invoiceCount: number; oldestDue: string | null; aging: { current: number; "0-30": number; "30-60": number; "60-90": number; "90+": number } }>()
+    enriched.forEach(({ inv, paid, remaining, overdue, bucket }) => {
       const cl = inv.clinic_id ? clinicById.get(inv.clinic_id) : null
       const key = inv.clinic_id || "(医院不明)"
       const name = cl?.name || "(医院不明)"
-      const e = m.get(key) || { name, total: 0, paid: 0, remaining: 0, overdueAmount: 0, invoiceCount: 0, oldestDue: null }
+      const e = m.get(key) || { name, total: 0, paid: 0, remaining: 0, overdueAmount: 0, invoiceCount: 0, oldestDue: null, aging: { current: 0, "0-30": 0, "30-60": 0, "60-90": 0, "90+": 0 } }
       e.total += Number(inv.total)
       e.paid += paid
       e.remaining += remaining
       if (overdue) e.overdueAmount += remaining
       e.invoiceCount += 1
+      if (remaining > 0) e.aging[bucket] += remaining
       if (inv.due_date && remaining > 0) {
         if (!e.oldestDue || inv.due_date < e.oldestDue) e.oldestDue = inv.due_date
       }
@@ -78,6 +92,13 @@ export default function ReceivablesPage() {
       .filter(r => !search || r.name.includes(search))
       .sort((a, b) => b.remaining - a.remaining)
   }, [enriched, clinicById, showZero, overdueOnly, search])
+
+  // 全体エイジング合計
+  const agingTotal = useMemo(() => {
+    const t = { current: 0, "0-30": 0, "30-60": 0, "60-90": 0, "90+": 0 }
+    enriched.forEach(({ remaining, bucket }) => { if (remaining > 0) t[bucket] += remaining })
+    return t
+  }, [enriched])
 
   const totals = useMemo(() => byClinic.reduce(
     (s, r) => ({ total: s.total + r.total, paid: s.paid + r.paid, remaining: s.remaining + r.remaining, overdue: s.overdue + r.overdueAmount }),
@@ -100,6 +121,18 @@ export default function ReceivablesPage() {
         <KPI label="入金合計" value={totals.paid} color="#10b981" />
         <KPI label="未収合計" value={totals.remaining} color="#3b82f6" highlight />
         <KPI label="期限超過" value={totals.overdue} color="#dc2626" highlight />
+      </div>
+
+      {/* エイジングサマリ */}
+      <div className="bg-white rounded p-3" style={{ border: "1px solid #e8eaed" }}>
+        <p className="text-[10px] text-gray-500 font-bold mb-2">エイジング（未収金の経過日数別）</p>
+        <div className="grid grid-cols-5 gap-2 text-center">
+          <Aging label="期限内" amount={agingTotal["current"]} bg="#ecfdf5" color="#065f46" />
+          <Aging label="0-30日" amount={agingTotal["0-30"]} bg="#fef3c7" color="#92400e" />
+          <Aging label="30-60日" amount={agingTotal["30-60"]} bg="#fed7aa" color="#9a3412" />
+          <Aging label="60-90日" amount={agingTotal["60-90"]} bg="#fecaca" color="#991b1b" />
+          <Aging label="90日超" amount={agingTotal["90+"]} bg="#fee2e2" color="#7f1d1d" highlight />
+        </div>
       </div>
 
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
@@ -160,6 +193,15 @@ function KPI({ label, value, color = "#374151", highlight = false }: { label: st
     <div className="bg-white rounded p-3" style={{ border: "1px solid #e8eaed" }}>
       <p className="text-[10px] text-gray-500 font-bold">{label}</p>
       <p className={"tabular-nums mt-1 " + (highlight ? "text-xl font-bold" : "text-base font-bold")} style={{ color }}>{fmtYen(value)}</p>
+    </div>
+  )
+}
+
+function Aging({ label, amount, bg, color, highlight = false }: { label: string; amount: number; bg: string; color: string; highlight?: boolean }) {
+  return (
+    <div className="rounded p-2" style={{ background: bg }}>
+      <p className="text-[10px] font-bold" style={{ color }}>{label}</p>
+      <p className={"tabular-nums mt-1 " + (highlight ? "text-base font-bold" : "text-sm font-bold")} style={{ color }}>{amount > 0 ? fmtYen(amount) : "—"}</p>
     </div>
   )
 }
