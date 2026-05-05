@@ -1,10 +1,13 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
 import { COMPANY } from "@/lib/company"
+
+type Supplier = { id: string; name: string }
 
 type Order = { id: string; clinic_id: string; created_at: string; delivery_number: string | null }
 type OrderItem = {
@@ -43,7 +46,12 @@ export default function PurchaseOrderPage() {
   const [statusFilter, setStatusFilter] = useState<"unbought" | "bought" | "all">("unbought")
   const [makerFilter, setMakerFilter] = useState("all")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [printMode, setPrintMode] = useState<string | null>(null)  // メーカー名
+  const [printMode, setPrintMode] = useState<string | null>(null)
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [showCreatePOModal, setShowCreatePOModal] = useState(false)
+  const [makerToSupplier, setMakerToSupplier] = useState<Record<string, string>>({})
+  const [poBusy, setPoBusy] = useState(false)
+  const [createdPOs, setCreatedPOs] = useState<{ id: string; po_number: string; supplier_name: string }[]>([])
 
   useEffect(() => { fetchData() }, [])
 
@@ -59,6 +67,8 @@ export default function PurchaseOrderPage() {
     setOrderItems((i.data as OrderItem[]) || [])
     setProducts((p.data as Product[]) || [])
     setClinics((c.data as Clinic[]) || [])
+    const { data: sup } = await supabase.from("suppliers").select("id,name").order("name")
+    setSuppliers((sup as Supplier[]) || [])
     setLoading(false)
   }
 
@@ -121,16 +131,96 @@ export default function PurchaseOrderPage() {
   function selectAll() { setSelectedIds(new Set(filtered.map((r) => r.item_id))) }
   function clearSel() { setSelectedIds(new Set()) }
 
-  async function markSelectedAsPurchased() {
+  // 選択行をメーカー別にグループ化
+  const selectedByMaker = useMemo(() => {
+    const m = new Map<string, Row[]>()
+    allRows.filter(r => selectedIds.has(r.item_id)).forEach(r => {
+      if (!m.has(r.manufacturer)) m.set(r.manufacturer, [])
+      m.get(r.manufacturer)!.push(r)
+    })
+    return Array.from(m.entries())
+  }, [allRows, selectedIds])
+
+  function openCreatePOModal() {
     if (selectedIds.size === 0) { alert("選択行がありません"); return }
-    if (!confirm(`${selectedIds.size}件を発注済みにしますか？`)) return
-    const { error } = await supabase.from("order_items").update({
-      purchase_status: "発注済み",
-      purchased_at: new Date().toISOString(),
-    }).in("id", Array.from(selectedIds))
-    if (error) { alert(error.message); return }
-    setSelectedIds(new Set())
-    fetchData()
+    // メーカー名で suppliers を自動マッチ（部分一致）
+    const auto: Record<string, string> = {}
+    const norm = (s: string) => String(s || "").toLowerCase().normalize("NFKC")
+    selectedByMaker.forEach(([maker]) => {
+      const m = norm(maker)
+      const found = suppliers.find(s => {
+        const sn = norm(s.name)
+        return sn.includes(m) || m.includes(sn)
+      })
+      if (found) auto[maker] = found.id
+    })
+    setMakerToSupplier(auto)
+    setCreatedPOs([])
+    setShowCreatePOModal(true)
+  }
+
+  async function generatePoNumber() {
+    const now = new Date()
+    const y = now.getFullYear()
+    const mo = String(now.getMonth() + 1).padStart(2, "0")
+    const d = String(now.getDate()).padStart(2, "0")
+    const { data } = await supabase.from("purchase_orders").select("id")
+      .gte("created_at", `${y}-${mo}-${d}T00:00:00`)
+      .lte("created_at", `${y}-${mo}-${d}T23:59:59`)
+    const count = (data?.length || 0) + 1
+    const rand = Math.floor(Math.random() * 900) + 100
+    return `PO-${y}${mo}${d}-${String(count).padStart(3, "0")}-${rand}`
+  }
+
+  async function createPOs() {
+    setPoBusy(true)
+    const created: { id: string; po_number: string; supplier_name: string }[] = []
+    const allItemIdsToMark: string[] = []
+    try {
+      for (const [maker, rows] of selectedByMaker) {
+        const supplierId = makerToSupplier[maker] || null
+        const supName = supplierId ? (suppliers.find(s => s.id === supplierId)?.name || maker) : maker
+        const total = rows.reduce((s, r) => s + r.cost * r.quantity, 0)
+        const poNumber = await generatePoNumber()
+        // PO ヘッダ作成
+        const { data: po, error: poErr } = await supabase.from("purchase_orders").insert([{
+          po_number: poNumber,
+          supplier_id: supplierId,
+          status: "発注済",
+          ordered_at: new Date().toISOString(),
+          total_amount: total,
+          note: `${maker} 向け（${rows.length}行集約）`,
+        }]).select().single()
+        if (poErr || !po) { alert(`発注書作成失敗: ${poErr?.message || ""}`); setPoBusy(false); return }
+        // 商品行 + source_order_item_id
+        const items = rows.map(r => ({
+          purchase_order_id: po.id,
+          product_id: r.product_id || null,
+          product_name: r.product_name,
+          quantity: r.quantity,
+          unit_price: r.cost,
+          source_order_item_id: r.item_id,
+        }))
+        const { error: ie } = await supabase.from("purchase_order_items").insert(items)
+        if (ie) { alert(`明細作成失敗: ${ie.message}`); setPoBusy(false); return }
+        // 元の order_items を発注済みに更新
+        rows.forEach(r => allItemIdsToMark.push(r.item_id))
+        created.push({ id: po.id, po_number: poNumber, supplier_name: supName })
+      }
+      // 一括で order_items を発注済みに
+      if (allItemIdsToMark.length > 0) {
+        const { error: ue } = await supabase.from("order_items").update({
+          purchase_status: "発注済み",
+          purchased_at: new Date().toISOString(),
+        }).in("id", allItemIdsToMark)
+        if (ue) { alert(`元注文の更新失敗: ${ue.message}`); setPoBusy(false); return }
+      }
+      setCreatedPOs(created)
+      setSelectedIds(new Set())
+      fetchData()
+    } finally {
+      setPoBusy(false)
+    }
   }
 
   async function revertSelected() {
@@ -254,8 +344,8 @@ export default function PurchaseOrderPage() {
         <span className="text-gray-500">{selectedIds.size}件選択中</span>
         <div className="flex-1" />
         {statusFilter === "unbought" && (
-          <button onClick={markSelectedAsPurchased} disabled={selectedIds.size === 0} className="px-4 py-1.5 bg-emerald-600 text-white rounded font-bold disabled:opacity-40">
-            選択を発注済みにする ({selectedIds.size})
+          <button onClick={openCreatePOModal} disabled={selectedIds.size === 0} className="px-4 py-1.5 bg-emerald-600 text-white rounded font-bold disabled:opacity-40">
+            ✉ 発注書を作成 ({selectedIds.size})
           </button>
         )}
         {statusFilter === "bought" && (
@@ -313,6 +403,67 @@ export default function PurchaseOrderPage() {
           </tbody>
         </table>
       </div>
+
+      {/* 発注書作成モーダル */}
+      {showCreatePOModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !poBusy && setShowCreatePOModal(false)}>
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold">発注書を作成</h2>
+              <p className="text-xs text-gray-500 mt-1">
+                メーカー別に発注書を分けます。各メーカーに対する仕入先を選択してください。
+                発注書作成後、元注文は自動で「発注済み」に更新されます。
+              </p>
+            </div>
+            <div className="p-4 space-y-3">
+              {createdPOs.length > 0 ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded p-3">
+                  <p className="text-sm font-bold text-emerald-900 mb-2">✅ {createdPOs.length}件の発注書を作成しました</p>
+                  <ul className="space-y-1">
+                    {createdPOs.map(po => (
+                      <li key={po.id} className="flex items-center justify-between text-xs">
+                        <span><strong>{po.po_number}</strong> ({po.supplier_name})</span>
+                        <Link href={`/admin/purchase-orders/${po.id}`} className="text-blue-600 underline">開く</Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <>
+                  {selectedByMaker.map(([maker, rows]) => (
+                    <div key={maker} className="border border-gray-200 rounded p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-sm">{maker}</span>
+                        <span className="text-xs text-gray-500">{rows.length}行 / {fmtYen(rows.reduce((s, r) => s + r.cost * r.quantity, 0))}</span>
+                      </div>
+                      <select
+                        value={makerToSupplier[maker] || ""}
+                        onChange={e => setMakerToSupplier({ ...makerToSupplier, [maker]: e.target.value })}
+                        className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm"
+                      >
+                        <option value="">仕入先を選択（未指定でも作成可）</option>
+                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-100 flex items-center justify-end gap-2">
+              {createdPOs.length > 0 ? (
+                <button onClick={() => setShowCreatePOModal(false)} className="px-4 py-2 bg-gray-900 text-white text-sm rounded">閉じる</button>
+              ) : (
+                <>
+                  <button onClick={() => setShowCreatePOModal(false)} disabled={poBusy} className="px-4 py-2 text-gray-600 text-sm rounded">キャンセル</button>
+                  <button onClick={createPOs} disabled={poBusy} className="px-5 py-2 bg-emerald-600 text-white text-sm font-bold rounded disabled:opacity-50">
+                    {poBusy ? "作成中…" : `✓ ${selectedByMaker.length}件の発注書を作成`}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* メーカー別サマリ */}
       <details className="bg-white rounded-lg p-3" style={{ border: "1px solid #e8eaed" }}>

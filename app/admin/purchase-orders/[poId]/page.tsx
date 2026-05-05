@@ -91,6 +91,60 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
     router.push("/admin/purchase-orders")
   }
 
+  // メール送信: 仕入先のメールアドレス宛に発注書本文を mailto: で開く
+  async function sendByEmail() {
+    if (!po) return
+    if (!supplier?.email) {
+      alert("仕入先にメールアドレスが登録されていません。\n仕入先マスタで設定してください。")
+      return
+    }
+    const total = items.reduce((s, i) => s + Number(i.quantity || 0) * Number(i.unit_price || 0), 0)
+    const lines: string[] = []
+    lines.push(`${supplier.name} 御中`)
+    lines.push("")
+    lines.push("いつもお世話になっております。")
+    lines.push(`下記のとおり発注いたします。ご確認のほどよろしくお願いいたします。`)
+    lines.push("")
+    lines.push(`■ 発注書番号: ${po.po_number || po.id.slice(0, 8)}`)
+    if (po.ordered_at) lines.push(`■ 発注日: ${new Date(po.ordered_at).toLocaleDateString("ja-JP")}`)
+    if (po.expected_at) lines.push(`■ 納期希望: ${new Date(po.expected_at).toLocaleDateString("ja-JP")}`)
+    lines.push("")
+    lines.push("【明細】")
+    items.forEach((i, idx) => {
+      lines.push(`  ${idx + 1}. ${i.product_name} × ${i.quantity}  @${i.unit_price.toLocaleString()}円  =  ${(i.quantity * i.unit_price).toLocaleString()}円`)
+    })
+    lines.push("")
+    lines.push(`合計: ${total.toLocaleString()}円（税抜）`)
+    if (po.note) { lines.push(""); lines.push(`備考: ${po.note}`) }
+    lines.push("")
+    lines.push("────────────────────")
+    lines.push(COMPANY.name)
+    lines.push(`〒${COMPANY.postalCode} ${COMPANY.address}`)
+    lines.push(`TEL: ${COMPANY.phone}  FAX: ${COMPANY.fax}`)
+    lines.push("────────────────────")
+    const subject = `【発注書】${po.po_number || ""} ${COMPANY.name}より`
+    const body = lines.join("\r\n")
+    const mailto = `mailto:${encodeURIComponent(supplier.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    window.location.href = mailto
+    // 送信記録（あくまでメール起動の記録、実際の送信は確認できない）
+    try {
+      await supabase.from("email_logs").insert({
+        to_email: supplier.email,
+        subject,
+        body,
+        related_type: "purchase_order",
+        related_id: po.id,
+        status: "mailto_opened",
+      })
+      // PO に sent_method/sent_at を記録
+      await supabase.from("purchase_orders").update({
+        sent_method: "メール",
+        sent_at: new Date().toISOString(),
+      }).eq("id", po.id)
+      fetchData()
+    } catch { /* テーブル無くてもOK */ }
+  }
+
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
   if (err || !po) return <p className="text-red-600 text-center py-12">{err}</p>
 
@@ -107,6 +161,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
           {po.status === "発注済" && <button onClick={() => setStatus("部分入荷")} className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded">部分入荷</button>}
           {(po.status === "発注済" || po.status === "部分入荷") && <button onClick={() => setStatus("入荷済")} className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded">入荷完了</button>}
           {po.status !== "取消" && po.status !== "入荷済" && <button onClick={() => setStatus("取消")} className="text-xs px-3 py-1.5 bg-gray-200 text-gray-700 rounded">取消</button>}
+          <button onClick={sendByEmail} className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded" title={supplier?.email ? `${supplier.email} 宛に送信` : "仕入先のメール未設定"}>✉ メール送付</button>
           <button onClick={() => window.print()} className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded">🖨 印刷</button>
           <button onClick={deletePO} className="text-xs px-3 py-1.5 text-red-600 hover:bg-red-50 rounded">削除</button>
         </div>
