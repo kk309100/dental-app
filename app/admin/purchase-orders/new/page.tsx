@@ -8,6 +8,7 @@ import { fmtYen } from "@/lib/invoice"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
 import { COMPANY } from "@/lib/company"
 import Seal from "@/app/components/Seal"
+import { fetchAllSupplierPrices, makeSupplierPriceMap, supplierPriceKey, bulkUpsertSupplierPrices, type SupplierPrice } from "@/lib/pricing"
 type Product = { id: string; name: string; product_code: string | null; cost: number | null; default_supplier_id?: string | null }
 type Row = { product_id: string | null; product_name: string; quantity: number; unit_price: number; note?: string }
 
@@ -34,6 +35,9 @@ function NewPOPage() {
   const [rows, setRows] = useState<Row[]>([{ product_id: null, product_name: "", quantity: 1, unit_price: 0 }])
   const [saving, setSaving] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  // 仕入先別価格マスタ（pickProduct 時の単価自動補完）
+  const [supplierPrices, setSupplierPrices] = useState<SupplierPrice[]>([])
+  const supplierPriceMap = useMemo(() => makeSupplierPriceMap(supplierPrices), [supplierPrices])
 
   // 自動提案からのデータ
   useEffect(() => {
@@ -51,12 +55,14 @@ function NewPOPage() {
 
   useEffect(() => {
     (async () => {
-      const [sups, p] = await Promise.all([
+      const [sups, p, sp] = await Promise.all([
         fetchSuppliersByUsage("id,name"),
         supabase.from("products").select("id,name,product_code,cost,default_supplier_id").order("name").limit(50000),
+        fetchAllSupplierPrices(),  // 仕入先別価格マスタ
       ])
       setSuppliers(sups)
       setProducts((p.data as Product[]) || [])
+      setSupplierPrices(sp)
     })()
   }, [])
 
@@ -67,8 +73,14 @@ function NewPOPage() {
   }
   function pickProduct(idx: number, name: string) {
     const p = productByName.get(name)
-    if (p) updateRow(idx, { product_id: p.id, product_name: p.name, unit_price: Number(p.cost || 0) })
-    else updateRow(idx, { product_id: null, product_name: name })
+    if (p) {
+      // ★ 仕入先別単価マスタから優先取得 → 無ければ商品標準仕入価格 (cost)
+      const supplierPrice = supplierId ? supplierPriceMap.get(supplierPriceKey(supplierId, p.id)) : undefined
+      const finalPrice = supplierPrice !== undefined ? supplierPrice : Number(p.cost || 0)
+      updateRow(idx, { product_id: p.id, product_name: p.name, unit_price: finalPrice })
+    } else {
+      updateRow(idx, { product_id: null, product_name: name })
+    }
   }
   const addRow = () => setRows(prev => [...prev, { product_id: null, product_name: "", quantity: 1, unit_price: 0 }])
   const removeRow = (idx: number) => setRows(prev => prev.length === 1 ? [{ product_id: null, product_name: "", quantity: 1, unit_price: 0 }] : prev.filter((_, i) => i !== idx))
@@ -118,6 +130,10 @@ function NewPOPage() {
       alert(`明細作成失敗: ${ie.message}\n\n発注書も取消しました。\n\n💡 RLS エラーの場合は db/migrations/2026-05-05_disable_rls_again.sql を Supabase Studio で実行してください。`)
       setSaving(false); return
     }
+
+    // ★ 仕入先別単価マスタを最新価格で学習（次回同じ仕入先×商品はこの単価が自動補完される）
+    await bulkUpsertSupplierPrices(supplierId, valid.map(r => ({ product_id: r.product_id, unit_price: Number(r.unit_price) })))
+
     alert(`発注書を${asDraft ? "下書き保存" : "発注済として作成"}しました（${poNumber}）`)
     router.push(`/admin/purchase-orders/${po.id}`)
   }
@@ -157,7 +173,11 @@ function NewPOPage() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, idx) => (
+            {rows.map((r, idx) => {
+              // この仕入先 × この商品 のマスタ単価
+              const masterPrice = (supplierId && r.product_id) ? supplierPriceMap.get(supplierPriceKey(supplierId, r.product_id)) : undefined
+              const masterDiffers = masterPrice !== undefined && masterPrice !== Number(r.unit_price)
+              return (
               <tr key={idx} className="border-t border-gray-100">
                 <td className="px-2 py-1 text-xs text-gray-400">{idx + 1}</td>
                 <td className="px-2 py-1">
@@ -175,6 +195,15 @@ function NewPOPage() {
                   <input type="number" value={r.unit_price}
                     onChange={e => updateRow(idx, { unit_price: Number(e.target.value) })}
                     className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right" min={0} />
+                  {masterDiffers && (
+                    <button
+                      type="button"
+                      onClick={() => updateRow(idx, { unit_price: masterPrice! })}
+                      className="text-[10px] text-emerald-700 hover:underline mt-0.5 block w-full text-right"
+                      title="この仕入先の登録単価を適用">
+                      💡 マスタ ¥{masterPrice!.toLocaleString()} を適用
+                    </button>
+                  )}
                 </td>
                 <td className="px-2 py-1 text-right tabular-nums text-gray-700">
                   {fmtYen(Number(r.quantity || 0) * Number(r.unit_price || 0))}
@@ -183,7 +212,8 @@ function NewPOPage() {
                   <button onClick={() => removeRow(idx)} className="text-gray-400 hover:text-red-500">×</button>
                 </td>
               </tr>
-            ))}
+              )
+            })}
           </tbody>
           <tfoot>
             <tr className="bg-gray-50 border-t border-gray-200">

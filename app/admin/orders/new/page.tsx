@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
+import { fetchAllClinicPrices, makeClinicPriceMap, clinicPriceKey, bulkUpsertClinicPrices, type ClinicPrice } from "@/lib/pricing"
 
 export default function NewOrderPageWrapper() {
   return (
@@ -47,6 +48,9 @@ function NewOrderPage() {
   const [showRecent, setShowRecent] = useState(false)
   const [productSearch, setProductSearch] = useState("")
   const [showProductPicker, setShowProductPicker] = useState<number | null>(null)
+  // 医院別価格マスタ（pickProduct 時の単価自動補完に使う）
+  const [clinicPrices, setClinicPrices] = useState<ClinicPrice[]>([])
+  const clinicPriceMap = useMemo(() => makeClinicPriceMap(clinicPrices), [clinicPrices])
 
   // 初期ロード: 営業マン名を localStorage から復元
   useEffect(() => {
@@ -56,12 +60,14 @@ function NewOrderPage() {
 
   useEffect(() => {
     (async () => {
-      const [c, p] = await Promise.all([
+      const [c, p, cp] = await Promise.all([
         supabase.from("clinics").select("id,name,corporate_name").order("name").limit(50000),
         supabase.from("products").select("id,name,product_code,price,stock,manufacturer,category").order("name").limit(50000),
+        fetchAllClinicPrices(),  // 医院別価格マスタ
       ])
       setClinics((c.data as Clinic[]) || [])
       setProducts((p.data as Product[]) || [])
+      setClinicPrices(cp)
 
       // 過去注文コピー処理
       if (copyFromId) {
@@ -141,10 +147,13 @@ function NewOrderPage() {
   }
 
   function pickProduct(idx: number, p: Product) {
+    // ★ 医院別単価マスタから優先取得 → 無ければ商品標準価格
+    const clinicPrice = clinicId ? clinicPriceMap.get(clinicPriceKey(clinicId, p.id)) : undefined
+    const finalPrice = clinicPrice !== undefined ? clinicPrice : Number(p.price || 0)
     updateRow(idx, {
       product_id: p.id,
       product_name: p.name,
-      price: Number(p.price || 0),
+      price: finalPrice,
     })
     setShowProductPicker(null)
     setProductSearch("")
@@ -245,6 +254,8 @@ function NewOrderPage() {
       }))
       const { error: ie } = await supabase.from("order_items").insert(items)
       if (ie) { alert("明細エラー: " + ie.message); setSaving(false); return }
+      // ★ 医院別単価マスタを学習
+      await bulkUpsertClinicPrices(clinicId, validRows.map(r => ({ product_id: r.product_id, price: Number(r.price) })))
       alert(`注文を作成しました（${deliveryNumber}）※新スキーマ未適用のため、営業マン名等は保存されていません`)
       router.push("/admin/orders"); return
     }
@@ -255,6 +266,10 @@ function NewOrderPage() {
     }))
     const { error: ie } = await supabase.from("order_items").insert(items)
     if (ie) { alert("明細エラー: " + ie.message); setSaving(false); return }
+
+    // ★ 医院別単価マスタを最新価格で学習（次回同じ医院×商品はこの単価が自動補完される）
+    await bulkUpsertClinicPrices(clinicId, validRows.map(r => ({ product_id: r.product_id, price: Number(r.price) })))
+
     alert(`注文を作成しました（${deliveryNumber}）`)
     router.push("/admin/orders")
   }
@@ -489,7 +504,11 @@ function NewOrderPage() {
               {filteredProducts.length === 0 ? (
                 <p className="p-6 text-center text-gray-400 text-sm">該当商品なし</p>
               ) : (
-                filteredProducts.map(p => (
+                filteredProducts.map(p => {
+                  const clinicSpecificPrice = clinicId ? clinicPriceMap.get(clinicPriceKey(clinicId, p.id)) : undefined
+                  const standardPrice = Number(p.price || 0)
+                  const hasClinicPrice = clinicSpecificPrice !== undefined && clinicSpecificPrice !== standardPrice
+                  return (
                   <button
                     key={p.id}
                     onClick={() => pickProduct(showProductPicker, p)}
@@ -505,14 +524,25 @@ function NewOrderPage() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold text-gray-900 tabular-nums">¥{Number(p.price || 0).toLocaleString()}</p>
+                        {hasClinicPrice ? (
+                          <>
+                            <p className="text-sm font-bold text-emerald-700 tabular-nums">
+                              💡 ¥{clinicSpecificPrice!.toLocaleString()}
+                              <span className="ml-1 text-[10px] font-normal text-emerald-600">医院別</span>
+                            </p>
+                            <p className="text-[10px] text-gray-400 line-through tabular-nums">標準 ¥{standardPrice.toLocaleString()}</p>
+                          </>
+                        ) : (
+                          <p className="text-sm font-bold text-gray-900 tabular-nums">¥{standardPrice.toLocaleString()}</p>
+                        )}
                         <p className={"text-xs " + ((p.stock || 0) > 0 ? "text-gray-500" : "text-red-500")}>
                           在庫 {p.stock || 0}
                         </p>
                       </div>
                     </div>
                   </button>
-                ))
+                  )
+                })
               )}
             </div>
             <div className="p-2 border-t border-gray-100 text-right">

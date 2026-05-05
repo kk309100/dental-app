@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { parseCSV, toCSV, downloadCSV } from "@/lib/csv"
+import ProductPriceMatrix from "@/app/components/ProductPriceMatrix"
 
 type Product = {
   id: string
@@ -30,6 +31,7 @@ export default function AdminProductsPage() {
   const [page, setPage] = useState(1)
   const [editId, setEditId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<Partial<Product>>({})
+  const [expandedPriceId, setExpandedPriceId] = useState<string | null>(null)  // 価格マトリクス展開中の商品ID
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState("")
   const [showInactive, setShowInactive] = useState(false)
@@ -257,14 +259,15 @@ export default function AdminProductsPage() {
               <th className="px-2 py-1.5 text-right w-16" style={td0}>仕入</th>
               <th className="px-2 py-1.5 text-right w-16" style={td0}>定価</th>
               <th className="px-2 py-1.5 text-right w-12" style={td0}>在庫</th>
-              <th className="px-2 py-1.5 text-center w-16" style={td0}>操作</th>
+              <th className="px-2 py-1.5 text-center w-24" style={td0}>操作</th>
             </tr>
           </thead>
           <tbody>
             {pageItems.length === 0 ? (
               <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">該当商品なし</td></tr>
             ) : pageItems.map((p, i) => (
-              <tr key={p.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/40")}>
+              <React.Fragment key={p.id}>
+              <tr className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/40")}>
                 {editId === p.id ? (
                   <>
                     <td className="px-1 py-0.5" style={td0}><input value={editForm.name || ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs" /></td>
@@ -289,6 +292,11 @@ export default function AdminProductsPage() {
                     <td className="px-2 py-1 text-right text-[11px] text-gray-700" style={td0}>{p.price ? p.price.toLocaleString() : ""}</td>
                     <td className="px-2 py-1 text-right text-[11px]" style={td0}>{p.stock ?? 0}</td>
                     <td className="px-1 py-1 text-center" style={td0}>
+                      <button onClick={() => setExpandedPriceId(expandedPriceId === p.id ? null : p.id)}
+                        className={"text-[10px] px-1.5 py-0.5 rounded mr-1 " + (expandedPriceId === p.id ? "bg-blue-600 text-white" : "border border-gray-200 hover:bg-blue-50 text-blue-700")}
+                        title="仕入先別/医院別の単価を表示">
+                        💰
+                      </button>
                       <button onClick={() => startEdit(p)} className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編</button>
                       <button onClick={() => toggleActive(p)}
                         className={"text-[10px] px-1.5 py-0.5 rounded " + (p.active === false ? "bg-gray-200 text-gray-600" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100")}
@@ -299,6 +307,19 @@ export default function AdminProductsPage() {
                   </>
                 )}
               </tr>
+              {expandedPriceId === p.id && (
+                <tr>
+                  <td colSpan={8} className="p-0">
+                    <ProductPriceMatrix
+                      productId={p.id}
+                      productName={p.name}
+                      standardCost={p.cost}
+                      standardPrice={p.price}
+                    />
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
