@@ -27,6 +27,7 @@ type Product = {
 }
 type OrderItem = { product_id: string | null; quantity: number; order_id: string }
 type Order = { id: string; status: string }
+type StockReceipt = { id: string; product_id: string; supplier_id: string | null; quantity: number; unit_price: number | null; created_at: string }
 
 type Suggestion = {
   product: Product
@@ -51,19 +52,30 @@ function SuggestPOPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [groupSupplier, setGroupSupplier] = useState<string>("")
+  const [historyByProduct, setHistoryByProduct] = useState<Map<string, StockReceipt[]>>(new Map())
+  const [openHistoryProductId, setOpenHistoryProductId] = useState<string | null>(null)
 
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setLoading(true)
-    const [p, sups, oi, o] = await Promise.all([
+    const [p, sups, oi, o, sr] = await Promise.all([
       supabase.from("products").select("id,name,product_code,manufacturer,stock,reorder_level,cost,default_supplier_id"),
       fetchSuppliersByUsage("id,name"),
       supabase.from("order_items").select("product_id,quantity,order_id"),
       supabase.from("orders").select("id,status").not("status", "in", '("納品済み","キャンセル")'),
+      supabase.from("stock_receipts").select("id,product_id,supplier_id,quantity,unit_price,created_at").order("created_at", { ascending: false }),
     ])
     const products = (p.data as Product[]) || []
     setSuppliers(sups)
+    // 商品ごとの過去仕入履歴をマップ化
+    const histMap = new Map<string, StockReceipt[]>()
+    ;((sr.data as StockReceipt[]) || []).forEach(r => {
+      if (!r.product_id) return
+      if (!histMap.has(r.product_id)) histMap.set(r.product_id, [])
+      histMap.get(r.product_id)!.push(r)
+    })
+    setHistoryByProduct(histMap)
     const orders = (o.data as Order[]) || []
     const orderIds = new Set(orders.map(o => o.id))
     const items = ((oi.data as OrderItem[]) || []).filter(i => i.order_id && orderIds.has(i.order_id))
@@ -75,41 +87,71 @@ function SuggestPOPage() {
       reserved.set(i.product_id, (reserved.get(i.product_id) || 0) + Number(i.quantity || 0))
     })
 
-    // ?from_orders=xxx,yyy が指定されたら、そのオーダーに含まれる product_id だけ表示
-    const fromOrderProductIds = new Set<string>()
-    if (sourceOrderIds.length > 0) {
-      ((oi.data as OrderItem[]) || [])
-        .filter(i => i.order_id && sourceOrderIds.includes(i.order_id) && i.product_id)
-        .forEach(i => fromOrderProductIds.add(i.product_id as string))
+    const list: Suggestion[] = []
+
+    // 商品ごとの「最後の仕入先」を計算（自動マッチ用）
+    function lastSupplier(productId: string): { supplierId: string | null; lastPrice: number | null } {
+      const hist = histMap.get(productId)
+      if (!hist || hist.length === 0) return { supplierId: null, lastPrice: null }
+      const latest = hist[0]  // 既に created_at desc 順
+      return { supplierId: latest.supplier_id, lastPrice: latest.unit_price }
     }
 
-    const list: Suggestion[] = []
-    products.forEach(p => {
-      // from_orders 指定時はそれに含まれる商品だけ
-      if (sourceOrderIds.length > 0 && !fromOrderProductIds.has(p.id)) return
-
-      const stock = Number(p.stock || 0)
-      const reorderLv = Number(p.reorder_level || 0)
-      const reservedQty = reserved.get(p.id) || 0
-      const effectiveStock = stock - reservedQty
-      // 推奨ロジック: (発注点 + 予約済み数) - 在庫 が正なら不足。最低でも1個。
-      const shortBy = Math.max(0, (reorderLv + reservedQty) - stock)
-      // 提案数: 不足量が0でも reorderLv より下回ってたら半月分くらい補充。シンプルに shortBy + reorderLv で発注。
-      const suggestQty = shortBy > 0 ? Math.max(shortBy, Math.ceil(reorderLv * 0.5)) : 0
-      // from_orders 指定時は不足してなくても表示（ユーザーが選んで発注できる）
-      if (sourceOrderIds.length > 0 || suggestQty > 0 || effectiveStock < 0) {
+    if (sourceOrderIds.length > 0) {
+      // 【from_order/from_orders 指定モード】
+      // その注文に含まれる商品だけを、注文数量ベースで「不足分だけ」発注候補にする
+      const orderQtyByProduct = new Map<string, number>()
+      ;((oi.data as OrderItem[]) || [])
+        .filter(i => i.order_id && sourceOrderIds.includes(i.order_id) && i.product_id)
+        .forEach(i => {
+          const cur = orderQtyByProduct.get(i.product_id as string) || 0
+          orderQtyByProduct.set(i.product_id as string, cur + Number(i.quantity || 0))
+        })
+      products.forEach(p => {
+        const orderQty = orderQtyByProduct.get(p.id) || 0
+        if (orderQty === 0) return
+        const stock = Number(p.stock || 0)
+        const shortBy = Math.max(0, orderQty - stock)
+        if (shortBy <= 0) return
+        // 過去仕入の最後の仕入先・単価を初期値に
+        const last = lastSupplier(p.id)
         list.push({
           product: p,
           systemStock: stock,
-          reorderLevel: reorderLv,
-          reservedQty,
-          shortBy: Math.max(shortBy, -effectiveStock, 0),
-          suggestQty: Math.max(suggestQty, -effectiveStock, sourceOrderIds.length > 0 ? 1 : 0, 1),
-          unitPrice: Number(p.cost || 0),
-          selected: shortBy > 0 || effectiveStock < 0,
+          reorderLevel: orderQty,
+          reservedQty: orderQty,
+          shortBy,
+          suggestQty: shortBy,
+          unitPrice: last.lastPrice ?? Number(p.cost || 0),
+          selected: true,
+          supplierOverride: last.supplierId || p.default_supplier_id || undefined,
         })
-      }
-    })
+      })
+    } else {
+      // 【通常モード】商品マスタ全体の在庫不足から推奨
+      products.forEach(p => {
+        const stock = Number(p.stock || 0)
+        const reorderLv = Number(p.reorder_level || 0)
+        const reservedQty = reserved.get(p.id) || 0
+        const effectiveStock = stock - reservedQty
+        const shortBy = Math.max(0, (reorderLv + reservedQty) - stock)
+        const suggestQty = shortBy > 0 ? Math.max(shortBy, Math.ceil(reorderLv * 0.5)) : 0
+        if (suggestQty > 0 || effectiveStock < 0) {
+          const last = lastSupplier(p.id)
+          list.push({
+            product: p,
+            systemStock: stock,
+            reorderLevel: reorderLv,
+            reservedQty,
+            shortBy: Math.max(shortBy, -effectiveStock),
+            suggestQty: Math.max(suggestQty, -effectiveStock, 1),
+            unitPrice: last.lastPrice ?? Number(p.cost || 0),
+            selected: true,
+            supplierOverride: last.supplierId || p.default_supplier_id || undefined,
+          })
+        }
+      })
+    }
     list.sort((a, b) => (b.shortBy / Math.max(1, b.reorderLevel)) - (a.shortBy / Math.max(1, a.reorderLevel)))
     setSuggestions(list)
     setLoading(false)
@@ -164,11 +206,22 @@ function SuggestPOPage() {
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-gray-900">
-          発注書の自動提案
-          <span className="ml-2 text-xs font-normal text-gray-400">在庫不足 + 予約済み数を考慮した発注候補</span>
+          {sourceOrderIds.length > 0 ? "📦 注文の不足品 発注" : "発注書の自動提案"}
+          <span className="ml-2 text-xs font-normal text-gray-400">
+            {sourceOrderIds.length > 0
+              ? `この注文を出荷するために必要な不足分（${sourceOrderIds.length}件分の注文）`
+              : "在庫不足 + 予約済み数を考慮した発注候補"}
+          </span>
         </h1>
         <Link href="/admin/purchase-orders" className="text-xs text-gray-500 underline">← 発注書一覧</Link>
       </div>
+      {sourceOrderIds.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-xs text-blue-800">
+          💡 この画面では「<strong>注文に必要な分だけ</strong>」を発注候補として表示しています。
+          余裕を持って多めに発注したい場合は数量を編集してください。
+          <Link href="/admin/purchase-orders/suggest" className="ml-2 underline">→ 全在庫不足を見る</Link>
+        </div>
+      )}
 
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="商品名・コード・メーカー"
@@ -204,10 +257,10 @@ function SuggestPOPage() {
               <th className="px-2 py-1.5 text-center w-8"></th>
               <th className="px-2 py-1.5 text-left">商品</th>
               <th className="px-2 py-1.5 text-right w-16">在庫</th>
-              <th className="px-2 py-1.5 text-right w-16">予約</th>
-              <th className="px-2 py-1.5 text-right w-16">発注点</th>
+              <th className="px-2 py-1.5 text-right w-16">{sourceOrderIds.length > 0 ? "注文" : "予約"}</th>
+              <th className="px-2 py-1.5 text-right w-16">{sourceOrderIds.length > 0 ? "必要" : "発注点"}</th>
               <th className="px-2 py-1.5 text-right w-16">不足</th>
-              <th className="px-2 py-1.5 text-right w-20">提案数</th>
+              <th className="px-2 py-1.5 text-right w-20">発注数</th>
               <th className="px-2 py-1.5 text-right w-24">単価</th>
               <th className="px-2 py-1.5 text-right w-24">小計</th>
               <th className="px-2 py-1.5 text-left w-44">仕入先</th>
@@ -218,37 +271,81 @@ function SuggestPOPage() {
               <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">不足商品なし 🎉</td></tr>
             ) : filtered.map((s, idx) => {
               const realIdx = suggestions.indexOf(s)
+              const history = historyByProduct.get(s.product.id) || []
+              const isHistoryOpen = openHistoryProductId === s.product.id
               return (
-                <tr key={s.product.id} className={"border-b border-gray-100 " + (idx % 2 === 0 ? "" : "bg-gray-50/30")}>
-                  <td className="px-2 py-1 text-center">
-                    <input type="checkbox" checked={s.selected} onChange={e => update(realIdx, { selected: e.target.checked })} />
-                  </td>
-                  <td className="px-2 py-1">
-                    <div className="font-bold text-gray-900">{s.product.name}</div>
-                    <div className="text-[10px] text-gray-500">{s.product.product_code || ""} {s.product.manufacturer || ""}</div>
-                  </td>
-                  <td className={"px-2 py-1 text-right tabular-nums " + (s.systemStock <= 0 ? "text-red-600 font-bold" : "text-gray-700")}>{s.systemStock}</td>
-                  <td className="px-2 py-1 text-right tabular-nums text-gray-500">{s.reservedQty || "—"}</td>
-                  <td className="px-2 py-1 text-right tabular-nums text-gray-500">{s.reorderLevel || "—"}</td>
-                  <td className="px-2 py-1 text-right tabular-nums text-amber-700 font-bold">{s.shortBy || "—"}</td>
-                  <td className="px-2 py-1">
-                    <input type="number" value={s.suggestQty} onChange={e => update(realIdx, { suggestQty: Number(e.target.value) })}
-                      className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs text-right" min={0} />
-                  </td>
-                  <td className="px-2 py-1">
-                    <input type="number" value={s.unitPrice} onChange={e => update(realIdx, { unitPrice: Number(e.target.value) })}
-                      className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs text-right" min={0} />
-                  </td>
-                  <td className="px-2 py-1 text-right tabular-nums font-bold">{fmtYen(s.suggestQty * s.unitPrice)}</td>
-                  <td className="px-2 py-1">
-                    <select value={s.supplierOverride || s.product.default_supplier_id || ""}
-                      onChange={e => update(realIdx, { supplierOverride: e.target.value })}
-                      className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs">
-                      <option value="">(未設定)</option>
-                      {suppliers.map(sup => <option key={sup.id} value={sup.id}>{supplierOptionLabel(sup)}</option>)}
-                    </select>
-                  </td>
-                </tr>
+                <>
+                  <tr key={s.product.id} className={"border-b border-gray-100 " + (idx % 2 === 0 ? "" : "bg-gray-50/30")}>
+                    <td className="px-2 py-1 text-center">
+                      <input type="checkbox" checked={s.selected} onChange={e => update(realIdx, { selected: e.target.checked })} />
+                    </td>
+                    <td className="px-2 py-1">
+                      <div className="font-bold text-gray-900">{s.product.name}</div>
+                      <div className="text-[10px] text-gray-500 flex items-center gap-2">
+                        <span>{s.product.product_code || ""} {s.product.manufacturer || ""}</span>
+                        {history.length > 0 && (
+                          <button
+                            onClick={() => setOpenHistoryProductId(isHistoryOpen ? null : s.product.id)}
+                            className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
+                            title="過去の仕入履歴"
+                          >📜 履歴 {history.length}</button>
+                        )}
+                      </div>
+                    </td>
+                    <td className={"px-2 py-1 text-right tabular-nums " + (s.systemStock <= 0 ? "text-red-600 font-bold" : "text-gray-700")}>{s.systemStock}</td>
+                    <td className="px-2 py-1 text-right tabular-nums text-gray-500">{s.reservedQty || "—"}</td>
+                    <td className="px-2 py-1 text-right tabular-nums text-gray-500">{s.reorderLevel || "—"}</td>
+                    <td className="px-2 py-1 text-right tabular-nums text-amber-700 font-bold">{s.shortBy || "—"}</td>
+                    <td className="px-2 py-1">
+                      <input type="number" value={s.suggestQty} onChange={e => update(realIdx, { suggestQty: Number(e.target.value) })}
+                        className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs text-right" min={0} />
+                    </td>
+                    <td className="px-2 py-1">
+                      <input type="number" value={s.unitPrice} onChange={e => update(realIdx, { unitPrice: Number(e.target.value) })}
+                        className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs text-right" min={0} />
+                    </td>
+                    <td className="px-2 py-1 text-right tabular-nums font-bold">{fmtYen(s.suggestQty * s.unitPrice)}</td>
+                    <td className="px-2 py-1">
+                      <select value={s.supplierOverride || s.product.default_supplier_id || ""}
+                        onChange={e => update(realIdx, { supplierOverride: e.target.value })}
+                        className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs">
+                        <option value="">(未設定)</option>
+                        {suppliers.map(sup => <option key={sup.id} value={sup.id}>{supplierOptionLabel(sup)}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                  {isHistoryOpen && history.length > 0 && (
+                    <tr className="bg-blue-50/30 border-b border-gray-100">
+                      <td colSpan={10} className="px-4 py-2">
+                        <p className="text-[10px] font-bold text-gray-500 mb-1">過去の仕入履歴（クリックで仕入先・単価セット）</p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1">
+                          {history.slice(0, 12).map(h => {
+                            const sup = suppliers.find(x => x.id === h.supplier_id)
+                            return (
+                              <button
+                                key={h.id}
+                                onClick={() => update(realIdx, {
+                                  supplierOverride: h.supplier_id || undefined,
+                                  unitPrice: Number(h.unit_price || 0),
+                                })}
+                                className="text-left text-[11px] px-2 py-1.5 bg-white border border-gray-200 rounded hover:bg-emerald-50 hover:border-emerald-300"
+                                title="クリックでこの仕入先・単価をセット"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-gray-900 truncate">{sup?.name || "(未設定)"}</span>
+                                  <span className="text-emerald-700 font-bold tabular-nums ml-2">¥{Number(h.unit_price || 0).toLocaleString()}</span>
+                                </div>
+                                <div className="text-[10px] text-gray-500">
+                                  {new Date(h.created_at).toLocaleDateString("ja-JP")} ・ {h.quantity}個
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
               )
             })}
           </tbody>

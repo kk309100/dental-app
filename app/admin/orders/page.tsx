@@ -56,10 +56,13 @@ function AdminOrdersPage() {
       supabase.from("clinics").select("id,name,corporate_name"),
       supabase.from("products").select("id,name,stock"),
     ])
-    setOrders((o.data as Order[]) || [])
+    const orders = (o.data as Order[]) || []
+    setOrders(orders)
     setOrderItems((i.data as OrderItem[]) || [])
     setClinics((c.data as Clinic[]) || [])
     setProducts((p.data as Product[]) || [])
+    // 未納品の注文は商品明細をデフォルトで展開
+    setOpenOrderIds(new Set(orders.filter(o => !["納品済み", "キャンセル"].includes(o.status)).map(o => o.id)))
     setLoading(false)
   }
 
