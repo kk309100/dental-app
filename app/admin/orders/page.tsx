@@ -184,24 +184,22 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center flex-wrap gap-2">
         <h1 className="text-lg font-bold text-gray-900">
           注文管理
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{orders.length} ・ 未納品 {counts.undelivered} ・ 納品済 {counts.delivered}</span>
         </h1>
-        <div className="flex items-center gap-2">
-          <Link href="/admin/orders/new" className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
-            ＋ 新規注文
-          </Link>
-          {/* ビュー切替 */}
-          <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs">
-            <button onClick={() => setView("byClinic")} className={"px-3 py-1.5 rounded font-bold " + (view === "byClinic" ? "bg-white shadow text-gray-900" : "text-gray-500")}>
-              🏥 医院別
-            </button>
-            <button onClick={() => setView("flat")} className={"px-3 py-1.5 rounded font-bold " + (view === "flat" ? "bg-white shadow text-gray-900" : "text-gray-500")}>
-              📋 一覧
-            </button>
-          </div>
+        <Link href="/admin/orders/new" className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
+          ＋ 新規注文
+        </Link>
+        {/* ビュー切替 */}
+        <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs">
+          <button onClick={() => setView("byClinic")} className={"px-3 py-1.5 rounded font-bold " + (view === "byClinic" ? "bg-white shadow text-gray-900" : "text-gray-500")}>
+            🏥 医院別
+          </button>
+          <button onClick={() => setView("flat")} className={"px-3 py-1.5 rounded font-bold " + (view === "flat" ? "bg-white shadow text-gray-900" : "text-gray-500")}>
+            📋 一覧
+          </button>
         </div>
       </div>
 
