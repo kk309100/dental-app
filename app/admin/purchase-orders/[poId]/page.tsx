@@ -28,6 +28,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState("")
   const [receivingIds, setReceivingIds] = useState<Set<string>>(new Set())  // 行ごとの入荷処理中ロック
+  const [showPrices, setShowPrices] = useState(false)  // 価格表示トグル（デフォルトは非表示。仕入先に伝えない方針）
 
   useEffect(() => { fetchData() }, [poId])
 
@@ -275,14 +276,28 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
             </details>
           </div>
         )}
-        <table style={{ width: "100%", marginTop: 16, borderCollapse: "collapse", fontSize: 12 }}>
+        {/* 価格表示トグル（社内確認用に必要なときだけ） */}
+        <div className="no-print" style={{ marginTop: 12, fontSize: 11 }}>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", color: "#666" }}>
+            <input type="checkbox" checked={showPrices} onChange={e => setShowPrices(e.target.checked)} />
+            社内管理用に価格を表示する
+          </label>
+          <span style={{ marginLeft: 8, fontSize: 10, color: "#999" }}>
+            ※ 仕入先に価格は伝えません。印刷物・メールには出力されません。
+          </span>
+        </div>
+
+        <table style={{ width: "100%", marginTop: 8, borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr style={{ background: "#f3f4f6" }}>
               <th style={th}>商品名</th>
               <th style={{ ...th, textAlign: "right", width: 60 }}>数量</th>
-              {/* 単価・金額は画面のみ表示。印刷時は非表示（発注時は仕入先に価格を伝えない） */}
-              <th style={{ ...th, textAlign: "right", width: 80 }} className="no-print">単価</th>
-              <th style={{ ...th, textAlign: "right", width: 90 }} className="no-print">金額</th>
+              {showPrices && (
+                <>
+                  <th style={{ ...th, textAlign: "right", width: 80 }} className="no-print">単価</th>
+                  <th style={{ ...th, textAlign: "right", width: 90 }} className="no-print">金額</th>
+                </>
+              )}
               <th style={{ ...th, textAlign: "right", width: 80 }} className="no-print">入荷</th>
             </tr>
           </thead>
@@ -294,8 +309,12 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
                   {i.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{i.note}</p>}
                 </td>
                 <td style={{ ...tdCell, textAlign: "right" }}>{i.quantity}</td>
-                <td style={{ ...tdCell, textAlign: "right" }} className="no-print">{fmtYen(i.unit_price)}</td>
-                <td style={{ ...tdCell, textAlign: "right", fontWeight: 700 }} className="no-print">{fmtYen(Number(i.quantity) * Number(i.unit_price))}</td>
+                {showPrices && (
+                  <>
+                    <td style={{ ...tdCell, textAlign: "right" }} className="no-print">{fmtYen(i.unit_price)}</td>
+                    <td style={{ ...tdCell, textAlign: "right", fontWeight: 700 }} className="no-print">{fmtYen(Number(i.quantity) * Number(i.unit_price))}</td>
+                  </>
+                )}
                 <td style={{ ...tdCell, textAlign: "right" }} className="no-print">
                   <input type="number" defaultValue={i.received_quantity || 0}
                     onBlur={(e) => updateReceived(i.id, Number(e.target.value))}
@@ -307,8 +326,12 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
           </tbody>
           <tfoot>
             <tr style={{ background: "#f9fafb" }} className="no-print">
-              <td colSpan={3} style={{ ...tdCell, textAlign: "right", fontWeight: 700 }}>合計（社内管理用）</td>
-              <td style={{ ...tdCell, textAlign: "right", fontWeight: 700, fontSize: 14 }}>{fmtYen(total)}</td>
+              <td colSpan={showPrices ? 3 : 2} style={{ ...tdCell, textAlign: "right", fontWeight: 700 }}>
+                {showPrices ? "合計（社内管理用）" : "入荷進捗"}
+              </td>
+              {showPrices && (
+                <td style={{ ...tdCell, textAlign: "right", fontWeight: 700, fontSize: 14 }}>{fmtYen(total)}</td>
+              )}
               <td style={tdCell}>{receivedTotal} / {expectedTotal}</td>
             </tr>
           </tfoot>
