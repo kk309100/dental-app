@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { fmtYen, fmtDate } from "@/lib/invoice"
 import { QUOTE_STATUSES, type QuoteStatus } from "@/lib/quote"
+import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 import Link from "next/link"
 
 type Quote = {
@@ -21,25 +22,33 @@ type Quote = {
   created_at: string
 }
 type Clinic = { id: string; name: string }
+type QuoteItem = { id: string; quote_id: string; product_name: string | null; quantity: number; unit_price: number; amount: number | null }
 
 export default function QuotesPage() {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])
+  const [items, setItems] = useState<QuoteItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | QuoteStatus | "active">("active")
   const [clinicFilter, setClinicFilter] = useState("all")
+  const [groupView, setGroupView] = useGroupView()
 
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setLoading(true)
     const [q, c] = await Promise.all([
-      supabase.from("quotes").select("*").order("issue_date", { ascending: false }),
+      supabase.from("quotes").select("*").order("issue_date", { ascending: false }).limit(50000),
       supabase.from("clinics").select("id,name").order("name").limit(50000),
     ])
     setQuotes((q.data as Quote[]) || [])
     setClinics(c.data || [])
+    // 商品別集計用に明細取得（テーブル無ければスキップ）
+    try {
+      const { data: its } = await supabase.from("quote_items").select("id,quote_id,product_name,quantity,unit_price,amount").limit(50000)
+      setItems((its as QuoteItem[]) || [])
+    } catch { setItems([]) }
     setLoading(false)
   }
 
@@ -65,6 +74,28 @@ export default function QuotesPage() {
     converted: quotes.filter(q => q.status === "converted").length,
     total: quotes.length,
   }), [quotes])
+
+  // GroupViewTabs 用の行データ
+  const itemsByQuote = useMemo(() => {
+    const m = new Map<string, QuoteItem[]>()
+    items.forEach(it => {
+      if (!m.has(it.quote_id)) m.set(it.quote_id, [])
+      m.get(it.quote_id)!.push(it)
+    })
+    return m
+  }, [items])
+
+  const groupRows: GroupableRow[] = useMemo(() => filtered.map(q => ({
+    id: q.id,
+    date: (q.issue_date || "").slice(0, 10),
+    party: clinicName(q.clinic_id),
+    amount: Number(q.total || 0),
+    items: (itemsByQuote.get(q.id) || []).map(it => ({
+      name: it.product_name || "(不明)",
+      quantity: Number(it.quantity || 0),
+      price: Number(it.unit_price || 0),
+    })),
+  })), [filtered, clinics, itemsByQuote])
 
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
@@ -116,7 +147,8 @@ export default function QuotesPage() {
       </div>
 
       {/* テーブル */}
-      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 240px)" }}>
+      <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
+      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
         <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
           <thead className="sticky top-0 bg-gray-100">
             <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
@@ -155,6 +187,7 @@ export default function QuotesPage() {
           </tbody>
         </table>
       </div>
+      </GroupViewTabs>
     </div>
   )
 }
