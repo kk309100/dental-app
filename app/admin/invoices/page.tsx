@@ -171,36 +171,53 @@ export default function InvoicesPage() {
         <span style={{ color: "#666" }}>{selected.size}件選択中</span>
       </div>
 
-      {/* 一覧 */}
+      {/* 一覧（高密度テーブル） */}
       <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
-      <div style={listWrap}>
-        {filtered.length === 0 ? (
-          <p style={{ padding: 32, textAlign: "center", color: "#999" }}>請求書がありません</p>
-        ) : (
-          filtered.map((iv) => (
-            <div key={iv.id} style={{ ...card, background: selected.has(iv.id) ? "#dbeafe" : "#fff" }}>
-              <input type="checkbox" checked={selected.has(iv.id)} onChange={() => toggleSel(iv.id)} style={{ marginRight: 8, marginTop: 4 }} />
-              <Link href={`/admin/invoices/${iv.id}`} style={{ textDecoration: "none", color: "inherit", display: "flex", flex: 1, gap: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={cardHead}>
-                    <span style={cardNum}>{iv.invoice_number}</span>
-                    <StatusBadge status={iv.status} />
-                  </div>
-                  <p style={cardClinic}>{clinicName(iv.clinic_id)}</p>
-                  <div style={cardMeta}>
-                    <span>📅 発行: {fmtDate(iv.issue_date)}</span>
-                    {iv.due_date && <span>⏰ 期限: {fmtDate(iv.due_date)}</span>}
-                    {iv.paid_at && <span style={{ color: "#10b981" }}>✓ 入金: {fmtDate(iv.paid_at)}</span>}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <p style={cardAmount}>{fmtYen(iv.total)}</p>
-                  <p style={cardSubtotal}>税抜 {fmtYen(iv.subtotal)}</p>
-                </div>
-              </Link>
-            </div>
-          ))
-        )}
+      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <thead className="sticky top-0 bg-gray-100">
+            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-center w-8">
+                <input type="checkbox"
+                  checked={filtered.length > 0 && selected.size === filtered.length}
+                  onChange={e => e.target.checked ? selectAll() : clearSel()} />
+              </th>
+              <th className="px-2 py-1.5 text-left w-32">請求書No</th>
+              <th className="px-2 py-1.5 text-center w-16">状態</th>
+              <th className="px-2 py-1.5 text-left">医院</th>
+              <th className="px-2 py-1.5 text-center w-24">発行日</th>
+              <th className="px-2 py-1.5 text-center w-24">期限</th>
+              <th className="px-2 py-1.5 text-center w-24">入金日</th>
+              <th className="px-2 py-1.5 text-right w-24">税抜</th>
+              <th className="px-2 py-1.5 text-right w-28">税込</th>
+              <th className="px-2 py-1.5 text-center w-16">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">該当請求書なし</td></tr>
+            ) : filtered.map((iv, i) => (
+              <tr key={iv.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (selected.has(iv.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                <td className="px-2 py-1.5 text-center">
+                  <input type="checkbox" checked={selected.has(iv.id)} onChange={() => toggleSel(iv.id)} />
+                </td>
+                <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700">{iv.invoice_number}</td>
+                <td className="px-2 py-1.5 text-center"><StatusBadge status={iv.status} /></td>
+                <td className="px-2 py-1.5">{clinicName(iv.clinic_id)}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{fmtDate(iv.issue_date)}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{iv.due_date ? fmtDate(iv.due_date) : "—"}</td>
+                <td className="px-2 py-1.5 text-center text-[11px]" style={{ color: iv.paid_at ? "#10b981" : "#9ca3af" }}>
+                  {iv.paid_at ? fmtDate(iv.paid_at) : "—"}
+                </td>
+                <td className="px-2 py-1.5 text-right text-[11px] text-gray-500 tabular-nums">{fmtYen(iv.subtotal)}</td>
+                <td className="px-2 py-1.5 text-right text-[12px] font-bold tabular-nums">{fmtYen(iv.total)}</td>
+                <td className="px-2 py-1.5 text-center">
+                  <Link href={`/admin/invoices/${iv.id}`} className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       </GroupViewTabs>
     </main>

@@ -38,7 +38,7 @@ export default function PurchaseOrdersListPage() {
   const [loading, setLoading] = useState(true)
   const [tableMissing, setTableMissing] = useState(false)
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("active")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
   const [supplierFilter, setSupplierFilter] = useState<string>("all")
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")

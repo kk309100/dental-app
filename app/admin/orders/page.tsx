@@ -33,7 +33,8 @@ type ViewMode = "flat" | "byClinic"
 
 function AdminOrdersPage() {
   const sp = useSearchParams()
-  const initialStatus = sp.get("status") === "delivered" ? "delivered" : sp.get("status") === "all" ? "all" : "undelivered"
+  // デフォルトは「すべて」表示（過去含む）。URLパラメータで filter 切替可能
+  const initialStatus = sp.get("status") === "delivered" ? "delivered" : sp.get("status") === "undelivered" ? "undelivered" : "all"
   const [orders, setOrders] = useState<Order[]>([])
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])

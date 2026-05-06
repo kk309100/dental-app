@@ -30,7 +30,7 @@ export default function QuotesPage() {
   const [items, setItems] = useState<QuoteItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | QuoteStatus | "active">("active")
+  const [statusFilter, setStatusFilter] = useState<"all" | QuoteStatus | "active">("all")
   const [clinicFilter, setClinicFilter] = useState("all")
   const [groupView, setGroupView] = useGroupView()
 
