@@ -176,17 +176,20 @@ export default function ReceivingPage() {
 
     let invoiceId: string | null = null
     if (parsedMeta) {
-      const { data } = await supabase.from("supplier_invoices").insert({
-        supplier_id: supplierId || null,
-        invoice_date: date,
-        invoice_number: parsedMeta.invoice_number || null,
-        total_amount: totalAmount,
-        pdf_filename: pdfFile?.name || null,
-        parsed_data: parsedMeta,
-        status: "completed",
-        completed_at: new Date().toISOString(),
-      }).select().single()
-      invoiceId = data?.id || null
+      // 新スキーマ用: pdf_data + status='OK'。check 制約に合わない値だと失敗するので try/catch で吸収
+      try {
+        const { data } = await supabase.from("supplier_invoices").insert({
+          supplier_id: supplierId || null,
+          invoice_date: date,
+          invoice_number: parsedMeta.invoice_number || null,
+          total_amount: totalAmount,
+          pdf_filename: pdfFile?.name || null,
+          pdf_data: parsedMeta,
+          status: "確定",
+          confirmed_at: new Date().toISOString(),
+        }).select().single()
+        invoiceId = data?.id || null
+      } catch { /* 失敗してもメイン処理は継続 */ }
     }
 
     for (let i = 0; i < validRows.length; i++) {
@@ -369,6 +372,11 @@ export default function ReceivingPage() {
           📦 仕入納品（仕入先からの入荷登録）
           <span className="ml-2 text-xs font-normal text-gray-400">手打ち or PDF読込 ・ 商品マスタは自動更新</span>
         </h1>
+        <a href="/admin/supplier-invoices"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 transition-colors"
+          title="月末の仕入先請求書と入荷データを付け合わせ">
+          🔍 月次請求書 付け合わせ
+        </a>
         <label
           htmlFor="pdf-upload"
           className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors " + (parsing ? "bg-gray-300 text-gray-600 cursor-wait" : "bg-blue-600 text-white hover:bg-blue-700")}

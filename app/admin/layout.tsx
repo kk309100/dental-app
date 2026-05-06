@@ -22,6 +22,7 @@ const NAV = [
 ]
 
 const SUB = [
+  { href: "/admin/supplier-invoices", label: "仕入先請求書付け合わせ", icon: Ic.check },
   { href: "/admin/invoices/bulk", label: "一括請求", icon: Ic.doc },
   { href: "/admin/receivables", label: "売掛金台帳", icon: Ic.sales },
   { href: "/admin/bank-import", label: "銀行CSV消込", icon: Ic.dl },
