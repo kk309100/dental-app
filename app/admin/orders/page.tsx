@@ -468,17 +468,40 @@ function AdminOrdersPage() {
                   {/* 業務状態サマリー */}
                   {(() => {
                     const total = clinicOrders.length
-                    const finished = (bizCounts.delivered || 0) + (bizCounts.cancelled || 0)
-                    // 全件完了 → 「✅ 完了」1つだけ
-                    if (finished === total && total > 0) {
+                    const delivered = bizCounts.delivered || 0
+                    const cancelled = bizCounts.cancelled || 0
+                    const finished = delivered + cancelled
+                    const allDelivered = delivered === total && total > 0
+                    const allFinished = finished === total && total > 0
+                    // 全件納品済み（取消なし） → 「✅ 全件納品済」
+                    if (allDelivered) {
                       return (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded inline-flex items-center gap-1"
                           style={{ background: "#dcfce7", color: "#15803d", border: "1px solid #86efac" }}>
-                          ✅ 完了
+                          ✅ 全件納品済
                         </span>
                       )
                     }
-                    // 進行中の状態だけ個別バッジ表示（完了済みは省略）
+                    // 全件完了（一部取消含む） → 納品N+取消M
+                    if (allFinished) {
+                      return (
+                        <span className="flex items-center gap-1 flex-wrap">
+                          {delivered > 0 && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                              style={{ background: "#dcfce7", color: "#15803d", border: "1px solid #86efac" }}>
+                              ✅ 納品済 {delivered}
+                            </span>
+                          )}
+                          {cancelled > 0 && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                              style={{ background: "#f3f4f6", color: "#6b7280", border: "1px solid #d1d5db" }}>
+                              ✕ 取消 {cancelled}
+                            </span>
+                          )}
+                        </span>
+                      )
+                    }
+                    // 進行中あり: 進行中バッジ + 完了済件数（小さく）
                     return (
                       <span className="flex items-center gap-1 ml-2 flex-wrap">
                         {(["need_po", "partial", "waiting", "ready"] as const).map(s => (
@@ -489,10 +512,9 @@ function AdminOrdersPage() {
                             </span>
                           ) : null
                         ))}
-                        {/* 完了分は控えめにグレーで件数のみ */}
                         {finished > 0 && (
-                          <span className="text-[10px] text-gray-500" title={`完了済: 納品済 ${bizCounts.delivered || 0} / 取消 ${bizCounts.cancelled || 0}`}>
-                            （済 {finished}/{total}）
+                          <span className="text-[10px] text-gray-500" title={`納品済 ${delivered} / 取消 ${cancelled}`}>
+                            （納品済 {delivered}/{total}{cancelled > 0 ? ` ・取消 ${cancelled}` : ""}）
                           </span>
                         )}
                       </span>
