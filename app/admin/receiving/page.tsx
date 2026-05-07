@@ -372,6 +372,11 @@ export default function ReceivingPage() {
           📦 仕入納品（仕入先からの入荷登録）
           <span className="ml-2 text-xs font-normal text-gray-400">手打ち or PDF読込 ・ 商品マスタは自動更新</span>
         </h1>
+        <a href="/admin/receivings"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors"
+          title="過去の入荷履歴を一覧表示">
+          📋 入荷履歴一覧
+        </a>
         <a href="/admin/supplier-invoices"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 transition-colors"
           title="月末の仕入先請求書と入荷データを付け合わせ">
