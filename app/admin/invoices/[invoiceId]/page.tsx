@@ -256,9 +256,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
     fetchData()
   }
 
-  function doPrint() {
-    window.print()
-  }
+  // 印刷は /detailed-print 専用ページで行う（このページからは廃止）
 
   if (loading) return <main style={page}><p>読み込み中…</p></main>
   if (error || !invoice) return <main style={page}><p style={{ color: "#dc2626" }}>{error || "見つかりません"}</p><Link href="/admin/invoices">← 戻る</Link></main>
@@ -276,9 +274,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
         <span style={{ marginRight: 8, padding: "4px 12px", borderRadius: 99, background: status.color + "22", color: status.color, fontSize: 12, fontWeight: 700 }}>
           {status.label}
         </span>
-        <button onClick={doPrint} style={btnDark}>🖨 シンプル印刷</button>
         <Link href={`/admin/invoices/${invoiceId}/detailed-print`}>
-          <button style={{ ...btnDark, background: "#1d4ed8" }}>📄 請求明細書（詳細）</button>
+          <button style={{ ...btnDark, background: "#1d4ed8" }}>📄 請求明細書を開く</button>
         </Link>
         {invoice.status === "issued" && (
           <>
@@ -291,174 +288,99 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
         )}
       </div>
 
-      {/* ── 印刷レイアウト ── */}
-      <main style={printArea} className="print-area">
-        {/* ヘッダー */}
-        <header style={header}>
-          <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: 28, letterSpacing: "0.3em", margin: "20px 0 4px", textAlign: "center" }}>請  求  書</h1>
-            <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {invoice.invoice_number}</p>
-          </div>
-        </header>
-
-        {/* 宛先 + 自社 */}
-        <div style={{ display: "flex", gap: 20, marginTop: 24 }}>
-          {/* 左: 宛先 */}
-          <div style={{ flex: 1 }}>
-            {clinic ? (
-              <>
-                {corporateLabel && <p style={{ margin: "0 0 4px", fontSize: 13, color: "#444" }}>{corporateLabel}</p>}
-                <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
-                  {clinicPrefix}{clinic.name}　御中
-                </p>
-                {clinic.adress && <p style={{ margin: "6px 0 0", fontSize: 11, color: "#666" }}>{clinic.adress}</p>}
-              </>
-            ) : (
-              <p style={{ fontSize: 14, color: "#999" }}>(医院情報なし)</p>
-            )}
-          </div>
-
-          {/* 右: 自社 */}
-          <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, textAlign: "left", position: "relative", paddingRight: 70 }}>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{company.name}</p>
-            <p style={{ margin: 0 }}>〒{company.postalCode}</p>
-            <p style={{ margin: 0 }}>{company.address}</p>
-            <p style={{ margin: 0 }}>TEL {company.phone} / FAX {company.fax}</p>
-            <p style={{ margin: "4px 0 0" }}>登録番号: {company.invoiceNumber}</p>
-            {/* 印影 */}
-            <div style={{ position: "absolute", top: 0, right: 0 }}>
-              <Seal size={64} />
+      {/* ── 請求書サマリー（操作用、印刷フォーマットは別ページ） ── */}
+      <main style={printArea}>
+        <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 8, padding: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <p style={{ margin: 0, fontSize: 11, color: "#666" }}>請求書番号</p>
+              <p style={{ margin: "2px 0 0", fontSize: 18, fontWeight: 700, fontFamily: "monospace" }}>{invoice.invoice_number}</p>
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: 11, color: "#666" }}>請求先</p>
+              {clinic ? (
+                <>
+                  {corporateLabel && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#666" }}>{corporateLabel}</p>}
+                  <p style={{ margin: "2px 0 0", fontSize: 16, fontWeight: 700 }}>{clinicPrefix}{clinic.name} 御中</p>
+                </>
+              ) : <p style={{ margin: 0, fontSize: 14, color: "#999" }}>(医院情報なし)</p>}
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: 11, color: "#666" }}>発行日 / 期限</p>
+              <p style={{ margin: "2px 0 0", fontSize: 13 }}>{fmtDate(invoice.issue_date)}{invoice.due_date && ` / 期限 ${fmtDate(invoice.due_date)}`}</p>
             </div>
           </div>
-        </div>
 
-        {/* メタ情報 */}
-        <div style={{ marginTop: 20, display: "flex", gap: 20, fontSize: 12 }}>
-          <div><strong>発行日:</strong> {fmtDate(invoice.issue_date)}</div>
-          {invoice.due_date && <div><strong>お支払期限:</strong> {fmtDate(invoice.due_date)}</div>}
-        </div>
-
-        {/* カード決済表記（金額の前、左寄せ） */}
-        {clinic?.payment_method === "カード" && (
-          <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-start" }}>
-            <div style={{
-              padding: "6px 16px",
-              border: "2px solid #dc2626",
-              color: "#dc2626",
-              fontWeight: 700,
-              fontSize: 14,
-              letterSpacing: "0.15em",
-              background: "rgba(255,255,255,0.9)",
-              borderRadius: 4,
-            }}>
-              💳 カード決済
+          {/* カード決済表記 */}
+          {clinic?.payment_method === "カード" && (
+            <div style={{ marginTop: 16 }}>
+              <span style={{
+                padding: "4px 14px", border: "2px solid #dc2626", color: "#dc2626",
+                fontWeight: 700, fontSize: 13, letterSpacing: "0.15em", borderRadius: 4,
+              }}>💳 カード決済</span>
             </div>
+          )}
+
+          {/* 合計強調ボックス */}
+          <div style={{ ...totalBox, marginTop: 16 }}>
+            <span style={{ fontSize: 13 }}>ご請求金額（税込）</span>
+            <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: "0.05em" }}>{fmtYen(invoice.total)}</span>
           </div>
-        )}
-
-        {/* 合計強調ボックス */}
-        <div style={totalBox}>
-          <span style={{ fontSize: 13 }}>ご請求金額（税込）</span>
-          <span style={{ fontSize: 28, fontWeight: 800, letterSpacing: "0.05em" }}>{fmtYen(invoice.total)}</span>
-        </div>
-
-        {/* 明細表 */}
-        <p style={{ fontSize: 11, color: "#666", margin: "16px 0 6px" }}>
-          下記のとおりご請求申し上げます。
-        </p>
-        {!invoiceCompliance.ok && (
-          <p className="no-print" style={{ fontSize: 11, color: "#b91c1c", background: "#fee2e2", padding: "6px 10px", borderRadius: 4, margin: "0 0 8px" }}>
-            ⚠ 適格請求書要件を満たしていません: {invoiceCompliance.issues.join(" / ")}
-            {(!company.invoiceNumber || !/^T\d{13}$/.test(company.invoiceNumber)) && (
-              <>　<Link href="/admin/settings" className="underline">→ 自社情報設定</Link></>
-            )}
+          <p style={{ marginTop: 8, fontSize: 11, color: "#666", textAlign: "right" }}>
+            （税抜 {fmtYen(invoice.subtotal)} + 消費税 {fmtYen(invoice.tax)}）
           </p>
-        )}
-        {missingNameCount > 0 && (
-          <p className="no-print" style={{ fontSize: 11, color: "#92400e", background: "#fef3c7", padding: "6px 10px", borderRadius: 4, margin: "0 0 8px" }}>
-            ⚠ 商品名が無い明細が {missingNameCount} 件あります（旧 dental-order データの欠損）。
-            請求書発行後の修正は基本不可ですが、明細の <Link href="/admin/orders" style={{ color: "#1d4ed8", textDecoration: "underline" }}>元の注文</Link> から商品名を補完すれば反映されます。
-          </p>
-        )}
-        <table style={table}>
-          <thead>
-            <tr>
-              <th style={th}>品目</th>
-              <th style={{ ...th, width: 80, textAlign: "right" }}>数量</th>
-              <th style={{ ...th, width: 120, textAlign: "right" }}>金額（税抜）</th>
-            </tr>
-          </thead>
-          <tbody>
-            {itemSummary.length === 0 ? (
-              <tr><td colSpan={3} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
-            ) : itemSummary.map((it, i) => (
-              <tr key={i}>
-                <td style={td}>{it.name}</td>
-                <td style={{ ...td, textAlign: "right" }}>{it.qty}</td>
-                <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.amount)}</td>
-              </tr>
-            ))}
-            {/* 空行で埋める（10行確保） */}
-            {Array.from({ length: Math.max(0, 10 - itemSummary.length) }).map((_, i) => (
-              <tr key={"empty" + i}>
-                <td style={td}>&nbsp;</td>
-                <td style={td}></td>
-                <td style={td}></td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={2} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td>
-              <td style={{ ...td, textAlign: "right" }}>{fmtYen(invoice.subtotal)}</td>
-            </tr>
-            <tr>
-              <td colSpan={2} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税（10%）</td>
-              <td style={{ ...td, textAlign: "right" }}>{fmtYen(invoice.tax)}</td>
-            </tr>
-            <tr>
-              <td colSpan={2} style={{ ...tdTotal, textAlign: "right" }}>合計</td>
-              <td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(invoice.total)}</td>
-            </tr>
-          </tfoot>
-        </table>
 
-        {/* 振込先 */}
-        <div style={bankBox}>
-          <p style={{ fontSize: 11, fontWeight: 700, margin: "0 0 4px" }}>お振込先</p>
-          <p style={{ fontSize: 12, margin: 0 }}>
-            {company.bankName}　{company.bankBranch}　{company.bankType}　{company.bankAccount}
-          </p>
-          <p style={{ fontSize: 12, margin: "2px 0 0" }}>名義: {company.bankHolder}</p>
-          <p style={{ fontSize: 10, color: "#666", margin: "4px 0 0" }}>{company.notes}</p>
-        </div>
+          {/* 状態スタンプ */}
+          {invoice.status === "paid" && (
+            <div style={{ marginTop: 12, textAlign: "center" }}>
+              <span style={{ display: "inline-block", color: "#10b981", fontSize: 18, fontWeight: 800, border: "3px solid #10b981", padding: "6px 16px", borderRadius: 6, letterSpacing: "0.1em" }}>
+                ✓ 入金済 {invoice.paid_at && `（${fmtDate(invoice.paid_at)}）`}
+              </span>
+            </div>
+          )}
+          {invoice.status === "cancelled" && (
+            <div style={{ marginTop: 12, textAlign: "center" }}>
+              <span style={{ display: "inline-block", color: "#9ca3af", fontSize: 18, fontWeight: 800, border: "3px solid #9ca3af", padding: "6px 16px", borderRadius: 6, letterSpacing: "0.1em" }}>
+                ✕ 取消
+              </span>
+            </div>
+          )}
 
-        {/* 備考 */}
-        {invoice.notes && (
-          <div style={{ marginTop: 12, padding: 10, background: "#fafafa", border: "1px solid #eee", borderRadius: 4 }}>
-            <p style={{ fontSize: 10, fontWeight: 700, margin: "0 0 4px", color: "#666" }}>備考</p>
-            <p style={{ fontSize: 11, margin: 0, whiteSpace: "pre-wrap" }}>{invoice.notes}</p>
-          </div>
-        )}
-
-        {/* 入金済みスタンプ（左下、金額にかぶらない） */}
-        {invoice.status === "paid" && (
-          <div style={paidStamp}>
-            <p style={{ margin: 0, transform: "rotate(-12deg)", color: "#10b981", fontSize: 22, fontWeight: 800, border: "3px solid #10b981", padding: "4px 14px", borderRadius: 6, letterSpacing: "0.1em", display: "inline-block", opacity: 0.85 }}>
-              入金済
+          {/* 明細件数 + 開くボタン */}
+          <div style={{ marginTop: 24, padding: 16, background: "#f0f9ff", border: "1px solid #c7d2fe", borderRadius: 6, textAlign: "center" }}>
+            <p style={{ margin: 0, fontSize: 12, color: "#444" }}>
+              明細 {itemSummary.length}品 / 関連注文 {orders.length}件
             </p>
-            {invoice.paid_at && <p style={{ margin: "4px 0 0", fontSize: 10, color: "#10b981" }}>入金日: {fmtDate(invoice.paid_at)}</p>}
+            <Link href={`/admin/invoices/${invoiceId}/detailed-print`}>
+              <button style={{ marginTop: 12, padding: "10px 24px", borderRadius: 8, border: "none", background: "#1d4ed8", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                📄 請求明細書を開く（印刷可）
+              </button>
+            </Link>
           </div>
-        )}
 
-        {/* 取消スタンプ */}
-        {invoice.status === "cancelled" && (
-          <div style={paidStamp}>
-            <p style={{ margin: 0, transform: "rotate(-12deg)", color: "#9ca3af", fontSize: 22, fontWeight: 800, border: "3px solid #9ca3af", padding: "4px 14px", borderRadius: 6, letterSpacing: "0.1em", display: "inline-block", opacity: 0.85 }}>
-              取  消
+          {/* 警告 */}
+          {!invoiceCompliance.ok && (
+            <p style={{ marginTop: 12, fontSize: 11, color: "#b91c1c", background: "#fee2e2", padding: "6px 10px", borderRadius: 4 }}>
+              ⚠ 適格請求書要件を満たしていません: {invoiceCompliance.issues.join(" / ")}
+              {(!company.invoiceNumber || !/^T\d{13}$/.test(company.invoiceNumber)) && (
+                <>　<Link href="/admin/settings" style={{ textDecoration: "underline" }}>→ 自社情報設定</Link></>
+              )}
             </p>
-          </div>
-        )}
+          )}
+          {missingNameCount > 0 && (
+            <p style={{ marginTop: 8, fontSize: 11, color: "#92400e", background: "#fef3c7", padding: "6px 10px", borderRadius: 4 }}>
+              ⚠ 商品名が無い明細が {missingNameCount} 件あります。<Link href="/admin/orders" style={{ color: "#1d4ed8", textDecoration: "underline" }}>元の注文</Link>から補完できます。
+            </p>
+          )}
+
+          {/* 備考 */}
+          {invoice.notes && (
+            <div style={{ marginTop: 12, padding: 10, background: "#fafafa", border: "1px solid #eee", borderRadius: 4 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, margin: "0 0 4px", color: "#666" }}>備考</p>
+              <p style={{ fontSize: 11, margin: 0, whiteSpace: "pre-wrap" }}>{invoice.notes}</p>
+            </div>
+          )}
+        </div>
       </main>
 
       {/* ── 関連注文（画面のみ） ── */}
