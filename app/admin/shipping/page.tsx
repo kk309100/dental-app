@@ -9,7 +9,7 @@ import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; sales_rep?: string | null; note?: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
-type Product = { id: string; name: string; stock: number | null; location: string | null }
+type Product = { id: string; name: string; stock: number | null; location: string | null; cost: number | null; price: number | null }
 type Clinic = { id: string; name: string; corporate_name?: string | null; sales_rep?: string | null }
 
 // 出荷準備対象 = 納品済み・キャンセル以外すべて（status 値の表記ゆれを吸収）
@@ -67,7 +67,7 @@ function ShippingPage() {
       // 全件取得 → クライアント側で EXCLUDE_STATUSES を除外（PostgREST .not in は日本語値で壊れる + 表記ゆれ吸収）
       supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note").order("created_at").limit(50000),
       supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price").limit(50000),
-      supabase.from("products").select("id,name,stock,location").limit(50000),
+      supabase.from("products").select("id,name,stock,location,cost,price").limit(50000),
       supabase.from("clinics").select("id,name,corporate_name,sales_rep").limit(50000),
     ])
     const allOrders = (o.data as Order[]) || []
@@ -391,45 +391,80 @@ function ShippingPage() {
                           <span className="text-xs font-bold tabular-nums">{fmtYen(o.total_price)}</span>
                         </div>
                         <div className="ml-6">
+                          {/* ヘッダ */}
+                          <div className="flex items-center text-[10px] py-0.5 text-gray-500 border-b border-gray-200">
+                            <span className="w-12">棚</span>
+                            <span className="flex-1">商品名</span>
+                            <span className="w-12 text-right">数量</span>
+                            <span className="w-20 text-right">仕入</span>
+                            <span className="w-20 text-right">定価</span>
+                            <span className="w-24 text-right">販売価格</span>
+                            <span className="w-16 text-right">粗利</span>
+                            <span className="w-12 text-right">粗利%</span>
+                            <span className="w-24 text-right">小計</span>
+                            <span className="w-12 text-right">在庫</span>
+                          </div>
                           {its.map(it => {
-                            const stock = it.product_id ? Number(productById.get(it.product_id)?.stock || 0) : 0
+                            const product = it.product_id ? productById.get(it.product_id) : null
+                            const stock = Number(product?.stock || 0)
                             const enough = stock >= Number(it.quantity)
-                            const loc = it.product_id ? productById.get(it.product_id)?.location : null
-                            const noPrice = !it.price || Number(it.price) === 0
+                            const loc = product?.location || null
+                            const cost = Number((product as any)?.cost || 0)
+                            const listPrice = Number((product as any)?.price || 0)
+                            const sellPrice = Number(it.price || 0)
+                            const qty = Number(it.quantity)
+                            const lineSubtotal = sellPrice * qty
+                            const gross = sellPrice - cost
+                            const grossRate = sellPrice > 0 ? Math.round(gross / sellPrice * 1000) / 10 : 0
+                            const noPrice = sellPrice === 0
+                            // 共通: 注文の total_price を DB から再計算
+                            const recalcTotal = async () => {
+                              const { data: latest } = await supabase
+                                .from("order_items").select("price,quantity")
+                                .eq("order_id", o.id).limit(1000)
+                              const sum = (latest || []).reduce((s, x) => s + Number(x.price || 0) * Number(x.quantity || 0), 0)
+                              await supabase.from("orders").update({ total_price: sum }).eq("id", o.id)
+                            }
                             return (
                               <div key={it.id} className={"flex items-center text-[11px] py-0.5 " + (noPrice ? "bg-amber-50" : "")}>
-                                {loc && <span className="font-mono text-gray-500 w-12">[{loc}]</span>}
+                                <span className="font-mono text-gray-500 w-12 text-[10px]">{loc ? `[${loc}]` : ""}</span>
                                 <span className="flex-1 truncate">{it.product_name || "(商品名なし)"}</span>
-                                <span className="tabular-nums w-8 text-right">×{it.quantity}</span>
-                                {noPrice ? (
-                                  <input
-                                    type="number"
-                                    defaultValue={0}
-                                    placeholder="単価"
-                                    onBlur={async (e) => {
-                                      const v = Number(e.target.value)
-                                      if (v > 0) {
-                                        await supabase.from("order_items").update({ price: v }).eq("id", it.id)
-                                        // total_price は DB の最新値で再計算（state スナップショットだと連続入力で 0 上書きになる）
-                                        const { data: latest } = await supabase
-                                          .from("order_items")
-                                          .select("price,quantity")
-                                          .eq("order_id", o.id)
-                                          .limit(1000)
-                                        const sum = (latest || []).reduce(
-                                          (s, x) => s + Number(x.price || 0) * Number(x.quantity || 0), 0
-                                        )
-                                        await supabase.from("orders").update({ total_price: sum }).eq("id", o.id)
-                                        fetchData()
-                                      }
-                                    }}
-                                    className="w-20 ml-2 px-1 py-0.5 border border-amber-400 rounded text-right text-[11px] bg-white"
-                                  />
-                                ) : (
-                                  <span className="tabular-nums w-20 ml-2 text-right text-gray-700">¥{Number(it.price).toLocaleString()}</span>
-                                )}
-                                <span className={"tabular-nums w-16 text-right " + (enough ? "text-gray-500" : "text-red-600 font-bold")}>
-                                  在庫{stock}
+                                {/* 数量編集 */}
+                                <input
+                                  type="number"
+                                  defaultValue={qty}
+                                  onBlur={async (e) => {
+                                    const v = Number(e.target.value)
+                                    if (v > 0 && v !== qty) {
+                                      await supabase.from("order_items").update({ quantity: v }).eq("id", it.id)
+                                      await recalcTotal()
+                                      fetchData()
+                                    }
+                                  }}
+                                  className="w-12 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[11px] bg-white"
+                                />
+                                <span className="w-20 text-right text-[10px] text-gray-500 tabular-nums">{fmtYen(cost)}</span>
+                                <span className="w-20 text-right text-[10px] text-gray-500 tabular-nums">{fmtYen(listPrice)}</span>
+                                {/* 販売価格編集 */}
+                                <input
+                                  type="number"
+                                  defaultValue={sellPrice}
+                                  placeholder="単価"
+                                  onBlur={async (e) => {
+                                    const v = Number(e.target.value)
+                                    if (v >= 0 && v !== sellPrice) {
+                                      await supabase.from("order_items").update({ price: v }).eq("id", it.id)
+                                      await recalcTotal()
+                                      fetchData()
+                                    }
+                                  }}
+                                  className={"w-24 text-right tabular-nums ml-1 px-1 py-0.5 border rounded text-[11px] font-bold " + (noPrice ? "border-amber-400 bg-amber-50" : "border-blue-300 bg-blue-50")}
+                                />
+                                <span className={"w-16 text-right text-[10px] tabular-nums " + (gross >= 0 ? "text-gray-700" : "text-red-600 font-bold")}>{fmtYen(gross)}</span>
+                                <span className={"w-12 text-right text-[10px] tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</span>
+                                <span className="w-24 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</span>
+                                <span className={"w-12 text-right text-[10px] tabular-nums " + (enough ? "text-gray-500" : "text-red-600 font-bold")}>
+                                  {stock}
                                 </span>
                               </div>
                             )

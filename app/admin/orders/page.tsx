@@ -19,7 +19,7 @@ export default function AdminOrdersPageWrapper() {
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; invoice_id: string | null; source?: string | null; note?: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
 type Clinic = { id: string; name: string; corporate_name?: string | null }
-type Product = { id: string; name: string; stock: number | null }
+type Product = { id: string; name: string; stock: number | null; cost: number | null; price: number | null }
 type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null }
 type POHead = { id: string; status: string }
 
@@ -62,7 +62,7 @@ function AdminOrdersPage() {
       supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(50000),
       supabase.from("order_items").select("*").limit(50000),  // デフォルト1000件 limit を回避
       supabase.from("clinics").select("id,name,corporate_name").limit(50000),
-      supabase.from("products").select("id,name,stock").limit(50000),
+      supabase.from("products").select("id,name,stock,cost,price").limit(50000),
       // 業務状態判定用: 「未入荷の発注」を検出するため
       supabase.from("purchase_orders").select("id,status").limit(50000),
       supabase.from("purchase_order_items").select("purchase_order_id,product_id,quantity,received_quantity").limit(50000),
@@ -731,6 +731,12 @@ function AdminOrdersPage() {
                               <td className="px-2 py-1 text-center whitespace-nowrap">
                                 <button onClick={() => toggleOrderOpen(o.id)} className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="明細を開閉">{isOpen ? "−" : "+"}</button>
                                 <Link href={`/order-edit/${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="編集">編</button></Link>
+                                {/* 出荷可能なら「納品」ボタン目立つ表示 */}
+                                {biz === "ready" && (
+                                  <Link href={`/admin/shipping?orders=${o.id}`}>
+                                    <button className="text-[10px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>
+                                  </Link>
+                                )}
                                 <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
                                 <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
                                 {ss.short > 0 && (
@@ -748,24 +754,53 @@ function AdminOrdersPage() {
                               <tr key={o.id + "-d"} className="bg-yellow-50">
                                 <td colSpan={8} className="px-4 py-2">
                                   {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
-                                    <div>
-                                      {items.map((it) => {
-                                        const p = it.product_id ? productById.get(it.product_id) : null
-                                        const stock = Number(p?.stock || 0)
-                                        const enough = stock >= Number(it.quantity || 0)
-                                        return (
-                                        <div key={it.id} className="flex items-center justify-between text-[11px] py-0.5 border-b border-gray-100">
-                                          <span className="flex items-center gap-2">
-                                            <span className={"text-[9px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
-                                              {enough ? "在庫OK" : `在庫${stock}`}
-                                            </span>
-                                            {it.product_name || "(不明)"}
-                                          </span>
-                                          <span className="text-gray-600">{it.quantity} × {fmtYen(it.price || 0)} = <strong>{fmtYen((it.price || 0) * (it.quantity || 0))}</strong></span>
-                                        </div>
-                                        )
-                                      })}
-                                    </div>
+                                    <table className="w-full text-[11px]">
+                                      <thead className="text-[10px] text-gray-500">
+                                        <tr>
+                                          <th className="text-left px-1 py-0.5 w-16">在庫</th>
+                                          <th className="text-left px-1 py-0.5">商品名</th>
+                                          <th className="text-right px-1 py-0.5 w-12">数量</th>
+                                          <th className="text-right px-1 py-0.5 w-20">仕入</th>
+                                          <th className="text-right px-1 py-0.5 w-20">定価</th>
+                                          <th className="text-right px-1 py-0.5 w-24">販売価格</th>
+                                          <th className="text-right px-1 py-0.5 w-20">粗利</th>
+                                          <th className="text-right px-1 py-0.5 w-14">粗利%</th>
+                                          <th className="text-right px-1 py-0.5 w-24">小計</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {items.map((it) => {
+                                          const p = it.product_id ? productById.get(it.product_id) : null
+                                          const stock = Number(p?.stock || 0)
+                                          const enough = stock >= Number(it.quantity || 0)
+                                          const cost = Number(p?.cost || 0)
+                                          const listPrice = Number(p?.price || 0)
+                                          const sellPrice = Number(it.price || 0)
+                                          const qty = Number(it.quantity || 0)
+                                          const lineSubtotal = sellPrice * qty
+                                          const lineCost = cost * qty
+                                          const gross = sellPrice - cost
+                                          const grossRate = sellPrice > 0 ? Math.round(gross / sellPrice * 1000) / 10 : 0
+                                          return (
+                                            <tr key={it.id} className="border-b border-gray-100">
+                                              <td className="px-1 py-0.5">
+                                                <span className={"text-[9px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
+                                                  {enough ? "OK" : `0`}
+                                                </span>
+                                              </td>
+                                              <td className="px-1 py-0.5">{it.product_name || "(不明)"}</td>
+                                              <td className="px-1 py-0.5 text-right tabular-nums">{qty}</td>
+                                              <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(cost)}</td>
+                                              <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(listPrice)}</td>
+                                              <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(sellPrice)}</td>
+                                              <td className={"px-1 py-0.5 text-right tabular-nums " + (gross >= 0 ? "text-gray-700" : "text-red-600 font-bold")}>{fmtYen(gross)}</td>
+                                              <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
+                                              <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
+                                            </tr>
+                                          )
+                                        })}
+                                      </tbody>
+                                    </table>
                                   )}
                                 </td>
                               </tr>
@@ -830,6 +865,11 @@ function AdminOrdersPage() {
                       <td className="px-2 py-1 text-center whitespace-nowrap">
                         <button onClick={() => toggleOrderOpen(o.id)} className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">{open ? "−" : "+"}</button>
                         <Link href={`/order-edit/${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">編</button></Link>
+                        {biz === "ready" && (
+                          <Link href={`/admin/shipping?orders=${o.id}`}>
+                            <button className="text-[10px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>
+                          </Link>
+                        )}
                         <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
                         <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
                         {ss.short > 0 && (
@@ -847,24 +887,52 @@ function AdminOrdersPage() {
                       <tr key={o.id + "-d"} className="bg-yellow-50">
                         <td colSpan={9} className="px-4 py-2">
                           {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
-                            <div>
+                            <table className="w-full text-[11px]">
+                              <thead className="text-[10px] text-gray-500">
+                                <tr>
+                                  <th className="text-left px-1 py-0.5 w-16">在庫</th>
+                                  <th className="text-left px-1 py-0.5">商品名</th>
+                                  <th className="text-right px-1 py-0.5 w-12">数量</th>
+                                  <th className="text-right px-1 py-0.5 w-20">仕入</th>
+                                  <th className="text-right px-1 py-0.5 w-20">定価</th>
+                                  <th className="text-right px-1 py-0.5 w-24">販売価格</th>
+                                  <th className="text-right px-1 py-0.5 w-20">粗利</th>
+                                  <th className="text-right px-1 py-0.5 w-14">粗利%</th>
+                                  <th className="text-right px-1 py-0.5 w-24">小計</th>
+                                </tr>
+                              </thead>
+                              <tbody>
                               {items.map((it) => {
                                 const p = it.product_id ? productById.get(it.product_id) : null
                                 const stock = Number(p?.stock || 0)
                                 const enough = stock >= Number(it.quantity || 0)
+                                const cost = Number(p?.cost || 0)
+                                const listPrice = Number(p?.price || 0)
+                                const sellPrice = Number(it.price || 0)
+                                const qty = Number(it.quantity || 0)
+                                const lineSubtotal = sellPrice * qty
+                                const gross = sellPrice - cost
+                                const grossRate = sellPrice > 0 ? Math.round(gross / sellPrice * 1000) / 10 : 0
                                 return (
-                                <div key={it.id} className="flex items-center justify-between text-[11px] py-0.5 border-b border-gray-100">
-                                  <span className="flex items-center gap-2">
-                                    <span className={"text-[9px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
-                                      {enough ? "在庫OK" : `在庫${stock}`}
-                                    </span>
-                                    {it.product_name || "(不明)"}
-                                  </span>
-                                  <span className="text-gray-600">{it.quantity} × {fmtYen(it.price || 0)} = <strong>{fmtYen((it.price || 0) * (it.quantity || 0))}</strong></span>
-                                </div>
+                                  <tr key={it.id} className="border-b border-gray-100">
+                                    <td className="px-1 py-0.5">
+                                      <span className={"text-[9px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
+                                        {enough ? "OK" : `0`}
+                                      </span>
+                                    </td>
+                                    <td className="px-1 py-0.5">{it.product_name || "(不明)"}</td>
+                                    <td className="px-1 py-0.5 text-right tabular-nums">{qty}</td>
+                                    <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(cost)}</td>
+                                    <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(listPrice)}</td>
+                                    <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(sellPrice)}</td>
+                                    <td className={"px-1 py-0.5 text-right tabular-nums " + (gross >= 0 ? "text-gray-700" : "text-red-600 font-bold")}>{fmtYen(gross)}</td>
+                                    <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
+                                    <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
+                                  </tr>
                                 )
                               })}
-                            </div>
+                              </tbody>
+                            </table>
                           )}
                         </td>
                       </tr>
@@ -908,7 +976,6 @@ function AdminOrdersPage() {
                       const ids = fallbackPickerOrderIds
                       setFallbackPickerOrderIds(null)
                       setFallbackProducts([])
-                      // fallbackSupplierId 指定で再実行
                       await addToPool(ids, s.id)
                     }}
                     className="text-left px-3 py-2 border border-gray-200 rounded text-sm hover:bg-blue-50 hover:border-blue-300">
