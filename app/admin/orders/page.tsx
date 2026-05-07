@@ -219,6 +219,7 @@ function AdminOrdersPage() {
   const [fallbackPickerOrderIds, setFallbackPickerOrderIds] = useState<string[] | null>(null)
   const [fallbackProducts, setFallbackProducts] = useState<{ product_id: string; product_name: string; quantity: number }[]>([])
   const [allSuppliers, setAllSuppliers] = useState<{ id: string; name: string }[]>([])
+  const [supplierSearch, setSupplierSearch] = useState("")
 
   // 注文の不足分を「発注プール」に追加（仕入先別の下書き発注書）
   async function addToPool(orderIds: string[], fallbackSupplierId?: string) {
@@ -938,7 +939,7 @@ function AdminOrdersPage() {
       {/* 仕入先未設定商品のフォールバック選択モーダル */}
       {fallbackPickerOrderIds && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-          onClick={() => { setFallbackPickerOrderIds(null); setFallbackProducts([]) }}>
+          onClick={() => { setFallbackPickerOrderIds(null); setFallbackProducts([]); setSupplierSearch("") }}>
           <div className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col"
             onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-gray-100">
@@ -949,7 +950,7 @@ function AdminOrdersPage() {
               </p>
             </div>
             <div className="flex-1 overflow-y-auto p-3">
-              <div className="bg-gray-50 rounded p-2 mb-3 text-xs max-h-40 overflow-auto">
+              <div className="bg-gray-50 rounded p-2 mb-3 text-xs max-h-32 overflow-auto">
                 {fallbackProducts.map(p => (
                   <div key={p.product_id} className="py-0.5 flex justify-between border-b border-gray-100 last:border-0">
                     <span>{p.product_name}</span>
@@ -957,25 +958,74 @@ function AdminOrdersPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-xs font-bold text-gray-700 mb-2">仕入先を選択:</p>
-              <div className="grid grid-cols-2 gap-2 max-h-72 overflow-auto">
-                {allSuppliers.map(s => (
-                  <button key={s.id}
-                    onClick={async () => {
-                      const ids = fallbackPickerOrderIds
-                      setFallbackPickerOrderIds(null)
-                      setFallbackProducts([])
-                      await addToPool(ids, s.id)
-                    }}
-                    className="text-left px-3 py-2 border border-gray-200 rounded text-sm hover:bg-blue-50 hover:border-blue-300">
-                    {s.name}
-                  </button>
-                ))}
+
+              {/* 検索 */}
+              <div className="mb-2">
+                <input
+                  autoFocus
+                  value={supplierSearch}
+                  onChange={(e) => setSupplierSearch(e.target.value)}
+                  placeholder="仕入先名・メーカー名で検索（カナ/半角全角OK）"
+                  className="w-full px-3 py-2 border border-gray-200 rounded text-sm"
+                />
               </div>
+
+              {(() => {
+                // 検索キー正規化
+                const searchKeyOf = (s: string) => {
+                  const nfkc = String(s || "").normalize("NFKC").toLowerCase()
+                  return nfkc.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
+                }
+                const k = searchKeyOf(supplierSearch)
+                // メイン仕入先（部分一致でピン留め）
+                const PINNED = ["リンク", "バイオデント", "フォレストワン", "TP", "CI"]
+                const isPinned = (name: string) => PINNED.some(p => name.includes(p))
+                const filtered = !k ? allSuppliers : allSuppliers.filter(s => searchKeyOf(s.name).includes(k))
+                const pinned = filtered.filter(s => isPinned(s.name))
+                const others = filtered.filter(s => !isPinned(s.name))
+                const onClick = async (sId: string) => {
+                  const ids = fallbackPickerOrderIds
+                  setFallbackPickerOrderIds(null)
+                  setFallbackProducts([])
+                  setSupplierSearch("")
+                  await addToPool(ids!, sId)
+                }
+                const SupBtn = ({ s, highlight }: { s: { id: string; name: string }; highlight?: boolean }) => (
+                  <button onClick={() => onClick(s.id)}
+                    className={"text-left px-3 py-2 border rounded text-sm transition-colors " +
+                      (highlight ? "border-emerald-300 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 font-bold"
+                        : "border-gray-200 hover:bg-blue-50 hover:border-blue-300")}>
+                    {highlight && "⭐ "}{s.name}
+                  </button>
+                )
+                return (
+                  <>
+                    {pinned.length > 0 && (
+                      <div className="mb-3">
+                        <p className="text-[10px] text-emerald-700 font-bold mb-1">⭐ メイン仕入先</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {pinned.map(s => <SupBtn key={s.id} s={s} highlight />)}
+                        </div>
+                      </div>
+                    )}
+                    {others.length > 0 && (
+                      <div>
+                        {pinned.length > 0 && <p className="text-[10px] text-gray-500 mb-1">その他 {others.length}社</p>}
+                        <div className="grid grid-cols-2 gap-2 max-h-72 overflow-auto">
+                          {others.map(s => <SupBtn key={s.id} s={s} />)}
+                        </div>
+                      </div>
+                    )}
+                    {filtered.length === 0 && (
+                      <p className="text-center text-gray-400 text-sm py-4">該当する仕入先なし</p>
+                    )}
+                  </>
+                )
+              })()}
             </div>
             <div className="p-3 border-t border-gray-100 flex items-center justify-between">
               <Link href="/admin/products" className="text-xs text-gray-500 underline">商品マスタで仕入先を設定する →</Link>
-              <button onClick={() => { setFallbackPickerOrderIds(null); setFallbackProducts([]) }}
+              <button onClick={() => { setFallbackPickerOrderIds(null); setFallbackProducts([]); setSupplierSearch("") }}
                 className="text-xs text-gray-500 underline">スキップ</button>
             </div>
           </div>
