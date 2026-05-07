@@ -425,14 +425,19 @@ function ShippingPage() {
                               const sum = (latest || []).reduce((s, x) => s + Number(x.price || 0) * Number(x.quantity || 0), 0)
                               await supabase.from("orders").update({ total_price: sum }).eq("id", o.id)
                             }
+                            // 共通: 販売価格を更新 + 再計算
+                            const updateSellPrice = async (newPrice: number) => {
+                              if (newPrice < 0 || newPrice === sellPrice) return
+                              await supabase.from("order_items").update({ price: newPrice }).eq("id", it.id)
+                              await recalcTotal()
+                              fetchData()
+                            }
                             return (
-                              <div key={it.id} className={"flex items-center text-[11px] py-0.5 " + (noPrice ? "bg-amber-50" : "")}>
+                              <div key={it.id} className={"flex items-center text-[11px] py-0.5 gap-0.5 " + (noPrice ? "bg-amber-50" : "")}>
                                 <span className="font-mono text-gray-500 w-12 text-[10px]">{loc ? `[${loc}]` : ""}</span>
                                 <span className="flex-1 truncate">{it.product_name || "(商品名なし)"}</span>
-                                {/* 数量編集 */}
-                                <input
-                                  type="number"
-                                  defaultValue={qty}
+                                {/* 数量 */}
+                                <input type="number" defaultValue={qty}
                                   onBlur={async (e) => {
                                     const v = Number(e.target.value)
                                     if (v > 0 && v !== qty) {
@@ -441,28 +446,66 @@ function ShippingPage() {
                                       fetchData()
                                     }
                                   }}
-                                  className="w-12 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[11px] bg-white"
-                                />
-                                <span className="w-20 text-right text-[10px] text-gray-500 tabular-nums">{fmtYen(cost)}</span>
-                                <span className="w-20 text-right text-[10px] text-gray-500 tabular-nums">{fmtYen(listPrice)}</span>
-                                {/* 販売価格編集 */}
-                                <input
-                                  type="number"
-                                  defaultValue={sellPrice}
-                                  placeholder="単価"
+                                  className="w-12 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[11px] bg-white" />
+                                {/* 仕入（products.cost マスタ更新）*/}
+                                <input type="number" defaultValue={cost}
+                                  disabled={!it.product_id}
                                   onBlur={async (e) => {
                                     const v = Number(e.target.value)
-                                    if (v >= 0 && v !== sellPrice) {
-                                      await supabase.from("order_items").update({ price: v }).eq("id", it.id)
-                                      await recalcTotal()
+                                    if (v >= 0 && v !== cost && it.product_id) {
+                                      await supabase.from("products").update({ cost: v }).eq("id", it.product_id)
                                       fetchData()
                                     }
                                   }}
-                                  className={"w-24 text-right tabular-nums ml-1 px-1 py-0.5 border rounded text-[11px] font-bold " + (noPrice ? "border-amber-400 bg-amber-50" : "border-blue-300 bg-blue-50")}
-                                />
-                                <span className={"w-16 text-right text-[10px] tabular-nums " + (gross >= 0 ? "text-gray-700" : "text-red-600 font-bold")}>{fmtYen(gross)}</span>
-                                <span className={"w-12 text-right text-[10px] tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</span>
-                                <span className="w-24 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</span>
+                                  className="w-20 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[10px] text-gray-600 bg-gray-50 disabled:opacity-50"
+                                  title="仕入価格（商品マスタを更新）" />
+                                {/* 定価（products.price マスタ更新） */}
+                                <input type="number" defaultValue={listPrice}
+                                  disabled={!it.product_id}
+                                  onBlur={async (e) => {
+                                    const v = Number(e.target.value)
+                                    if (v >= 0 && v !== listPrice && it.product_id) {
+                                      await supabase.from("products").update({ price: v }).eq("id", it.product_id)
+                                      fetchData()
+                                    }
+                                  }}
+                                  className="w-20 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[10px] text-gray-600 bg-gray-50 disabled:opacity-50"
+                                  title="定価（商品マスタを更新）" />
+                                {/* 販売価格 */}
+                                <input type="number" defaultValue={sellPrice}
+                                  onBlur={(e) => updateSellPrice(Number(e.target.value))}
+                                  className={"w-24 text-right tabular-nums px-1 py-0.5 border rounded text-[11px] font-bold " + (noPrice ? "border-amber-400 bg-amber-50" : "border-blue-300 bg-blue-50")}
+                                  title="販売価格（明細だけに反映）" />
+                                {/* 粗利（編集すると 販売価格 = 仕入 + 粗利 で逆算）*/}
+                                <input type="number" defaultValue={gross}
+                                  onBlur={(e) => {
+                                    const v = Number(e.target.value)
+                                    const newPrice = cost + v
+                                    if (newPrice >= 0) updateSellPrice(newPrice)
+                                  }}
+                                  className={"w-16 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[10px] " + (gross >= 0 ? "text-gray-700" : "text-red-600 font-bold bg-red-50")}
+                                  title="粗利（編集すると販売価格が逆算: 仕入+粗利）" />
+                                {/* 粗利% */}
+                                <input type="number" step="0.1" defaultValue={grossRate}
+                                  onBlur={(e) => {
+                                    const v = Number(e.target.value)
+                                    if (v >= 100 || cost <= 0) return
+                                    const newPrice = Math.round(cost / (1 - v / 100))
+                                    updateSellPrice(newPrice)
+                                  }}
+                                  className={"w-14 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[10px] " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold bg-red-50" : "text-gray-500")}
+                                  title="粗利%（編集すると販売価格が逆算: 仕入÷(1-粗利%)）" />
+                                {/* 小計（編集すると 販売価格 = 小計÷数量 で逆算）*/}
+                                <input type="number" defaultValue={lineSubtotal}
+                                  onBlur={(e) => {
+                                    const v = Number(e.target.value)
+                                    if (qty > 0) {
+                                      const newPrice = Math.round(v / qty)
+                                      if (newPrice >= 0) updateSellPrice(newPrice)
+                                    }
+                                  }}
+                                  className="w-24 text-right tabular-nums px-1 py-0.5 border border-blue-300 rounded text-[11px] font-bold bg-blue-50"
+                                  title="小計（編集すると販売価格が逆算: 小計÷数量）" />
                                 <span className={"w-12 text-right text-[10px] tabular-nums " + (enough ? "text-gray-500" : "text-red-600 font-bold")}>
                                   {stock}
                                 </span>
