@@ -135,8 +135,8 @@ function SuggestPOPage() {
         if (orderQty === 0) return
         const stock = Number(p.stock || 0)
         const shortBy = Math.max(0, orderQty - stock)
-        if (shortBy <= 0) return
-        // 過去仕入の最後の仕入先・単価を初期値に
+        // ★ shortBy=0（在庫足りる）でも候補に含める。ただし初期選択はOFF
+        //   ユーザーが「不足分だけ」「全商品」選べる柔軟性を確保
         const last = lastSupplier(p.id)
         const clinicId = productClinicMap.get(p.id)
         list.push({
@@ -145,9 +145,9 @@ function SuggestPOPage() {
           reorderLevel: orderQty,
           reservedQty: orderQty,
           shortBy,
-          suggestQty: shortBy,
+          suggestQty: shortBy > 0 ? shortBy : orderQty,  // 足りてれば注文数量と同じ提案
           unitPrice: last.lastPrice ?? Number(p.cost || 0),
-          selected: true,
+          selected: shortBy > 0,  // 不足分だけ初期チェック、足りる商品はOFF
           supplierOverride: last.supplierId || p.default_supplier_id || undefined,
           deliveryTarget: clinicId || "stock",
           deliveryLabel: clinicId ? (clinicNameMap.get(clinicId) || "医院") : "在庫",

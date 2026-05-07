@@ -388,6 +388,52 @@ function AdminOrdersPage() {
         </Link>
       </div>
 
+      {/* 🆕 医院Webからの新規注文アラート（最上部・目立つ表示） */}
+      {(() => {
+        const newOrders = orders
+          .filter(o => o.source !== "admin" && o.status === "注文受付")
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        if (newOrders.length === 0) return null
+        const fmtTimeAgo = (dt: string) => {
+          const diffMin = Math.floor((Date.now() - new Date(dt).getTime()) / 60000)
+          if (diffMin < 1) return "今"
+          if (diffMin < 60) return `${diffMin}分前`
+          const diffHour = Math.floor(diffMin / 60)
+          if (diffHour < 24) return `${diffHour}時間前`
+          return `${Math.floor(diffHour / 24)}日前`
+        }
+        return (
+          <div className="rounded-lg p-3 animate-pulse-soft" style={{ background: "linear-gradient(135deg,#fee2e2,#fecaca)", border: "2px solid #ef4444" }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-bold text-red-900">🆕 医院Webから新規注文 {newOrders.length}件 (要対応)</span>
+              <span className="text-[10px] text-red-700">最新順</span>
+            </div>
+            <div className="bg-white rounded p-2 max-h-60 overflow-auto">
+              {newOrders.slice(0, 10).map(o => {
+                const cl = clinicById.get(o.clinic_id)
+                return (
+                  <div key={o.id} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-0 text-xs">
+                    <span className="font-bold text-gray-900">{cl?.name || "(医院不明)"}</span>
+                    <span className="text-[10px] text-gray-500 mx-2">{fmtTimeAgo(o.created_at)}</span>
+                    <span className="text-gray-600 mx-2 font-mono text-[10px]">{o.delivery_number || o.id.slice(0, 8)}</span>
+                    <span className="font-bold text-gray-900 tabular-nums mr-2">{fmtYen(o.total_price || 0)}</span>
+                    <button
+                      onClick={() => updateStatus(o.id, "確認中")}
+                      className="text-[10px] px-2 py-0.5 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                      title="この注文を「確認中」に進めて、新規アラートから外す">
+                      確認
+                    </button>
+                  </div>
+                )
+              })}
+              {newOrders.length > 10 && (
+                <p className="text-[10px] text-gray-500 text-center mt-1">他 {newOrders.length - 10}件 ...</p>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
       <div className="flex items-center flex-wrap gap-2">
         <h1 className="text-lg font-bold text-gray-900">
           注文管理
