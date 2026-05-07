@@ -48,6 +48,8 @@ function NewOrderPage() {
   const [showRecent, setShowRecent] = useState(false)
   const [productSearch, setProductSearch] = useState("")
   const [showProductPicker, setShowProductPicker] = useState<number | null>(null)
+  const [showClinicPicker, setShowClinicPicker] = useState(false)
+  const [clinicSearchInPicker, setClinicSearchInPicker] = useState("")
   // 医院別価格マスタ（pickProduct 時の単価自動補完に使う）
   const [clinicPrices, setClinicPrices] = useState<ClinicPrice[]>([])
   const clinicPriceMap = useMemo(() => makeClinicPriceMap(clinicPrices), [clinicPrices])
@@ -291,16 +293,17 @@ function NewOrderPage() {
       <div className="bg-white rounded-lg p-3 space-y-2" style={{ border: "1px solid #e8eaed" }}>
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
           <label className="sm:col-span-1 text-xs font-bold text-gray-700">医院</label>
-          <input
-            list="clinic-list"
-            value={clinicQuery}
-            onChange={e => pickClinic(e.target.value)}
-            placeholder="医院名（候補から選択）"
-            className="sm:col-span-6 px-3 py-2 border border-gray-200 rounded text-sm bg-white"
-          />
-          <datalist id="clinic-list">
-            {clinics.map(c => <option key={c.id} value={c.name}>{c.corporate_name || ""}</option>)}
-          </datalist>
+          {/* 医院ピッカー: クリックでモーダル展開、検索可能 */}
+          <button
+            type="button"
+            onClick={() => { setShowClinicPicker(true); setClinicSearchInPicker("") }}
+            className="sm:col-span-6 px-3 py-2 border border-gray-200 rounded text-sm bg-white text-left hover:bg-blue-50 flex items-center justify-between"
+          >
+            <span className={clinicId ? "text-gray-900 font-bold" : "text-gray-400"}>
+              {clinicId ? clinicQuery : "🔍 医院を選択（クリック）"}
+            </span>
+            <span className="text-gray-400 text-xs">▼</span>
+          </button>
           <label className="sm:col-span-1 text-xs font-bold text-gray-700">担当</label>
           <input
             value={salesRep}
@@ -316,9 +319,6 @@ function NewOrderPage() {
             {["注文受付", "確認中", "準備中", "納品済み"].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
-        {clinicQuery && !clinicId && (
-          <p className="text-xs text-red-600">⚠ 「{clinicQuery}」は医院マスタにありません。<Link href="/admin/clinics" className="underline">医院マスタで追加</Link></p>
-        )}
         {clinicId && recentOrders.length > 0 && (
           <div>
             <button onClick={() => setShowRecent(s => !s)} className="text-xs text-blue-600 hover:underline">
@@ -480,6 +480,64 @@ function NewOrderPage() {
           {saving ? "保存中…" : "✓ 注文を作成"}
         </button>
       </div>
+
+      {/* 医院ピッカー モーダル */}
+      {showClinicPicker && (() => {
+        const k = searchKey(clinicSearchInPicker)
+        const filteredClinics = !k ? clinics : clinics.filter(c => {
+          const target = searchKey(`${c.name} ${c.corporate_name || ""}`)
+          return target.includes(k)
+        })
+        return (
+          <div
+            className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-2"
+            onClick={() => setShowClinicPicker(false)}
+          >
+            <div
+              className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-3 border-b border-gray-100">
+                <h3 className="text-sm font-bold mb-2">🏥 医院を選択</h3>
+                <input
+                  autoFocus
+                  value={clinicSearchInPicker}
+                  onChange={e => setClinicSearchInPicker(e.target.value)}
+                  placeholder="医院名・法人名で検索（カナ/半角全角OK）"
+                  className="w-full px-3 py-2 border border-gray-200 rounded text-sm"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">{filteredClinics.length}/{clinics.length}件</p>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {filteredClinics.length === 0 ? (
+                  <p className="p-6 text-center text-gray-400 text-sm">該当医院なし</p>
+                ) : (
+                  filteredClinics.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => {
+                        setClinicId(c.id)
+                        setClinicQuery(c.name)
+                        setShowClinicPicker(false)
+                        setClinicSearchInPicker("")
+                        if (typeof window !== "undefined") localStorage.setItem(RECENT_CLINIC_KEY, c.id)
+                      }}
+                      className={"w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100 " + (clinicId === c.id ? "bg-blue-100" : "")}
+                    >
+                      <p className="text-sm font-bold text-gray-900">{c.name}</p>
+                      {c.corporate_name && <p className="text-xs text-gray-500">{c.corporate_name}</p>}
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="p-2 border-t border-gray-100 flex items-center justify-between">
+                <Link href="/admin/clinics" className="text-xs text-gray-500 underline">医院マスタで追加 →</Link>
+                <button onClick={() => setShowClinicPicker(false)} className="text-xs text-gray-500 underline">閉じる</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 商品ピッカー モーダル */}
       {showProductPicker !== null && (
