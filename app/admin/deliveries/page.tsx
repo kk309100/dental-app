@@ -177,14 +177,14 @@ export default function DeliveriesPage() {
               <th className="px-2 py-1.5 text-center w-8">
                 <input type="checkbox" checked={filtered.length > 0 && selected.size === filtered.length} onChange={(e) => e.target.checked ? selectAll() : clearSel()} />
               </th>
-              <th className="px-2 py-1.5 text-center w-24">納品日</th>
-              <th className="px-2 py-1.5 text-left w-36">納品書No</th>
+              <th className="px-2 py-1.5 text-center w-24 whitespace-nowrap">納品日</th>
+              <th className="px-2 py-1.5 text-left w-40 whitespace-nowrap">納品書No</th>
               <th className="px-2 py-1.5 text-left">医院</th>
-              <th className="px-2 py-1.5 text-center w-24">決済</th>
-              <th className="px-2 py-1.5 text-center w-16">商品数</th>
-              <th className="px-2 py-1.5 text-right w-28">金額(税抜)</th>
-              <th className="px-2 py-1.5 text-center w-16">請求</th>
-              <th className="px-2 py-1.5 text-center w-24">操作</th>
+              <th className="px-2 py-1.5 text-center w-24 whitespace-nowrap">決済</th>
+              <th className="px-2 py-1.5 text-center w-16 whitespace-nowrap">商品数</th>
+              <th className="px-2 py-1.5 text-right w-28 whitespace-nowrap">金額(税抜)</th>
+              <th className="px-2 py-1.5 text-center w-14 whitespace-nowrap">請求</th>
+              <th className="px-2 py-1.5 text-center w-14 whitespace-nowrap">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -196,15 +196,15 @@ export default function DeliveriesPage() {
               return (
                 <tr key={o.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (selected.has(o.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
                   <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleSel(o.id)} /></td>
-                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-700">
+                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-700 whitespace-nowrap">
                     {(o.delivered_at || o.created_at).slice(0, 10)}
                   </td>
-                  <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700">{o.delivery_number || o.id.slice(0, 8)}</td>
-                  <td className="px-2 py-1.5">{cl?.name || "(削除済み)"}</td>
-                  <td className="px-2 py-1.5 text-center"><PaymentBadge method={cl?.payment_method} /></td>
-                  <td className="px-2 py-1.5 text-center text-gray-600">{its.length}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-bold">{fmtYen(o.total_price || 0)}</td>
-                  <td className="px-2 py-1.5 text-center">
+                  <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700 whitespace-nowrap">{o.delivery_number || o.id.slice(0, 8)}</td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">{cl?.name || "(削除済み)"}</td>
+                  <td className="px-2 py-1.5 text-center whitespace-nowrap"><PaymentBadge method={cl?.payment_method} /></td>
+                  <td className="px-2 py-1.5 text-center text-gray-600 whitespace-nowrap">{its.length}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums font-bold whitespace-nowrap">{fmtYen(o.total_price || 0)}</td>
+                  <td className="px-2 py-1.5 text-center whitespace-nowrap">
                     {o.invoice_id ? <span className="text-emerald-600 text-[11px]">✓</span> : <span className="text-gray-300 text-[11px]">—</span>}
                   </td>
                   <td className="px-2 py-1.5 text-center whitespace-nowrap">

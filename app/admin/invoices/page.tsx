@@ -185,16 +185,16 @@ export default function InvoicesPage() {
                   checked={filtered.length > 0 && selected.size === filtered.length}
                   onChange={e => e.target.checked ? selectAll() : clearSel()} />
               </th>
-              <th className="px-2 py-1.5 text-left w-32">請求書No</th>
-              <th className="px-2 py-1.5 text-center w-16">状態</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-36">請求書No</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-20">状態</th>
               <th className="px-2 py-1.5 text-left">医院</th>
-              <th className="px-2 py-1.5 text-center w-24">決済</th>
-              <th className="px-2 py-1.5 text-center w-24">発行日</th>
-              <th className="px-2 py-1.5 text-center w-24">期限</th>
-              <th className="px-2 py-1.5 text-center w-24">入金日</th>
-              <th className="px-2 py-1.5 text-right w-24">税抜</th>
-              <th className="px-2 py-1.5 text-right w-28">税込</th>
-              <th className="px-2 py-1.5 text-center w-16">操作</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-24">決済</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-28">発行日</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-28">期限</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-28">入金日</th>
+              <th className="px-2 py-1.5 text-right whitespace-nowrap w-24">税抜</th>
+              <th className="px-2 py-1.5 text-right whitespace-nowrap w-28">税込</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-14">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -205,18 +205,18 @@ export default function InvoicesPage() {
                 <td className="px-2 py-1.5 text-center">
                   <input type="checkbox" checked={selected.has(iv.id)} onChange={() => toggleSel(iv.id)} />
                 </td>
-                <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700">{iv.invoice_number}</td>
-                <td className="px-2 py-1.5 text-center"><StatusBadge status={iv.status} /></td>
-                <td className="px-2 py-1.5">{clinicName(iv.clinic_id)}</td>
-                <td className="px-2 py-1.5 text-center"><PaymentBadge method={clinicPayment(iv.clinic_id)} /></td>
-                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{fmtDate(iv.issue_date)}</td>
-                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{iv.due_date ? fmtDate(iv.due_date) : "—"}</td>
-                <td className="px-2 py-1.5 text-center text-[11px]" style={{ color: iv.paid_at ? "#10b981" : "#9ca3af" }}>
+                <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700 whitespace-nowrap">{iv.invoice_number}</td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap"><StatusBadge status={iv.status} /></td>
+                <td className="px-2 py-1.5 whitespace-nowrap">{clinicName(iv.clinic_id)}</td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap"><PaymentBadge method={clinicPayment(iv.clinic_id)} /></td>
+                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600 whitespace-nowrap">{fmtDate(iv.issue_date)}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600 whitespace-nowrap">{iv.due_date ? fmtDate(iv.due_date) : "—"}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] whitespace-nowrap" style={{ color: iv.paid_at ? "#10b981" : "#9ca3af" }}>
                   {iv.paid_at ? fmtDate(iv.paid_at) : "—"}
                 </td>
-                <td className="px-2 py-1.5 text-right text-[11px] text-gray-500 tabular-nums">{fmtYen(iv.subtotal)}</td>
-                <td className="px-2 py-1.5 text-right text-[12px] font-bold tabular-nums">{fmtYen(iv.total)}</td>
-                <td className="px-2 py-1.5 text-center">
+                <td className="px-2 py-1.5 text-right text-[11px] text-gray-500 tabular-nums whitespace-nowrap">{fmtYen(iv.subtotal)}</td>
+                <td className="px-2 py-1.5 text-right text-[12px] font-bold tabular-nums whitespace-nowrap">{fmtYen(iv.total)}</td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap">
                   <Link href={`/admin/invoices/${iv.id}`} className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
                 </td>
               </tr>
@@ -256,7 +256,7 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
   )
 }
 
-const page: React.CSSProperties = { maxWidth: 960, margin: "0 auto", padding: 20 }
+const page: React.CSSProperties = { width: "100%", padding: 0 }
 const back: React.CSSProperties = { padding: "6px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", marginBottom: 16, cursor: "pointer" }
 const header: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 12 }
 const btnDark: React.CSSProperties = { padding: "8px 16px", borderRadius: 8, border: "none", background: "#111", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }
