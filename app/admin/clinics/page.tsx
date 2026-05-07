@@ -242,39 +242,36 @@ export default function AdminClinicsPage() {
     a.click()
   }
 
-  if (loading) return <main style={page}><p>読み込み中…</p></main>
+  if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   return (
-    <main style={page}>
-      <Link href="/admin"><button style={back}>← 戻る</button></Link>
-
-      <div style={header}>
-        <div>
-          <h1 style={{ fontSize: 26, margin: 0 }}>医院管理</h1>
-          <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{clinics.length}件</p>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".csv,text/csv"
-            style={{ display: "none" }}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f) }}
-          />
-          <button onClick={() => fileRef.current?.click()} disabled={importing} style={btnGray}>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-lg font-bold text-gray-900">
+          医院管理
+          <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{clinics.length}件</span>
+        </h1>
+        <div className="flex items-center gap-2">
+          <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f) }} />
+          <button onClick={() => fileRef.current?.click()} disabled={importing}
+            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
             {importing ? "取込中…" : "📥 CSV取込"}
           </button>
-          <button onClick={downloadCSV} style={btnGray}>📤 CSV出力</button>
-          <button onClick={openAdd} style={btnDark}>＋ 医院を追加</button>
+          <button onClick={downloadCSV} className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">📤 CSV出力</button>
+          <button onClick={openAdd} className="text-xs px-3 py-1.5 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700">＋ 医院を追加</button>
         </div>
       </div>
 
       {importMsg && (
-        <div style={{ ...errBox, background: importMsg.startsWith("✅") ? "#ecfdf5" : "#fff5f5", borderColor: importMsg.startsWith("✅") ? "#bbf7d0" : "#fcc", color: importMsg.startsWith("✅") ? "#065f46" : "#dc2626", whiteSpace: "pre-line" }}>{importMsg}</div>
+        <div className="text-xs px-3 py-2 rounded whitespace-pre-line"
+          style={{ background: importMsg.startsWith("✅") ? "#ecfdf5" : "#fff5f5", color: importMsg.startsWith("✅") ? "#065f46" : "#dc2626", border: "1px solid " + (importMsg.startsWith("✅") ? "#bbf7d0" : "#fcc") }}>
+          {importMsg}
+        </div>
       )}
 
       {duplicates.length > 0 && (
-        <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 6, padding: 10, marginBottom: 12, fontSize: 12, color: "#92400e" }}>
+        <div className="text-xs px-3 py-2 rounded bg-amber-50 text-amber-700" style={{ border: "1px solid #fde68a" }}>
           ⚠ 同名の医院が {duplicates.length} 組あります:
           {duplicates.slice(0, 5).map(([name, arr]) => (
             <span key={name} style={{ marginLeft: 8 }}>「{arr[0].name}」×{arr.length}</span>
@@ -283,44 +280,68 @@ export default function AdminClinicsPage() {
         </div>
       )}
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="医院名・法人名・担当で検索（半角/全角OK）"
-        style={searchInput}
-      />
+      <div className="bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="医院名・法人名・担当で検索（半角/全角OK）"
+          className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
+        />
+      </div>
 
-      {errMsg && (
-        <div style={errBox}>{errMsg}</div>
-      )}
+      {errMsg && <div className="text-xs px-3 py-2 rounded bg-red-50 text-red-700" style={{ border: "1px solid #fcc" }}>{errMsg}</div>}
 
-      <div style={tableWrap}>
-        {filtered.length === 0 ? (
-          <p style={{ padding: 32, textAlign: "center", color: "#999" }}>
-            {search ? "該当なし" : "医院がまだ登録されていません"}
-          </p>
-        ) : (
-          filtered.map((c) => (
-            <div key={c.id} style={card}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={cardName}>{c.name}</p>
-                {c.corporate_name && <p style={cardSub}>{c.corporate_name}</p>}
-                <div style={cardMeta}>
-                  {c.contact && <span>👤 {c.contact}</span>}
-                  {c.phone && <span>📞 {c.phone}</span>}
-                  {c.email && <span>✉ {c.email}</span>}
-                  {c.sales_rep && <span style={badge}>担当: {c.sales_rep}</span>}
-                  <span style={badgeGray}>{c.closing_day || "月末"}</span>
-                </div>
-                {c.adress && <p style={cardAddr}>📍 {c.adress}</p>}
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => openEdit(c)} style={btnEdit}>編集</button>
-                <button onClick={() => del(c.id, c.name)} style={btnDel}>削除</button>
-              </div>
-            </div>
-          ))
-        )}
+      {/* 高密度テーブル */}
+      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 200px)" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <thead className="sticky top-0 bg-gray-100">
+            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-left whitespace-nowrap">医院名</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">法人名</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-24">先方担当</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-24">営業担当</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">電話</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-20">締日</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-24">決済</th>
+              <th className="px-2 py-1.5 text-left">住所</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-24">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+                {search ? "該当なし" : "医院がまだ登録されていません"}
+              </td></tr>
+            ) : filtered.map((c, i) => (
+              <tr key={c.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                <td className="px-2 py-1.5 font-bold text-gray-900 whitespace-nowrap">{c.name}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{c.corporate_name || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{c.contact || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{c.sales_rep || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap font-mono">{c.phone || "—"}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600 whitespace-nowrap">{c.closing_day || "月末"}</td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                  {c.payment_method ? (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                      style={{
+                        background: c.payment_method === "カード" ? "#fee2e2" : c.payment_method === "現金" ? "#dcfce7" : "#dbeafe",
+                        color: c.payment_method === "カード" ? "#b91c1c" : c.payment_method === "現金" ? "#15803d" : "#1e40af",
+                      }}>
+                      {c.payment_method}
+                    </span>
+                  ) : <span className="text-[10px] text-gray-400">—</span>}
+                </td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-500" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.adress || ""}>
+                  {c.adress || "—"}
+                </td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                  <button onClick={() => openEdit(c)} className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
+                  <button onClick={() => del(c.id, c.name)} className="text-[10px] px-1.5 py-0.5 border border-red-200 bg-red-50 rounded hover:bg-red-100 text-red-700">削除</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* フォーム モーダル */}
@@ -386,7 +407,7 @@ export default function AdminClinicsPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   )
 }
 

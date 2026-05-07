@@ -170,73 +170,92 @@ export default function AdminSuppliersPage() {
     a.click()
   }
 
-  if (loading) return <main style={page}><p>読み込み中…</p></main>
+  if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   return (
-    <main style={page}>
-      <Link href="/admin"><button style={back}>← 戻る</button></Link>
-
-      <div style={header}>
-        <div>
-          <h1 style={{ fontSize: 26, margin: 0 }}>仕入先管理</h1>
-          <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{suppliers.length}件</p>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-lg font-bold text-gray-900">
+          仕入先管理
+          <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{suppliers.length}件</span>
+        </h1>
+        <div className="flex items-center gap-2">
           <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f) }} />
-          <button onClick={() => fileRef.current?.click()} disabled={importing} style={btnGray}>
+          <button onClick={() => fileRef.current?.click()} disabled={importing}
+            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
             {importing ? "取込中…" : "📥 CSV取込"}
           </button>
-          <button onClick={downloadCSV} style={btnGray}>📤 CSV出力</button>
-          <button onClick={openAdd} style={btnDark}>＋ 仕入先を追加</button>
+          <button onClick={downloadCSV} className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">📤 CSV出力</button>
+          <button onClick={openAdd} className="text-xs px-3 py-1.5 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700">＋ 仕入先を追加</button>
         </div>
       </div>
 
       {importMsg && (
-        <div style={{ ...errBox, background: importMsg.startsWith("✅") ? "#ecfdf5" : "#fff5f5", borderColor: importMsg.startsWith("✅") ? "#bbf7d0" : "#fcc", color: importMsg.startsWith("✅") ? "#065f46" : "#dc2626", whiteSpace: "pre-line" }}>{importMsg}</div>
+        <div className="text-xs px-3 py-2 rounded whitespace-pre-line"
+          style={{ background: importMsg.startsWith("✅") ? "#ecfdf5" : "#fff5f5", color: importMsg.startsWith("✅") ? "#065f46" : "#dc2626", border: "1px solid " + (importMsg.startsWith("✅") ? "#bbf7d0" : "#fcc") }}>
+          {importMsg}
+        </div>
       )}
 
       {duplicates.length > 0 && (
-        <div style={{ background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 6, padding: 10, marginBottom: 12, fontSize: 12, color: "#92400e" }}>
+        <div className="text-xs px-3 py-2 rounded bg-amber-50 text-amber-700" style={{ border: "1px solid #fde68a" }}>
           ⚠ 同名の仕入先が {duplicates.length} 組あります
         </div>
       )}
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="仕入先名・メーカー・担当で検索（半角/全角OK）"
-        style={searchInput}
-      />
+      <div className="bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="仕入先名・メーカー・担当で検索（半角/全角OK）"
+          className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
+        />
+      </div>
 
-      {errMsg && <div style={errBox}>{errMsg}</div>}
+      {errMsg && <div className="text-xs px-3 py-2 rounded bg-red-50 text-red-700" style={{ border: "1px solid #fcc" }}>{errMsg}</div>}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {filtered.length === 0 ? (
-          <p style={{ padding: 32, textAlign: "center", color: "#999" }}>
-            {search ? "該当なし" : "仕入先がまだ登録されていません"}
-          </p>
-        ) : (
-          filtered.map((s) => (
-            <div key={s.id} style={card}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={cardName}>{s.name}</p>
-                {s.maker_name && <p style={cardSub}>メーカー: {s.maker_name}</p>}
-                <div style={cardMeta}>
-                  {s.contact && <span>👤 {s.contact}</span>}
-                  {s.phone && <span>📞 {s.phone}</span>}
-                  {s.email && <span>✉ {s.email}</span>}
-                </div>
-                {s.address && <p style={cardAddr}>📍 {s.address}</p>}
-                {s.notes && <p style={cardNotes}>📝 {s.notes}</p>}
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => openEdit(s)} style={btnEdit}>編集</button>
-                <button onClick={() => del(s.id, s.name)} style={btnDel}>削除</button>
-              </div>
-            </div>
-          ))
-        )}
+      {/* 高密度テーブル */}
+      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 200px)" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <thead className="sticky top-0 bg-gray-100">
+            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-left whitespace-nowrap">仕入先名</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">メーカー</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-28">担当者</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">電話</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-48">メール</th>
+              <th className="px-2 py-1.5 text-left">住所</th>
+              <th className="px-2 py-1.5 text-left w-32">備考</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-24">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">
+                {search ? "該当なし" : "仕入先がまだ登録されていません"}
+              </td></tr>
+            ) : filtered.map((s, i) => (
+              <tr key={s.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                <td className="px-2 py-1.5 font-bold text-gray-900 whitespace-nowrap">{s.name}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{s.maker_name || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{s.contact || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap font-mono">{s.phone || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap font-mono">{s.email || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-500" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.address || ""}>
+                  {s.address || "—"}
+                </td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-500" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.notes || ""}>
+                  {s.notes || "—"}
+                </td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                  <button onClick={() => openEdit(s)} className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
+                  <button onClick={() => del(s.id, s.name)} className="text-[10px] px-1.5 py-0.5 border border-red-200 bg-red-50 rounded hover:bg-red-100 text-red-700">削除</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {showForm && (
@@ -270,7 +289,7 @@ export default function AdminSuppliersPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   )
 }
 
