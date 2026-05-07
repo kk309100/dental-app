@@ -126,8 +126,14 @@ export async function addItemsToPool(
 
 /**
  * 注文1件 or 複数件から、不足商品を仕入先別にプールに追加するヘルパ
+ *
+ * @param orderIds 対象注文ID
+ * @param fallbackSupplierId 仕入先未設定の商品をここに振る（オプション）
  */
-export async function poolFromOrders(orderIds: string[]): Promise<PoolResult & { skippedNoSupplier: number; skippedNoShortage: number }> {
+export async function poolFromOrders(
+  orderIds: string[],
+  fallbackSupplierId?: string,
+): Promise<PoolResult & { skippedNoSupplier: number; skippedNoShortage: number; productsNeedingSupplier: { product_id: string; product_name: string; quantity: number }[] }> {
   // 1. データ取得
   const [oRes, oiRes, pRes, sRes, srRes, cRes] = await Promise.all([
     supabase.from("orders").select("id,clinic_id").in("id", orderIds),
@@ -164,6 +170,7 @@ export async function poolFromOrders(orderIds: string[]): Promise<PoolResult & {
   const itemsBySupplier = new Map<string, PoolItem[]>()
   let skippedNoSupplier = 0
   let skippedNoShortage = 0
+  const productsNeedingSupplier: { product_id: string; product_name: string; quantity: number }[] = []
 
   for (const oi of orderItems as any[]) {
     if (!oi.product_id) continue
@@ -174,10 +181,19 @@ export async function poolFromOrders(orderIds: string[]): Promise<PoolResult & {
     const shortBy = orderQty - stock
     if (shortBy <= 0) { skippedNoShortage++; continue }
 
-    // 仕入先決定: default_supplier_id > 過去履歴
+    // 仕入先決定: default_supplier_id > 過去履歴 > fallbackSupplierId
     const last = lastSupplierByProduct.get(oi.product_id)
-    const supplierId = product.default_supplier_id || last?.supplierId
-    if (!supplierId) { skippedNoSupplier++; continue }
+    const supplierId = product.default_supplier_id || last?.supplierId || fallbackSupplierId
+
+    if (!supplierId) {
+      skippedNoSupplier++
+      productsNeedingSupplier.push({
+        product_id: oi.product_id,
+        product_name: product.name,
+        quantity: shortBy,
+      })
+      continue
+    }
 
     const order = orderById.get(oi.order_id) as any
     const clinicName = order?.clinic_id ? (clinicById.get(order.clinic_id) || "(医院)") : "(医院)"
@@ -198,7 +214,7 @@ export async function poolFromOrders(orderIds: string[]): Promise<PoolResult & {
 
   // 3. プールに追加
   const result = await addItemsToPool(itemsBySupplier, supplierById)
-  return { ...result, skippedNoSupplier, skippedNoShortage }
+  return { ...result, skippedNoSupplier, skippedNoShortage, productsNeedingSupplier }
 }
 
 /**

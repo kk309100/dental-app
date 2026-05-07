@@ -216,20 +216,47 @@ function AdminOrdersPage() {
     fetchData()
   }
 
+  // 仕入先未設定商品のフォールバック選択用 state
+  const [fallbackPickerOrderIds, setFallbackPickerOrderIds] = useState<string[] | null>(null)
+  const [fallbackProducts, setFallbackProducts] = useState<{ product_id: string; product_name: string; quantity: number }[]>([])
+  const [allSuppliers, setAllSuppliers] = useState<{ id: string; name: string }[]>([])
+
   // 注文の不足分を「発注プール」に追加（仕入先別の下書き発注書）
-  async function addToPool(orderIds: string[]) {
+  async function addToPool(orderIds: string[], fallbackSupplierId?: string) {
     if (orderIds.length === 0) return
-    const r = await poolFromOrders(orderIds)
-    if (r.pos.length === 0 && r.skippedNoShortage > 0) {
-      alert(`不足商品がありません（在庫足りる）。\n発注プールには追加されませんでした。`)
-      return
-    }
+    const r = await poolFromOrders(orderIds, fallbackSupplierId)
     if (!r.ok && r.errors.length > 0) {
       alert("一部失敗:\n" + r.errors.join("\n"))
     }
+
+    // ケース1: 仕入先未設定商品があり、まだ fallback も指定されてない
+    if (r.skippedNoSupplier > 0 && !fallbackSupplierId) {
+      // 仕入先一覧をロードして選択ダイアログを出す
+      const { data: sups } = await supabase.from("suppliers").select("id,name").order("name").limit(50000)
+      setAllSuppliers((sups as { id: string; name: string }[]) || [])
+      setFallbackProducts(r.productsNeedingSupplier)
+      setFallbackPickerOrderIds(orderIds)
+      // 既にプール追加されたものについても、後でまとめて結果表示するため一旦ここで return
+      // ※ 既に追加された分は既に DB に書き込み済み
+      if (r.pos.length > 0) {
+        const lines = r.pos.map(p => `  ${p.supplier_name}: ${p.added_items}品`).join("\n")
+        alert(`一部の商品はプールに追加しました:\n${lines}\n\n残り ${r.skippedNoSupplier}品 の仕入先を選択してください。`)
+      }
+      return
+    }
+
+    if (r.pos.length === 0) {
+      if (r.skippedNoShortage > 0) {
+        alert(`すべての商品の在庫が足りています。\n発注の必要はありません。`)
+      } else {
+        alert("発注対象がありません。")
+      }
+      return
+    }
+
+    // プール追加成功
     const lines = r.pos.map(p => `  ${p.supplier_name}: ${p.added_items}品`).join("\n")
-    const skipMsg = r.skippedNoSupplier > 0 ? `\n(仕入先未設定 ${r.skippedNoSupplier}品はスキップ)` : ""
-    if (confirm(`✅ 発注プールに追加しました:\n${lines}${skipMsg}\n\n発注プール画面に移動しますか？`)) {
+    if (confirm(`✅ 発注プールに追加しました:\n${lines}\n\n発注プール画面に移動しますか？`)) {
       window.location.href = "/admin/purchase-orders/pool"
     }
   }
@@ -850,6 +877,54 @@ function AdminOrdersPage() {
         </div>
       )}
       </GroupViewTabs>
+
+      {/* 仕入先未設定商品のフォールバック選択モーダル */}
+      {fallbackPickerOrderIds && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => { setFallbackPickerOrderIds(null); setFallbackProducts([]) }}>
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col"
+            onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-100">
+              <h3 className="text-base font-bold text-gray-900">⚠️ 仕入先が未設定の商品</h3>
+              <p className="text-xs text-gray-600 mt-1">
+                以下 {fallbackProducts.length}品 の仕入先がマスタに登録されていません。<br />
+                どの仕入先の発注プールに追加しますか？
+              </p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3">
+              <div className="bg-gray-50 rounded p-2 mb-3 text-xs max-h-40 overflow-auto">
+                {fallbackProducts.map(p => (
+                  <div key={p.product_id} className="py-0.5 flex justify-between border-b border-gray-100 last:border-0">
+                    <span>{p.product_name}</span>
+                    <span className="text-gray-500">×{p.quantity}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs font-bold text-gray-700 mb-2">仕入先を選択:</p>
+              <div className="grid grid-cols-2 gap-2 max-h-72 overflow-auto">
+                {allSuppliers.map(s => (
+                  <button key={s.id}
+                    onClick={async () => {
+                      const ids = fallbackPickerOrderIds
+                      setFallbackPickerOrderIds(null)
+                      setFallbackProducts([])
+                      // fallbackSupplierId 指定で再実行
+                      await addToPool(ids, s.id)
+                    }}
+                    className="text-left px-3 py-2 border border-gray-200 rounded text-sm hover:bg-blue-50 hover:border-blue-300">
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-3 border-t border-gray-100 flex items-center justify-between">
+              <Link href="/admin/products" className="text-xs text-gray-500 underline">商品マスタで仕入先を設定する →</Link>
+              <button onClick={() => { setFallbackPickerOrderIds(null); setFallbackProducts([]) }}
+                className="text-xs text-gray-500 underline">スキップ</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
