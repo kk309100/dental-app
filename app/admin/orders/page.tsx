@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { fmtYen } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
+import { poolFromOrders } from "@/lib/po-pool"
 
 export default function AdminOrdersPageWrapper() {
   return (
@@ -213,6 +214,24 @@ function AdminOrdersPage() {
     const { error } = await supabase.from("orders").delete().eq("id", orderId)
     if (error) { alert("削除失敗: " + error.message); return }
     fetchData()
+  }
+
+  // 注文の不足分を「発注プール」に追加（仕入先別の下書き発注書）
+  async function addToPool(orderIds: string[]) {
+    if (orderIds.length === 0) return
+    const r = await poolFromOrders(orderIds)
+    if (r.pos.length === 0 && r.skippedNoShortage > 0) {
+      alert(`不足商品がありません（在庫足りる）。\n発注プールには追加されませんでした。`)
+      return
+    }
+    if (!r.ok && r.errors.length > 0) {
+      alert("一部失敗:\n" + r.errors.join("\n"))
+    }
+    const lines = r.pos.map(p => `  ${p.supplier_name}: ${p.added_items}品`).join("\n")
+    const skipMsg = r.skippedNoSupplier > 0 ? `\n(仕入先未設定 ${r.skippedNoSupplier}品はスキップ)` : ""
+    if (confirm(`✅ 発注プールに追加しました:\n${lines}${skipMsg}\n\n発注プール画面に移動しますか？`)) {
+      window.location.href = "/admin/purchase-orders/pool"
+    }
   }
 
   // 一括削除（納品済みは自動的にスキップ）
@@ -504,12 +523,10 @@ function AdminOrdersPage() {
             >📋 見積書作成</button>
             {selectedShort > 0 && (
               <button
-                onClick={() => {
-                  window.location.href = `/admin/purchase-orders/suggest?from_orders=${ids.join(",")}`
-                }}
+                onClick={() => addToPool(ids)}
                 className="px-3 py-1 bg-amber-500 text-white rounded font-bold"
-                title="在庫不足の商品を仕入先へ発注"
-              >🛒 不足分を発注 ({selectedShort})</button>
+                title="不足商品を仕入先別の発注プールに追加（後で一括発注確定）"
+              >🛒 プールに追加 ({selectedShort}品)</button>
             )}
             <button
               onClick={() => {
@@ -634,12 +651,11 @@ function AdminOrdersPage() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        const ids = undeliveredOrders.map(o => o.id).join(",")
-                        window.location.href = `/admin/purchase-orders/suggest?from_orders=${ids}`
+                        addToPool(undeliveredOrders.map(o => o.id))
                       }}
                       className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500 text-white hover:bg-amber-600"
-                      title="この医院の不足分を発注"
-                    >🛒 発注</button>
+                      title="この医院の不足分を発注プールに追加"
+                    >🛒 プール追加</button>
                   )}
                   <div className="flex-1" />
                   <span className="text-sm font-bold text-gray-900">{fmtYen(total)}</span>
@@ -691,9 +707,10 @@ function AdminOrdersPage() {
                                 <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
                                 <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
                                 {ss.short > 0 && (
-                                  <Link href={`/admin/purchase-orders/suggest?from_order=${o.id}`}>
-                                    <button className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1" title="不足分を発注書候補に">発注</button>
-                                  </Link>
+                                  <button
+                                    onClick={() => addToPool([o.id])}
+                                    className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1"
+                                    title="不足分を発注プールに追加">プール</button>
                                 )}
                                 {!["納品済み", "納品済"].includes(o.status) && (
                                   <button onClick={() => deleteOrder(o.id, o.delivery_number)} className="text-[10px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" title="この注文を削除">🗑</button>
@@ -789,9 +806,10 @@ function AdminOrdersPage() {
                         <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
                         <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
                         {ss.short > 0 && (
-                          <Link href={`/admin/purchase-orders/suggest?from_order=${o.id}`}>
-                            <button className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1" title="不足分を発注書候補に">発注</button>
-                          </Link>
+                          <button
+                            onClick={() => addToPool([o.id])}
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1"
+                            title="不足分を発注プールに追加">プール</button>
                         )}
                         {!["納品済み", "納品済"].includes(o.status) && (
                           <button onClick={() => deleteOrder(o.id, o.delivery_number)} className="text-[10px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" title="この注文を削除">🗑</button>

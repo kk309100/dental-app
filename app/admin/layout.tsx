@@ -11,6 +11,7 @@ const NAV = [
   // 業務フロー順: 注文 → 発注 → 仕入 → 納品 → 請求
   { id: "orders", href: "/admin/orders", label: "注文", icon: Ic.order },
   { id: "purchase-orders", href: "/admin/purchase-orders", label: "発注", icon: Ic.truck },
+  { id: "po-pool", href: "/admin/purchase-orders/pool", label: "🛒プール", icon: Ic.purchase },
   { id: "receivings", href: "/admin/receivings", label: "仕入納品", icon: Ic.purchase },
   { id: "deliveries", href: "/admin/deliveries", label: "医院納品", icon: Ic.doc },
   { id: "invoices", href: "/admin/invoices", label: "請求", icon: Ic.sales },
