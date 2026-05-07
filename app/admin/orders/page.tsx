@@ -19,6 +19,8 @@ type Order = { id: string; clinic_id: string; status: string; created_at: string
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
 type Clinic = { id: string; name: string; corporate_name?: string | null }
 type Product = { id: string; name: string; stock: number | null }
+type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null }
+type POHead = { id: string; status: string }
 
 const STATUSES = ["注文受付", "確認中", "準備中", "納品済み", "キャンセル"] as const
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -39,6 +41,8 @@ function AdminOrdersPage() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [products, setProducts] = useState<Product[]>([])
+  const [poHeads, setPoHeads] = useState<POHead[]>([])
+  const [poItems, setPoItems] = useState<POItem[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<ViewMode>("byClinic")
   const [search, setSearch] = useState("")
@@ -53,17 +57,22 @@ function AdminOrdersPage() {
 
   async function fetchData() {
     setLoading(true)
-    const [o, i, c, p] = await Promise.all([
+    const [o, i, c, p, ph, pi] = await Promise.all([
       supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(50000),
       supabase.from("order_items").select("*").limit(50000),  // デフォルト1000件 limit を回避
       supabase.from("clinics").select("id,name,corporate_name").limit(50000),
       supabase.from("products").select("id,name,stock").limit(50000),
+      // 業務状態判定用: 「未入荷の発注」を検出するため
+      supabase.from("purchase_orders").select("id,status").limit(50000),
+      supabase.from("purchase_order_items").select("purchase_order_id,product_id,quantity,received_quantity").limit(50000),
     ])
     const orders = (o.data as Order[]) || []
     setOrders(orders)
     setOrderItems((i.data as OrderItem[]) || [])
     setClinics((c.data as Clinic[]) || [])
     setProducts((p.data as Product[]) || [])
+    setPoHeads((ph.data as POHead[]) || [])
+    setPoItems((pi.data as POItem[]) || [])
     // 未納品の注文は商品明細をデフォルトで展開
     setOpenOrderIds(new Set(orders.filter(o => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)).map(o => o.id)))
     setLoading(false)
@@ -93,6 +102,70 @@ function AdminOrdersPage() {
       else { short++; shortItems.push(it) }
     })
     return { ok, short, total: items.length, shortItems }
+  }
+
+  // 「発注済み」「部分入荷」状態の PO で、まだ入荷待ちの商品ID集合
+  // → 在庫不足注文がこの商品を含むなら「入荷待ち」、含まないなら「要発注」
+  const orderedAwaitingReceipt = useMemo(() => {
+    const activePOIds = new Set(poHeads.filter(p => p.status === "発注済" || p.status === "部分入荷").map(p => p.id))
+    const ids = new Set<string>()
+    poItems.forEach(it => {
+      if (!it.product_id) return
+      if (!activePOIds.has(it.purchase_order_id)) return
+      const remaining = Number(it.quantity || 0) - Number(it.received_quantity || 0)
+      if (remaining > 0) ids.add(it.product_id)
+    })
+    return ids
+  }, [poHeads, poItems])
+
+  // 業務状態（一目で「次にやること」が分かるバッジ用）
+  // delivered  : 納品済み（完了）
+  // cancelled  : キャンセル
+  // ready      : 全在庫足りてる → 出荷準備すれば即納品可
+  // waiting    : 不足分すべてが発注済み・入荷待ち
+  // partial    : 不足分の一部だけ発注済み（残りは未発注）
+  // need_po    : 不足分すべて未発注 → 発注書作る必要
+  type BizState = "delivered" | "cancelled" | "ready" | "waiting" | "partial" | "need_po"
+  function businessState(orderId: string): BizState {
+    const order = orders.find(o => o.id === orderId)
+    if (!order) return "ready"
+    if (["納品済み", "納品済"].includes(order.status)) return "delivered"
+    if (["キャンセル", "取消"].includes(order.status)) return "cancelled"
+
+    const items = itemsByOrder.get(orderId) || []
+    if (items.length === 0) return "ready"
+
+    let shortCount = 0, awaitingCount = 0
+    for (const it of items) {
+      const stock = it.product_id ? Number(productById.get(it.product_id)?.stock || 0) : 0
+      if (stock < Number(it.quantity || 0)) {
+        shortCount++
+        if (it.product_id && orderedAwaitingReceipt.has(it.product_id)) awaitingCount++
+      }
+    }
+    if (shortCount === 0) return "ready"
+    if (awaitingCount === shortCount) return "waiting"
+    if (awaitingCount > 0) return "partial"
+    return "need_po"
+  }
+
+  // バッジ表示用
+  const BIZ_BADGES: Record<BizState, { icon: string; label: string; bg: string; color: string; border: string }> = {
+    delivered: { icon: "✅", label: "納品済",     bg: "#dcfce7", color: "#15803d", border: "#86efac" },
+    cancelled: { icon: "✕",  label: "取消",       bg: "#f3f4f6", color: "#6b7280", border: "#d1d5db" },
+    ready:     { icon: "🚚", label: "出荷待ち",   bg: "#dbeafe", color: "#1e40af", border: "#93c5fd" },
+    waiting:   { icon: "⏳", label: "入荷待ち",   bg: "#fef3c7", color: "#92400e", border: "#fde68a" },
+    partial:   { icon: "🟠", label: "一部要発注", bg: "#fed7aa", color: "#9a3412", border: "#fdba74" },
+    need_po:   { icon: "📦", label: "要発注",     bg: "#fee2e2", color: "#b91c1c", border: "#fca5a5" },
+  }
+  function BizBadge({ state }: { state: BizState }) {
+    const s = BIZ_BADGES[state]
+    return (
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 whitespace-nowrap"
+        style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+        <span>{s.icon}</span><span>{s.label}</span>
+      </span>
+    )
   }
 
   const filtered = useMemo(() => {
@@ -350,6 +423,12 @@ function AdminOrdersPage() {
               const ss = stockState(o.id)
               return { ok: s.ok + ss.ok, short: s.short + ss.short }
             }, { ok: 0, short: 0 })
+            // 業務状態の集計（医院グループのサマリーバッジ用）
+            const bizCounts = clinicOrders.reduce((acc, o) => {
+              const s = businessState(o.id)
+              acc[s] = (acc[s] || 0) + 1
+              return acc
+            }, {} as Record<string, number>)
             const allSelected = clinicOrders.every((o) => selectedOrderIds.has(o.id))
             const someSelected = clinicOrders.some((o) => selectedOrderIds.has(o.id))
             return (
@@ -366,15 +445,17 @@ function AdminOrdersPage() {
                   <span className="text-base">{open ? "▼" : "▶"}</span>
                   <span className="font-bold text-gray-900">{clinic?.name || "医院不明"}</span>
                   <span className="text-xs text-gray-500">{clinicOrders.length}件</span>
-                  {undelivered > 0 && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">未納品 {undelivered}</span>}
-                  {undelivered > 0 && (stockSummary.ok > 0 || stockSummary.short > 0) && (
-                    <span className="text-[10px] flex items-center gap-1">
-                      <span className="text-emerald-700 font-bold">🟢{stockSummary.ok}</span>
-                      {stockSummary.short > 0 && (
-                        <span className="text-red-600 font-bold">🔴{stockSummary.short}不足</span>
-                      )}
-                    </span>
-                  )}
+                  {/* 業務状態サマリー: それぞれ何件あるか */}
+                  <span className="flex items-center gap-1 ml-2 flex-wrap">
+                    {(["need_po", "partial", "waiting", "ready", "delivered", "cancelled"] as const).map(s => (
+                      bizCounts[s] ? (
+                        <span key={s} className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"
+                          style={{ background: BIZ_BADGES[s].bg, color: BIZ_BADGES[s].color, border: `1px solid ${BIZ_BADGES[s].border}` }}>
+                          {BIZ_BADGES[s].icon}{BIZ_BADGES[s].label} {bizCounts[s]}
+                        </span>
+                      ) : null
+                    ))}
+                  </span>
                   {/* 医院単位で「不足分を発注」ボタン */}
                   {stockSummary.short > 0 && (
                     <button
@@ -398,6 +479,7 @@ function AdminOrdersPage() {
                       <tr className="text-[10px] text-gray-500 uppercase">
                         <th className="px-2 py-1 text-center w-8"></th>
                         <th className="px-2 py-1 text-left w-24">状態</th>
+                        <th className="px-2 py-1 text-center w-28">業務状態</th>
                         <th className="px-2 py-1 text-center w-24">在庫</th>
                         <th className="px-2 py-1 text-left w-32">納品書No</th>
                         <th className="px-2 py-1 text-left w-24">日時</th>
@@ -413,6 +495,7 @@ function AdminOrdersPage() {
                         const ss = stockState(o.id)
                         const allOk = ss.short === 0 && ss.total > 0
                         const allShort = ss.short === ss.total && ss.total > 0
+                        const biz = businessState(o.id)
                         return (
                           <>
                             <tr key={o.id} className={"border-b border-gray-100 " + (selectedOrderIds.has(o.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
@@ -423,6 +506,9 @@ function AdminOrdersPage() {
                                 <select value={o.status} onChange={(e) => updateStatus(o.id, e.target.value)} className="px-1.5 py-0.5 rounded text-[10px] font-bold border-0 cursor-pointer w-full" style={{ background: sc.bg, color: sc.color }}>
                                   {STATUSES.map((s) => <option key={s}>{s}</option>)}
                                 </select>
+                              </td>
+                              <td className="px-2 py-1 text-center">
+                                <BizBadge state={biz} />
                               </td>
                               <td className="px-2 py-1 text-center">
                                 {ss.total === 0 ? <span className="text-[10px] text-gray-300">—</span> :
@@ -447,7 +533,7 @@ function AdminOrdersPage() {
                             </tr>
                             {isOpen && (
                               <tr key={o.id + "-d"} className="bg-yellow-50">
-                                <td colSpan={7} className="px-4 py-2">
+                                <td colSpan={8} className="px-4 py-2">
                                   {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
                                     <div>
                                       {items.map((it) => {
@@ -491,6 +577,7 @@ function AdminOrdersPage() {
               <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
                 <th className="px-2 py-1.5 text-center w-8"></th>
                 <th className="px-2 py-1.5 text-left w-24">状態</th>
+                <th className="px-2 py-1.5 text-center w-28">業務状態</th>
                 <th className="px-2 py-1.5 text-center w-24">在庫</th>
                 <th className="px-2 py-1.5 text-left w-28">納品書No</th>
                 <th className="px-2 py-1.5 text-left">医院</th>
@@ -501,7 +588,7 @@ function AdminOrdersPage() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">該当注文なし</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">該当注文なし</td></tr>
               ) : filtered.map((o, i) => {
                 const sc = STATUS_COLORS[o.status] || STATUS_COLORS["キャンセル"]
                 const items = itemsByOrder.get(o.id) || []
@@ -509,6 +596,7 @@ function AdminOrdersPage() {
                 const ss = stockState(o.id)
                 const allOk = ss.short === 0 && ss.total > 0
                 const allShort = ss.short === ss.total && ss.total > 0
+                const biz = businessState(o.id)
                 return (
                   <>
                     <tr key={o.id} className={"border-b border-gray-100 " + (selectedOrderIds.has(o.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
@@ -519,6 +607,9 @@ function AdminOrdersPage() {
                         <select value={o.status} onChange={(e) => updateStatus(o.id, e.target.value)} className="px-1.5 py-0.5 rounded text-[10px] font-bold border-0 cursor-pointer w-full" style={{ background: sc.bg, color: sc.color }}>
                           {STATUSES.map((s) => <option key={s}>{s}</option>)}
                         </select>
+                      </td>
+                      <td className="px-2 py-1 text-center">
+                        <BizBadge state={biz} />
                       </td>
                       <td className="px-2 py-1 text-center">
                         {ss.total === 0 ? <span className="text-[10px] text-gray-300">—</span> :
@@ -544,7 +635,7 @@ function AdminOrdersPage() {
                     </tr>
                     {open && (
                       <tr key={o.id + "-d"} className="bg-yellow-50">
-                        <td colSpan={8} className="px-4 py-2">
+                        <td colSpan={9} className="px-4 py-2">
                           {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
                             <div>
                               {items.map((it) => {
