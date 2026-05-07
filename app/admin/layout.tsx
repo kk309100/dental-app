@@ -12,7 +12,7 @@ const NAV = [
   { id: "orders", href: "/admin/orders", label: "注文", icon: Ic.order },
   { id: "purchase-orders", href: "/admin/purchase-orders", label: "発注", icon: Ic.truck },
   { id: "receivings", href: "/admin/receivings", label: "仕入納品", icon: Ic.purchase },
-  { id: "shipping", href: "/admin/shipping", label: "医院納品", icon: Ic.doc },
+  { id: "deliveries", href: "/admin/deliveries", label: "医院納品", icon: Ic.doc },
   { id: "invoices", href: "/admin/invoices", label: "請求", icon: Ic.sales },
   { id: "inventory", href: "/admin/inventory", label: "在庫", icon: Ic.product },
   { id: "sales", href: "/admin/sales", label: "売上", icon: Ic.sales },

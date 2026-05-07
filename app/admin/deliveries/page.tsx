@@ -130,8 +130,12 @@ export default function DeliveriesPage() {
           <span className="ml-2 text-xs font-normal text-gray-400">納品済み {filtered.length}/全{orders.length}件 ・ 合計 {fmtYen(totalAmount)}</span>
         </h1>
         <div className="flex items-center gap-2">
+          <Link href="/admin/shipping"
+            className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
+            ＋ 出荷準備（在庫減算→納品書発行）
+          </Link>
           <button onClick={exportCSV} className="px-3 py-1.5 bg-white border border-gray-200 rounded text-xs hover:bg-gray-50">📤 CSV</button>
-          <button onClick={bulkPrint} disabled={selected.size === 0} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700 disabled:opacity-50">
+          <button onClick={bulkPrint} disabled={selected.size === 0} className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700 disabled:opacity-50">
             🖨 選択を一括印刷 ({selected.size})
           </button>
         </div>

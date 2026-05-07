@@ -290,6 +290,11 @@ function ShippingPage() {
           🚚 医院納品（出荷準備→納品書発行）
           <span className="ml-2 text-xs font-normal text-gray-400">医院への出荷準備・在庫減算・納品書発行</span>
         </h1>
+        <Link href="/admin/deliveries"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors"
+          title="過去の納品書一覧">
+          📋 納品書一覧
+        </Link>
         <Link href="/admin/orders" className="text-xs text-gray-500 underline">← 注文一覧</Link>
       </div>
 
