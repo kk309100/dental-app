@@ -168,24 +168,46 @@ function AdminOrdersPage() {
     )
   }
 
-  // 注文経路バッジ
-  // source = "admin" → 事務入力（LINE/電話/口頭で受けた注文を事務がシステム入力）
-  // それ以外（null / "customer" / "web" 等） → 医院Web（医院側のシステム注文）
+  // 注文経路バッジ（コンパクト版: アイコン+短い文字）
   function SourceBadge({ source }: { source: string | null | undefined }) {
     const isAdmin = source === "admin"
     return isAdmin ? (
-      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 whitespace-nowrap"
-        style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}
-        title="LINE/電話/口頭で受けた注文を事務が入力">
-        📞 事務入力
+      <span className="text-[10px] px-1 py-0.5 rounded inline-flex items-center whitespace-nowrap"
+        style={{ background: "#fef3c7", color: "#92400e" }}
+        title="LINE/電話/口頭で受けた注文を事務入力">
+        📞 事務
       </span>
     ) : (
-      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 whitespace-nowrap"
-        style={{ background: "#dbeafe", color: "#1e40af", border: "1px solid #93c5fd" }}
+      <span className="text-[10px] px-1 py-0.5 rounded inline-flex items-center whitespace-nowrap"
+        style={{ background: "#dbeafe", color: "#1e40af" }}
         title="医院側のシステムから直接注文">
-        🏥 医院Web
+        🏥 Web
       </span>
     )
+  }
+
+  // 業務状態 + 不足品数を1つのバッジで表示（在庫列を消すため）
+  function BizBadgeWithCount({ state, shortCount }: { state: BizState; shortCount: number }) {
+    const s = BIZ_BADGES[state]
+    const showCount = (state === "need_po" || state === "partial" || state === "waiting") && shortCount > 0
+    return (
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap"
+        style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+        <span>{s.icon}</span>
+        <span>{s.label}</span>
+        {showCount && <span className="ml-0.5 opacity-70">{shortCount}品</span>}
+      </span>
+    )
+  }
+
+  // 注文削除（明細・関連レコードも消す）
+  async function deleteOrder(orderId: string, deliveryNumber: string | null) {
+    if (!confirm(`注文 ${deliveryNumber || orderId.slice(0, 8)} を削除します。\n明細も一緒に削除されます。\nよろしいですか？`)) return
+    // 明細削除 → 注文削除
+    await supabase.from("order_items").delete().eq("order_id", orderId)
+    const { error } = await supabase.from("orders").delete().eq("id", orderId)
+    if (error) { alert("削除失敗: " + error.message); return }
+    fetchData()
   }
 
   const filtered = useMemo(() => {
@@ -543,13 +565,12 @@ function AdminOrdersPage() {
                       <tr className="text-[10px] text-gray-500 uppercase">
                         <th className="px-2 py-1 text-center w-8"></th>
                         <th className="px-2 py-1 text-left w-24">状態</th>
-                        <th className="px-2 py-1 text-center w-28">業務状態</th>
-                        <th className="px-2 py-1 text-center w-24">在庫</th>
-                        <th className="px-2 py-1 text-center w-24">経路</th>
+                        <th className="px-2 py-1 text-center w-32">業務状態</th>
+                        <th className="px-2 py-1 text-center w-16">経路</th>
                         <th className="px-2 py-1 text-left w-32">納品書No</th>
                         <th className="px-2 py-1 text-left w-24">日時</th>
                         <th className="px-2 py-1 text-right w-24">金額</th>
-                        <th className="px-2 py-1 text-center w-44">操作</th>
+                        <th className="px-2 py-1 text-center w-40">操作</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -558,8 +579,6 @@ function AdminOrdersPage() {
                         const items = itemsByOrder.get(o.id) || []
                         const isOpen = openOrderIds.has(o.id)
                         const ss = stockState(o.id)
-                        const allOk = ss.short === 0 && ss.total > 0
-                        const allShort = ss.short === ss.total && ss.total > 0
                         const biz = businessState(o.id)
                         return (
                           <>
@@ -573,13 +592,7 @@ function AdminOrdersPage() {
                                 </select>
                               </td>
                               <td className="px-2 py-1 text-center">
-                                <BizBadge state={biz} />
-                              </td>
-                              <td className="px-2 py-1 text-center">
-                                {ss.total === 0 ? <span className="text-[10px] text-gray-300">—</span> :
-                                 allOk ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">🟢 出荷可</span> :
-                                 allShort ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🔴 全不足</span> :
-                                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">🟡 {ss.short}品不足</span>}
+                                <BizBadgeWithCount state={biz} shortCount={ss.short} />
                               </td>
                               <td className="px-2 py-1 text-center"><SourceBadge source={o.source} /></td>
                               <td className="px-2 py-1 font-mono text-[10px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
@@ -589,17 +602,18 @@ function AdminOrdersPage() {
                                 <button onClick={() => toggleOrderOpen(o.id)} className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="明細を開閉">{isOpen ? "−" : "+"}</button>
                                 <Link href={`/order-edit/${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="編集">編</button></Link>
                                 <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
-                                <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="この注文から見積書を発行">→見積</button></Link>
+                                <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
                                 {ss.short > 0 && (
                                   <Link href={`/admin/purchase-orders/suggest?from_order=${o.id}`}>
-                                    <button className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100" title="不足分を発注書候補に">→発注</button>
+                                    <button className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1" title="不足分を発注書候補に">発注</button>
                                   </Link>
                                 )}
+                                <button onClick={() => deleteOrder(o.id, o.delivery_number)} className="text-[10px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" title="この注文を削除">🗑</button>
                               </td>
                             </tr>
                             {isOpen && (
                               <tr key={o.id + "-d"} className="bg-yellow-50">
-                                <td colSpan={9} className="px-4 py-2">
+                                <td colSpan={8} className="px-4 py-2">
                                   {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
                                     <div>
                                       {items.map((it) => {
@@ -643,26 +657,23 @@ function AdminOrdersPage() {
               <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
                 <th className="px-2 py-1.5 text-center w-8"></th>
                 <th className="px-2 py-1.5 text-left w-24">状態</th>
-                <th className="px-2 py-1.5 text-center w-28">業務状態</th>
-                <th className="px-2 py-1.5 text-center w-24">在庫</th>
-                <th className="px-2 py-1.5 text-center w-24">経路</th>
+                <th className="px-2 py-1.5 text-center w-32">業務状態</th>
+                <th className="px-2 py-1.5 text-center w-16">経路</th>
                 <th className="px-2 py-1.5 text-left w-28">納品書No</th>
                 <th className="px-2 py-1.5 text-left">医院</th>
                 <th className="px-2 py-1.5 text-left w-28">日付</th>
                 <th className="px-2 py-1.5 text-right w-24">金額</th>
-                <th className="px-2 py-1.5 text-center w-44">操作</th>
+                <th className="px-2 py-1.5 text-center w-40">操作</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">該当注文なし</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">該当注文なし</td></tr>
               ) : filtered.map((o, i) => {
                 const sc = STATUS_COLORS[o.status] || STATUS_COLORS["キャンセル"]
                 const items = itemsByOrder.get(o.id) || []
                 const open = openOrderIds.has(o.id)
                 const ss = stockState(o.id)
-                const allOk = ss.short === 0 && ss.total > 0
-                const allShort = ss.short === ss.total && ss.total > 0
                 const biz = businessState(o.id)
                 return (
                   <>
@@ -676,13 +687,7 @@ function AdminOrdersPage() {
                         </select>
                       </td>
                       <td className="px-2 py-1 text-center">
-                        <BizBadge state={biz} />
-                      </td>
-                      <td className="px-2 py-1 text-center">
-                        {ss.total === 0 ? <span className="text-[10px] text-gray-300">—</span> :
-                         allOk ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">🟢 出荷可</span> :
-                         allShort ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🔴 全不足</span> :
-                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">🟡 {ss.short}品不足</span>}
+                        <BizBadgeWithCount state={biz} shortCount={ss.short} />
                       </td>
                       <td className="px-2 py-1 text-center"><SourceBadge source={o.source} /></td>
                       <td className="px-2 py-1 font-mono text-[10px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
@@ -693,17 +698,18 @@ function AdminOrdersPage() {
                         <button onClick={() => toggleOrderOpen(o.id)} className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">{open ? "−" : "+"}</button>
                         <Link href={`/order-edit/${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">編</button></Link>
                         <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
-                        <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書を発行">→見積</button></Link>
+                        <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
                         {ss.short > 0 && (
                           <Link href={`/admin/purchase-orders/suggest?from_order=${o.id}`}>
-                            <button className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100" title="不足分を発注書候補に">→発注</button>
+                            <button className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1" title="不足分を発注書候補に">発注</button>
                           </Link>
                         )}
+                        <button onClick={() => deleteOrder(o.id, o.delivery_number)} className="text-[10px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" title="この注文を削除">🗑</button>
                       </td>
                     </tr>
                     {open && (
                       <tr key={o.id + "-d"} className="bg-yellow-50">
-                        <td colSpan={10} className="px-4 py-2">
+                        <td colSpan={9} className="px-4 py-2">
                           {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
                             <div>
                               {items.map((it) => {
