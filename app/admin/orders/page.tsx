@@ -202,14 +202,13 @@ function AdminOrdersPage() {
   }
 
   // 注文削除（明細・関連レコードも消す）
-  // 納品済みの注文は削除不可（業務記録として保持）
   async function deleteOrder(orderId: string, deliveryNumber: string | null) {
     const order = orders.find(o => o.id === orderId)
-    if (order && ["納品済み", "納品済"].includes(order.status)) {
-      alert("納品済みの注文は削除できません。\n（業務記録として保持されます）\n\n取消にしたい場合は状態を「キャンセル」に変更してください。")
-      return
-    }
-    if (!confirm(`注文 ${deliveryNumber || orderId.slice(0, 8)} を削除します。\n明細も一緒に削除されます。\nよろしいですか？`)) return
+    const isDelivered = order && ["納品済み", "納品済"].includes(order.status)
+    const msg = isDelivered
+      ? `⚠️ 「納品済み」の注文 ${deliveryNumber || orderId.slice(0, 8)} を削除します。\n\n業務記録（納品実績）が失われます。\n納品書・請求書とのリンクも切れる可能性があります。\n\n本当によろしいですか？`
+      : `注文 ${deliveryNumber || orderId.slice(0, 8)} を削除します。\n明細も一緒に削除されます。\nよろしいですか？`
+    if (!confirm(msg)) return
     await supabase.from("order_items").delete().eq("order_id", orderId)
     const { error } = await supabase.from("orders").delete().eq("id", orderId)
     if (error) { alert("削除失敗: " + error.message); return }
@@ -261,26 +260,19 @@ function AdminOrdersPage() {
     }
   }
 
-  // 一括削除（納品済みは自動的にスキップ）
+  // 一括削除（納品済み含む。警告強化）
   async function bulkDelete() {
     const ids = Array.from(selectedOrderIds)
     const targetOrders = orders.filter(o => ids.includes(o.id))
-    const deletable = targetOrders.filter(o => !["納品済み", "納品済"].includes(o.status))
-    const skipped = targetOrders.length - deletable.length
+    const deliveredCount = targetOrders.filter(o => ["納品済み", "納品済"].includes(o.status)).length
 
-    if (deletable.length === 0) {
-      alert(`選択中の ${targetOrders.length}件 はすべて納品済みです。\n納品済みは削除できません。`)
-      return
-    }
-
-    const msg = skipped > 0
-      ? `${deletable.length}件 を削除します。\n（納品済み ${skipped}件 は保持されます）\n\n明細も一緒に削除されます。よろしいですか？`
-      : `${deletable.length}件 を削除します。\n明細も一緒に削除されます。\n\nよろしいですか？`
+    const msg = deliveredCount > 0
+      ? `⚠️ ${targetOrders.length}件 を削除します。\nうち ${deliveredCount}件 は「納品済み」（業務記録）です。\n\n削除すると納品実績・請求書とのリンクが失われる可能性があります。\n\n本当によろしいですか？`
+      : `${targetOrders.length}件 を削除します。\n明細も一緒に削除されます。\nよろしいですか？`
     if (!confirm(msg)) return
 
-    const deletableIds = deletable.map(o => o.id)
-    await supabase.from("order_items").delete().in("order_id", deletableIds)
-    const { error } = await supabase.from("orders").delete().in("id", deletableIds)
+    await supabase.from("order_items").delete().in("order_id", ids)
+    const { error } = await supabase.from("orders").delete().in("id", ids)
     if (error) { alert("一括削除失敗: " + error.message); return }
     setSelectedOrderIds(new Set())
     fetchData()
@@ -565,12 +557,11 @@ function AdminOrdersPage() {
             <button onClick={() => bulkUpdate("キャンセル")} className="px-3 py-1 bg-gray-400 text-white rounded">キャンセル</button>
             {(() => {
               // 選択中で削除可能な件数（納品済みは除外）
-              const deletableCount = orders.filter(o => ids.includes(o.id) && !["納品済み", "納品済"].includes(o.status)).length
-              return deletableCount > 0 ? (
+              return ids.length > 0 ? (
                 <button onClick={bulkDelete}
                   className="px-3 py-1 bg-red-600 text-white rounded font-bold"
-                  title="選択した注文を削除（納品済みは除外）">
-                  🗑 一括削除 ({deletableCount})
+                  title="選択した注文を削除（納品済み含む。警告あり）">
+                  🗑 一括削除 ({ids.length})
                 </button>
               ) : null
             })()}
@@ -745,9 +736,7 @@ function AdminOrdersPage() {
                                     className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1"
                                     title="不足分を発注プールに追加">プール</button>
                                 )}
-                                {!["納品済み", "納品済"].includes(o.status) && (
-                                  <button onClick={() => deleteOrder(o.id, o.delivery_number)} className="text-[10px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" title="この注文を削除">🗑</button>
-                                )}
+                                <button onClick={() => deleteOrder(o.id, o.delivery_number)} className="text-[10px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" title="この注文を削除（納品済みは強い警告あり）">🗑</button>
                               </td>
                             </tr>
                             {isOpen && (
