@@ -465,17 +465,39 @@ function AdminOrdersPage() {
                   <span className="text-base">{open ? "▼" : "▶"}</span>
                   <span className="font-bold text-gray-900">{clinic?.name || "医院不明"}</span>
                   <span className="text-xs text-gray-500">{clinicOrders.length}件</span>
-                  {/* 業務状態サマリー: それぞれ何件あるか */}
-                  <span className="flex items-center gap-1 ml-2 flex-wrap">
-                    {(["need_po", "partial", "waiting", "ready", "delivered", "cancelled"] as const).map(s => (
-                      bizCounts[s] ? (
-                        <span key={s} className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"
-                          style={{ background: BIZ_BADGES[s].bg, color: BIZ_BADGES[s].color, border: `1px solid ${BIZ_BADGES[s].border}` }}>
-                          {BIZ_BADGES[s].icon}{BIZ_BADGES[s].label} {bizCounts[s]}
+                  {/* 業務状態サマリー */}
+                  {(() => {
+                    const total = clinicOrders.length
+                    const finished = (bizCounts.delivered || 0) + (bizCounts.cancelled || 0)
+                    // 全件完了 → 「✅ 完了」1つだけ
+                    if (finished === total && total > 0) {
+                      return (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded inline-flex items-center gap-1"
+                          style={{ background: "#dcfce7", color: "#15803d", border: "1px solid #86efac" }}>
+                          ✅ 完了
                         </span>
-                      ) : null
-                    ))}
-                  </span>
+                      )
+                    }
+                    // 進行中の状態だけ個別バッジ表示（完了済みは省略）
+                    return (
+                      <span className="flex items-center gap-1 ml-2 flex-wrap">
+                        {(["need_po", "partial", "waiting", "ready"] as const).map(s => (
+                          bizCounts[s] ? (
+                            <span key={s} className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"
+                              style={{ background: BIZ_BADGES[s].bg, color: BIZ_BADGES[s].color, border: `1px solid ${BIZ_BADGES[s].border}` }}>
+                              {BIZ_BADGES[s].icon}{BIZ_BADGES[s].label} {bizCounts[s]}
+                            </span>
+                          ) : null
+                        ))}
+                        {/* 完了分は控えめにグレーで件数のみ */}
+                        {finished > 0 && (
+                          <span className="text-[10px] text-gray-500" title={`完了済: 納品済 ${bizCounts.delivered || 0} / 取消 ${bizCounts.cancelled || 0}`}>
+                            （済 {finished}/{total}）
+                          </span>
+                        )}
+                      </span>
+                    )
+                  })()}
                   {/* 医院単位で「不足分を発注」ボタン */}
                   {stockSummary.short > 0 && (
                     <button
