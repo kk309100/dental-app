@@ -6,10 +6,11 @@ import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { downloadCSV, toCSV } from "@/lib/csv"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
+import PaymentBadge from "@/app/components/PaymentBadge"
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; delivered_at: string | null; total_price: number; delivery_number: string | null; sales_rep?: string | null; invoice_id: string | null }
 type OrderItem = { id: string; order_id: string; product_name: string | null; quantity: number; price: number }
-type Clinic = { id: string; name: string; corporate_name?: string | null }
+type Clinic = { id: string; name: string; corporate_name?: string | null; payment_method?: string | null }
 
 export default function DeliveriesPage() {
   const [orders, setOrders] = useState<Order[]>([])
@@ -31,7 +32,7 @@ export default function DeliveriesPage() {
     const [o, i, c] = await Promise.all([
       supabase.from("orders").select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep,invoice_id").in("status", ["納品済み", "納品済"]).order("delivered_at", { ascending: false }).limit(50000),
       supabase.from("order_items").select("id,order_id,product_name,quantity,price").limit(50000),
-      supabase.from("clinics").select("id,name,corporate_name").limit(50000),
+      supabase.from("clinics").select("id,name,corporate_name,payment_method").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
     setItems((i.data as OrderItem[]) || [])
@@ -179,6 +180,7 @@ export default function DeliveriesPage() {
               <th className="px-2 py-1.5 text-center w-24">納品日</th>
               <th className="px-2 py-1.5 text-left w-36">納品書No</th>
               <th className="px-2 py-1.5 text-left">医院</th>
+              <th className="px-2 py-1.5 text-center w-24">決済</th>
               <th className="px-2 py-1.5 text-center w-16">商品数</th>
               <th className="px-2 py-1.5 text-right w-28">金額(税抜)</th>
               <th className="px-2 py-1.5 text-center w-16">請求</th>
@@ -187,7 +189,7 @@ export default function DeliveriesPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">該当納品書なし</td></tr>
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">該当納品書なし</td></tr>
             ) : filtered.map((o, i) => {
               const cl = clinicById.get(o.clinic_id)
               const its = itemsByOrder.get(o.id) || []
@@ -199,6 +201,7 @@ export default function DeliveriesPage() {
                   </td>
                   <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700">{o.delivery_number || o.id.slice(0, 8)}</td>
                   <td className="px-2 py-1.5">{cl?.name || "(削除済み)"}</td>
+                  <td className="px-2 py-1.5 text-center"><PaymentBadge method={cl?.payment_method} /></td>
                   <td className="px-2 py-1.5 text-center text-gray-600">{its.length}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums font-bold">{fmtYen(o.total_price || 0)}</td>
                   <td className="px-2 py-1.5 text-center">

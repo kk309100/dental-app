@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { fmtYen, fmtDate, INVOICE_STATUSES, type InvoiceStatus } from "@/lib/invoice"
 import Link from "next/link"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
+import PaymentBadge from "@/app/components/PaymentBadge"
 
 type Invoice = {
   id: string
@@ -21,7 +22,7 @@ type Invoice = {
   notes: string | null
   created_at: string
 }
-type Clinic = { id: string; name: string }
+type Clinic = { id: string; name: string; payment_method?: string | null }
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -43,7 +44,7 @@ export default function InvoicesPage() {
     setLoading(true)
     const [i, c] = await Promise.all([
       supabase.from("invoices").select("*").order("issue_date", { ascending: false }).limit(50000),
-      supabase.from("clinics").select("id,name").order("name").limit(50000),
+      supabase.from("clinics").select("id,name,payment_method").order("name").limit(50000),
     ])
     setInvoices((i.data as Invoice[]) || [])
     setClinics(c.data || [])
@@ -55,7 +56,9 @@ export default function InvoicesPage() {
     setLoading(false)
   }
 
-  const clinicName = (id: string | null) => id ? (clinics.find((c) => c.id === id)?.name || "(削除済み)") : "-"
+  const clinicById = useMemo(() => new Map(clinics.map(c => [c.id, c])), [clinics])
+  const clinicName = (id: string | null) => id ? (clinicById.get(id)?.name || "(削除済み)") : "-"
+  const clinicPayment = (id: string | null): string | null => id ? (clinicById.get(id)?.payment_method ?? null) : null
 
   const filtered = useMemo(() => {
     const k = search.toLowerCase().normalize("NFKC")
@@ -185,6 +188,7 @@ export default function InvoicesPage() {
               <th className="px-2 py-1.5 text-left w-32">請求書No</th>
               <th className="px-2 py-1.5 text-center w-16">状態</th>
               <th className="px-2 py-1.5 text-left">医院</th>
+              <th className="px-2 py-1.5 text-center w-24">決済</th>
               <th className="px-2 py-1.5 text-center w-24">発行日</th>
               <th className="px-2 py-1.5 text-center w-24">期限</th>
               <th className="px-2 py-1.5 text-center w-24">入金日</th>
@@ -195,7 +199,7 @@ export default function InvoicesPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">該当請求書なし</td></tr>
+              <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">該当請求書なし</td></tr>
             ) : filtered.map((iv, i) => (
               <tr key={iv.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (selected.has(iv.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
                 <td className="px-2 py-1.5 text-center">
@@ -204,6 +208,7 @@ export default function InvoicesPage() {
                 <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700">{iv.invoice_number}</td>
                 <td className="px-2 py-1.5 text-center"><StatusBadge status={iv.status} /></td>
                 <td className="px-2 py-1.5">{clinicName(iv.clinic_id)}</td>
+                <td className="px-2 py-1.5 text-center"><PaymentBadge method={clinicPayment(iv.clinic_id)} /></td>
                 <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{fmtDate(iv.issue_date)}</td>
                 <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{iv.due_date ? fmtDate(iv.due_date) : "—"}</td>
                 <td className="px-2 py-1.5 text-center text-[11px]" style={{ color: iv.paid_at ? "#10b981" : "#9ca3af" }}>
