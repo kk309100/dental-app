@@ -15,7 +15,7 @@ export default function AdminOrdersPageWrapper() {
   )
 }
 
-type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; invoice_id: string | null }
+type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; invoice_id: string | null; source?: string | null; note?: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
 type Clinic = { id: string; name: string; corporate_name?: string | null }
 type Product = { id: string; name: string; stock: number | null }
@@ -164,6 +164,26 @@ function AdminOrdersPage() {
       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 whitespace-nowrap"
         style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
         <span>{s.icon}</span><span>{s.label}</span>
+      </span>
+    )
+  }
+
+  // 注文経路バッジ
+  // source = "admin" → 事務入力（LINE/電話/口頭で受けた注文を事務がシステム入力）
+  // それ以外（null / "customer" / "web" 等） → 医院Web（医院側のシステム注文）
+  function SourceBadge({ source }: { source: string | null | undefined }) {
+    const isAdmin = source === "admin"
+    return isAdmin ? (
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 whitespace-nowrap"
+        style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a" }}
+        title="LINE/電話/口頭で受けた注文を事務が入力">
+        📞 事務入力
+      </span>
+    ) : (
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 whitespace-nowrap"
+        style={{ background: "#dbeafe", color: "#1e40af", border: "1px solid #93c5fd" }}
+        title="医院側のシステムから直接注文">
+        🏥 医院Web
       </span>
     )
   }
@@ -481,6 +501,7 @@ function AdminOrdersPage() {
                         <th className="px-2 py-1 text-left w-24">状態</th>
                         <th className="px-2 py-1 text-center w-28">業務状態</th>
                         <th className="px-2 py-1 text-center w-24">在庫</th>
+                        <th className="px-2 py-1 text-center w-24">経路</th>
                         <th className="px-2 py-1 text-left w-32">納品書No</th>
                         <th className="px-2 py-1 text-left w-24">日時</th>
                         <th className="px-2 py-1 text-right w-24">金額</th>
@@ -516,6 +537,7 @@ function AdminOrdersPage() {
                                  allShort ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🔴 全不足</span> :
                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">🟡 {ss.short}品不足</span>}
                               </td>
+                              <td className="px-2 py-1 text-center"><SourceBadge source={o.source} /></td>
                               <td className="px-2 py-1 font-mono text-[10px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
                               <td className="px-2 py-1 text-[10px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                               <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
@@ -533,7 +555,7 @@ function AdminOrdersPage() {
                             </tr>
                             {isOpen && (
                               <tr key={o.id + "-d"} className="bg-yellow-50">
-                                <td colSpan={8} className="px-4 py-2">
+                                <td colSpan={9} className="px-4 py-2">
                                   {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
                                     <div>
                                       {items.map((it) => {
@@ -579,6 +601,7 @@ function AdminOrdersPage() {
                 <th className="px-2 py-1.5 text-left w-24">状態</th>
                 <th className="px-2 py-1.5 text-center w-28">業務状態</th>
                 <th className="px-2 py-1.5 text-center w-24">在庫</th>
+                <th className="px-2 py-1.5 text-center w-24">経路</th>
                 <th className="px-2 py-1.5 text-left w-28">納品書No</th>
                 <th className="px-2 py-1.5 text-left">医院</th>
                 <th className="px-2 py-1.5 text-left w-28">日付</th>
@@ -588,7 +611,7 @@ function AdminOrdersPage() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">該当注文なし</td></tr>
+                <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">該当注文なし</td></tr>
               ) : filtered.map((o, i) => {
                 const sc = STATUS_COLORS[o.status] || STATUS_COLORS["キャンセル"]
                 const items = itemsByOrder.get(o.id) || []
@@ -617,6 +640,7 @@ function AdminOrdersPage() {
                          allShort ? <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🔴 全不足</span> :
                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">🟡 {ss.short}品不足</span>}
                       </td>
+                      <td className="px-2 py-1 text-center"><SourceBadge source={o.source} /></td>
                       <td className="px-2 py-1 font-mono text-[10px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
                       <td className="px-2 py-1">{clinicById.get(o.clinic_id)?.name || "—"}</td>
                       <td className="px-2 py-1 text-[10px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
@@ -635,7 +659,7 @@ function AdminOrdersPage() {
                     </tr>
                     {open && (
                       <tr key={o.id + "-d"} className="bg-yellow-50">
-                        <td colSpan={9} className="px-4 py-2">
+                        <td colSpan={10} className="px-4 py-2">
                           {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
                             <div>
                               {items.map((it) => {
