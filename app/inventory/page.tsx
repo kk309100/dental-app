@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import Barcode from "react-barcode"
+import { Html5Qrcode } from "html5-qrcode"
 
 type Item = {
   id: string
@@ -43,6 +44,10 @@ export default function ClinicInventoryPage() {
   // 複数選択印刷用
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [scanning, setScanning] = useState(false)
+  const [scanResult, setScanResult] = useState<{ found: boolean; code: string } | null>(null)
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const barcodeRef = useRef<HTMLDivElement>(null)
   const bulkBarcodeRef = useRef<HTMLDivElement>(null)
 
@@ -141,6 +146,43 @@ export default function ClinicInventoryPage() {
     fetchData()
   }
 
+  async function startScan() {
+    setScanning(true)
+    setScanResult(null)
+    const scanner = new Html5Qrcode("inv-reader")
+    try {
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 220 },
+        async (decodedText) => {
+          await scanner.stop()
+          setScanning(false)
+          const found = items.find((i) => String(i.barcode || "") === decodedText)
+          if (found) {
+            setScanResult({ found: true, code: decodedText })
+            setSearch("")
+            setHighlightId(found.id)
+            setTimeout(() => {
+              itemRefs.current[found.id]?.scrollIntoView({ behavior: "smooth", block: "center" })
+            }, 100)
+            setTimeout(() => setHighlightId(null), 3000)
+          } else {
+            setScanResult({ found: false, code: decodedText })
+          }
+        },
+        () => {}
+      )
+    } catch {
+      setScanning(false)
+      alert("カメラの起動に失敗しました。カメラへのアクセスを許可してください。")
+    }
+  }
+
+  function stopScan() {
+    setScanning(false)
+    setScanResult(null)
+  }
+
   function toggleSelect(id: string, hasBarcode: boolean) {
     if (!hasBarcode) return
     setSelectedIds((prev) => {
@@ -208,6 +250,9 @@ export default function ClinicInventoryPage() {
         <div style={{ display: "flex", gap: 8 }}>
           {!selectMode ? (
             <>
+              <button onClick={startScan} style={outlineBtn}>
+                📷 スキャン
+              </button>
               <button onClick={() => setSelectMode(true)} style={outlineBtn}>
                 バーコード選択印刷
               </button>
@@ -223,6 +268,34 @@ export default function ClinicInventoryPage() {
           )}
         </div>
       </div>
+
+      {/* スキャナー */}
+      {scanning && (
+        <div style={{ marginBottom: 12, border: "1px solid #c5d5f5", borderRadius: 10, overflow: "hidden", background: "#f8faff" }}>
+          <div id="inv-reader" style={{ width: "100%" }} />
+          <div style={{ padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "#555" }}>バーコードをカメラに向けてください</span>
+            <button onClick={stopScan} style={{ ...cancelBtn, fontSize: 12, padding: "4px 12px" }}>キャンセル</button>
+          </div>
+        </div>
+      )}
+
+      {/* スキャン結果 */}
+      {scanResult && !scanning && (
+        <div style={{
+          marginBottom: 12, padding: "10px 14px", borderRadius: 8,
+          background: scanResult.found ? "#e6f4ea" : "#fff3cd",
+          border: `1px solid ${scanResult.found ? "#34a853" : "#ffc107"}`,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <span style={{ fontSize: 13, color: scanResult.found ? "#137333" : "#856404", fontWeight: "bold" }}>
+            {scanResult.found
+              ? `✓ 商品が見つかりました（${scanResult.code}）`
+              : `商品が見つかりません（${scanResult.code}）`}
+          </span>
+          <button onClick={() => setScanResult(null)} style={{ background: "none", border: "none", fontSize: 16, cursor: "pointer", color: "#888" }}>✕</button>
+        </div>
+      )}
 
       {/* 検索バー */}
       <div style={{ marginBottom: 12 }}>
@@ -290,17 +363,19 @@ export default function ClinicInventoryPage() {
               )
             }
 
+            const isHighlighted = highlightId === item.id
             return (
               <div
                 key={item.id}
+                ref={(el) => { itemRefs.current[item.id] = el }}
                 onClick={selectMode && hasBarcode ? () => toggleSelect(item.id, hasBarcode) : undefined}
                 style={{
-                  background: isSelected ? "#eef4ff" : "#fff",
-                  border: isSelected ? "2px solid #1a56db" : low ? "1px solid #f5c6cb" : "1px solid #e0e0e0",
+                  background: isHighlighted ? "#fffbe6" : isSelected ? "#eef4ff" : "#fff",
+                  border: isHighlighted ? "2px solid #f59e0b" : isSelected ? "2px solid #1a56db" : low ? "1px solid #f5c6cb" : "1px solid #e0e0e0",
                   borderRadius: 10,
                   padding: "10px 14px",
                   opacity: busy ? 0.6 : (selectMode && !hasBarcode ? 0.45 : 1),
-                  transition: "opacity 0.15s, border 0.1s",
+                  transition: "opacity 0.15s, border 0.1s, background 0.3s",
                   cursor: selectMode && hasBarcode ? "pointer" : "default",
                 }}
               >
