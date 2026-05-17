@@ -17,6 +17,7 @@ export default function HistoryPage() {
   const [openOrderId, setOpenOrderId] = useState<string | null>(null)
   const [reorderingId, setReorderingId] = useState<string | null>(null)
   const [reorderDone, setReorderDone] = useState(false)
+  const [reorderModal, setReorderModal] = useState<{ order: any; items: { product_id: string; product_name: string; price: number; quantity: number }[] } | null>(null)
 
   useEffect(() => { checkLogin() }, [])
 
@@ -66,17 +67,34 @@ export default function HistoryPage() {
     })
   }, [orders, orderItems, search, statusFilter])
 
-  async function reorder(order: any) {
+  function openReorderModal(order: any) {
     const items = getItems(order.id)
     if (items.length === 0) { alert("再注文できる商品がありません"); return }
-    setReorderingId(order.id)
+    setReorderModal({
+      order,
+      items: items.map((i) => ({ product_id: i.product_id, product_name: i.product_name, price: Number(i.price || 0), quantity: Number(i.quantity || 1) })),
+    })
+  }
+
+  function setReorderQty(productId: string, val: string) {
+    const qty = parseInt(val, 10)
+    if (isNaN(qty) || qty < 0) return
+    setReorderModal((prev) => prev ? { ...prev, items: prev.items.map((i) => i.product_id === productId ? { ...i, quantity: qty } : i) } : prev)
+  }
+
+  async function submitReorder() {
+    if (!reorderModal) return
+    const items = reorderModal.items.filter((i) => i.quantity > 0)
+    if (items.length === 0) { alert("数量が0の商品は注文できません"); return }
+    setReorderingId(reorderModal.order.id)
+    setReorderModal(null)
 
     const now = new Date()
     const y = now.getFullYear(), m = String(now.getMonth() + 1).padStart(2, "0"), d = String(now.getDate()).padStart(2, "0")
     const { data: existing } = await supabase.from("orders").select("id")
       .gte("created_at", `${y}-${m}-${d}T00:00:00`).lte("created_at", `${y}-${m}-${d}T23:59:59`)
     const deliveryNumber = `DN-${y}${m}${d}-${String((existing?.length || 0) + 1).padStart(4, "0")}`
-    const totalPrice = items.reduce((sum, i) => sum + Number(i.price || 0) * Number(i.quantity || 0), 0)
+    const totalPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
     const { data: newOrder, error } = await supabase.from("orders")
       .insert([{ clinic_id: clinicId, status: "注文受付", total_price: totalPrice, delivery_number: deliveryNumber }])
@@ -221,7 +239,7 @@ export default function HistoryPage() {
                     </button>
                   )}
 
-                  <button onClick={() => reorder(order)} disabled={isReordering}
+                  <button onClick={() => openReorderModal(order)} disabled={isReordering}
                     style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", background: "#111", color: "#fff", fontSize: 13, cursor: isReordering ? "not-allowed" : "pointer", fontWeight: "bold", opacity: isReordering ? 0.6 : 1 }}>
                     {isReordering ? "処理中…" : "再注文"}
                   </button>
@@ -229,6 +247,51 @@ export default function HistoryPage() {
               </div>
             )
           })}
+        </div>
+      )}
+      {/* 再注文 数量確認モーダル */}
+      {reorderModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setReorderModal(null) }}>
+          <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: "20px 20px 36px", width: "100%", maxWidth: 600, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: "bold" }}>再注文 — 数量を確認</h2>
+              <button onClick={() => setReorderModal(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#888" }}>✕</button>
+            </div>
+
+            <div style={{ overflowY: "auto", flex: 1, marginBottom: 16 }}>
+              {reorderModal.items.map((item) => (
+                <div key={item.product_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid #f0f0f0", gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontWeight: "bold", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.product_name}</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 12, color: "#999" }}>税抜 {item.price.toLocaleString()}円 / 個</p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => setReorderQty(item.product_id, String(Math.max(0, item.quantity - 1)))}
+                      style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid #ddd", background: "#f5f5f5", fontSize: 18, cursor: "pointer" }}>−</button>
+                    <input type="number" min="0" value={item.quantity}
+                      onChange={(e) => setReorderQty(item.product_id, e.target.value)}
+                      style={{ width: 52, height: 34, textAlign: "center", borderRadius: 8, border: "1px solid #ddd", fontSize: 15, fontWeight: "bold" }} />
+                    <button onClick={() => setReorderQty(item.product_id, String(item.quantity + 1))}
+                      style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid #ddd", background: "#f5f5f5", fontSize: 18, cursor: "pointer" }}>＋</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ borderTop: "1px solid #eee", paddingTop: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+                <span style={{ fontWeight: "bold", fontSize: 14 }}>合計（税抜）</span>
+                <span style={{ fontWeight: "bold", fontSize: 18 }}>
+                  {reorderModal.items.reduce((s, i) => s + i.price * i.quantity, 0).toLocaleString()}円
+                </span>
+              </div>
+              <button onClick={submitReorder}
+                style={{ width: "100%", padding: 15, borderRadius: 12, background: "#111", color: "#fff", border: "none", fontSize: 16, fontWeight: "bold", cursor: "pointer" }}>
+                この内容で再注文する
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>
