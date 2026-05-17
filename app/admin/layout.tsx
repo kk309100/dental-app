@@ -18,6 +18,7 @@ const NAV = [
   { id: "inventory", href: "/admin/inventory", label: "在庫", icon: Ic.product },
   { id: "sales", href: "/admin/sales", label: "売上", icon: Ic.sales },
   { id: "masters", href: "/admin/masters", label: "マスター", icon: Ic.dash },
+  { id: "notices", href: "/admin/notices", label: "📢 お知らせ", icon: Ic.dash },
   // 一番右にダッシュボード
   { id: "dashboard", href: "/admin/dashboard", label: "📊 ダッシュ", icon: Ic.dash },
 ]
