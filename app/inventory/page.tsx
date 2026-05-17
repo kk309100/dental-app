@@ -28,7 +28,7 @@ export default function ClinicInventoryPage() {
     const { data } = await supabase
       .from("clinic_inventory_items")
       .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no")
-      .order("name", { ascending: true })
+      .order("product_name", { ascending: true })
     setItems((data as Item[]) || [])
     setLoading(false)
   }
