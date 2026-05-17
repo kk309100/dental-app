@@ -14,11 +14,24 @@ type Item = {
   shelf_no: string | null
 }
 
+type EditForm = {
+  product_name: string
+  maker: string
+  category: string
+  shelf_no: string
+  min_stock: string
+  stock_quantity: string
+}
+
 export default function ClinicInventoryPage() {
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<EditForm>({
+    product_name: "", maker: "", category: "", shelf_no: "", min_stock: "", stock_quantity: "",
+  })
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchData() }, [])
@@ -58,8 +71,40 @@ export default function ClinicInventoryPage() {
       .eq("id", id)
     setProcessingId(null)
     if (error) { alert("エラー: " + error.message); return }
-    // ローカルステートを即更新（再フェッチも実行）
     setItems((prev) => prev.map((i) => i.id === id ? { ...i, stock_quantity: newQty } : i))
+  }
+
+  function startEdit(item: Item) {
+    setEditId(item.id)
+    setEditForm({
+      product_name: item.product_name,
+      maker: item.maker || "",
+      category: item.category || "",
+      shelf_no: item.shelf_no || "",
+      min_stock: item.min_stock !== null ? String(item.min_stock) : "",
+      stock_quantity: String(item.stock_quantity),
+    })
+  }
+
+  async function saveEdit() {
+    if (!editId) return
+    setProcessingId(editId)
+    const updates = {
+      product_name: editForm.product_name.trim(),
+      maker: editForm.maker.trim() || null,
+      category: editForm.category.trim() || null,
+      shelf_no: editForm.shelf_no.trim() || null,
+      min_stock: editForm.min_stock !== "" ? Number(editForm.min_stock) : null,
+      stock_quantity: Number(editForm.stock_quantity) || 0,
+    }
+    const { error } = await supabase
+      .from("clinic_inventory_items")
+      .update(updates)
+      .eq("id", editId)
+    setProcessingId(null)
+    if (error) { alert("保存エラー: " + error.message); return }
+    setItems((prev) => prev.map((i) => i.id === editId ? { ...i, ...updates } : i))
+    setEditId(null)
   }
 
   const isLow = (item: Item) => item.stock_quantity <= (item.min_stock ?? 0)
@@ -71,9 +116,7 @@ export default function ClinicInventoryPage() {
         <span style={{ fontSize: 11, fontWeight: "normal", color: "#888", marginLeft: 8 }}>
           {filtered.length}/{items.length}件
           {items.filter(isLow).length > 0 && (
-            <span style={{ color: "#c0392b", marginLeft: 8 }}>
-              発注必要 {items.filter(isLow).length}件
-            </span>
+            <span style={{ color: "#c0392b", marginLeft: 8 }}>発注必要 {items.filter(isLow).length}件</span>
           )}
         </span>
       </h1>
@@ -85,15 +128,7 @@ export default function ClinicInventoryPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="商品名・バーコードで検索"
-          style={{
-            width: "100%",
-            padding: "10px 14px",
-            border: "1px solid #d0d0d0",
-            borderRadius: 8,
-            fontSize: 14,
-            boxSizing: "border-box",
-            outline: "none",
-          }}
+          style={{ width: "100%", padding: "10px 14px", border: "1px solid #d0d0d0", borderRadius: 8, fontSize: 14, boxSizing: "border-box" }}
         />
       </div>
 
@@ -106,6 +141,47 @@ export default function ClinicInventoryPage() {
           {filtered.map((item) => {
             const low = isLow(item)
             const busy = processingId === item.id
+            const isEditing = editId === item.id
+
+            if (isEditing) {
+              return (
+                <div key={item.id} style={{ background: "#f8faff", border: "1px solid #4f83e8", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                    <label style={labelStyle}>
+                      商品名
+                      <input value={editForm.product_name} onChange={(e) => setEditForm({ ...editForm, product_name: e.target.value })} style={inputStyle} />
+                    </label>
+                    <label style={labelStyle}>
+                      メーカー
+                      <input value={editForm.maker} onChange={(e) => setEditForm({ ...editForm, maker: e.target.value })} style={inputStyle} placeholder="例: GC" />
+                    </label>
+                    <label style={labelStyle}>
+                      カテゴリ
+                      <input value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} style={inputStyle} placeholder="例: セメント" />
+                    </label>
+                    <label style={labelStyle}>
+                      棚番号
+                      <input value={editForm.shelf_no} onChange={(e) => setEditForm({ ...editForm, shelf_no: e.target.value })} style={inputStyle} placeholder="例: 技工室" />
+                    </label>
+                    <label style={labelStyle}>
+                      在庫数
+                      <input type="number" min="0" value={editForm.stock_quantity} onChange={(e) => setEditForm({ ...editForm, stock_quantity: e.target.value })} style={inputStyle} />
+                    </label>
+                    <label style={labelStyle}>
+                      最低在庫数
+                      <input type="number" min="0" value={editForm.min_stock} onChange={(e) => setEditForm({ ...editForm, min_stock: e.target.value })} style={inputStyle} placeholder="例: 1" />
+                    </label>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button onClick={() => setEditId(null)} style={cancelBtn}>キャンセル</button>
+                    <button onClick={saveEdit} disabled={busy} style={saveBtn}>
+                      {busy ? "保存中…" : "保存する"}
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+
             return (
               <div
                 key={item.id}
@@ -124,74 +200,36 @@ export default function ClinicInventoryPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ fontWeight: "bold", fontSize: 14, color: "#111" }}>{item.product_name}</span>
                       {low && (
-                        <span style={{
-                          fontSize: 10, fontWeight: "bold",
-                          background: "#fde8e8", color: "#c0392b",
-                          padding: "1px 6px", borderRadius: 4,
-                        }}>
+                        <span style={{ fontSize: 10, fontWeight: "bold", background: "#fde8e8", color: "#c0392b", padding: "1px 6px", borderRadius: 4 }}>
                           発注必要
                         </span>
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 3, flexWrap: "wrap" }}>
-                      {item.maker && (
-                        <span style={{ fontSize: 11, color: "#666" }}>{item.maker}</span>
-                      )}
-                      {item.category && (
-                        <span style={{ fontSize: 11, color: "#888", background: "#f3f4f6", padding: "0 5px", borderRadius: 3 }}>{item.category}</span>
-                      )}
-                      {item.shelf_no && (
-                        <span style={{ fontSize: 11, color: "#888" }}>棚: {item.shelf_no}</span>
-                      )}
-                      {item.barcode && (
-                        <span style={{ fontSize: 11, color: "#aaa", fontFamily: "monospace" }}>{item.barcode}</span>
-                      )}
+                      {item.maker && <span style={{ fontSize: 11, color: "#666" }}>{item.maker}</span>}
+                      {item.category && <span style={{ fontSize: 11, color: "#888", background: "#f3f4f6", padding: "0 5px", borderRadius: 3 }}>{item.category}</span>}
+                      {item.shelf_no && <span style={{ fontSize: 11, color: "#888" }}>棚: {item.shelf_no}</span>}
+                      {item.barcode && <span style={{ fontSize: 11, color: "#aaa", fontFamily: "monospace" }}>{item.barcode}</span>}
                     </div>
                     <div style={{ marginTop: 4, fontSize: 12, color: "#555" }}>
                       在庫: <strong style={{ fontSize: 16, color: low ? "#c0392b" : "#111" }}>{item.stock_quantity}</strong>
-                      {item.min_stock !== null && (
-                        <span style={{ marginLeft: 6, color: "#aaa" }}>（最低: {item.min_stock}）</span>
-                      )}
+                      {item.min_stock !== null && <span style={{ marginLeft: 6, color: "#aaa" }}>（最低: {item.min_stock}）</span>}
                     </div>
                   </div>
 
                   {/* 右：操作ボタン */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, shrink: 0 } as React.CSSProperties}>
-                    <button
-                      onClick={() => changeQty(item.id, -1)}
-                      disabled={busy || item.stock_quantity <= 0}
-                      style={{
-                        padding: "6px 14px",
-                        background: "#e8f0fe",
-                        color: "#1a56db",
-                        border: "none",
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: "bold",
-                        cursor: "pointer",
-                        opacity: (busy || item.stock_quantity <= 0) ? 0.4 : 1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 } as React.CSSProperties}>
+                    <button onClick={() => changeQty(item.id, -1)} disabled={busy || item.stock_quantity <= 0}
+                      style={{ padding: "6px 14px", background: "#e8f0fe", color: "#1a56db", border: "none", borderRadius: 6, fontSize: 12, fontWeight: "bold", cursor: "pointer", opacity: (busy || item.stock_quantity <= 0) ? 0.4 : 1, whiteSpace: "nowrap" }}>
                       使用する
                     </button>
-                    <button
-                      onClick={() => changeQty(item.id, 1)}
-                      disabled={busy}
-                      style={{
-                        padding: "6px 14px",
-                        background: "#e6f4ea",
-                        color: "#137333",
-                        border: "none",
-                        borderRadius: 6,
-                        fontSize: 12,
-                        fontWeight: "bold",
-                        cursor: "pointer",
-                        opacity: busy ? 0.4 : 1,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <button onClick={() => changeQty(item.id, 1)} disabled={busy}
+                      style={{ padding: "6px 14px", background: "#e6f4ea", color: "#137333", border: "none", borderRadius: 6, fontSize: 12, fontWeight: "bold", cursor: "pointer", opacity: busy ? 0.4 : 1, whiteSpace: "nowrap" }}>
                       補充する
+                    </button>
+                    <button onClick={() => startEdit(item)} disabled={busy}
+                      style={{ padding: "6px 14px", background: "#f5f5f5", color: "#555", border: "1px solid #ddd", borderRadius: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      編集
                     </button>
                   </div>
                 </div>
@@ -202,4 +240,22 @@ export default function ClinicInventoryPage() {
       )}
     </div>
   )
+}
+
+const labelStyle: React.CSSProperties = {
+  display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#666", fontWeight: "bold",
+}
+
+const inputStyle: React.CSSProperties = {
+  padding: "6px 8px", border: "1px solid #c5d5f5", borderRadius: 6, fontSize: 13, background: "#fff",
+}
+
+const saveBtn: React.CSSProperties = {
+  padding: "7px 20px", background: "#1a56db", color: "#fff", border: "none",
+  borderRadius: 7, fontSize: 13, fontWeight: "bold", cursor: "pointer",
+}
+
+const cancelBtn: React.CSSProperties = {
+  padding: "7px 16px", background: "#fff", color: "#555", border: "1px solid #ddd",
+  borderRadius: 7, fontSize: 13, cursor: "pointer",
 }
