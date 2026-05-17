@@ -5,18 +5,18 @@ import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Html5Qrcode } from "html5-qrcode"
 
-// カラーパレット
+// カラーパレット（CIモール準拠）
 const C = {
-  primary:   "#2563eb",  // メインブルー
-  primaryBg: "#eff6ff",  // 薄ブルー
-  accent:    "#059669",  // 確定グリーン
-  accentBg:  "#ecfdf5",
-  scan:      "#0284c7",  // スキャンボタン
-  text:      "#111827",
+  primary:   "#22a648",  // CIモール グリーン
+  primaryBg: "#e8f5ec",  // 薄グリーン
+  accent:    "#f08c00",  // オレンジ（注文確定）
+  accentBg:  "#fff7e6",
+  scan:      "#22a648",
+  text:      "#1a1a1a",
   sub:       "#6b7280",
   border:    "#e5e7eb",
   card:      "#ffffff",
-  pageBg:    "#f8fafc",
+  pageBg:    "#f8f9fa",
 }
 
 export default function OrderPage() {
@@ -249,7 +249,7 @@ export default function OrderPage() {
           position: "fixed", bottom: 24, right: 20, zIndex: 50,
           background: C.primary, color: "#fff", border: "none", borderRadius: 999,
           padding: "14px 22px", fontSize: 15, fontWeight: "bold", cursor: "pointer",
-          boxShadow: "0 4px 20px rgba(37,99,235,0.4)",
+          boxShadow: "0 4px 20px rgba(34,166,72,0.4)",
           display: "flex", alignItems: "center", gap: 10,
         }}>
           🛒 {totalQty}点
@@ -363,13 +363,13 @@ function MiniCard({ product, onAdd }: any) {
     <div className="mini-card" style={{ minWidth: 128, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 10, flexShrink: 0 }}>
       {product.image_url
         ? <img src={product.image_url} alt={product.name} style={{ width: "100%", height: 60, objectFit: "cover", borderRadius: 8, marginBottom: 6 }} />
-        : <div style={{ height: 60, borderRadius: 8, marginBottom: 6, background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center", color: "#93c5fd", fontSize: 10 }}>NO IMAGE</div>
+        : <div style={{ height: 60, borderRadius: 8, marginBottom: 6, background: "#e8f5ec", display: "flex", alignItems: "center", justifyContent: "center", color: "#86efac", fontSize: 10 }}>NO IMAGE</div>
       }
-      <p style={{ fontWeight: "bold", fontSize: 11, marginBottom: 2, lineHeight: 1.3, color: "#111827" }}>{product.name}</p>
-      <p style={{ fontSize: 11, color: "#2563eb", fontWeight: "bold", marginBottom: 6 }}>¥{Number(product.price || 0).toLocaleString()}</p>
+      <p style={{ fontWeight: "bold", fontSize: 11, marginBottom: 2, lineHeight: 1.3, color: "#1a1a1a" }}>{product.name}</p>
+      <p style={{ fontSize: 11, color: "#22a648", fontWeight: "bold", marginBottom: 6 }}>¥{Number(product.price || 0).toLocaleString()}</p>
       <button onClick={() => onAdd(product)} style={{
         width: "100%", padding: "6px 0", borderRadius: 8, border: "none",
-        background: "#2563eb", color: "#fff", fontSize: 13, fontWeight: "bold", cursor: "pointer",
+        background: "#22a648", color: "#fff", fontSize: 13, fontWeight: "bold", cursor: "pointer",
       }}>＋</button>
     </div>
   )

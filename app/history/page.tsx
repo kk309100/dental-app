@@ -260,13 +260,13 @@ export default function HistoryPage() {
 
                   {order.status === "注文受付" && (
                     <button onClick={() => router.push(`/order-edit/${order.id}`)}
-                      style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "1px solid #e0e0e0", background: "#fff", fontSize: 13, color: "#1a56db", cursor: "pointer", fontWeight: "bold" }}>
+                      style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "1px solid #22a648", background: "#fff", fontSize: 13, color: "#22a648", cursor: "pointer", fontWeight: "bold" }}>
                       修正
                     </button>
                   )}
 
                   <button onClick={() => openReorderModal(order)} disabled={isReordering}
-                    style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", background: "#111", color: "#fff", fontSize: 13, cursor: isReordering ? "not-allowed" : "pointer", fontWeight: "bold", opacity: isReordering ? 0.6 : 1 }}>
+                    style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", background: "#22a648", color: "#fff", fontSize: 13, cursor: isReordering ? "not-allowed" : "pointer", fontWeight: "bold", opacity: isReordering ? 0.6 : 1 }}>
                     {isReordering ? "処理中…" : "再注文"}
                   </button>
                 </div>
@@ -313,7 +313,7 @@ export default function HistoryPage() {
                 </span>
               </div>
               <button onClick={submitReorder}
-                style={{ width: "100%", padding: 15, borderRadius: 12, background: "#111", color: "#fff", border: "none", fontSize: 16, fontWeight: "bold", cursor: "pointer" }}>
+                style={{ width: "100%", padding: 15, borderRadius: 12, background: "#f08c00", color: "#fff", border: "none", fontSize: 16, fontWeight: "bold", cursor: "pointer" }}>
                 この内容で再注文する
               </button>
             </div>
@@ -325,6 +325,6 @@ export default function HistoryPage() {
 }
 
 const backBtn: React.CSSProperties = {
-  padding: "8px 14px", background: "#f5f5f5", color: "#555", border: "1px solid #e0e0e0",
+  padding: "8px 14px", background: "#e8f5ec", color: "#22a648", border: "1px solid #b2dfbd",
   borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: "bold",
 }

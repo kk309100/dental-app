@@ -45,29 +45,29 @@ export default function MenuPage() {
       icon: "🛒",
       label: "注文する",
       desc: "商品を選んで注文",
-      color: "#1a56db",
-      bg: "#e8f0fe",
+      color: "#22a648",
+      bg: "#e8f5ec",
     },
     {
       href: "/history",
       icon: "📋",
       label: "注文履歴",
       desc: "過去の注文を確認",
-      color: "#059669",
-      bg: "#d1fae5",
+      color: "#22a648",
+      bg: "#e8f5ec",
     },
     {
       href: "/inventory",
       icon: "📦",
       label: "在庫管理",
       desc: "院内在庫の確認・管理",
-      color: "#7c3aed",
-      bg: "#ede9fe",
+      color: "#f08c00",
+      bg: "#fff3d6",
     },
   ]
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f5f7fb", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ minHeight: "100vh", background: "#f8f9fa", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ width: "100%", maxWidth: 420 }}>
         {/* ヘッダー */}
         <div style={{ textAlign: "center", marginBottom: 36 }}>
