@@ -23,6 +23,7 @@ export default function InventoryPage() {
   const [maker, setMaker] = useState("")
   const [filter, setFilter] = useState<"all" | "low" | "zero">("all")
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [usingId, setUsingId] = useState<string | null>(null)
 
   useEffect(() => { fetchData() }, [])
 
@@ -61,6 +62,19 @@ export default function InventoryPage() {
     setSavingId(id)
     await supabase.from("products").update({ stock }).eq("id", id)
     setSavingId(null)
+    fetchData()
+  }
+
+  async function useStock(id: string) {
+    setUsingId(id)
+    const { error } = await supabase.rpc("change_product_stock", {
+      target_product_id: id,
+      change_amount: -1,
+      change_type_text: "use",
+      memo_text: "使用による在庫減少",
+    })
+    setUsingId(null)
+    if (error) { alert("エラー: " + error.message); return }
     fetchData()
   }
 
@@ -120,16 +134,17 @@ export default function InventoryPage() {
               <th className="px-2 py-1.5 text-right w-16" style={td0}>在庫</th>
               <th className="px-2 py-1.5 text-right w-16" style={td0}>発注基準</th>
               <th className="px-2 py-1.5 text-center w-14" style={td0}>状態</th>
+              <th className="px-2 py-1.5 text-center w-16" style={td0}>使用</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-400">該当商品なし</td></tr>
+              <tr><td colSpan={10} className="px-4 py-6 text-center text-gray-400">該当商品なし</td></tr>
             ) : filtered.map((p, i) => {
               const low = isLow(p)
               const zero = (p.stock ?? 0) === 0
               return (
-                <tr key={p.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/40") + (savingId === p.id ? " opacity-50" : "")}>
+                <tr key={p.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/40") + ((savingId === p.id || usingId === p.id) ? " opacity-50" : "")}>
                   <td className="px-2 py-1 text-[12px]" style={td0}>{p.name}</td>
                   <td className="px-2 py-1 text-[11px] text-gray-500" style={td0}>{p.product_code || ""}</td>
                   <td className="px-2 py-1 text-[11px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
@@ -153,9 +168,18 @@ export default function InventoryPage() {
                     />
                   </td>
                   <td className="px-1 py-1 text-center" style={td0}>
-                    {zero ? <span className="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">0</span> :
-                     low ? <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded">不足</span> :
+                    {zero ? <span className="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">発注必要</span> :
+                     low ? <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded">発注必要</span> :
                      <span className="text-[10px] text-green-700">OK</span>}
+                  </td>
+                  <td className="px-1 py-1 text-center" style={td0}>
+                    <button
+                      onClick={() => useStock(p.id)}
+                      disabled={zero || usingId !== null || savingId !== null}
+                      className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {usingId === p.id ? "処理中" : "使用する"}
+                    </button>
                   </td>
                 </tr>
               )

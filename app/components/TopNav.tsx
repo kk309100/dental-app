@@ -19,6 +19,7 @@ export default function TopNav() {
     <nav style={navStyle}>
       <Link href="/" style={linkStyle}>注文</Link>
       <Link href="/history" style={linkStyle}>履歴</Link>
+      <Link href="/inventory" style={linkStyle}>在庫</Link>
     </nav>
   )
 }

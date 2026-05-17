@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
 export default function PurchasePage() {
-  const [products, setProducts] = useState([])
-  const [manufacturers, setManufacturers] = useState([])
+  const [products, setProducts] = useState<any[]>([])
+  const [manufacturers, setManufacturers] = useState<any[]>([])
 
   useEffect(() => {
     fetchData()
@@ -28,7 +28,7 @@ export default function PurchasePage() {
     setManufacturers(manufacturerData || [])
   }
 
-  function getManufacturerName(manufacturerId) {
+  function getManufacturerName(manufacturerId: string) {
     const manufacturer = manufacturers.find((item) => item.id === manufacturerId)
     return manufacturer ? manufacturer.name : 'メーカー未設定'
   }

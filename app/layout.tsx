@@ -6,7 +6,7 @@ export const metadata = {
   description: '歯科医院向け注文管理アプリ',
 }
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
       <body>
