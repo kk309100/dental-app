@@ -41,6 +41,8 @@ export default function ClinicInventoryPage() {
   const [addForm, setAddForm] = useState<EditForm>(emptyForm)
   const [addSaving, setAddSaving] = useState(false)
   const [barcodeItem, setBarcodeItem] = useState<Item | null>(null)
+  const [groupByShelf, setGroupByShelf] = useState(false)
+  const [collapsedShelves, setCollapsedShelves] = useState<Set<string>>(new Set())
   // 複数選択印刷用
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -76,6 +78,30 @@ export default function ClinicInventoryPage() {
       norm(item.shelf_no || "").includes(k)
     )
   })
+
+  // 棚別グループ化
+  const groupedByShelves: { shelf: string; items: Item[] }[] = (() => {
+    const map = new Map<string, Item[]>()
+    for (const item of filtered) {
+      const key = item.shelf_no?.trim() || "棚未設定"
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(item)
+    }
+    const entries = Array.from(map.entries()).sort(([a], [b]) => {
+      if (a === "棚未設定") return 1
+      if (b === "棚未設定") return -1
+      return a.localeCompare(b, "ja")
+    })
+    return entries.map(([shelf, items]) => ({ shelf, items }))
+  })()
+
+  function toggleShelf(shelf: string) {
+    setCollapsedShelves((prev) => {
+      const next = new Set(prev)
+      next.has(shelf) ? next.delete(shelf) : next.add(shelf)
+      return next
+    })
+  }
 
   async function changeQty(id: string, delta: number) {
     const item = items.find((i) => i.id === id)
@@ -233,6 +259,135 @@ export default function ClinicInventoryPage() {
 
   const isLow = (item: Item) => item.stock_quantity <= (item.min_stock ?? 0)
 
+  function renderItemCard(item: Item) {
+    const low = isLow(item)
+    const busy = processingId === item.id
+    const isEditing = editId === item.id
+    const hasBarcode = !!item.barcode
+    const isSelected = selectedIds.has(item.id)
+    const isHighlighted = highlightId === item.id
+
+    if (isEditing) {
+      return (
+        <div key={item.id} style={{ background: "#f8faff", border: "1px solid #4f83e8", borderRadius: 10, padding: "12px 14px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+            <label style={labelStyle}>
+              商品名
+              <input value={editForm.product_name} onChange={(e) => setEditForm({ ...editForm, product_name: e.target.value })} style={inputStyle} />
+            </label>
+            <label style={labelStyle}>
+              メーカー
+              <input value={editForm.maker} onChange={(e) => setEditForm({ ...editForm, maker: e.target.value })} style={inputStyle} placeholder="例: GC" />
+            </label>
+            <label style={labelStyle}>
+              カテゴリ
+              <input value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} style={inputStyle} placeholder="例: セメント" />
+            </label>
+            <label style={labelStyle}>
+              棚番号
+              <input value={editForm.shelf_no} onChange={(e) => setEditForm({ ...editForm, shelf_no: e.target.value })} style={inputStyle} placeholder="例: 技工室" />
+            </label>
+            <label style={labelStyle}>
+              在庫数
+              <input type="number" min="0" value={editForm.stock_quantity} onChange={(e) => setEditForm({ ...editForm, stock_quantity: e.target.value })} style={inputStyle} />
+            </label>
+            <label style={labelStyle}>
+              最低在庫数
+              <input type="number" min="0" value={editForm.min_stock} onChange={(e) => setEditForm({ ...editForm, min_stock: e.target.value })} style={inputStyle} placeholder="例: 1" />
+            </label>
+            <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
+              バーコード
+              <input value={editForm.barcode} onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })} style={inputStyle} placeholder="例: 4901234567890" />
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button onClick={() => setEditId(null)} style={cancelBtn}>キャンセル</button>
+            <button onClick={saveEdit} disabled={busy} style={saveBtn}>
+              {busy ? "保存中…" : "保存する"}
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div
+        key={item.id}
+        ref={(el) => { itemRefs.current[item.id] = el }}
+        onClick={selectMode && hasBarcode ? () => toggleSelect(item.id, hasBarcode) : undefined}
+        style={{
+          background: isHighlighted ? "#fffbe6" : isSelected ? "#eef4ff" : "#fff",
+          border: isHighlighted ? "2px solid #f59e0b" : isSelected ? "2px solid #1a56db" : low ? "1px solid #f5c6cb" : "1px solid #e0e0e0",
+          borderRadius: 10,
+          padding: "10px 14px",
+          opacity: busy ? 0.6 : (selectMode && !hasBarcode ? 0.45 : 1),
+          transition: "opacity 0.15s, border 0.1s, background 0.3s",
+          cursor: selectMode && hasBarcode ? "pointer" : "default",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          {selectMode && (
+            <div style={{ paddingTop: 2, flexShrink: 0 }}>
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => toggleSelect(item.id, hasBarcode)}
+                disabled={!hasBarcode}
+                style={{ width: 18, height: 18, cursor: hasBarcode ? "pointer" : "not-allowed" }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: "bold", fontSize: 14, color: "#111" }}>{item.product_name}</span>
+              {low && (
+                <span style={{ fontSize: 10, fontWeight: "bold", background: "#fde8e8", color: "#c0392b", padding: "1px 6px", borderRadius: 4 }}>
+                  発注必要
+                </span>
+              )}
+              {selectMode && !hasBarcode && (
+                <span style={{ fontSize: 10, color: "#aaa" }}>バーコードなし</span>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 3, flexWrap: "wrap" }}>
+              {item.maker && <span style={{ fontSize: 11, color: "#666" }}>{item.maker}</span>}
+              {item.category && <span style={{ fontSize: 11, color: "#888", background: "#f3f4f6", padding: "0 5px", borderRadius: 3 }}>{item.category}</span>}
+              {!groupByShelf && item.shelf_no && <span style={{ fontSize: 11, color: "#888" }}>棚: {item.shelf_no}</span>}
+              {item.barcode && <span style={{ fontSize: 11, color: "#aaa", fontFamily: "monospace" }}>{item.barcode}</span>}
+            </div>
+            <div style={{ marginTop: 4, fontSize: 12, color: "#555" }}>
+              在庫: <strong style={{ fontSize: 16, color: low ? "#c0392b" : "#111" }}>{item.stock_quantity}</strong>
+              {item.min_stock !== null && <span style={{ marginLeft: 6, color: "#aaa" }}>（最低: {item.min_stock}）</span>}
+            </div>
+          </div>
+          {!selectMode && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 } as React.CSSProperties}>
+              <button onClick={() => changeQty(item.id, -1)} disabled={busy || item.stock_quantity <= 0}
+                style={{ padding: "6px 14px", background: "#e8f0fe", color: "#1a56db", border: "none", borderRadius: 6, fontSize: 12, fontWeight: "bold", cursor: "pointer", opacity: (busy || item.stock_quantity <= 0) ? 0.4 : 1, whiteSpace: "nowrap" }}>
+                使用する
+              </button>
+              <button onClick={() => changeQty(item.id, 1)} disabled={busy}
+                style={{ padding: "6px 14px", background: "#e6f4ea", color: "#137333", border: "none", borderRadius: 6, fontSize: 12, fontWeight: "bold", cursor: "pointer", opacity: busy ? 0.4 : 1, whiteSpace: "nowrap" }}>
+                補充する
+              </button>
+              <button onClick={() => startEdit(item)} disabled={busy}
+                style={{ padding: "6px 14px", background: "#f5f5f5", color: "#555", border: "1px solid #ddd", borderRadius: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+                編集
+              </button>
+              {item.barcode && (
+                <button onClick={() => setBarcodeItem(item)}
+                  style={{ padding: "6px 14px", background: "#fff8e1", color: "#b45309", border: "1px solid #fcd34d", borderRadius: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  バーコード
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   const selectedItems = items.filter((i) => selectedIds.has(i.id) && i.barcode)
 
   return (
@@ -253,11 +408,17 @@ export default function ClinicInventoryPage() {
               <button onClick={startScan} style={outlineBtn}>
                 📷 スキャン
               </button>
+              <button
+                onClick={() => setGroupByShelf((v) => !v)}
+                style={{ ...outlineBtn, background: groupByShelf ? "#1a56db" : "#fff", color: groupByShelf ? "#fff" : "#1a56db" }}
+              >
+                棚別
+              </button>
               <button onClick={() => setSelectMode(true)} style={outlineBtn}>
-                バーコード選択印刷
+                選択印刷
               </button>
               <button onClick={() => { setAddForm(emptyForm); setShowAddModal(true) }} style={addBtn}>
-                ＋ 商品追加
+                ＋ 追加
               </button>
             </>
           ) : (
@@ -311,139 +472,45 @@ export default function ClinicInventoryPage() {
         <p style={{ textAlign: "center", color: "#999", padding: "40px 0" }}>読み込み中…</p>
       ) : filtered.length === 0 ? (
         <p style={{ textAlign: "center", color: "#999", padding: "40px 0" }}>該当する商品がありません</p>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {filtered.map((item) => {
-            const low = isLow(item)
-            const busy = processingId === item.id
-            const isEditing = editId === item.id
-            const hasBarcode = !!item.barcode
-            const isSelected = selectedIds.has(item.id)
-
-            if (isEditing) {
-              return (
-                <div key={item.id} style={{ background: "#f8faff", border: "1px solid #4f83e8", borderRadius: 10, padding: "12px 14px" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
-                    <label style={labelStyle}>
-                      商品名
-                      <input value={editForm.product_name} onChange={(e) => setEditForm({ ...editForm, product_name: e.target.value })} style={inputStyle} />
-                    </label>
-                    <label style={labelStyle}>
-                      メーカー
-                      <input value={editForm.maker} onChange={(e) => setEditForm({ ...editForm, maker: e.target.value })} style={inputStyle} placeholder="例: GC" />
-                    </label>
-                    <label style={labelStyle}>
-                      カテゴリ
-                      <input value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} style={inputStyle} placeholder="例: セメント" />
-                    </label>
-                    <label style={labelStyle}>
-                      棚番号
-                      <input value={editForm.shelf_no} onChange={(e) => setEditForm({ ...editForm, shelf_no: e.target.value })} style={inputStyle} placeholder="例: 技工室" />
-                    </label>
-                    <label style={labelStyle}>
-                      在庫数
-                      <input type="number" min="0" value={editForm.stock_quantity} onChange={(e) => setEditForm({ ...editForm, stock_quantity: e.target.value })} style={inputStyle} />
-                    </label>
-                    <label style={labelStyle}>
-                      最低在庫数
-                      <input type="number" min="0" value={editForm.min_stock} onChange={(e) => setEditForm({ ...editForm, min_stock: e.target.value })} style={inputStyle} placeholder="例: 1" />
-                    </label>
-                    <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
-                      バーコード
-                      <input value={editForm.barcode} onChange={(e) => setEditForm({ ...editForm, barcode: e.target.value })} style={inputStyle} placeholder="例: 4901234567890" />
-                    </label>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                    <button onClick={() => setEditId(null)} style={cancelBtn}>キャンセル</button>
-                    <button onClick={saveEdit} disabled={busy} style={saveBtn}>
-                      {busy ? "保存中…" : "保存する"}
-                    </button>
-                  </div>
-                </div>
-              )
-            }
-
-            const isHighlighted = highlightId === item.id
+      ) : groupByShelf ? (
+        /* 棚別グループ表示 */
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {groupedByShelves.map(({ shelf, items: shelfItems }) => {
+            const collapsed = collapsedShelves.has(shelf)
+            const lowCount = shelfItems.filter(isLow).length
             return (
-              <div
-                key={item.id}
-                ref={(el) => { itemRefs.current[item.id] = el }}
-                onClick={selectMode && hasBarcode ? () => toggleSelect(item.id, hasBarcode) : undefined}
-                style={{
-                  background: isHighlighted ? "#fffbe6" : isSelected ? "#eef4ff" : "#fff",
-                  border: isHighlighted ? "2px solid #f59e0b" : isSelected ? "2px solid #1a56db" : low ? "1px solid #f5c6cb" : "1px solid #e0e0e0",
-                  borderRadius: 10,
-                  padding: "10px 14px",
-                  opacity: busy ? 0.6 : (selectMode && !hasBarcode ? 0.45 : 1),
-                  transition: "opacity 0.15s, border 0.1s, background 0.3s",
-                  cursor: selectMode && hasBarcode ? "pointer" : "default",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                  {/* 選択モード時のチェックボックス */}
-                  {selectMode && (
-                    <div style={{ paddingTop: 2, flexShrink: 0 }}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleSelect(item.id, hasBarcode)}
-                        disabled={!hasBarcode}
-                        style={{ width: 18, height: 18, cursor: hasBarcode ? "pointer" : "not-allowed" }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </div>
-                  )}
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <span style={{ fontWeight: "bold", fontSize: 14, color: "#111" }}>{item.product_name}</span>
-                      {low && (
-                        <span style={{ fontSize: 10, fontWeight: "bold", background: "#fde8e8", color: "#c0392b", padding: "1px 6px", borderRadius: 4 }}>
-                          発注必要
-                        </span>
-                      )}
-                      {selectMode && !hasBarcode && (
-                        <span style={{ fontSize: 10, color: "#aaa" }}>バーコードなし</span>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", gap: 10, marginTop: 3, flexWrap: "wrap" }}>
-                      {item.maker && <span style={{ fontSize: 11, color: "#666" }}>{item.maker}</span>}
-                      {item.category && <span style={{ fontSize: 11, color: "#888", background: "#f3f4f6", padding: "0 5px", borderRadius: 3 }}>{item.category}</span>}
-                      {item.shelf_no && <span style={{ fontSize: 11, color: "#888" }}>棚: {item.shelf_no}</span>}
-                      {item.barcode && <span style={{ fontSize: 11, color: "#aaa", fontFamily: "monospace" }}>{item.barcode}</span>}
-                    </div>
-                    <div style={{ marginTop: 4, fontSize: 12, color: "#555" }}>
-                      在庫: <strong style={{ fontSize: 16, color: low ? "#c0392b" : "#111" }}>{item.stock_quantity}</strong>
-                      {item.min_stock !== null && <span style={{ marginLeft: 6, color: "#aaa" }}>（最低: {item.min_stock}）</span>}
-                    </div>
+              <div key={shelf}>
+                <button
+                  onClick={() => toggleShelf(shelf)}
+                  style={{
+                    width: "100%", textAlign: "left", display: "flex", alignItems: "center",
+                    justifyContent: "space-between", padding: "8px 12px", marginBottom: 6,
+                    background: "#f0f4ff", border: "1px solid #c5d5f5", borderRadius: 8,
+                    cursor: "pointer", fontWeight: "bold", fontSize: 14, color: "#1a56db",
+                  }}
+                >
+                  <span>
+                    📦 {shelf}
+                    <span style={{ fontSize: 11, fontWeight: "normal", color: "#888", marginLeft: 8 }}>
+                      {shelfItems.length}件
+                      {lowCount > 0 && <span style={{ color: "#c0392b", marginLeft: 6 }}>発注必要 {lowCount}件</span>}
+                    </span>
+                  </span>
+                  <span style={{ fontSize: 12, color: "#888" }}>{collapsed ? "▶" : "▼"}</span>
+                </button>
+                {!collapsed && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {shelfItems.map((item) => renderItemCard(item))}
                   </div>
-
-                  {!selectMode && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 } as React.CSSProperties}>
-                      <button onClick={() => changeQty(item.id, -1)} disabled={busy || item.stock_quantity <= 0}
-                        style={{ padding: "6px 14px", background: "#e8f0fe", color: "#1a56db", border: "none", borderRadius: 6, fontSize: 12, fontWeight: "bold", cursor: "pointer", opacity: (busy || item.stock_quantity <= 0) ? 0.4 : 1, whiteSpace: "nowrap" }}>
-                        使用する
-                      </button>
-                      <button onClick={() => changeQty(item.id, 1)} disabled={busy}
-                        style={{ padding: "6px 14px", background: "#e6f4ea", color: "#137333", border: "none", borderRadius: 6, fontSize: 12, fontWeight: "bold", cursor: "pointer", opacity: busy ? 0.4 : 1, whiteSpace: "nowrap" }}>
-                        補充する
-                      </button>
-                      <button onClick={() => startEdit(item)} disabled={busy}
-                        style={{ padding: "6px 14px", background: "#f5f5f5", color: "#555", border: "1px solid #ddd", borderRadius: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-                        編集
-                      </button>
-                      {item.barcode && (
-                        <button onClick={() => setBarcodeItem(item)}
-                          style={{ padding: "6px 14px", background: "#fff8e1", color: "#b45309", border: "1px solid #fcd34d", borderRadius: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-                          バーコード
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             )
           })}
+        </div>
+      ) : (
+        /* 通常リスト表示 */
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {filtered.map((item) => renderItemCard(item))}
         </div>
       )}
 
