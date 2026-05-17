@@ -2,30 +2,46 @@ import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
 
 const SUPABASE_URL = "https://alcetorurdocopxatego.supabase.co"
-const ANON_KEY     = "sb_publishable_VbmRpikpm6xr_lUaqo_MgQ_9swmJ_1j"
 
 export async function POST(request: NextRequest) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!serviceKey) {
-    return NextResponse.json({ error: "サーバー設定エラー" }, { status: 500 })
+    return NextResponse.json({ error: "サーバー設定エラー（環境変数未設定）" }, { status: 500 })
   }
 
-  // 呼び出し元が管理者か確認
   const authHeader = request.headers.get("Authorization") ?? ""
-  const token = authHeader.replace("Bearer ", "")
-  if (!token) return NextResponse.json({ error: "認証エラー" }, { status: 401 })
+  const token = authHeader.replace("Bearer ", "").trim()
+  if (!token) return NextResponse.json({ error: "認証エラー（トークンなし）" }, { status: 401 })
 
-  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
+  // service role で JWT を検証し、管理者かどうか確認
+  const adminClient = createClient(SUPABASE_URL, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
   })
-  const { data: { user } } = await userClient.auth.getUser()
-  if (!user) return NextResponse.json({ error: "認証エラー" }, { status: 401 })
 
-  const { data: profile } = await userClient.from("profiles").select("role").eq("id", user.id).single()
-  if (profile?.role !== "admin") return NextResponse.json({ error: "権限がありません" }, { status: 403 })
+  const { data: { user }, error: authError } = await adminClient.auth.getUser(token)
+  if (authError || !user) {
+    return NextResponse.json({ error: "認証エラー（無効なトークン）" }, { status: 401 })
+  }
 
-  // リクエスト本文を取得
-  const { userId, newPassword, loginCode } = await request.json()
+  const { data: profile } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profile?.role !== "admin") {
+    return NextResponse.json({ error: "権限がありません" }, { status: 403 })
+  }
+
+  // リクエスト本文
+  let body: any
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: "リクエスト形式が不正です" }, { status: 400 })
+  }
+
+  const { userId, newPassword } = body
   if (!userId || !newPassword) {
     return NextResponse.json({ error: "userId と newPassword は必須です" }, { status: 400 })
   }
@@ -33,17 +49,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "パスワードは6文字以上にしてください" }, { status: 400 })
   }
 
-  // 管理者クライアントでパスワード変更
-  const adminClient = createClient(SUPABASE_URL, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
+  // パスワード変更
+  const { error: pwError } = await adminClient.auth.admin.updateUserById(userId, {
+    password: newPassword,
   })
+  if (pwError) {
+    return NextResponse.json({ error: pwError.message }, { status: 400 })
+  }
 
-  const { error: pwError } = await adminClient.auth.admin.updateUserById(userId, { password: newPassword })
-  if (pwError) return NextResponse.json({ error: pwError.message }, { status: 400 })
-
-  // login_code も同じ値に更新（パスワードのみログインの逆引きキー）
-  const code = (loginCode ?? newPassword).trim()
-  await adminClient.from("profiles").update({ login_code: code }).eq("id", userId)
+  // login_code を同じ値に更新
+  await adminClient
+    .from("profiles")
+    .update({ login_code: newPassword.trim() })
+    .eq("id", userId)
 
   return NextResponse.json({ success: true })
 }
