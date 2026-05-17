@@ -40,6 +40,7 @@ export default function OrderPage() {
   const [favorites, setFavorites]       = useState<string[]>([])
   const [notices, setNotices]           = useState<Notice[]>([])
   const [dismissed, setDismissed]       = useState<string[]>([])
+  const [ordererName, setOrdererName]   = useState("")
 
   useEffect(() => { checkLogin() }, [])
 
@@ -160,18 +161,19 @@ export default function OrderPage() {
 
   async function submitOrder() {
     if (!clinicId || cart.length === 0) return
+    if (!ordererName.trim()) { alert("注文者名を入力してください。"); return }
     const total = cart.reduce((s, i) => s + Number(i.price || 0) * i.quantity, 0)
     const now = new Date()
     const y = now.getFullYear(), m = String(now.getMonth() + 1).padStart(2, "0"), d = String(now.getDate()).padStart(2, "0")
     const { data: ex } = await supabase.from("orders").select("id").gte("created_at", `${y}-${m}-${d}T00:00:00`).lte("created_at", `${y}-${m}-${d}T23:59:59`)
     const dn = `DN-${y}${m}${d}-${String((ex?.length || 0) + 1).padStart(4, "0")}`
     const { data: order, error } = await supabase.from("orders")
-      .insert([{ clinic_id: clinicId, status: "注文受付", total_price: total, delivery_number: dn }]).select().single()
+      .insert([{ clinic_id: clinicId, status: "注文受付", total_price: total, delivery_number: dn, orderer_name: ordererName.trim() }]).select().single()
     if (error) { alert("注文作成でエラー"); return }
     await supabase.from("order_items").insert(
       cart.map((i) => ({ order_id: order.id, product_id: i.id, product_name: i.name, quantity: i.quantity, price: i.price }))
     )
-    setLastOrderId(order.id); setCart([]); setShowConfirm(false); setShowCart(false); setShowComplete(true)
+    setLastOrderId(order.id); setCart([]); setOrdererName(""); setShowConfirm(false); setShowCart(false); setShowComplete(true)
     await fetchData(clinicId)
   }
 
@@ -415,6 +417,24 @@ export default function OrderPage() {
               <button onClick={() => setShowConfirm(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.sub }}>✕</button>
             </div>
             <p style={{ fontSize: 13, color: C.sub, marginBottom: 12 }}>医院：<strong style={{ color: C.text }}>{clinicName}</strong></p>
+
+            {/* 注文者名 */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: "bold", color: C.sub, display: "block", marginBottom: 5 }}>
+                注文者名 <span style={{ color: "#ef4444" }}>*</span>
+              </label>
+              <input
+                value={ordererName}
+                onChange={(e) => setOrdererName(e.target.value)}
+                placeholder="例：山田 太郎"
+                style={{
+                  width: "100%", padding: "10px 13px", borderRadius: 8,
+                  border: `1.5px solid ${ordererName.trim() ? C.border : "#fca5a5"}`,
+                  fontSize: 14, boxSizing: "border-box" as const, outline: "none", color: C.text,
+                }}
+              />
+            </div>
+
             <div style={{ overflowY: "auto", flex: 1 }}>
               {cart.map((item) => (
                 <div key={item.id} style={{ borderBottom: `1px solid ${C.border}`, padding: "11px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -456,7 +476,8 @@ export default function OrderPage() {
           <div style={{ background: "#fff", borderRadius: 20, padding: "36px 28px", maxWidth: 340, width: "100%", textAlign: "center", boxShadow: "0 8px 40px rgba(0,0,0,0.18)", margin: 16 }}>
             <div style={{ width: 72, height: 72, borderRadius: "50%", background: C.primaryBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, margin: "0 auto 16px" }}>✅</div>
             <h2 style={{ fontSize: 20, fontWeight: "bold", color: C.primary, marginBottom: 6 }}>注文が完了しました</h2>
-            <p style={{ fontSize: 13, color: C.sub, marginBottom: 28 }}>{clinicName}</p>
+            <p style={{ fontSize: 13, color: C.sub, marginBottom: 4 }}>{clinicName}</p>
+            <p style={{ fontSize: 13, color: C.sub, marginBottom: 28 }}>注文者：{ordererName || "-"}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <button onClick={() => setShowComplete(false)} style={{
                 width: "100%", padding: 14, borderRadius: 12, background: C.primary,

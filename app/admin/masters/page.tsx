@@ -21,6 +21,7 @@ const ITEMS: MasterItem[] = [
   { href: "/admin/palladium", label: "パラ価格", desc: "パラジウム価格管理", icon: Ic.product, color: "#a855f7", group: "商品" },
   { href: "/admin/barcodes", label: "バーコード", desc: "商品バーコード一覧", icon: Ic.csv, color: "#f59e0b", group: "商品" },
   // 設定
+  { href: "/admin/users", label: "ユーザー", desc: "ログインID設定・医院ユーザー管理", icon: Ic.clinic, color: "#22a648", group: "設定" },
   { href: "/admin/settings", label: "自社情報", desc: "請求書・納品書の自社欄", icon: Ic.gear, color: "#0891b2", group: "設定" },
   { href: "/admin/audit-logs", label: "監査ログ", desc: "操作履歴の閲覧", icon: Ic.lock, color: "#9333ea", group: "設定" },
 ]
