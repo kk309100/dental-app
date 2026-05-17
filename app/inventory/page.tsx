@@ -40,7 +40,11 @@ export default function ClinicInventoryPage() {
   const [addForm, setAddForm] = useState<EditForm>(emptyForm)
   const [addSaving, setAddSaving] = useState(false)
   const [barcodeItem, setBarcodeItem] = useState<Item | null>(null)
+  // 複数選択印刷用
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const barcodeRef = useRef<HTMLDivElement>(null)
+  const bulkBarcodeRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { fetchData() }, [])
 
@@ -137,33 +141,61 @@ export default function ClinicInventoryPage() {
     fetchData()
   }
 
-  function printBarcode(item: Item) {
-    setBarcodeItem(item)
+  function toggleSelect(id: string, hasBarcode: boolean) {
+    if (!hasBarcode) return
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
   }
 
-  function doPrint() {
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }
+
+  function selectAllWithBarcode() {
+    const ids = filtered.filter((i) => i.barcode).map((i) => i.id)
+    setSelectedIds(new Set(ids))
+  }
+
+  function doPrintSingle() {
     const content = barcodeRef.current
     if (!content) return
     const w = window.open("", "_blank", "width=400,height=300")
     if (!w) return
-    w.document.write(`
-      <html><head><title>バーコード印刷</title>
-      <style>body{margin:20px;font-family:sans-serif;text-align:center} svg{max-width:100%}</style>
-      </head><body>
-      <div>${content.innerHTML}</div>
-      </body></html>
-    `)
-    w.document.close()
-    w.focus()
-    w.print()
-    w.close()
+    w.document.write(`<html><head><title>バーコード印刷</title>
+      <style>body{margin:20px;font-family:sans-serif;text-align:center}svg{max-width:100%}</style>
+      </head><body><div>${content.innerHTML}</div></body></html>`)
+    w.document.close(); w.focus(); w.print(); w.close()
+  }
+
+  function doPrintBulk() {
+    const content = bulkBarcodeRef.current
+    if (!content) return
+    const w = window.open("", "_blank", "width=700,height=600")
+    if (!w) return
+    w.document.write(`<html><head><title>バーコード一括印刷</title>
+      <style>
+        body{margin:16px;font-family:sans-serif}
+        .grid{display:flex;flex-wrap:wrap;gap:12px}
+        .cell{border:1px solid #ddd;padding:8px 12px;border-radius:6px;text-align:center;break-inside:avoid}
+        .name{font-size:11px;font-weight:bold;margin-bottom:4px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        svg{max-width:100%}
+        @media print{@page{margin:10mm}}
+      </style>
+      </head><body><div class="grid">${content.innerHTML}</div></body></html>`)
+    w.document.close(); w.focus(); w.print(); w.close()
   }
 
   const isLow = (item: Item) => item.stock_quantity <= (item.min_stock ?? 0)
 
+  const selectedItems = items.filter((i) => selectedIds.has(i.id) && i.barcode)
+
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "16px 12px 80px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "16px 12px 100px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
         <h1 style={{ fontSize: 18, fontWeight: "bold", color: "#111", margin: 0 }}>
           在庫管理
           <span style={{ fontSize: 11, fontWeight: "normal", color: "#888", marginLeft: 8 }}>
@@ -173,9 +205,23 @@ export default function ClinicInventoryPage() {
             )}
           </span>
         </h1>
-        <button onClick={() => { setAddForm(emptyForm); setShowAddModal(true) }} style={addBtn}>
-          ＋ 商品追加
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {!selectMode ? (
+            <>
+              <button onClick={() => setSelectMode(true)} style={outlineBtn}>
+                バーコード選択印刷
+              </button>
+              <button onClick={() => { setAddForm(emptyForm); setShowAddModal(true) }} style={addBtn}>
+                ＋ 商品追加
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={selectAllWithBarcode} style={outlineBtn}>全選択</button>
+              <button onClick={exitSelectMode} style={cancelBtn}>キャンセル</button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* 検索バー */}
@@ -198,6 +244,8 @@ export default function ClinicInventoryPage() {
             const low = isLow(item)
             const busy = processingId === item.id
             const isEditing = editId === item.id
+            const hasBarcode = !!item.barcode
+            const isSelected = selectedIds.has(item.id)
 
             if (isEditing) {
               return (
@@ -245,16 +293,32 @@ export default function ClinicInventoryPage() {
             return (
               <div
                 key={item.id}
+                onClick={selectMode && hasBarcode ? () => toggleSelect(item.id, hasBarcode) : undefined}
                 style={{
-                  background: "#fff",
-                  border: low ? "1px solid #f5c6cb" : "1px solid #e0e0e0",
+                  background: isSelected ? "#eef4ff" : "#fff",
+                  border: isSelected ? "2px solid #1a56db" : low ? "1px solid #f5c6cb" : "1px solid #e0e0e0",
                   borderRadius: 10,
                   padding: "10px 14px",
-                  opacity: busy ? 0.6 : 1,
-                  transition: "opacity 0.15s",
+                  opacity: busy ? 0.6 : (selectMode && !hasBarcode ? 0.45 : 1),
+                  transition: "opacity 0.15s, border 0.1s",
+                  cursor: selectMode && hasBarcode ? "pointer" : "default",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  {/* 選択モード時のチェックボックス */}
+                  {selectMode && (
+                    <div style={{ paddingTop: 2, flexShrink: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(item.id, hasBarcode)}
+                        disabled={!hasBarcode}
+                        style={{ width: 18, height: 18, cursor: hasBarcode ? "pointer" : "not-allowed" }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  )}
+
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                       <span style={{ fontWeight: "bold", fontSize: 14, color: "#111" }}>{item.product_name}</span>
@@ -262,6 +326,9 @@ export default function ClinicInventoryPage() {
                         <span style={{ fontSize: 10, fontWeight: "bold", background: "#fde8e8", color: "#c0392b", padding: "1px 6px", borderRadius: 4 }}>
                           発注必要
                         </span>
+                      )}
+                      {selectMode && !hasBarcode && (
+                        <span style={{ fontSize: 10, color: "#aaa" }}>バーコードなし</span>
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 3, flexWrap: "wrap" }}>
@@ -276,32 +343,70 @@ export default function ClinicInventoryPage() {
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 } as React.CSSProperties}>
-                    <button onClick={() => changeQty(item.id, -1)} disabled={busy || item.stock_quantity <= 0}
-                      style={{ padding: "6px 14px", background: "#e8f0fe", color: "#1a56db", border: "none", borderRadius: 6, fontSize: 12, fontWeight: "bold", cursor: "pointer", opacity: (busy || item.stock_quantity <= 0) ? 0.4 : 1, whiteSpace: "nowrap" }}>
-                      使用する
-                    </button>
-                    <button onClick={() => changeQty(item.id, 1)} disabled={busy}
-                      style={{ padding: "6px 14px", background: "#e6f4ea", color: "#137333", border: "none", borderRadius: 6, fontSize: 12, fontWeight: "bold", cursor: "pointer", opacity: busy ? 0.4 : 1, whiteSpace: "nowrap" }}>
-                      補充する
-                    </button>
-                    <button onClick={() => startEdit(item)} disabled={busy}
-                      style={{ padding: "6px 14px", background: "#f5f5f5", color: "#555", border: "1px solid #ddd", borderRadius: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-                      編集
-                    </button>
-                    {item.barcode && (
-                      <button onClick={() => printBarcode(item)}
-                        style={{ padding: "6px 14px", background: "#fff8e1", color: "#b45309", border: "1px solid #fcd34d", borderRadius: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-                        バーコード
+                  {!selectMode && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 } as React.CSSProperties}>
+                      <button onClick={() => changeQty(item.id, -1)} disabled={busy || item.stock_quantity <= 0}
+                        style={{ padding: "6px 14px", background: "#e8f0fe", color: "#1a56db", border: "none", borderRadius: 6, fontSize: 12, fontWeight: "bold", cursor: "pointer", opacity: (busy || item.stock_quantity <= 0) ? 0.4 : 1, whiteSpace: "nowrap" }}>
+                        使用する
                       </button>
-                    )}
-                  </div>
+                      <button onClick={() => changeQty(item.id, 1)} disabled={busy}
+                        style={{ padding: "6px 14px", background: "#e6f4ea", color: "#137333", border: "none", borderRadius: 6, fontSize: 12, fontWeight: "bold", cursor: "pointer", opacity: busy ? 0.4 : 1, whiteSpace: "nowrap" }}>
+                        補充する
+                      </button>
+                      <button onClick={() => startEdit(item)} disabled={busy}
+                        style={{ padding: "6px 14px", background: "#f5f5f5", color: "#555", border: "1px solid #ddd", borderRadius: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+                        編集
+                      </button>
+                      {item.barcode && (
+                        <button onClick={() => setBarcodeItem(item)}
+                          style={{ padding: "6px 14px", background: "#fff8e1", color: "#b45309", border: "1px solid #fcd34d", borderRadius: 6, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+                          バーコード
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )
           })}
         </div>
       )}
+
+      {/* 一括印刷フッターバー */}
+      {selectMode && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 200,
+          background: "#1a56db", color: "#fff", padding: "12px 20px",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          boxShadow: "0 -2px 12px rgba(0,0,0,0.15)",
+        }}>
+          <span style={{ fontSize: 14, fontWeight: "bold" }}>
+            {selectedIds.size}件選択中
+            {selectedIds.size > 0 && <span style={{ fontWeight: "normal", fontSize: 12, marginLeft: 8, opacity: 0.8 }}>（バーコードありのみ印刷）</span>}
+          </span>
+          <button
+            onClick={doPrintBulk}
+            disabled={selectedIds.size === 0}
+            style={{
+              padding: "8px 24px", background: "#fff", color: "#1a56db", border: "none",
+              borderRadius: 8, fontSize: 14, fontWeight: "bold", cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
+              opacity: selectedIds.size === 0 ? 0.5 : 1,
+            }}
+          >
+            まとめて印刷
+          </button>
+        </div>
+      )}
+
+      {/* 一括印刷用の非表示バーコードレンダリング領域 */}
+      <div ref={bulkBarcodeRef} style={{ display: "none" }}>
+        {selectedItems.map((item) => (
+          <div key={item.id} className="cell">
+            <div className="name">{item.product_name}</div>
+            <Barcode value={item.barcode!} width={1.5} height={50} fontSize={10} displayValue={true} />
+          </div>
+        ))}
+      </div>
 
       {/* 商品追加モーダル */}
       {showAddModal && (
@@ -348,24 +453,18 @@ export default function ClinicInventoryPage() {
         </div>
       )}
 
-      {/* バーコード表示モーダル */}
+      {/* バーコード単体表示モーダル */}
       {barcodeItem && (
         <div style={overlay} onClick={(e) => { if (e.target === e.currentTarget) setBarcodeItem(null) }}>
           <div style={{ ...modal, maxWidth: 380, textAlign: "center" }}>
             <h2 style={{ fontSize: 14, fontWeight: "bold", marginBottom: 4, color: "#111" }}>{barcodeItem.product_name}</h2>
             <p style={{ fontSize: 11, color: "#888", marginBottom: 14 }}>{barcodeItem.barcode}</p>
             <div ref={barcodeRef} style={{ display: "inline-block", background: "#fff", padding: 8 }}>
-              <Barcode
-                value={barcodeItem.barcode!}
-                width={1.8}
-                height={60}
-                fontSize={12}
-                displayValue={true}
-              />
+              <Barcode value={barcodeItem.barcode!} width={1.8} height={60} fontSize={12} displayValue={true} />
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
               <button onClick={() => setBarcodeItem(null)} style={cancelBtn}>閉じる</button>
-              <button onClick={doPrint} style={saveBtn}>印刷する</button>
+              <button onClick={doPrintSingle} style={saveBtn}>印刷する</button>
             </div>
           </div>
         </div>
@@ -394,6 +493,11 @@ const cancelBtn: React.CSSProperties = {
 
 const addBtn: React.CSSProperties = {
   padding: "8px 18px", background: "#1a56db", color: "#fff", border: "none",
+  borderRadius: 8, fontSize: 13, fontWeight: "bold", cursor: "pointer",
+}
+
+const outlineBtn: React.CSSProperties = {
+  padding: "8px 16px", background: "#fff", color: "#1a56db", border: "1.5px solid #1a56db",
   borderRadius: 8, fontSize: 13, fontWeight: "bold", cursor: "pointer",
 }
 
