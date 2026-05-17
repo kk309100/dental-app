@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import Barcode from "react-barcode"
 import { Html5Qrcode } from "html5-qrcode"
+import { useRouter } from "next/navigation"
 
 type Item = {
   id: string
@@ -36,6 +37,7 @@ const emptyForm: EditForm = {
 }
 
 export default function ClinicInventoryPage() {
+  const router = useRouter()
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -434,6 +436,8 @@ export default function ClinicInventoryPage() {
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "16px 12px 100px" }}>
       {/* ヘッダー */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => router.push("/menu")} style={backBtn}>← メニューへ</button>
         <h1 style={{ fontSize: 18, fontWeight: "bold", color: "#111", margin: 0 }}>
           在庫管理
           <span style={{ fontSize: 11, fontWeight: "normal", color: "#888", marginLeft: 8 }}>
@@ -441,6 +445,7 @@ export default function ClinicInventoryPage() {
             {items.filter(isLow).length > 0 && <span style={{ color: "#c0392b", marginLeft: 8 }}>発注必要 {items.filter(isLow).length}件</span>}
           </span>
         </h1>
+        </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {!selectMode && !cartMode && (
             <>
@@ -738,6 +743,11 @@ export default function ClinicInventoryPage() {
       )}
     </div>
   )
+}
+
+const backBtn: React.CSSProperties = {
+  padding: "8px 14px", background: "#f5f5f5", color: "#555", border: "1px solid #e0e0e0",
+  borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: "bold", whiteSpace: "nowrap",
 }
 
 const labelStyle: React.CSSProperties = {
