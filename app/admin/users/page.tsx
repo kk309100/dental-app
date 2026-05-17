@@ -8,15 +8,15 @@ type UserRow = {
   login_code: string | null
   role: string
   clinic_id: string | null
-  clinic_name?: string
-  email?: string
+  clinic_name: string
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<UserRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<Record<string, string>>({})
-  const [saving, setSaving] = useState<string | null>(null)
+  const [users, setUsers]       = useState<UserRow[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [passwords, setPasswords] = useState<Record<string, string>>({})
+  const [saving, setSaving]     = useState<string | null>(null)
+  const [done, setDone]         = useState<string | null>(null)
 
   useEffect(() => { fetchUsers() }, [])
 
@@ -28,102 +28,119 @@ export default function UsersPage() {
 
     if (!profiles) { setLoading(false); return }
 
-    const rows: UserRow[] = profiles.map((p: any) => ({
+    setUsers(profiles.map((p: any) => ({
       id: p.id,
-      login_code: p.login_code || null,
-      role: p.role || "-",
+      login_code: p.login_code ?? null,
+      role: p.role ?? "-",
       clinic_id: p.clinic_id,
-      clinic_name: p.clinics?.name || "-",
-    }))
-
-    setUsers(rows)
-    const initEdit: Record<string, string> = {}
-    rows.forEach((r) => { initEdit[r.id] = r.login_code || "" })
-    setEditing(initEdit)
+      clinic_name: p.clinics?.name ?? "-",
+    })))
     setLoading(false)
   }
 
-  async function saveLoginCode(userId: string) {
-    const code = editing[userId]?.trim()
+  async function setPassword(userId: string) {
+    const newPassword = passwords[userId]?.trim()
+    if (!newPassword) { alert("パスワードを入力してください。"); return }
+    if (newPassword.length < 6) { alert("パスワードは6文字以上にしてください。"); return }
+
     setSaving(userId)
-    const { error } = await supabase
-      .from("profiles")
-      .update({ login_code: code || null })
-      .eq("id", userId)
-    if (error) {
-      alert("保存できませんでした。このIDはすでに使われているかもしれません。")
-    } else {
-      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, login_code: code || null } : u))
+    setDone(null)
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) { alert("セッションが切れています。再ログインしてください。"); setSaving(null); return }
+
+    const res = await fetch("/api/admin/set-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ userId, newPassword }),
+    })
+
+    const json = await res.json()
+    if (!res.ok) {
+      alert(`エラー: ${json.error}`)
+      setSaving(null)
+      return
     }
+
+    // login_code をローカル更新
+    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, login_code: newPassword } : u))
+    setPasswords((prev) => ({ ...prev, [userId]: "" }))
+    setDone(userId)
     setSaving(null)
+    setTimeout(() => setDone(null), 3000)
   }
 
   return (
-    <div style={{ maxWidth: 700 }}>
-      <h1 style={{ fontSize: 20, fontWeight: "bold", marginBottom: 8, color: "#111" }}>👤 ユーザー管理</h1>
+    <div style={{ maxWidth: 680 }}>
+      <h1 style={{ fontSize: 20, fontWeight: "bold", marginBottom: 6, color: "#111" }}>👤 ユーザー管理</h1>
       <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 24 }}>
-        各ユーザーのログインIDを設定します。ログインIDは半角英数字推奨です（重複不可）。
+        パスワードを設定すると、医院スタッフはそのパスワード1つだけでログインできるようになります。
       </p>
 
       {loading ? (
         <p style={{ color: "#999" }}>読み込み中…</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {users.map((u) => (
             <div key={u.id} style={{
-              background: "#fff", borderRadius: 12, padding: "14px 16px",
+              background: "#fff", borderRadius: 14, padding: "16px 18px",
               border: "1px solid #e5e7eb", boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-              display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
             }}>
               {/* ユーザー情報 */}
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: "bold", padding: "2px 8px", borderRadius: 999,
-                    background: u.role === "admin" ? "#fef3c7" : "#e8f5ec",
-                    color: u.role === "admin" ? "#92400e" : "#166534",
-                  }}>
-                    {u.role === "admin" ? "管理者" : "医院"}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: "bold", padding: "3px 10px", borderRadius: 999,
+                  background: u.role === "admin" ? "#fef3c7" : "#e8f5ec",
+                  color: u.role === "admin" ? "#92400e" : "#166534",
+                }}>
+                  {u.role === "admin" ? "管理者" : "医院"}
+                </span>
+                <span style={{ fontSize: 14, fontWeight: "bold", color: "#111" }}>
+                  {u.clinic_name !== "-" ? u.clinic_name : "（医院未設定）"}
+                </span>
+                {u.login_code && (
+                  <span style={{ fontSize: 12, color: "#9ca3af" }}>
+                    現在のPW：<code style={{ background: "#f3f4f6", padding: "1px 6px", borderRadius: 4 }}>{u.login_code}</code>
                   </span>
-                  {u.clinic_name !== "-" && (
-                    <span style={{ fontSize: 12, color: "#374151", fontWeight: "bold" }}>{u.clinic_name}</span>
-                  )}
-                </div>
-                <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontFamily: "monospace" }}>
-                  {u.id.slice(0, 16)}…
-                </p>
+                )}
               </div>
 
-              {/* ログインID入力 */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                <div>
-                  <label style={{ fontSize: 11, color: "#6b7280", display: "block", marginBottom: 3 }}>ログインID</label>
-                  <input
-                    value={editing[u.id] ?? ""}
-                    onChange={(e) => setEditing((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                    placeholder="未設定"
-                    style={{
-                      padding: "8px 10px", borderRadius: 8, border: "1.5px solid #e5e7eb",
-                      fontSize: 14, width: 160, outline: "none", color: "#1a1a1a",
-                    }}
-                  />
-                </div>
+              {/* パスワード設定 */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="text"
+                  value={passwords[u.id] ?? ""}
+                  onChange={(e) => setPasswords((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                  placeholder={u.login_code ? "新しいパスワード" : "パスワードを設定（6文字以上）"}
+                  style={{
+                    flex: 1, padding: "9px 12px", borderRadius: 8,
+                    border: "1.5px solid #e5e7eb", fontSize: 14, outline: "none", color: "#1a1a1a",
+                  }}
+                  onKeyDown={(e) => { if (e.key === "Enter") setPassword(u.id) }}
+                />
                 <button
-                  onClick={() => saveLoginCode(u.id)}
+                  onClick={() => setPassword(u.id)}
                   disabled={saving === u.id}
                   style={{
-                    marginTop: 18, padding: "8px 16px", borderRadius: 8, border: "none",
-                    background: saving === u.id ? "#d1d5db" : "#22a648",
-                    color: "#fff", fontWeight: "bold", fontSize: 13,
-                    cursor: saving === u.id ? "not-allowed" : "pointer",
+                    padding: "9px 18px", borderRadius: 8, border: "none",
+                    background: done === u.id ? "#059669" : saving === u.id ? "#d1d5db" : "#22a648",
+                    color: "#fff", fontWeight: "bold", fontSize: 13, cursor: saving === u.id ? "not-allowed" : "pointer",
+                    whiteSpace: "nowrap", transition: "background 0.2s",
                   }}>
-                  {saving === u.id ? "保存中" : "保存"}
+                  {done === u.id ? "✓ 設定済" : saving === u.id ? "設定中…" : "設定する"}
                 </button>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <div style={{ marginTop: 28, padding: "14px 16px", background: "#fff7e6", border: "1px solid #fde68a", borderRadius: 10 }}>
+        <p style={{ margin: 0, fontSize: 13, color: "#92400e", lineHeight: 1.6 }}>
+          <strong>注意：</strong>設定したパスワードは画面上に表示されます。スタッフへの共有は口頭またはメモで行ってください。管理者アカウントのパスワードはここから変更しないことを推奨します。
+        </p>
+      </div>
     </div>
   )
 }
