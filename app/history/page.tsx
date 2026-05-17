@@ -14,6 +14,8 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("すべて")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
   const [openOrderId, setOpenOrderId] = useState<string | null>(null)
   const [reorderingId, setReorderingId] = useState<string | null>(null)
   const [reorderDone, setReorderDone] = useState(false)
@@ -60,12 +62,20 @@ export default function HistoryPage() {
 
   const filteredOrders = useMemo(() => {
     const k = norm(search)
+    const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null
+    const to = dateTo ? new Date(dateTo + "T23:59:59") : null
     return orders.filter((order) => {
       const itemNames = getItems(order.id).map((i) => i.product_name || "").join(" ")
       const target = norm(`${order.delivery_number || ""} ${order.status || ""} ${itemNames}`)
-      return (!k || target.includes(k)) && (statusFilter === "すべて" || order.status === statusFilter)
+      const orderDate = new Date(order.created_at)
+      return (
+        (!k || target.includes(k)) &&
+        (statusFilter === "すべて" || order.status === statusFilter) &&
+        (!from || orderDate >= from) &&
+        (!to || orderDate <= to)
+      )
     })
-  }, [orders, orderItems, search, statusFilter])
+  }, [orders, orderItems, search, statusFilter, dateFrom, dateTo])
 
   function openReorderModal(order: any) {
     const items = getItems(order.id)
@@ -137,14 +147,30 @@ export default function HistoryPage() {
       <h1 style={{ fontSize: 20, fontWeight: "bold", color: "#111", marginBottom: 16 }}>注文履歴</h1>
 
       {/* 検索・フィルター */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <input value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder="納品書番号・商品名で検索"
-          style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1px solid #ddd", fontSize: 14, boxSizing: "border-box" as const }} />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #ddd", fontSize: 13, background: "#fff", flexShrink: 0 }}>
-          {statuses.map((s: any) => <option key={s} value={s}>{s}</option>)}
-        </select>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="納品書番号・商品名で検索"
+            style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1px solid #ddd", fontSize: 14, boxSizing: "border-box" as const }} />
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #ddd", fontSize: 13, background: "#fff", flexShrink: 0 }}>
+            {statuses.map((s: any) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: "#888", flexShrink: 0 }}>日付</span>
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+            style={{ flex: 1, padding: "8px 10px", borderRadius: 10, border: "1px solid #ddd", fontSize: 13, boxSizing: "border-box" as const }} />
+          <span style={{ fontSize: 12, color: "#888", flexShrink: 0 }}>〜</span>
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+            style={{ flex: 1, padding: "8px 10px", borderRadius: 10, border: "1px solid #ddd", fontSize: 13, boxSizing: "border-box" as const }} />
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(""); setDateTo("") }}
+              style={{ flexShrink: 0, padding: "8px 10px", borderRadius: 8, border: "1px solid #ddd", background: "#fff", fontSize: 12, color: "#888", cursor: "pointer" }}>
+              クリア
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 件数 */}
