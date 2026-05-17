@@ -10,18 +10,9 @@ import { usePathname } from "next/navigation"
 export default function TopNav() {
   const pathname = usePathname()
 
-  if (pathname.startsWith("/login")) return null
-  // /admin/* は AdminLayout が独自にナビを提供するので、グローバルナビは出さない
   if (pathname.startsWith("/admin")) return null
 
-  // 医院側
-  return (
-    <nav style={navStyle}>
-      <Link href="/" style={linkStyle}>注文</Link>
-      <Link href="/history" style={linkStyle}>履歴</Link>
-      <Link href="/inventory" style={linkStyle}>在庫</Link>
-    </nav>
-  )
+  return null
 }
 
 const navStyle: React.CSSProperties = {
