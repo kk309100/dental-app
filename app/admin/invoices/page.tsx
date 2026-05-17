@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { fmtYen, fmtDate, INVOICE_STATUSES, type InvoiceStatus } from "@/lib/invoice"
 import Link from "next/link"
+import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
+import PaymentBadge from "@/app/components/PaymentBadge"
 
 type Invoice = {
   id: string
@@ -20,7 +22,7 @@ type Invoice = {
   notes: string | null
   created_at: string
 }
-type Clinic = { id: string; name: string }
+type Clinic = { id: string; name: string; payment_method?: string | null }
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -29,32 +31,85 @@ export default function InvoicesPage() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | InvoiceStatus>("all")
   const [clinicFilter, setClinicFilter] = useState<string>("all")
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
+  const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc")
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [groupView, setGroupView] = useGroupView()
+  const [invoiceItems, setInvoiceItems] = useState<{ invoice_id: string; product_name: string | null; quantity: number; unit_price: number }[]>([])
 
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setLoading(true)
     const [i, c] = await Promise.all([
-      supabase.from("invoices").select("*").order("issue_date", { ascending: false }),
-      supabase.from("clinics").select("id,name").order("name"),
+      supabase.from("invoices").select("*").order("issue_date", { ascending: false }).limit(50000),
+      supabase.from("clinics").select("id,name,payment_method").order("name").limit(50000),
     ])
     setInvoices((i.data as Invoice[]) || [])
     setClinics(c.data || [])
+    // 商品別集計用に明細も取得（テーブル無い時はスキップ）
+    try {
+      const { data: items } = await supabase.from("invoice_items").select("invoice_id,product_name,quantity,unit_price").limit(50000)
+      setInvoiceItems((items as any[]) || [])
+    } catch { setInvoiceItems([]) }
     setLoading(false)
   }
 
-  const clinicName = (id: string | null) => id ? (clinics.find((c) => c.id === id)?.name || "(削除済み)") : "-"
+  const clinicById = useMemo(() => new Map(clinics.map(c => [c.id, c])), [clinics])
+  const clinicName = (id: string | null) => id ? (clinicById.get(id)?.name || "(削除済み)") : "-"
+  const clinicPayment = (id: string | null): string | null => id ? (clinicById.get(id)?.payment_method ?? null) : null
 
   const filtered = useMemo(() => {
     const k = search.toLowerCase().normalize("NFKC")
     return invoices.filter((iv) => {
       if (statusFilter !== "all" && iv.status !== statusFilter) return false
       if (clinicFilter !== "all" && iv.clinic_id !== clinicFilter) return false
+      const dateStr = (iv.issue_date || "").slice(0, 10)
+      if (from && dateStr < from) return false
+      if (to && dateStr > to) return false
       if (!k) return true
       const target = `${iv.invoice_number} ${clinicName(iv.clinic_id)}`.toLowerCase().normalize("NFKC")
       return target.includes(k)
+    }).sort((a, b) => {
+      if (sortBy === "date_desc") return (b.issue_date || "").localeCompare(a.issue_date || "")
+      if (sortBy === "date_asc") return (a.issue_date || "").localeCompare(b.issue_date || "")
+      if (sortBy === "amount_desc") return Number(b.total) - Number(a.total)
+      if (sortBy === "amount_asc") return Number(a.total) - Number(b.total)
+      return 0
     })
-  }, [invoices, search, statusFilter, clinicFilter])
+  }, [invoices, search, statusFilter, clinicFilter, from, to, sortBy])
+
+  // 明細を請求書IDでグループ化
+  const itemsByInvoice = useMemo(() => {
+    const m = new Map<string, { product_name: string | null; quantity: number; unit_price: number }[]>()
+    invoiceItems.forEach(it => {
+      if (!m.has(it.invoice_id)) m.set(it.invoice_id, [])
+      m.get(it.invoice_id)!.push(it)
+    })
+    return m
+  }, [invoiceItems])
+
+  // GroupViewTabs 用の行データ
+  const groupRows: GroupableRow[] = useMemo(() => filtered.map(iv => ({
+    id: iv.id,
+    date: (iv.issue_date || "").slice(0, 10),
+    party: clinicName(iv.clinic_id),
+    amount: Number(iv.total || 0),
+    items: (itemsByInvoice.get(iv.id) || []).map(it => ({
+      name: it.product_name || "(不明)",
+      quantity: Number(it.quantity || 0),
+      price: Number(it.unit_price || 0),
+    })),
+  })), [filtered, clinics, itemsByInvoice])
+
+  function toggleSel(id: string) { setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n }) }
+  function selectAll() { setSelected(new Set(filtered.map(i => i.id))) }
+  function clearSel() { setSelected(new Set()) }
+  function bulkPrint() {
+    if (selected.size === 0) { alert("選択がありません"); return }
+    window.open(`/admin/invoices/print?ids=${Array.from(selected).join(",")}`, "_blank")
+  }
 
   // 集計
   const totalIssued = filtered.filter((i) => i.status === "issued").reduce((s, i) => s + i.total, 0)
@@ -72,6 +127,9 @@ export default function InvoicesPage() {
           <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{invoices.length}件</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={bulkPrint} disabled={selected.size === 0} style={{ ...btnGray, background: "#1f2937", color: "#fff", opacity: selected.size === 0 ? 0.4 : 1 }}>
+            🖨 選択を一括印刷 ({selected.size})
+          </button>
           <Link href="/admin/invoices/bulk"><button style={btnGray}>📋 一括発行</button></Link>
           <Link href="/admin/invoices/create"><button style={btnDark}>＋ 請求書を発行</button></Link>
         </div>
@@ -100,37 +158,73 @@ export default function InvoicesPage() {
           <option value="all">すべての医院</option>
           {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={select} />
+        <span style={{ color: "#999", fontSize: 12 }}>〜</span>
+        <input type="date" value={to} onChange={e => setTo(e.target.value)} style={select} />
+        <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} style={select}>
+          <option value="date_desc">📅 新しい順</option>
+          <option value="date_asc">📅 古い順</option>
+          <option value="amount_desc">💰 金額大→小</option>
+          <option value="amount_asc">💰 金額小→大</option>
+        </select>
+      </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11, padding: "0 4px" }}>
+        <button onClick={selectAll} style={{ padding: "2px 8px", border: "1px solid #ddd", borderRadius: 4, background: "#fff", cursor: "pointer" }}>全選択</button>
+        <button onClick={clearSel} style={{ padding: "2px 8px", border: "1px solid #ddd", borderRadius: 4, background: "#fff", cursor: "pointer", color: "#666" }}>解除</button>
+        <span style={{ color: "#666" }}>{selected.size}件選択中</span>
       </div>
 
-      {/* 一覧 */}
-      <div style={listWrap}>
-        {filtered.length === 0 ? (
-          <p style={{ padding: 32, textAlign: "center", color: "#999" }}>請求書がありません</p>
-        ) : (
-          filtered.map((iv) => (
-            <Link key={iv.id} href={`/admin/invoices/${iv.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-              <div style={card}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={cardHead}>
-                    <span style={cardNum}>{iv.invoice_number}</span>
-                    <StatusBadge status={iv.status} />
-                  </div>
-                  <p style={cardClinic}>{clinicName(iv.clinic_id)}</p>
-                  <div style={cardMeta}>
-                    <span>📅 発行: {fmtDate(iv.issue_date)}</span>
-                    {iv.due_date && <span>⏰ 期限: {fmtDate(iv.due_date)}</span>}
-                    {iv.paid_at && <span style={{ color: "#10b981" }}>✓ 入金: {fmtDate(iv.paid_at)}</span>}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <p style={cardAmount}>{fmtYen(iv.total)}</p>
-                  <p style={cardSubtotal}>税抜 {fmtYen(iv.subtotal)}</p>
-                </div>
-              </div>
-            </Link>
-          ))
-        )}
+      {/* 一覧（高密度テーブル） */}
+      <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
+      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <thead className="sticky top-0 bg-gray-100">
+            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-center w-8">
+                <input type="checkbox"
+                  checked={filtered.length > 0 && selected.size === filtered.length}
+                  onChange={e => e.target.checked ? selectAll() : clearSel()} />
+              </th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-36">請求書No</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-20">状態</th>
+              <th className="px-2 py-1.5 text-left">医院</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-24">決済</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-28">発行日</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-28">期限</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-28">入金日</th>
+              <th className="px-2 py-1.5 text-right whitespace-nowrap w-24">税抜</th>
+              <th className="px-2 py-1.5 text-right whitespace-nowrap w-28">税込</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-14">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={11} className="px-4 py-8 text-center text-gray-400">該当請求書なし</td></tr>
+            ) : filtered.map((iv, i) => (
+              <tr key={iv.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (selected.has(iv.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                <td className="px-2 py-1.5 text-center">
+                  <input type="checkbox" checked={selected.has(iv.id)} onChange={() => toggleSel(iv.id)} />
+                </td>
+                <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700 whitespace-nowrap">{iv.invoice_number}</td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap"><StatusBadge status={iv.status} /></td>
+                <td className="px-2 py-1.5 whitespace-nowrap">{clinicName(iv.clinic_id)}</td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap"><PaymentBadge method={clinicPayment(iv.clinic_id)} /></td>
+                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600 whitespace-nowrap">{fmtDate(iv.issue_date)}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600 whitespace-nowrap">{iv.due_date ? fmtDate(iv.due_date) : "—"}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] whitespace-nowrap" style={{ color: iv.paid_at ? "#10b981" : "#9ca3af" }}>
+                  {iv.paid_at ? fmtDate(iv.paid_at) : "—"}
+                </td>
+                <td className="px-2 py-1.5 text-right text-[11px] text-gray-500 tabular-nums whitespace-nowrap">{fmtYen(iv.subtotal)}</td>
+                <td className="px-2 py-1.5 text-right text-[12px] font-bold tabular-nums whitespace-nowrap">{fmtYen(iv.total)}</td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                  <Link href={`/admin/invoices/${iv.id}`} className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+      </GroupViewTabs>
     </main>
   )
 }
@@ -162,7 +256,7 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
   )
 }
 
-const page: React.CSSProperties = { maxWidth: 960, margin: "0 auto", padding: 20 }
+const page: React.CSSProperties = { width: "100%", padding: 0 }
 const back: React.CSSProperties = { padding: "6px 12px", borderRadius: 6, border: "1px solid #ddd", background: "#fff", marginBottom: 16, cursor: "pointer" }
 const header: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 12 }
 const btnDark: React.CSSProperties = { padding: "8px 16px", borderRadius: 8, border: "none", background: "#111", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }

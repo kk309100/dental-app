@@ -54,9 +54,11 @@ export function calcDueDate(issueDate: Date): string {
 }
 
 // ── 消費税（10%、税抜→税込） ─────────────────────────────────────────
+// インボイス制度では「適格請求書ごとに税率ごと1回端数処理」が原則。
+// 端数処理は事業者の選択（切り捨て/四捨五入/切り上げ）。当社は四捨五入を採用。
 export const TAX_RATE = 0.1
 export function calcTax(subtotal: number): number {
-  return Math.floor(subtotal * TAX_RATE)
+  return Math.round(subtotal * TAX_RATE)
 }
 
 // ── ヘルパ ──────────────────────────────────────────────────────────
@@ -80,18 +82,99 @@ export function fmtDate(d: string | Date | null | undefined): string {
 
 // ── 医院名プレフィックス（「医）」） ────────────────────────────────────
 const DENTAL_KEYWORDS = ["歯科", "デンタル", "dental", "口腔", "矯正歯科", "医院", "クリニック", "診療所"]
-export function getClinicPrefix(name: string, corporateName?: string | null, clinicType?: string | null): string {
-  if (clinicType === "dental") return "医）"
-  if (clinicType === "company" || clinicType === "person" || clinicType === "other") return ""
+function isMedical(name: string, corporateName?: string | null, clinicType?: string | null): boolean {
+  if (clinicType === "dental") return true
+  if (clinicType === "company" || clinicType === "person" || clinicType === "other") return false
   const target = (name + (corporateName || "")).toLowerCase()
-  return DENTAL_KEYWORDS.some((kw) => target.includes(kw.toLowerCase())) ? "医）" : ""
+  return DENTAL_KEYWORDS.some((kw) => target.includes(kw.toLowerCase()))
+}
+
+/**
+ * 医院名の前に付ける短縮プレフィックス。
+ * corporate_name がある場合は二重表示を避けるため空を返す（getCorporateLabel 側で「医療法人 ◯◯」を出す）。
+ */
+export function getClinicPrefix(name: string, corporateName?: string | null, clinicType?: string | null): string {
+  if (corporateName) return "" // corporate_name がある場合は getCorporateLabel に任せる
+  return isMedical(name, corporateName, clinicType) ? "医）" : ""
+}
+
+/**
+ * 法人名ラベル。医療系なら「医療法人 ◯◯」、それ以外は corporate_name そのまま。
+ * corporate_name が空なら空文字。
+ */
+export function getCorporateLabel(corporateName?: string | null, name?: string | null, clinicType?: string | null): string {
+  if (!corporateName) return ""
+  // 既に「医療法人」「株式会社」などが入っているならそのまま返す
+  if (/^(医療法人|社会医療法人|医療法人社団|社団法人|財団法人|学校法人|株式会社|有限会社|合同会社|合資会社)/.test(corporateName)) {
+    return corporateName
+  }
+  if (isMedical(name || "", corporateName, clinicType)) return `医療法人 ${corporateName}`
+  return corporateName
 }
 
 // ── 請求書ステータス ──────────────────────────────────────────────────
 export const INVOICE_STATUSES = {
   issued: { label: "発行済", color: "#3b82f6" },
+  partial: { label: "一部入金", color: "#f59e0b" },
   paid: { label: "入金済", color: "#10b981" },
   cancelled: { label: "取消", color: "#9ca3af" },
 } as const
 
 export type InvoiceStatus = keyof typeof INVOICE_STATUSES
+
+// ── 消費税計算（軽減税率対応） ─────────────────────────────────────────
+// rate: 0.10 = 10% / 0.08 = 軽減税率
+// rounding: floor / round / ceil（デフォルト: round = 四捨五入。インボイス制度向け）
+export function calcTaxFor(amount: number, rate = 0.10, rounding: "floor" | "round" | "ceil" = "round"): number {
+  const raw = amount * rate
+  if (rounding === "floor") return Math.floor(raw)
+  if (rounding === "ceil") return Math.ceil(raw)
+  return Math.round(raw)
+}
+
+// ── 経費分類（茶屋歯科フォーマット） ─────────────────────────────────
+// products.category がこれらのいずれかにマッチする → そのカテゴリ
+// マッチしない or null → 「その他」に集約
+export const EXPENSE_CATEGORIES = [
+  "材料費", "消耗品", "薬品", "備品・設備", "貴金属", "銀合金",
+  "図書研究費", "衛生管理費", "修繕費", "事務用品費", "8%軽減食品", "その他",
+] as const
+export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]
+
+// 軽減税率対象カテゴリ
+const REDUCED_TAX_CATEGORIES: ExpenseCategory[] = ["8%軽減食品"]
+
+/**
+ * products.category 文字列を 12 区分のいずれかに正規化
+ * - "材料" "材料費" など部分一致も拾う
+ * - マッチしないものは「その他」
+ */
+export function normalizeExpenseCategory(raw: string | null | undefined): ExpenseCategory {
+  if (!raw) return "その他"
+  const s = String(raw).trim()
+  // 完全一致優先
+  if ((EXPENSE_CATEGORIES as readonly string[]).includes(s)) return s as ExpenseCategory
+  // 部分一致
+  const pairs: [ExpenseCategory, RegExp][] = [
+    ["材料費", /材料/],
+    ["消耗品", /消耗/],
+    ["薬品", /薬品|医薬|薬剤/],
+    ["備品・設備", /備品|設備|機器|機械/],
+    ["貴金属", /貴金属|金合金|プラチナ|パラジウム/],
+    ["銀合金", /銀合金/],
+    ["図書研究費", /図書|書籍|研究|学会/],
+    ["衛生管理費", /衛生|歯ブラシ|オーラル|歯磨/],
+    ["修繕費", /修繕|修理|メンテ/],
+    ["事務用品費", /事務|文具|オフィス/],
+    ["8%軽減食品", /軽減|食品/],
+  ]
+  for (const [cat, re] of pairs) if (re.test(s)) return cat
+  return "その他"
+}
+
+/**
+ * 軽減税率対象か判定
+ */
+export function isReducedTax(cat: ExpenseCategory): boolean {
+  return REDUCED_TAX_CATEGORIES.includes(cat)
+}

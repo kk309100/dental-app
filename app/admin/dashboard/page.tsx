@@ -22,10 +22,10 @@ export default function AdminDashboard() {
 
   async function fetchData() {
     const [o, i, p, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,invoice_id"),
-      supabase.from("invoices").select("id,clinic_id,invoice_number,issue_date,total,status").order("issue_date", { ascending: false }),
-      supabase.from("products").select("id,name,stock,reorder_level"),
-      supabase.from("clinics").select("id,name,corporate_name"),
+      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,invoice_id").limit(50000),
+      supabase.from("invoices").select("id,clinic_id,invoice_number,issue_date,total,status").order("issue_date", { ascending: false }).limit(50000),
+      supabase.from("products").select("id,name,stock,reorder_level").limit(50000),
+      supabase.from("clinics").select("id,name,corporate_name").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
     setInvoices((i.data as Invoice[]) || [])
@@ -50,8 +50,8 @@ export default function AdminDashboard() {
 
     const pendingOrders = orders.filter((o) => o.status === "注文受付" || o.status === "確認中" || o.status === "準備中")
 
-    // 「未請求の納品済み注文」 = 売上化されていない注文
-    const undeliveredInvoiced = orders.filter((o) => o.status === "納品済み" && !o.invoice_id)
+    // 「未請求の納品済み注文」 = 売上化されていない注文（DB の表記ゆれ「納品済」も含む）
+    const undeliveredInvoiced = orders.filter((o) => ["納品済み", "納品済"].includes(o.status) && !o.invoice_id)
 
     const lowStock = products.filter((p) => p.stock !== null && p.reorder_level !== null && p.stock <= p.reorder_level)
 

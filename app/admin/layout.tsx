@@ -4,32 +4,34 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 import { Ic } from "./_lib/icons"
+import UserBadge from "@/app/components/UserBadge"
 
 const NAV = [
   { id: "home", href: "/admin", label: "HOME", icon: Ic.dash, exact: true },
-  { id: "receiving", href: "/admin/receiving", label: "仕入", icon: Ic.purchase },
-  { id: "purchase-order", href: "/admin/purchase-order", label: "発注", icon: Ic.truck },
+  // 業務フロー順: 注文 → 発注 → 仕入 → 納品 → 請求
   { id: "orders", href: "/admin/orders", label: "注文", icon: Ic.order },
-  { id: "delivery", href: "/admin/delivery", label: "納品", icon: Ic.doc },
+  { id: "purchase-orders", href: "/admin/purchase-orders", label: "発注", icon: Ic.truck },
+  { id: "po-pool", href: "/admin/purchase-orders/pool", label: "🛒プール", icon: Ic.purchase },
+  { id: "receivings", href: "/admin/receivings", label: "仕入納品", icon: Ic.purchase },
+  { id: "deliveries", href: "/admin/deliveries", label: "医院納品", icon: Ic.doc },
   { id: "invoices", href: "/admin/invoices", label: "請求", icon: Ic.sales },
   { id: "inventory", href: "/admin/inventory", label: "在庫", icon: Ic.product },
-  { id: "clinics", href: "/admin/clinics", label: "得意先", icon: Ic.clinic },
-  { id: "suppliers", href: "/admin/suppliers", label: "仕入先", icon: Ic.truck },
-  { id: "palladium", href: "/admin/palladium", label: "パラ", icon: Ic.product },
-  { id: "quotes", href: "/admin/quotes", label: "見積", icon: Ic.doc },
   { id: "sales", href: "/admin/sales", label: "売上", icon: Ic.sales },
-  { id: "products", href: "/admin/products", label: "商品", icon: Ic.product },
+  { id: "masters", href: "/admin/masters", label: "マスター", icon: Ic.dash },
   // 一番右にダッシュボード
   { id: "dashboard", href: "/admin/dashboard", label: "📊 ダッシュ", icon: Ic.dash },
 ]
 
 const SUB = [
+  { href: "/admin/supplier-invoices", label: "仕入先請求書付け合わせ", icon: Ic.check },
   { href: "/admin/invoices/bulk", label: "一括請求", icon: Ic.doc },
-  { href: "/admin/purchase-order", label: "発注書", icon: Ic.purchase },
+  { href: "/admin/receivables", label: "売掛金台帳", icon: Ic.sales },
+  { href: "/admin/bank-import", label: "銀行CSV消込", icon: Ic.dl },
+  { href: "/admin/purchase-order", label: "推奨発注リスト(旧)", icon: Ic.purchase },
+  { href: "/admin/stocktakes", label: "棚卸", icon: Ic.check },
+  { href: "/admin/stock-movements", label: "在庫履歴", icon: Ic.dash },
+  { href: "/admin/inventory-valuation", label: "在庫評価", icon: Ic.product },
   { href: "/admin/delivery-search", label: "納品書検索", icon: Ic.search },
-  { href: "/admin/delivery-control", label: "納品処理", icon: Ic.check },
-  { href: "/admin/delivered", label: "納品済", icon: Ic.check },
-  { href: "/admin/barcodes", label: "バーコード", icon: Ic.product },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -94,6 +96,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             })}
           </nav>
           <div className="hidden md:flex items-center gap-2 ml-4 shrink-0">
+            <UserBadge />
             <Link href="/" className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs text-gray-400 hover:bg-gray-50 hover:text-gray-700">
               医院側 →
             </Link>
@@ -120,7 +123,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           { href: "/admin", label: "ホーム", icon: Ic.dash, exact: true },
           { href: "/admin/orders", label: "注文", icon: Ic.order },
           { href: "/admin/invoices", label: "請求書", icon: Ic.sales },
-          { href: "/admin/clinics", label: "得意先", icon: Ic.clinic },
+          { href: "/admin/masters", label: "マスター", icon: Ic.dash },
         ].map((item) => (
           <Link key={item.href} href={item.href} className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5"
             style={{ color: isActive(item.href, item.exact) ? "#1a1a1a" : "#9ca3af" }}>

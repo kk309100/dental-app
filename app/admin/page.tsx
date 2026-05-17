@@ -22,9 +22,9 @@ export default function AdminHomePage() {
 
   async function fetchData() {
     const [o, i, p] = await Promise.all([
-      supabase.from("orders").select("id,status,invoice_id"),
-      supabase.from("invoices").select("id,status"),
-      supabase.from("products").select("id,stock,reorder_level"),
+      supabase.from("orders").select("id,status,invoice_id").limit(50000),
+      supabase.from("invoices").select("id,status").limit(50000),
+      supabase.from("products").select("id,stock,reorder_level").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
     setInvoices((i.data as Invoice[]) || [])
@@ -35,25 +35,23 @@ export default function AdminHomePage() {
   // バッジ用カウント
   const badges = useMemo(() => {
     const pendingOrders = orders.filter((o) => ["注文受付", "確認中", "準備中"].includes(o.status)).length
-    const undeliveredCount = orders.filter((o) => o.status !== "納品済み" && o.status !== "キャンセル").length
-    const unbilled = orders.filter((o) => o.status === "納品済み" && !o.invoice_id).length
+    const undeliveredCount = orders.filter((o) => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)).length
+    const unbilled = orders.filter((o) => ["納品済み", "納品済"].includes(o.status) && !o.invoice_id).length
     const unpaidInvoices = invoices.filter((i) => i.status === "issued").length
     const lowStock = products.filter((p) => p.stock !== null && p.reorder_level !== null && p.stock <= p.reorder_level).length
     return { pendingOrders, undeliveredCount, unbilled, unpaidInvoices, lowStock }
   }, [orders, invoices, products])
 
-  // ボタン定義（10つ）
+  // ボタン定義（業務フロー順: 注文→発注→仕入→納品→請求 + 売上/在庫/マスター）
   const buttons: ButtonItem[] = [
-    { href: "/admin/receiving/import", label: "仕入", desc: "PDF取込・一括入荷", icon: Ic.purchase, color: "#7c3aed" },
-    { href: "/admin/purchase-order", label: "発注", desc: "仕入先への発注書", icon: Ic.truck, color: "#0891b2" },
-    { href: "/admin/orders", label: "注文", desc: "医院からの注文管理", icon: Ic.order, color: "#3b82f6", badge: badges.pendingOrders, badgeLabel: "未処理" },
-    { href: "/admin/delivery", label: "納品", desc: "納品書の発行・印刷", icon: Ic.doc, color: "#10b981", badge: badges.undeliveredCount, badgeLabel: "未納品" },
+    { href: "/admin/orders", label: "注文", desc: "注文管理（→見積も発行可）", icon: Ic.order, color: "#3b82f6", badge: badges.pendingOrders, badgeLabel: "未処理" },
+    { href: "/admin/purchase-orders", label: "発注", desc: "発注書管理・自動提案", icon: Ic.truck, color: "#0891b2" },
+    { href: "/admin/receiving", label: "仕入納品", desc: "仕入先からの納品PDF/手入力", icon: Ic.purchase, color: "#7c3aed" },
+    { href: "/admin/shipping", label: "医院納品", desc: "出荷準備→医院に納品書発行", icon: Ic.doc, color: "#10b981", badge: badges.undeliveredCount, badgeLabel: "未納品" },
     { href: "/admin/invoices", label: "請求", desc: "請求書発行・入金", icon: Ic.sales, color: "#dc2626", badge: badges.unbilled || badges.unpaidInvoices, badgeLabel: badges.unbilled > 0 ? "未請求" : "未収" },
     { href: "/admin/sales", label: "売上", desc: "月次・医院・商品別分析", icon: Ic.sales, color: "#059669" },
     { href: "/admin/inventory", label: "在庫", desc: "在庫数・最低在庫", icon: Ic.product, color: "#d97706", badge: badges.lowStock, badgeLabel: "在庫不足" },
-    { href: "/admin/clinics", label: "得意先", desc: "医院マスタ", icon: Ic.clinic, color: "#0d9488" },
-    { href: "/admin/suppliers", label: "仕入先", desc: "仕入先マスタ", icon: Ic.truck, color: "#475569" },
-    { href: "/admin/palladium", label: "パラ", desc: "パラジウム価格管理", icon: Ic.product, color: "#a855f7" },
+    { href: "/admin/masters", label: "マスター", desc: "得意先・仕入先・商品・設定", icon: Ic.dash, color: "#475569" },
   ]
 
   return (
@@ -64,7 +62,7 @@ export default function AdminHomePage() {
       </div>
 
       {/* 大きなボタングリッド (mobile: 2col×5row / tablet: 3col / desktop: 5col×2row) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 max-w-6xl mx-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 max-w-6xl mx-auto">
         {buttons.map((b) => (
           <BigButton key={b.href} {...b} loading={loading} />
         ))}
@@ -75,14 +73,18 @@ export default function AdminHomePage() {
         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 text-center">QUICK ACCESS</p>
         <div className="flex flex-wrap justify-center gap-2 text-xs">
           {[
-            { href: "/admin/dashboard", label: "📊 ダッシュボード", featured: true },
-            { href: "/admin/quotes", label: "見積書" },
             { href: "/admin/invoices/bulk", label: "一括請求" },
-            { href: "/admin/products", label: "商品マスタ" },
+            { href: "/admin/receivables", label: "売掛金台帳" },
+            { href: "/admin/purchase-order", label: "推奨発注リスト（旧）" },
+            { href: "/admin/stocktakes", label: "棚卸" },
+            { href: "/admin/stock-movements", label: "在庫履歴" },
+            { href: "/admin/inventory-valuation", label: "在庫評価" },
+            { href: "/admin/bank-import", label: "📥 銀行CSV消込" },
             { href: "/admin/delivery-search", label: "納品書検索" },
-            { href: "/admin/delivered", label: "納品済み一覧" },
-            { href: "/admin/barcodes", label: "バーコード" },
-          ].map((l) => (
+            { href: "/admin/orders?status=delivered", label: "納品済み一覧" },
+            { href: "/admin/deliveries", label: "📄 納品書一覧" },
+            { href: "/admin/simulation", label: "📊 シミュレーション" },
+          ].map((l: { href: string; label: string; featured?: boolean }) => (
             <Link key={l.href} href={l.href}
               className={"px-3 py-1.5 rounded-full border " + (l.featured ? "bg-gray-900 text-white border-gray-900 hover:bg-gray-700" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900")}>
               {l.label}

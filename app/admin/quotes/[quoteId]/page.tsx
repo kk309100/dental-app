@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react"
 import { use } from "react"
 import { supabase } from "@/lib/supabase"
-import { COMPANY } from "@/lib/company"
-import { fmtYen, fmtDate, getClinicPrefix, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
+import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
+import { fmtYen, fmtDate, getClinicPrefix, getCorporateLabel, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
 import { QUOTE_STATUSES, type QuoteStatus } from "@/lib/quote"
 import Seal from "@/app/components/Seal"
 import Link from "next/link"
@@ -31,6 +31,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
   const [clinic, setClinic] = useState<Clinic | null>(null)
   const [items, setItems] = useState<QuoteItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [company, setCompany] = useState<Company>(COMPANY_DEFAULT)
+  useEffect(() => { getCompany().then(setCompany) }, [])
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
 
@@ -55,6 +57,107 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
     const { error: e } = await supabase.from("quotes").update({ status: newStatus }).eq("id", quote.id)
     if (e) { alert("更新失敗: " + e.message); return }
     fetchData()
+  }
+
+  // 見積を実行: 在庫ある商品 → 注文化（出荷準備可能） / 不足品 → 発注プールへ自動振り分け
+  async function executeQuote() {
+    if (!quote || !clinic) return
+    if (quote.status === "converted") { alert("既に売上化済みです"); return }
+    if (items.length === 0) { alert("明細がありません"); return }
+
+    if (!confirm(`「${quote.quote_number}」を実行しますか？\n\n  ・在庫ある商品 → 注文として作成（出荷準備可能）\n  ・在庫不足 → 発注プールに追加（後で発注確定）\n\n見積書のステータスは「売上化済」になります。`)) return
+
+    setBusy(true)
+    try {
+      // 1. 在庫確認
+      const productIds = items.map(it => it.product_id).filter(Boolean) as string[]
+      const { data: products } = await supabase.from("products").select("id,stock").in("id", productIds)
+      const stockMap = new Map((products || []).map((p: any) => [p.id, Number(p.stock || 0)]))
+
+      // 2. 注文作成 (status="準備中": 在庫ある分は出荷準備可能、不足分は発注後に出荷)
+      const totalPrice = items.reduce((s, it) => s + Number(it.price) * Number(it.quantity), 0)
+      const { data: ord, error: oe } = await supabase.from("orders").insert({
+        clinic_id: quote.clinic_id,
+        status: "準備中",
+        total_price: totalPrice,
+        delivery_number: `Q-${quote.quote_number}`,
+        source: "admin",
+        note: `見積 ${quote.quote_number} から実行`,
+      }).select().single()
+      if (oe || !ord) throw new Error("注文作成失敗: " + oe?.message)
+
+      // 3. 注文明細
+      const itemRows = items.map(it => ({
+        order_id: ord.id,
+        product_id: it.product_id,
+        product_name: it.product_name,
+        quantity: it.quantity,
+        price: it.price,
+      }))
+      const { error: ie } = await supabase.from("order_items").insert(itemRows)
+      if (ie) throw new Error("明細作成失敗: " + ie.message)
+
+      // 4. 在庫充足判定
+      let inStockCount = 0
+      let shortCount = 0
+      for (const it of items) {
+        if (!it.product_id) { shortCount++; continue }
+        const stock = stockMap.get(it.product_id) || 0
+        if (stock >= Number(it.quantity)) inStockCount++
+        else shortCount++
+      }
+
+      // 5. 不足分を発注プールへ
+      let poolResultText = ""
+      if (shortCount > 0) {
+        const { poolFromOrders } = await import("@/lib/po-pool")
+        const poolResult = await poolFromOrders([ord.id])
+        if (poolResult.pos.length > 0) {
+          poolResultText = "\n\n📦 発注プールに追加:"
+          for (const p of poolResult.pos) {
+            poolResultText += `\n  ${p.supplier_name}: ${p.added_items}品`
+          }
+        }
+        if (poolResult.skippedNoSupplier > 0) {
+          poolResultText += `\n  (仕入先未設定 ${poolResult.skippedNoSupplier}品はスキップ)`
+        }
+      }
+
+      // 6. 見積書を「売上化済」に
+      await supabase.from("quotes").update({ status: "converted" }).eq("id", quote.id)
+
+      // 7. 結果表示 + 適切な画面に誘導
+      const msg =
+        `✅ 見積「${quote.quote_number}」を実行しました\n\n` +
+        `📝 注文: ${ord.delivery_number} (¥${totalPrice.toLocaleString()})\n` +
+        `🟢 在庫あり: ${inStockCount}品 → 出荷準備可能\n` +
+        `🔴 在庫不足: ${shortCount}品` +
+        poolResultText
+
+      if (inStockCount > 0 && shortCount > 0) {
+        // 両方ある → 出荷準備画面を優先
+        if (confirm(msg + "\n\n出荷準備画面に移動しますか？")) {
+          window.location.href = `/admin/shipping?orders=${ord.id}`
+        }
+      } else if (inStockCount > 0) {
+        // 全部在庫あり → 出荷準備
+        if (confirm(msg + "\n\n出荷準備画面に移動しますか？")) {
+          window.location.href = `/admin/shipping?orders=${ord.id}`
+        }
+      } else if (shortCount > 0) {
+        // 全部不足 → 発注プール画面
+        if (confirm(msg + "\n\n発注プール画面に移動しますか？")) {
+          window.location.href = "/admin/purchase-orders/pool"
+        }
+      } else {
+        alert(msg)
+      }
+      fetchData()
+    } catch (e) {
+      alert((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   // 売上化: 見積から請求書 + 仮想注文を作成
@@ -127,6 +230,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
 
   const status = QUOTE_STATUSES[quote.status]
   const clinicPrefix = clinic ? getClinicPrefix(clinic.name, clinic.corporate_name, clinic.clinic_type) : ""
+  const corporateLabel = clinic ? getCorporateLabel(clinic.corporate_name, clinic.name, clinic.clinic_type) : ""
 
   return (
     <>
@@ -136,14 +240,17 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
         <span style={{ marginRight: 8, padding: "4px 12px", borderRadius: 99, background: status.color + "22", color: status.color, fontSize: 12, fontWeight: 700 }}>{status.label}</span>
         <button onClick={doPrint} style={btnDark}>🖨 印刷</button>
         {quote.status === "draft" && <button onClick={() => updateStatus("sent")} style={btnGray}>送付済にする</button>}
-        {(quote.status === "draft" || quote.status === "sent") && (
+        {(quote.status === "draft" || quote.status === "sent" || quote.status === "accepted") && quote.status !== "converted" && (
           <>
-            <button onClick={() => updateStatus("accepted")} style={btnGreen}>承認</button>
-            <button onClick={convertToInvoice} disabled={busy} style={btnPurple}>{busy ? "処理中…" : "✓ 売上化（請求書化）"}</button>
+            {quote.status !== "accepted" && <button onClick={() => updateStatus("accepted")} style={btnGreen}>承認</button>}
+            {/* メイン操作: 在庫振り分け実行 */}
+            <button onClick={executeQuote} disabled={busy} style={{ ...btnDark, background: "#059669" }}>
+              {busy ? "処理中…" : "💼 見積を実行（在庫品→納品 / 不足品→発注）"}
+            </button>
+            <button onClick={convertToInvoice} disabled={busy} style={btnPurple}>{busy ? "処理中…" : "✓ 売上化（請求書のみ）"}</button>
             <button onClick={() => updateStatus("rejected")} style={btnRed}>拒否</button>
           </>
         )}
-        {quote.status === "accepted" && <button onClick={convertToInvoice} disabled={busy} style={btnPurple}>{busy ? "処理中…" : "✓ 売上化"}</button>}
         {quote.invoice_id && <Link href={`/admin/invoices/${quote.invoice_id}`}><button style={btnGray}>請求書を見る →</button></Link>}
       </div>
 
@@ -157,7 +264,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
           <div style={{ flex: 1 }}>
             {clinic ? (
               <>
-                {clinic.corporate_name && <p style={{ margin: "0 0 4px", fontSize: 13 }}>{clinic.corporate_name}</p>}
+                {corporateLabel && <p style={{ margin: "0 0 4px", fontSize: 13 }}>{corporateLabel}</p>}
                 <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
                   {clinicPrefix}{clinic.name}　御中
                 </p>
@@ -165,10 +272,10 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
             ) : <p style={{ color: "#999" }}>(医院情報なし)</p>}
           </div>
           <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, position: "relative", paddingRight: 70 }}>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{COMPANY.name}</p>
-            <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
-            <p style={{ margin: 0 }}>{COMPANY.address}</p>
-            <p style={{ margin: 0 }}>TEL {COMPANY.phone}</p>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{company.name}</p>
+            <p style={{ margin: 0 }}>〒{company.postalCode}</p>
+            <p style={{ margin: 0 }}>{company.address}</p>
+            <p style={{ margin: 0 }}>TEL {company.phone}</p>
             {/* 印影 */}
             <div style={{ position: "absolute", top: 0, right: 0 }}>
               <Seal size={64} />

@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
+import { parseCSV } from "@/lib/csv"
 
 // ── 型 ─────────────────────────────────────────────────────────────────
 type Clinic = {
@@ -16,6 +17,7 @@ type Clinic = {
   sales_rep?: string | null
   closing_day?: string | null
   clinic_type?: string | null
+  payment_method?: string | null
   created_at?: string
 }
 
@@ -29,6 +31,7 @@ type Form = {
   sales_rep: string
   closing_day: string
   clinic_type: string
+  payment_method: string
 }
 
 const empty: Form = {
@@ -41,6 +44,7 @@ const empty: Form = {
   sales_rep: "",
   closing_day: "月末",
   clinic_type: "",
+  payment_method: "振込",
 }
 
 const CLOSING_DAYS = ["月末", "20日", "15日", "10日", "5日", "その他"]
@@ -61,6 +65,9 @@ export default function AdminClinicsPage() {
   const [form, setForm] = useState<Form>(empty)
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState("")
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState("")
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchData() }, [])
 
@@ -85,6 +92,18 @@ export default function AdminClinicsPage() {
     })
   }, [clinics, search])
 
+  // 重複検出: 名前 (NFKC正規化) で同じものが2件以上
+  const duplicates = useMemo(() => {
+    const m = new Map<string, Clinic[]>()
+    clinics.forEach((c) => {
+      const k = norm(c.name)
+      if (!k) return
+      if (!m.has(k)) m.set(k, [])
+      m.get(k)!.push(c)
+    })
+    return Array.from(m.entries()).filter(([, arr]) => arr.length >= 2)
+  }, [clinics])
+
   function openAdd() {
     setForm(empty)
     setEditId(null)
@@ -103,6 +122,7 @@ export default function AdminClinicsPage() {
       sales_rep: c.sales_rep || "",
       closing_day: c.closing_day || "月末",
       clinic_type: c.clinic_type || "",
+      payment_method: c.payment_method || "振込",
     })
     setEditId(c.id)
     setErrMsg("")
@@ -143,6 +163,62 @@ export default function AdminClinicsPage() {
     fetchData()
   }
 
+  async function importCSV(file: File) {
+    setImporting(true)
+    setImportMsg("")
+    try {
+      const text = await file.text()
+      const rows = parseCSV(text)
+      if (rows.length === 0) { setImportMsg("CSVが空です"); setImporting(false); return }
+
+      // ヘッダ名を柔軟にマッチ（日本語/英語）
+      const pickKey = (r: Record<string, string>, ...keys: string[]) => {
+        for (const k of keys) if (r[k] !== undefined && r[k] !== "") return r[k]
+        return ""
+      }
+
+      const existingByName = new Map(clinics.map((c) => [norm(c.name), c]))
+      let created = 0, updated = 0, skipped = 0
+      const errors: string[] = []
+
+      for (const r of rows) {
+        const name = pickKey(r, "医院名", "name").trim()
+        if (!name) { skipped++; continue }
+        const payload: Record<string, string | null> = {
+          name,
+          corporate_name: pickKey(r, "法人名", "corporate_name") || null,
+          contact: pickKey(r, "先方担当", "contact") || null,
+          phone: pickKey(r, "電話", "電話番号", "phone") || null,
+          email: pickKey(r, "メール", "メールアドレス", "email") || null,
+          sales_rep: pickKey(r, "自社担当", "営業担当", "sales_rep") || null,
+          closing_day: pickKey(r, "締日", "closing_day") || "月末",
+          adress: pickKey(r, "住所", "address", "adress") || null,
+          clinic_type: pickKey(r, "種別", "clinic_type") || null,
+        }
+        const existing = existingByName.get(norm(name))
+        if (existing) {
+          const { error } = await supabase.from("clinics").update(payload).eq("id", existing.id)
+          if (error) { errors.push(`${name}: ${error.message}`); continue }
+          updated++
+        } else {
+          const { error } = await supabase.from("clinics").insert(payload)
+          if (error) { errors.push(`${name}: ${error.message}`); continue }
+          created++
+        }
+      }
+
+      let msg = `✅ 取込完了: 新規${created}件 / 更新${updated}件 / スキップ${skipped}件`
+      if (errors.length) msg += `\n⚠ エラー${errors.length}件: ${errors.slice(0, 3).join(" / ")}`
+      setImportMsg(msg)
+      await fetchData()
+    } catch (e) {
+      setImportMsg(`取込失敗: ${(e as Error).message}`)
+    } finally {
+      setImporting(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
+
   function downloadCSV() {
     const rows: string[][] = [
       ["医院名", "法人名", "先方担当", "電話", "メール", "自社担当", "締日", "住所", "種別"],
@@ -166,61 +242,106 @@ export default function AdminClinicsPage() {
     a.click()
   }
 
-  if (loading) return <main style={page}><p>読み込み中…</p></main>
+  if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   return (
-    <main style={page}>
-      <Link href="/admin"><button style={back}>← 戻る</button></Link>
-
-      <div style={header}>
-        <div>
-          <h1 style={{ fontSize: 26, margin: 0 }}>医院管理</h1>
-          <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{clinics.length}件</p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={downloadCSV} style={btnGray}>CSV</button>
-          <button onClick={openAdd} style={btnDark}>＋ 医院を追加</button>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-lg font-bold text-gray-900">
+          医院管理
+          <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{clinics.length}件</span>
+        </h1>
+        <div className="flex items-center gap-2">
+          <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f) }} />
+          <button onClick={() => fileRef.current?.click()} disabled={importing}
+            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
+            {importing ? "取込中…" : "📥 CSV取込"}
+          </button>
+          <button onClick={downloadCSV} className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">📤 CSV出力</button>
+          <button onClick={openAdd} className="text-xs px-3 py-1.5 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700">＋ 医院を追加</button>
         </div>
       </div>
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="医院名・法人名・担当で検索（半角/全角OK）"
-        style={searchInput}
-      />
-
-      {errMsg && (
-        <div style={errBox}>{errMsg}</div>
+      {importMsg && (
+        <div className="text-xs px-3 py-2 rounded whitespace-pre-line"
+          style={{ background: importMsg.startsWith("✅") ? "#ecfdf5" : "#fff5f5", color: importMsg.startsWith("✅") ? "#065f46" : "#dc2626", border: "1px solid " + (importMsg.startsWith("✅") ? "#bbf7d0" : "#fcc") }}>
+          {importMsg}
+        </div>
       )}
 
-      <div style={tableWrap}>
-        {filtered.length === 0 ? (
-          <p style={{ padding: 32, textAlign: "center", color: "#999" }}>
-            {search ? "該当なし" : "医院がまだ登録されていません"}
-          </p>
-        ) : (
-          filtered.map((c) => (
-            <div key={c.id} style={card}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={cardName}>{c.name}</p>
-                {c.corporate_name && <p style={cardSub}>{c.corporate_name}</p>}
-                <div style={cardMeta}>
-                  {c.contact && <span>👤 {c.contact}</span>}
-                  {c.phone && <span>📞 {c.phone}</span>}
-                  {c.email && <span>✉ {c.email}</span>}
-                  {c.sales_rep && <span style={badge}>担当: {c.sales_rep}</span>}
-                  <span style={badgeGray}>{c.closing_day || "月末"}</span>
-                </div>
-                {c.adress && <p style={cardAddr}>📍 {c.adress}</p>}
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => openEdit(c)} style={btnEdit}>編集</button>
-                <button onClick={() => del(c.id, c.name)} style={btnDel}>削除</button>
-              </div>
-            </div>
-          ))
-        )}
+      {duplicates.length > 0 && (
+        <div className="text-xs px-3 py-2 rounded bg-amber-50 text-amber-700" style={{ border: "1px solid #fde68a" }}>
+          ⚠ 同名の医院が {duplicates.length} 組あります:
+          {duplicates.slice(0, 5).map(([name, arr]) => (
+            <span key={name} style={{ marginLeft: 8 }}>「{arr[0].name}」×{arr.length}</span>
+          ))}
+          {duplicates.length > 5 && <span> 他</span>}
+        </div>
+      )}
+
+      <div className="bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="医院名・法人名・担当で検索（半角/全角OK）"
+          className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
+        />
+      </div>
+
+      {errMsg && <div className="text-xs px-3 py-2 rounded bg-red-50 text-red-700" style={{ border: "1px solid #fcc" }}>{errMsg}</div>}
+
+      {/* 高密度テーブル */}
+      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 200px)" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <thead className="sticky top-0 bg-gray-100">
+            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-left whitespace-nowrap">医院名</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">法人名</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-24">先方担当</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-24">営業担当</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">電話</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-20">締日</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-24">決済</th>
+              <th className="px-2 py-1.5 text-left">住所</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-24">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+                {search ? "該当なし" : "医院がまだ登録されていません"}
+              </td></tr>
+            ) : filtered.map((c, i) => (
+              <tr key={c.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                <td className="px-2 py-1.5 font-bold text-gray-900 whitespace-nowrap">{c.name}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{c.corporate_name || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{c.contact || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{c.sales_rep || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap font-mono">{c.phone || "—"}</td>
+                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600 whitespace-nowrap">{c.closing_day || "月末"}</td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                  {c.payment_method ? (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                      style={{
+                        background: c.payment_method === "カード" ? "#fee2e2" : c.payment_method === "現金" ? "#dcfce7" : "#dbeafe",
+                        color: c.payment_method === "カード" ? "#b91c1c" : c.payment_method === "現金" ? "#15803d" : "#1e40af",
+                      }}>
+                      {c.payment_method}
+                    </span>
+                  ) : <span className="text-[10px] text-gray-400">—</span>}
+                </td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-500" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.adress || ""}>
+                  {c.adress || "—"}
+                </td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                  <button onClick={() => openEdit(c)} className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
+                  <button onClick={() => del(c.id, c.name)} className="text-[10px] px-1.5 py-0.5 border border-red-200 bg-red-50 rounded hover:bg-red-100 text-red-700">削除</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* フォーム モーダル */}
@@ -263,6 +384,21 @@ export default function AdminClinicsPage() {
                 </select>
               </div>
 
+              <div style={fieldWrap}>
+                <label style={fieldLabel}>決済方法（請求書にスタンプ表示）</label>
+                <select
+                  value={form.payment_method}
+                  onChange={(e) => setForm((f) => ({ ...f, payment_method: e.target.value }))}
+                  style={fieldInput}
+                >
+                  <option value="振込">振込</option>
+                  <option value="カード">カード（請求書に「カード決済」スタンプ）</option>
+                  <option value="現金">現金</option>
+                  <option value="口座引落">口座引落</option>
+                  <option value="その他">その他</option>
+                </select>
+              </div>
+
               <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                 <button onClick={save} style={btnDark} disabled={saving}>{saving ? "保存中…" : "保存"}</button>
                 <button onClick={() => setShowForm(false)} style={btnGray} disabled={saving}>キャンセル</button>
@@ -271,7 +407,7 @@ export default function AdminClinicsPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   )
 }
 

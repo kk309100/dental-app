@@ -12,7 +12,8 @@ type Order = {
   total_price: number; delivery_number: string | null; invoice_id: string | null
 }
 
-const TARGET_STATUSES = ["納品済み"]
+// 「納品済」「納品済み」両方を一括請求書発行対象として扱う（DB の表記ゆれを吸収）
+const TARGET_STATUSES = ["納品済み", "納品済"]
 const CLOSING_DAYS = ["月末", "20日", "15日", "10日", "5日", "その他"]
 
 type Row = {
@@ -42,8 +43,8 @@ export default function BulkInvoicePage() {
   async function fetchData() {
     setLoading(true)
     const [c, o] = await Promise.all([
-      supabase.from("clinics").select("id,name,corporate_name,closing_day").order("name"),
-      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,invoice_id"),
+      supabase.from("clinics").select("id,name,corporate_name,closing_day").order("name").limit(50000),
+      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,invoice_id").limit(50000),
     ])
     setClinics(c.data || [])
     setOrders((o.data as Order[]) || [])
@@ -64,6 +65,7 @@ export default function BulkInvoicePage() {
             const d = (o.created_at || "").slice(0, 10)
             return d >= period.from && d <= period.to
           })
+        // 税計算規約: orders.total_price は税抜（invoices/create/page.tsx と同じ）
         const subtotal = ords.reduce((s, o) => s + (o.total_price || 0), 0)
         const tax = calcTax(subtotal)
         return { clinic: c, orders: ords, subtotal, tax, total: subtotal + tax, selected: selectedClinics.has(c.id) }

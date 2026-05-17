@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
+import { parseCSV } from "@/lib/csv"
 
 type Supplier = {
   id: string
@@ -37,12 +38,15 @@ export default function AdminSuppliersPage() {
   const [form, setForm] = useState<Form>(empty)
   const [saving, setSaving] = useState(false)
   const [errMsg, setErrMsg] = useState("")
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState("")
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setLoading(true)
-    const { data, error } = await supabase.from("suppliers").select("*").order("name", { ascending: true })
+    const { data, error } = await supabase.from("suppliers").select("*").order("name", { ascending: true }).limit(50000)
     if (error) setErrMsg(`読込エラー: ${error.message}`)
     setSuppliers(data || [])
     setLoading(false)
@@ -56,6 +60,63 @@ export default function AdminSuppliersPage() {
       return target.includes(k)
     })
   }, [suppliers, search])
+
+  const duplicates = useMemo(() => {
+    const m = new Map<string, number>()
+    suppliers.forEach((s) => {
+      const k = norm(s.name)
+      if (k) m.set(k, (m.get(k) || 0) + 1)
+    })
+    return Array.from(m.entries()).filter(([, n]) => n >= 2)
+  }, [suppliers])
+
+  async function importCSV(file: File) {
+    setImporting(true); setImportMsg("")
+    try {
+      const text = await file.text()
+      const rows = parseCSV(text)
+      if (rows.length === 0) { setImportMsg("CSVが空です"); setImporting(false); return }
+      const pickKey = (r: Record<string, string>, ...keys: string[]) => {
+        for (const k of keys) if (r[k] !== undefined && r[k] !== "") return r[k]
+        return ""
+      }
+      const existingByName = new Map(suppliers.map(s => [norm(s.name), s]))
+      let created = 0, updated = 0, skipped = 0
+      const errors: string[] = []
+      for (const r of rows) {
+        const name = pickKey(r, "仕入先名", "name").trim()
+        if (!name) { skipped++; continue }
+        const payload: Record<string, unknown> = {
+          name,
+          maker_name: pickKey(r, "メーカー名", "メーカー", "maker_name") || null,
+          contact: pickKey(r, "担当者", "contact") || null,
+          phone: pickKey(r, "電話", "電話番号", "phone") || null,
+          email: pickKey(r, "メール", "email") || null,
+          address: pickKey(r, "住所", "address") || null,
+          notes: pickKey(r, "備考", "notes") || null,
+        }
+        const existing = existingByName.get(norm(name))
+        if (existing) {
+          const { error } = await supabase.from("suppliers").update(payload).eq("id", existing.id)
+          if (error) { errors.push(`${name}: ${error.message}`); continue }
+          updated++
+        } else {
+          const { error } = await supabase.from("suppliers").insert(payload)
+          if (error) { errors.push(`${name}: ${error.message}`); continue }
+          created++
+        }
+      }
+      let msg = `✅ 取込完了: 新規${created}件 / 更新${updated}件 / スキップ${skipped}件`
+      if (errors.length) msg += `\n⚠ エラー${errors.length}件: ${errors.slice(0, 3).join(" / ")}`
+      setImportMsg(msg)
+      await fetchData()
+    } catch (e) {
+      setImportMsg(`取込失敗: ${(e as Error).message}`)
+    } finally {
+      setImporting(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
 
   function openAdd() { setForm(empty); setEditId(null); setErrMsg(""); setShowForm(true) }
   function openEdit(s: Supplier) {
@@ -109,58 +170,92 @@ export default function AdminSuppliersPage() {
     a.click()
   }
 
-  if (loading) return <main style={page}><p>読み込み中…</p></main>
+  if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   return (
-    <main style={page}>
-      <Link href="/admin"><button style={back}>← 戻る</button></Link>
-
-      <div style={header}>
-        <div>
-          <h1 style={{ fontSize: 26, margin: 0 }}>仕入先管理</h1>
-          <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{suppliers.length}件</p>
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={downloadCSV} style={btnGray}>CSV</button>
-          <button onClick={openAdd} style={btnDark}>＋ 仕入先を追加</button>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-lg font-bold text-gray-900">
+          仕入先管理
+          <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{suppliers.length}件</span>
+        </h1>
+        <div className="flex items-center gap-2">
+          <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f) }} />
+          <button onClick={() => fileRef.current?.click()} disabled={importing}
+            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
+            {importing ? "取込中…" : "📥 CSV取込"}
+          </button>
+          <button onClick={downloadCSV} className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">📤 CSV出力</button>
+          <button onClick={openAdd} className="text-xs px-3 py-1.5 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700">＋ 仕入先を追加</button>
         </div>
       </div>
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="仕入先名・メーカー・担当で検索（半角/全角OK）"
-        style={searchInput}
-      />
+      {importMsg && (
+        <div className="text-xs px-3 py-2 rounded whitespace-pre-line"
+          style={{ background: importMsg.startsWith("✅") ? "#ecfdf5" : "#fff5f5", color: importMsg.startsWith("✅") ? "#065f46" : "#dc2626", border: "1px solid " + (importMsg.startsWith("✅") ? "#bbf7d0" : "#fcc") }}>
+          {importMsg}
+        </div>
+      )}
 
-      {errMsg && <div style={errBox}>{errMsg}</div>}
+      {duplicates.length > 0 && (
+        <div className="text-xs px-3 py-2 rounded bg-amber-50 text-amber-700" style={{ border: "1px solid #fde68a" }}>
+          ⚠ 同名の仕入先が {duplicates.length} 組あります
+        </div>
+      )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {filtered.length === 0 ? (
-          <p style={{ padding: 32, textAlign: "center", color: "#999" }}>
-            {search ? "該当なし" : "仕入先がまだ登録されていません"}
-          </p>
-        ) : (
-          filtered.map((s) => (
-            <div key={s.id} style={card}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={cardName}>{s.name}</p>
-                {s.maker_name && <p style={cardSub}>メーカー: {s.maker_name}</p>}
-                <div style={cardMeta}>
-                  {s.contact && <span>👤 {s.contact}</span>}
-                  {s.phone && <span>📞 {s.phone}</span>}
-                  {s.email && <span>✉ {s.email}</span>}
-                </div>
-                {s.address && <p style={cardAddr}>📍 {s.address}</p>}
-                {s.notes && <p style={cardNotes}>📝 {s.notes}</p>}
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={() => openEdit(s)} style={btnEdit}>編集</button>
-                <button onClick={() => del(s.id, s.name)} style={btnDel}>削除</button>
-              </div>
-            </div>
-          ))
-        )}
+      <div className="bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="仕入先名・メーカー・担当で検索（半角/全角OK）"
+          className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
+        />
+      </div>
+
+      {errMsg && <div className="text-xs px-3 py-2 rounded bg-red-50 text-red-700" style={{ border: "1px solid #fcc" }}>{errMsg}</div>}
+
+      {/* 高密度テーブル */}
+      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 200px)" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <thead className="sticky top-0 bg-gray-100">
+            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-left whitespace-nowrap">仕入先名</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">メーカー</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-28">担当者</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">電話</th>
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-48">メール</th>
+              <th className="px-2 py-1.5 text-left">住所</th>
+              <th className="px-2 py-1.5 text-left w-32">備考</th>
+              <th className="px-2 py-1.5 text-center whitespace-nowrap w-24">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">
+                {search ? "該当なし" : "仕入先がまだ登録されていません"}
+              </td></tr>
+            ) : filtered.map((s, i) => (
+              <tr key={s.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                <td className="px-2 py-1.5 font-bold text-gray-900 whitespace-nowrap">{s.name}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{s.maker_name || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{s.contact || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap font-mono">{s.phone || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap font-mono">{s.email || "—"}</td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-500" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.address || ""}>
+                  {s.address || "—"}
+                </td>
+                <td className="px-2 py-1.5 text-[11px] text-gray-500" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.notes || ""}>
+                  {s.notes || "—"}
+                </td>
+                <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                  <button onClick={() => openEdit(s)} className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
+                  <button onClick={() => del(s.id, s.name)} className="text-[10px] px-1.5 py-0.5 border border-red-200 bg-red-50 rounded hover:bg-red-100 text-red-700">削除</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {showForm && (
@@ -194,7 +289,7 @@ export default function AdminSuppliersPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   )
 }
 
