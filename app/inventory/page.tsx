@@ -26,6 +26,7 @@ type Item = {
   min_stock: number | null
   category: string | null
   shelf_no: string | null
+  location: string | null
 }
 
 type Log = {
@@ -48,7 +49,6 @@ type ActionModal = {
 export default function ClinicInventoryPage() {
   const router = useRouter()
 
-  // ── 基本状態 ──
   const [tab, setTab]             = useState<"record" | "history">("record")
   const [items, setItems]         = useState<Item[]>([])
   const [logs, setLogs]           = useState<Log[]>([])
@@ -59,21 +59,16 @@ export default function ClinicInventoryPage() {
   const [clinicId, setClinicId]   = useState("")
   const [staffName, setStaffName] = useState("")
 
-  // ④ カテゴリフィルター
-  const [categoryFilter, setCategoryFilter] = useState("すべて")
+  const [locationFilter, setLocationFilter] = useState("すべて")
 
-  // ⑤ トースト・アニメーション
   const [toast, setToast]         = useState<string | null>(null)
   const [flashId, setFlashId]     = useState<string | null>(null)
 
-  // ① ② カスタム数量 / スキャン後モーダル（共通）
   const [actionModal, setActionModal] = useState<ActionModal | null>(null)
 
-  // ③ 在庫数直接編集
   const [editStockId, setEditStockId]     = useState<string | null>(null)
   const [editStockValue, setEditStockValue] = useState("")
 
-  // ⑦ 履歴フィルター
   const [historyFilter, setHistoryFilter] = useState<"today" | "week" | "all">("today")
   const [staffFilter, setStaffFilter]     = useState("すべて")
 
@@ -82,7 +77,6 @@ export default function ClinicInventoryPage() {
 
   useEffect(() => { init() }, [])
 
-  // ── 初期化 ──
   async function init() {
     const { data: userData } = await supabase.auth.getUser()
     if (!userData.user) { router.push("/login"); return }
@@ -98,7 +92,7 @@ export default function ClinicInventoryPage() {
   async function fetchAll(cid?: string) {
     const [{ data: itemsData }, { data: logsData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
-        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no")
+        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location")
         .order("product_name"),
       supabase.from("inventory_logs")
         .select("*").order("occurred_at", { ascending: false }).limit(500),
@@ -107,14 +101,12 @@ export default function ClinicInventoryPage() {
     setLogs((logsData as Log[]) || [])
   }
 
-  // ⑤ トースト表示
   function showToast(msg: string) {
     setToast(msg)
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 2200)
   }
 
-  // ── 在庫更新（共通） ──
   async function updateStock(item: Item, delta: number, type?: string) {
     if (processingId) return
     const newQty = Math.max(0, item.stock_quantity + delta)
@@ -134,7 +126,6 @@ export default function ClinicInventoryPage() {
 
     setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, stock_quantity: newQty } : i))
 
-    // ⑤ フラッシュアニメーション
     setFlashId(item.id)
     setTimeout(() => setFlashId(null), 600)
 
@@ -144,7 +135,6 @@ export default function ClinicInventoryPage() {
     setProcessingId(null)
   }
 
-  // ① ② モーダルから確定
   async function confirmAction() {
     if (!actionModal) return
     const { item, type, qty } = actionModal
@@ -155,13 +145,11 @@ export default function ClinicInventoryPage() {
     showToast(type === "use" ? `✓ 使用 -${qty} 記録しました` : `✓ 補充 +${qty} 記録しました`)
   }
 
-  // クイック -1 / +1
   async function quickUpdate(item: Item, delta: number) {
     await updateStock(item, delta)
     showToast(delta < 0 ? `✓ 使用 -1 記録しました` : `✓ 補充 +1 記録しました`)
   }
 
-  // ③ 在庫数直接編集（棚卸調整）
   function startEditStock(item: Item) {
     setEditStockId(item.id)
     setEditStockValue(String(item.stock_quantity))
@@ -175,7 +163,6 @@ export default function ClinicInventoryPage() {
     showToast(`✓ 在庫を ${item.stock_quantity} → ${newQty} に修正しました`)
   }
 
-  // スキャン
   async function startScan() {
     setScanning(true)
     const scanner = new Html5Qrcode("inv-reader")
@@ -186,19 +173,18 @@ export default function ClinicInventoryPage() {
           setScanning(false)
           const found = items.find((i) => String(i.barcode || "") === code)
           if (!found) { alert("商品が見つかりません"); return }
-          // ② スキャン後モーダルを開く
           setActionModal({ item: found, type: "use", qty: 1 })
           itemRefs.current[found.id]?.scrollIntoView({ behavior: "smooth", block: "center" })
         }, () => {})
     } catch { setScanning(false) }
   }
 
-  // ── フィルター ──
   const norm = (v: any) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s+/g, "")
 
-  const categories = useMemo(() => {
-    const cats = items.map((i) => i.category).filter(Boolean) as string[]
-    return ["すべて", ...Array.from(new Set(cats)).sort()]
+  // 場所一覧
+  const locations = useMemo(() => {
+    const locs = items.map((i) => i.location).filter(Boolean) as string[]
+    return ["すべて", ...Array.from(new Set(locs)).sort()]
   }, [items])
 
   const filtered = useMemo(() => {
@@ -208,17 +194,31 @@ export default function ClinicInventoryPage() {
         norm(i.product_name).includes(k) ||
         norm(i.maker || "").includes(k) ||
         norm(i.barcode || "").includes(k) ||
-        norm(i.category || "").includes(k) ||
+        norm(i.location || "").includes(k) ||
         norm(i.shelf_no || "").includes(k)
-      const matchCat = categoryFilter === "すべて" || i.category === categoryFilter
-      return matchSearch && matchCat
+      const matchLoc = locationFilter === "すべて" || i.location === locationFilter
+      return matchSearch && matchLoc
     })
-  }, [items, search, categoryFilter])
+  }, [items, search, locationFilter])
 
   const needsReorder = useMemo(() =>
     filtered.filter((i) => i.min_stock !== null && i.stock_quantity <= i.min_stock), [filtered])
+
   const normalItems = useMemo(() =>
     filtered.filter((i) => !(i.min_stock !== null && i.stock_quantity <= i.min_stock)), [filtered])
+
+  // 場所別グループ（すべて表示時のみ）
+  const locationGroups = useMemo(() => {
+    if (locationFilter !== "すべて") return null
+    const order: string[] = []
+    const map: Record<string, Item[]> = {}
+    for (const item of normalItems) {
+      const key = item.location || "（場所未設定）"
+      if (!map[key]) { map[key] = []; order.push(key) }
+      map[key].push(item)
+    }
+    return order.map((loc) => ({ loc, items: map[loc] }))
+  }, [normalItems, locationFilter])
 
   const staffNames = useMemo(() => {
     const names = logs.map((l) => l.staff_name).filter(Boolean) as string[]
@@ -248,6 +248,21 @@ export default function ClinicInventoryPage() {
       ? fmtTime(str) : `${d.getMonth() + 1}/${d.getDate()} ${fmtTime(str)}`
   }
 
+  const itemCardProps = (item: Item) => ({
+    item,
+    onQuick: quickUpdate,
+    onOpenModal: (item: Item, type: "use" | "restock") => setActionModal({ item, type, qty: 1 }),
+    onEditStock: startEditStock,
+    editStockId,
+    editStockValue,
+    setEditStockValue,
+    onConfirmEdit: confirmEditStock,
+    onCancelEdit: () => setEditStockId(null),
+    processing: processingId === item.id,
+    flash: flashId === item.id,
+    setRef: (el: HTMLDivElement | null) => { itemRefs.current[item.id] = el },
+  })
+
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: C.sub }}>
       読み込み中…
@@ -263,7 +278,6 @@ export default function ClinicInventoryPage() {
         .cat-pills::-webkit-scrollbar { display: none; }
       `}</style>
 
-      {/* ⑤ トースト */}
       {toast && (
         <div style={{
           position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)",
@@ -304,16 +318,16 @@ export default function ClinicInventoryPage() {
             <input value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="🔍 商品名・バーコードで検索"
               style={{ width: "100%", padding: "9px 13px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 14, boxSizing: "border-box", outline: "none", color: C.text, marginBottom: 8 }} />
-            {/* ④ カテゴリフィルター */}
-            {categories.length > 2 && (
+            {/* 場所フィルター */}
+            {locations.length > 2 && (
               <div className="cat-pills" style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 2 }}>
-                {categories.map((cat) => (
-                  <button key={cat} onClick={() => setCategoryFilter(cat)} style={{
+                {locations.map((loc) => (
+                  <button key={loc} onClick={() => setLocationFilter(loc)} style={{
                     whiteSpace: "nowrap", padding: "5px 12px", borderRadius: 999, fontSize: 12,
-                    cursor: "pointer", border: "none", fontWeight: categoryFilter === cat ? "bold" : "normal",
-                    background: categoryFilter === cat ? C.blue : "#f3f4f6",
-                    color: categoryFilter === cat ? "#fff" : C.sub,
-                  }}>{cat}</button>
+                    cursor: "pointer", border: "none", fontWeight: locationFilter === loc ? "bold" : "normal",
+                    background: locationFilter === loc ? C.primary : "#f3f4f6",
+                    color: locationFilter === loc ? "#fff" : C.sub,
+                  }}>{loc === "すべて" ? "📍 すべての場所" : `📍 ${loc}`}</button>
                 ))}
               </div>
             )}
@@ -332,7 +346,6 @@ export default function ClinicInventoryPage() {
                 }}>{f === "today" ? "今日" : f === "week" ? "今週" : "すべて"}</button>
               ))}
             </div>
-            {/* ⑦ スタッフフィルター */}
             {staffNames.length > 2 && (
               <div className="cat-pills" style={{ display: "flex", overflowX: "auto", gap: 6 }}>
                 {staffNames.map((s) => (
@@ -354,6 +367,7 @@ export default function ClinicInventoryPage() {
       {/* ── 記録タブ ── */}
       {tab === "record" && (
         <div style={{ padding: "10px 10px 0" }}>
+          {/* 発注必要セクション */}
           {needsReorder.length > 0 && (
             <section style={{ marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
@@ -361,47 +375,44 @@ export default function ClinicInventoryPage() {
                   <span style={{ fontSize: 13, fontWeight: "bold", color: "#b91c1c" }}>発注必要</span>
                   <span style={{ background: C.red, color: "#fff", borderRadius: 999, padding: "1px 7px", fontSize: 11, fontWeight: "bold" }}>{needsReorder.length}</span>
                 </div>
-                {/* ⑥ 注文画面へ */}
                 <button onClick={() => router.push("/order")} style={{
                   padding: "5px 12px", borderRadius: 8, background: C.orange, color: "#fff",
                   border: "none", fontSize: 12, fontWeight: "bold", cursor: "pointer",
                 }}>注文画面へ →</button>
               </div>
-              {needsReorder.map((item) => (
-                <ItemCard key={item.id} item={item}
-                  onQuick={quickUpdate}
-                  onOpenModal={(item, type) => setActionModal({ item, type, qty: 1 })}
-                  onEditStock={startEditStock}
-                  editStockId={editStockId}
-                  editStockValue={editStockValue}
-                  setEditStockValue={setEditStockValue}
-                  onConfirmEdit={confirmEditStock}
-                  onCancelEdit={() => setEditStockId(null)}
-                  processing={processingId === item.id}
-                  flash={flashId === item.id}
-                  setRef={(el) => { itemRefs.current[item.id] = el }}
-                />
-              ))}
+              {needsReorder.map((item) => <ItemCard key={item.id} {...itemCardProps(item)} />)}
             </section>
           )}
-          {needsReorder.length > 0 && normalItems.length > 0 && (
-            <p style={{ fontSize: 12, color: C.sub, fontWeight: "bold", marginBottom: 6, paddingLeft: 2 }}>全商品</p>
+
+          {/* 場所別グループ表示（すべて選択時） */}
+          {locationFilter === "すべて" && locationGroups ? (
+            locationGroups.length === 0 ? null : (
+              locationGroups.map(({ loc, items: groupItems }) => (
+                <section key={loc} style={{ marginBottom: 16 }}>
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 6, marginBottom: 6,
+                    padding: "6px 10px", background: "#f0fdf4", borderRadius: 8,
+                    border: "1px solid #bbf7d0",
+                  }}>
+                    <span style={{ fontSize: 13 }}>📍</span>
+                    <span style={{ fontSize: 13, fontWeight: "bold", color: C.primary }}>
+                      {loc}
+                    </span>
+                    <span style={{ fontSize: 12, color: C.sub, marginLeft: "auto" }}>
+                      {groupItems.length}点
+                    </span>
+                  </div>
+                  {groupItems.map((item) => <ItemCard key={item.id} {...itemCardProps(item)} />)}
+                </section>
+              ))
+            )
+          ) : (
+            /* 場所指定フィルター時は単純リスト */
+            <>
+              {normalItems.map((item) => <ItemCard key={item.id} {...itemCardProps(item)} />)}
+            </>
           )}
-          {normalItems.map((item) => (
-            <ItemCard key={item.id} item={item}
-              onQuick={quickUpdate}
-              onOpenModal={(item, type) => setActionModal({ item, type, qty: 1 })}
-              onEditStock={startEditStock}
-              editStockId={editStockId}
-              editStockValue={editStockValue}
-              setEditStockValue={setEditStockValue}
-              onConfirmEdit={confirmEditStock}
-              onCancelEdit={() => setEditStockId(null)}
-              processing={processingId === item.id}
-              flash={flashId === item.id}
-              setRef={(el) => { itemRefs.current[item.id] = el }}
-            />
-          ))}
+
           {filtered.length === 0 && (
             <div style={{ textAlign: "center", color: C.sub, padding: "60px 0", fontSize: 14 }}>商品が見つかりません</div>
           )}
@@ -454,22 +465,24 @@ export default function ClinicInventoryPage() {
         </div>
       )}
 
-      {/* ① ② アクションモーダル */}
+      {/* アクションモーダル */}
       {actionModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
           onClick={(e) => { if (e.target === e.currentTarget) setActionModal(null) }}>
           <div style={{ background: C.card, borderRadius: "20px 20px 0 0", padding: "22px 20px 36px", width: "100%", maxWidth: 520, boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <h2 style={{ margin: 0, fontSize: 16, fontWeight: "bold", color: C.text }}>{actionModal.item.product_name}</h2>
               <button onClick={() => setActionModal(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.sub }}>✕</button>
             </div>
+            {actionModal.item.location && (
+              <p style={{ margin: "0 0 12px", fontSize: 12, color: C.sub }}>📍 {actionModal.item.location}</p>
+            )}
 
             <p style={{ fontSize: 13, color: C.sub, marginBottom: 14 }}>
               現在在庫：<strong style={{ fontSize: 20, color: C.text }}>{actionModal.item.stock_quantity}</strong>
               {actionModal.item.min_stock !== null && <span style={{ fontSize: 12, color: "#9ca3af" }}> / 最低 {actionModal.item.min_stock}</span>}
             </p>
 
-            {/* 使用 / 補充 切り替え */}
             <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
               <button onClick={() => setActionModal({ ...actionModal, type: "use" })} style={{
                 flex: 1, padding: "11px 0", borderRadius: 9, fontWeight: "bold", fontSize: 15, cursor: "pointer",
@@ -485,7 +498,6 @@ export default function ClinicInventoryPage() {
               }}>補充</button>
             </div>
 
-            {/* 数量入力 */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 20 }}>
               <button onClick={() => setActionModal({ ...actionModal, qty: Math.max(1, actionModal.qty - 1) })}
                 style={{ width: 44, height: 44, borderRadius: 12, border: `1.5px solid ${C.border}`, background: "#f9fafb", fontSize: 22, cursor: "pointer", color: C.text }}>−</button>
@@ -549,7 +561,11 @@ function ItemCard({ item, onQuick, onOpenModal, onEditStock, editStockId, editSt
 }) {
   const needsReorder = item.min_stock !== null && item.stock_quantity <= item.min_stock
   const isEditing = editStockId === item.id
-  const meta = [item.maker, item.category, item.shelf_no ? `📍 ${item.shelf_no}` : null, item.barcode ? `# ${item.barcode}` : null].filter(Boolean)
+  const meta = [
+    item.maker,
+    item.shelf_no ? `棚：${item.shelf_no}` : null,
+    item.barcode ? `# ${item.barcode}` : null,
+  ].filter(Boolean)
 
   return (
     <div ref={setRef} style={{
@@ -565,7 +581,6 @@ function ItemCard({ item, onQuick, onOpenModal, onEditStock, editStockId, editSt
           <span style={{ fontWeight: "bold", fontSize: 14, color: "#1a1a1a" }}>{item.product_name}</span>
         </div>
 
-        {/* ③ 在庫数（タップで編集） */}
         {isEditing ? (
           <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
             <input type="number" value={editStockValue} onChange={(e) => setEditStockValue(e.target.value)}
@@ -591,21 +606,17 @@ function ItemCard({ item, onQuick, onOpenModal, onEditStock, editStockId, editSt
         </div>
       )}
 
-      {/* ボタン行 */}
       <div style={{ display: "flex", gap: 6 }}>
-        {/* 使用 -1（クイック） */}
         <button className="inv-btn" onClick={() => onQuick(item, -1)}
           disabled={processing || item.stock_quantity <= 0}
           style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #2563eb`, background: "#fff", color: "#2563eb", fontWeight: "bold", fontSize: 13, cursor: processing || item.stock_quantity <= 0 ? "not-allowed" : "pointer", opacity: processing || item.stock_quantity <= 0 ? 0.4 : 1 }}>
           使用 -1
         </button>
-        {/* 補充 +1（クイック） */}
         <button className="inv-btn" onClick={() => onQuick(item, +1)}
           disabled={processing}
           style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #22a648`, background: "#fff", color: "#22a648", fontWeight: "bold", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
           補充 +1
         </button>
-        {/* ① カスタム数量 */}
         <button className="inv-btn" onClick={() => onOpenModal(item, "use")}
           disabled={processing}
           style={{ padding: "8px 10px", borderRadius: 8, border: `1.5px solid #e5e7eb`, background: "#fff", color: "#6b7280", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
