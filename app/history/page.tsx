@@ -208,7 +208,14 @@ export default function HistoryPage() {
                       <p style={{ margin: 0, fontWeight: "bold", fontSize: 15, color: "#111" }}>
                         {order.delivery_number || "番号なし"}
                       </p>
-                      <p style={{ margin: "3px 0 0", fontSize: 12, color: "#999" }}>{fmtDate(order.created_at)}</p>
+                      <p style={{ margin: "3px 0 0", fontSize: 12, color: "#999" }}>
+                        {fmtDate(order.created_at)}
+                        {order.orderer_name && (
+                          <span style={{ marginLeft: 8, color: "#555", fontWeight: "bold" }}>
+                            担当：{order.orderer_name}
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <span style={statusStyle(order.status)}>{order.status || "未設定"}</span>
                   </div>
