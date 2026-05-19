@@ -18,6 +18,7 @@ const ITEMS: MasterItem[] = [
   { href: "/admin/suppliers", label: "仕入先", desc: "仕入先マスタ・連絡先", icon: Ic.truck, color: "#475569", group: "取引先" },
   // 商品
   { href: "/admin/products", label: "商品", desc: "商品マスタ・原価・定価", icon: Ic.product, color: "#3b82f6", group: "商品" },
+  { href: "/admin/product-images", label: "商品画像", desc: "楽天APIで画像を一括取得", icon: Ic.product, color: "#f08c00", group: "商品" },
   { href: "/admin/palladium", label: "パラ価格", desc: "パラジウム価格管理", icon: Ic.product, color: "#a855f7", group: "商品" },
   { href: "/admin/barcodes", label: "バーコード", desc: "商品バーコード一覧", icon: Ic.csv, color: "#f59e0b", group: "商品" },
   // 医院在庫
