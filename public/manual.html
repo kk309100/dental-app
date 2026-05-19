@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dental Connect 操作マニュアル</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+    font-size: 11pt;
+    color: #1a1a1a;
+    line-height: 1.7;
+    background: #fff;
+  }
+
+  /* 印刷設定 */
+  @media print {
+    .page-break { page-break-before: always; }
+    .no-break { page-break-inside: avoid; }
+    body { font-size: 10pt; }
+    .cover { height: 100vh; }
+  }
+
+  @page {
+    size: A4;
+    margin: 20mm 18mm 20mm 18mm;
+  }
+
+  /* 表紙 */
+  .cover {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 90vh;
+    text-align: center;
+    border: 3px solid #22a648;
+    border-radius: 12px;
+    padding: 60px 40px;
+    margin-bottom: 40px;
+  }
+  .cover-logo {
+    font-size: 11pt;
+    letter-spacing: 0.4em;
+    color: #22a648;
+    font-weight: bold;
+    margin-bottom: 24px;
+    text-transform: uppercase;
+  }
+  .cover h1 {
+    font-size: 28pt;
+    font-weight: bold;
+    color: #1a1a1a;
+    margin-bottom: 12px;
+    line-height: 1.3;
+  }
+  .cover .subtitle {
+    font-size: 13pt;
+    color: #6b7280;
+    margin-bottom: 48px;
+  }
+  .cover .version {
+    font-size: 10pt;
+    color: #9ca3af;
+    margin-top: 48px;
+  }
+  .cover-divider {
+    width: 60px;
+    height: 3px;
+    background: #22a648;
+    margin: 24px auto;
+    border-radius: 2px;
+  }
+
+  /* 目次 */
+  .toc { margin-bottom: 40px; }
+  .toc h2 { font-size: 16pt; font-weight: bold; margin-bottom: 16px; color: #22a648; border-bottom: 2px solid #22a648; padding-bottom: 6px; }
+  .toc-section { font-weight: bold; font-size: 11pt; margin: 12px 0 4px; color: #374151; }
+  .toc-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0 3px 16px;
+    border-bottom: 1px dotted #d1d5db;
+    font-size: 10.5pt;
+    color: #4b5563;
+  }
+
+  /* セクション */
+  .section-header {
+    background: #22a648;
+    color: #fff;
+    padding: 14px 20px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+  }
+  .section-header h2 {
+    font-size: 16pt;
+    font-weight: bold;
+    margin: 0;
+  }
+  .section-header .section-sub {
+    font-size: 10pt;
+    opacity: 0.85;
+    margin-top: 2px;
+  }
+
+  .sub-section {
+    margin-bottom: 32px;
+  }
+  .sub-section h3 {
+    font-size: 13pt;
+    font-weight: bold;
+    color: #1a1a1a;
+    margin-bottom: 10px;
+    padding-left: 10px;
+    border-left: 4px solid #22a648;
+  }
+  .sub-section h4 {
+    font-size: 11pt;
+    font-weight: bold;
+    color: #374151;
+    margin: 14px 0 6px;
+  }
+
+  p { margin-bottom: 8px; }
+
+  /* ステップ */
+  .steps { list-style: none; counter-reset: step; }
+  .steps li {
+    counter-increment: step;
+    padding: 8px 0 8px 40px;
+    position: relative;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 26px;
+    height: 26px;
+    background: #22a648;
+    color: #fff;
+    border-radius: 50%;
+    font-size: 11pt;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* 注意・ヒントボックス */
+  .box {
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-size: 10.5pt;
+  }
+  .box-tip { background: #f0fdf4; border-left: 4px solid #22a648; }
+  .box-warn { background: #fff7ed; border-left: 4px solid #f08c00; }
+  .box-info { background: #eff6ff; border-left: 4px solid #3b82f6; }
+  .box-title { font-weight: bold; margin-bottom: 4px; }
+
+  /* テーブル */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 10.5pt;
+  }
+  th {
+    background: #f3f4f6;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: bold;
+    border: 1px solid #d1d5db;
+    color: #374151;
+  }
+  td {
+    padding: 7px 12px;
+    border: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #fafafa; }
+
+  /* バッジ */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 9pt;
+    font-weight: bold;
+    margin-right: 4px;
+  }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-orange { background: #fff7ed; color: #9a3412; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+
+  /* ボタン表現 */
+  .btn {
+    display: inline-block;
+    padding: 3px 10px;
+    border: 1.5px solid #22a648;
+    border-radius: 6px;
+    font-size: 10pt;
+    color: #22a648;
+    font-weight: bold;
+    white-space: nowrap;
+  }
+  .btn-filled {
+    background: #22a648;
+    color: #fff;
+    border-color: #22a648;
+  }
+  .btn-orange { border-color: #f08c00; color: #f08c00; }
+
+  ul { padding-left: 20px; margin-bottom: 8px; }
+  ul li { margin-bottom: 4px; }
+
+  hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
+
+  .screen-label {
+    display: inline-block;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 9pt;
+    margin-bottom: 8px;
+    letter-spacing: 0.05em;
+  }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 12px 0;
+    padding: 12px 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+  }
+  .flow-item {
+    padding: 5px 12px;
+    background: #fff;
+    border: 1.5px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 10pt;
+    font-weight: bold;
+    white-space: nowrap;
+  }
+  .flow-arrow { color: #9ca3af; font-size: 12pt; }
+  .flow-item.active { background: #22a648; color: #fff; border-color: #22a648; }
+</style>
+</head>
+<body>
+
+<!-- ========== 表紙 ========== -->
+<div class="cover">
+  <div class="cover-logo">Dental Connect</div>
+  <h1>操作マニュアル</h1>
+  <div class="cover-divider"></div>
+  <div class="subtitle">医院スタッフ・管理者 共通</div>
+  <p style="color:#6b7280; font-size:10.5pt; line-height:2;">
+    注文 / 注文履歴 / 在庫管理<br>
+    管理画面（注文・発注・請求・マスター）
+  </p>
+  <div class="version">Ver. 1.0 &nbsp;|&nbsp; dental-app-brown.vercel.app</div>
+</div>
+
+<!-- ========== 目次 ========== -->
+<div class="toc page-break">
+  <h2>目次</h2>
+
+  <div class="toc-section">【スタッフ向け】</div>
+  <div class="toc-item"><span>1. ログイン</span><span>3</span></div>
+  <div class="toc-item"><span>2. メニュー画面</span><span>3</span></div>
+  <div class="toc-item"><span>3. 注文画面</span><span>4</span></div>
+  <div class="toc-item"><span>　3-1. 商品を探す・カートに追加</span><span>4</span></div>
+  <div class="toc-item"><span>　3-2. バーコードスキャン</span><span>4</span></div>
+  <div class="toc-item"><span>　3-3. お気に入り</span><span>5</span></div>
+  <div class="toc-item"><span>　3-4. 注文を確定する</span><span>5</span></div>
+  <div class="toc-item"><span>4. 注文履歴</span><span>6</span></div>
+  <div class="toc-item"><span>　4-1. 履歴を確認する</span><span>6</span></div>
+  <div class="toc-item"><span>　4-2. 再注文</span><span>6</span></div>
+  <div class="toc-item"><span>　4-3. キャンセル申請</span><span>7</span></div>
+  <div class="toc-item"><span>5. 在庫管理</span><span>7</span></div>
+  <div class="toc-item"><span>　5-1. 在庫を記録する（使用 / 補充）</span><span>7</span></div>
+  <div class="toc-item"><span>　5-2. バーコードスキャンで記録</span><span>8</span></div>
+  <div class="toc-item"><span>　5-3. 在庫数を直接修正</span><span>8</span></div>
+  <div class="toc-item"><span>　5-4. 出し入れ履歴を見る</span><span>9</span></div>
+
+  <div class="toc-section" style="margin-top:16px;">【管理者向け】</div>
+  <div class="toc-item"><span>6. 管理者ログイン</span><span>10</span></div>
+  <div class="toc-item"><span>7. 注文管理</span><span>10</span></div>
+  <div class="toc-item"><span>8. 発注管理</span><span>11</span></div>
+  <div class="toc-item"><span>9. 仕入納品</span><span>12</span></div>
+  <div class="toc-item"><span>10. 医院納品</span><span>12</span></div>
+  <div class="toc-item"><span>11. 請求管理</span><span>13</span></div>
+  <div class="toc-item"><span>12. マスター管理</span><span>14</span></div>
+  <div class="toc-item"><span>　12-1. 商品マスタ</span><span>14</span></div>
+  <div class="toc-item"><span>　12-2. 得意先（医院）マスタ</span><span>14</span></div>
+  <div class="toc-item"><span>　12-3. ユーザー管理</span><span>15</span></div>
+  <div class="toc-item"><span>　12-4. お知らせ管理</span><span>15</span></div>
+  <div class="toc-item"><span>　12-5. 医院在庫アイテム</span><span>15</span></div>
+</div>
+
+
+<!-- ============================= -->
+<!--   スタッフ向け               -->
+<!-- ============================= -->
+<div class="page-break">
+  <div class="section-header">
+    <h2>スタッフ向け操作ガイド</h2>
+    <div class="section-sub">注文・在庫管理を行う医院スタッフの方向け</div>
+  </div>
+</div>
+
+<!-- 1. ログイン -->
+<div class="sub-section no-break">
+  <h3>1. ログイン</h3>
+  <div class="screen-label">画面：ログイン</div>
+  <ol class="steps">
+    <li>ブラウザで <strong>dental-app-brown.vercel.app</strong> を開く</li>
+    <li>管理者から渡された <strong>パスワード</strong> を入力する</li>
+    <li><span class="btn btn-filled">ログイン</span> をタップする</li>
+  </ol>
+  <div class="box box-tip" style="margin-top:12px;">
+    <div class="box-title">💡 ブックマーク登録を推奨</div>
+    スマートフォンのブラウザでホーム画面に追加すると、アプリのように使えます。
+  </div>
+  <div class="box box-warn">
+    <div class="box-title">⚠ 管理者ログインについて</div>
+    ログイン画面下部の「管理者ログイン」はシステム管理者専用です。スタッフは操作不要です。
+  </div>
+</div>
+
+<hr>
+
+<!-- 2. メニュー -->
+<div class="sub-section no-break">
+  <h3>2. メニュー画面</h3>
+  <div class="screen-label">画面：メニュー</div>
+  <p>ログイン後に表示されるホーム画面です。以下の機能にアクセスできます。</p>
+  <table>
+    <tr><th>ボタン</th><th>内容</th></tr>
+    <tr><td>🛒 注文</td><td>医療材料・消耗品の注文</td></tr>
+    <tr><td>📋 注文履歴</td><td>過去の注文確認・再注文・キャンセル申請</td></tr>
+    <tr><td>📦 在庫管理</td><td>院内在庫の使用・補充の記録</td></tr>
+  </table>
+</div>
+
+<hr>
+
+<!-- 3. 注文画面 -->
+<div class="sub-section page-break">
+  <h3>3. 注文画面</h3>
+  <div class="screen-label">画面：注文</div>
+
+  <h4>3-1. 商品を探す・カートに追加</h4>
+  <ol class="steps">
+    <li>画面上部の検索欄に商品名・コード・メーカー名を入力する</li>
+    <li>カテゴリボタン（画面上部またはPC左サイドバー）で絞り込むこともできる</li>
+    <li>商品カードの <span class="btn btn-filled">＋ カートに追加</span> をタップする</li>
+    <li>カートに商品が入ると画面右下に <strong>🛒 カートボタン</strong> が表示される</li>
+  </ol>
+
+  <h4>3-2. バーコードスキャン</h4>
+  <ol class="steps">
+    <li><span class="btn btn-filled">📷 バーコードでカートに追加</span> をタップ</li>
+    <li>カメラが起動するので商品のバーコードに向ける</li>
+    <li>読み取りに成功すると自動でカートに追加される</li>
+  </ol>
+  <div class="box box-info">
+    <div class="box-title">ℹ バーコードが読み取れない場合</div>
+    商品マスタにバーコードが未登録の可能性があります。管理者に登録を依頼してください。
+  </div>
+
+  <h4>3-3. お気に入り</h4>
+  <p>よく注文する商品は❤️ボタンでお気に入り登録できます。登録した商品は画面上部の「❤️ お気に入り」に表示されます。</p>
+  <ul>
+    <li>商品カード右上の <strong>🤍</strong> をタップ → ❤️に変わりお気に入り登録</li>
+    <li>もう一度タップで解除</li>
+  </ul>
+
+  <h4>3-4. 注文を確定する</h4>
+  <ol class="steps">
+    <li>🛒カートボタンをタップしてカートを開く</li>
+    <li>数量を確認・修正する（「−」「＋」ボタンまたは数字を直接入力）</li>
+    <li><span class="btn btn-filled">注文確認へ →</span> をタップ</li>
+    <li><strong>注文者名</strong>（担当者名）を入力する　※必須</li>
+    <li>内容を確認して <span class="btn btn-orange">✓ 注文を確定する</span> をタップ</li>
+    <li>「注文が完了しました」画面が表示されたら完了</li>
+  </ol>
+  <div class="box box-warn">
+    <div class="box-title">⚠ 注文者名は必須項目です</div>
+    注文担当者名を入力しないと注文できません。フルネームで入力してください。
+  </div>
+</div>
+
+<hr>
+
+<!-- 4. 注文履歴 -->
+<div class="sub-section page-break">
+  <h3>4. 注文履歴</h3>
+  <div class="screen-label">画面：注文履歴</div>
+
+  <h4>4-1. 履歴を確認する</h4>
+  <p>過去の注文が月ごとにまとめて表示されます。</p>
+  <ul>
+    <li>月のヘッダーをタップすると折りたたみ・展開できる</li>
+    <li>月ごとの <strong>注文件数・合計金額</strong> がヘッダーに表示される</li>
+    <li>各注文には <strong>進捗バー</strong> で現在のステータスが確認できる</li>
+  </ul>
+
+  <div class="flow">
+    <div class="flow-item active">注文受付</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-item">処理中</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-item">発送済み</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-item">納品済み</div>
+  </div>
+
+  <p>「明細 ▼」ボタンで注文内容の詳細（商品・数量・金額）を表示できます。</p>
+
+  <p><strong>検索・絞り込み：</strong></p>
+  <ul>
+    <li>上部の検索欄で納品書番号・商品名・担当者名を検索</li>
+    <li>ステータスのプルダウンで絞り込み</li>
+    <li>日付範囲で期間指定</li>
+  </ul>
+
+  <h4>4-2. 再注文</h4>
+  <ol class="steps">
+    <li>再注文したい注文カードの <span class="btn btn-filled">再注文</span> をタップ</li>
+    <li>数量確認画面が開く。数量を変更する場合は「−」「＋」で調整</li>
+    <li><span class="btn btn-orange">この内容で再注文する</span> をタップ</li>
+  </ol>
+  <div class="box box-tip">
+    <div class="box-title">💡 再注文のヒント</div>
+    数量を0にした商品は注文に含まれません。不要な商品は0にしてから確定できます。
+  </div>
+
+  <h4>4-3. キャンセル申請</h4>
+  <p>ステータスが「注文受付」の注文のみキャンセル申請できます。</p>
+  <ol class="steps">
+    <li>キャンセルしたい注文の <span class="btn" style="border-color:#ef4444;color:#ef4444;">キャンセル</span> をタップ</li>
+    <li>確認ダイアログで「OK」をタップ</li>
+    <li>ステータスが <span class="badge badge-orange">キャンセル申請中</span> に変わる</li>
+    <li>管理者が確認後、正式にキャンセル処理される</li>
+  </ol>
+  <div class="box box-warn">
+    <div class="box-title">⚠ 注意</div>
+    「処理中」以降のステータスはキャンセルできません。急ぎの場合は管理者に直接連絡してください。
+  </div>
+</div>
+
+<hr>
+
+<!-- 5. 在庫管理 -->
+<div class="sub-section page-break">
+  <h3>5. 在庫管理</h3>
+  <div class="screen-label">画面：在庫管理</div>
+  <p>院内の消耗品・材料の在庫数を管理します。画面下部の「記録」「履歴」タブで切り替えます。</p>
+
+  <h4>5-1. 在庫を記録する（使用 / 補充）</h4>
+  <p><strong>クイック操作（±1）：</strong></p>
+  <ol class="steps">
+    <li>商品カードを探す（検索欄・置き場所フィルターで絞り込み可）</li>
+    <li><span class="btn">使用 -1</span> または <span class="btn btn-filled">補充 +1</span> をタップ</li>
+    <li>画面上部に「✓ 記録しました」のメッセージが表示されれば完了</li>
+  </ol>
+
+  <p><strong>数量を指定して記録（···ボタン）：</strong></p>
+  <ol class="steps">
+    <li>商品カードの <span class="btn">···</span> ボタンをタップ</li>
+    <li>底部から操作パネルが開く</li>
+    <li>「使用」または「補充」を選択する</li>
+    <li>「−」「＋」ボタンまたは数字入力で数量を指定</li>
+    <li><span class="btn btn-filled">記録する</span> をタップ</li>
+  </ol>
+
+  <div class="box box-tip">
+    <div class="box-title">💡 置き場所フィルター</div>
+    処置室・倉庫など置き場所ごとに絞り込んで表示できます。管理者が設定した置き場所のボタンが検索欄の下に表示されます。
+  </div>
+
+  <h4>5-2. バーコードスキャンで記録</h4>
+  <ol class="steps">
+    <li><span class="btn btn-filled">📷 スキャンして記録</span> をタップ</li>
+    <li>商品のバーコードを読み取る</li>
+    <li>操作パネルが自動で開くので「使用」/「補充」と数量を選んで記録</li>
+  </ol>
+
+  <h4>5-3. 在庫数を直接修正（棚卸調整）</h4>
+  <p>実際の在庫数と記録が合わない場合に使います。</p>
+  <ol class="steps">
+    <li>修正したい商品カードの <strong>在庫数（大きい数字）をタップ</strong></li>
+    <li>入力欄に正しい在庫数を入力</li>
+    <li>✓ ボタンまたはEnterキーで確定（✕で取消）</li>
+    <li>「棚卸調整」として履歴に記録される</li>
+  </ol>
+
+  <h4>5-4. 出し入れ履歴を見る</h4>
+  <ol class="steps">
+    <li>画面下部の <strong>「履歴」タブ</strong> をタップ</li>
+    <li>「今日」「今週」「すべて」で期間を絞り込める</li>
+    <li>スタッフ名のボタンで担当者別に絞り込める</li>
+  </ol>
+
+  <p>履歴の種類：</p>
+  <table>
+    <tr><th>種類</th><th>意味</th><th>表示色</th></tr>
+    <tr><td>使用</td><td>在庫を使った</td><td style="color:#b91c1c;">赤系</td></tr>
+    <tr><td>補充</td><td>在庫を補充した</td><td style="color:#166534;">緑系</td></tr>
+    <tr><td>棚卸調整</td><td>直接数量を修正した</td><td style="color:#92400e;">オレンジ系</td></tr>
+  </table>
+
+  <div class="box box-warn" style="margin-top:12px;">
+    <div class="box-title">⚠ 発注が必要な商品</div>
+    在庫数が最低在庫数以下になると <span class="badge badge-red">発注必要</span> バッジが表示されます。「注文画面へ →」ボタンから注文画面に移動して発注してください。
+  </div>
+</div>
+
+
+<!-- ============================= -->
+<!--   管理者向け                 -->
+<!-- ============================= -->
+<div class="page-break">
+  <div class="section-header">
+    <h2>管理者向け操作ガイド</h2>
+    <div class="section-sub">管理画面を操作するシステム管理者向け</div>
+  </div>
+</div>
+
+<!-- 6. 管理者ログイン -->
+<div class="sub-section no-break">
+  <h3>6. 管理者ログイン</h3>
+  <ol class="steps">
+    <li>ログイン画面下部の「管理者ログイン」をタップ</li>
+    <li>登録済みの <strong>メールアドレス</strong> と <strong>パスワード</strong> を入力</li>
+    <li>ログインすると管理画面に移動する</li>
+  </ol>
+  <div class="box box-warn">
+    <div class="box-title">⚠ セキュリティ</div>
+    管理者アカウントのパスワードは他の人と共有しないでください。スタッフには専用のスタッフパスワードを発行してください。
+  </div>
+</div>
+
+<hr>
+
+<!-- 7. 注文管理 -->
+<div class="sub-section no-break">
+  <h3>7. 注文管理</h3>
+  <div class="screen-label">管理画面：注文</div>
+  <p>医院スタッフからの注文を管理します。</p>
+
+  <h4>注文一覧の確認</h4>
+  <ul>
+    <li>医院名・ステータス・日付で絞り込み検索ができる</li>
+    <li>注文番号（DN-）をクリックすると注文詳細を確認できる</li>
+    <li><span class="badge badge-blue">注文受付</span> → ステータスを更新して業務フローを進める</li>
+  </ul>
+
+  <h4>ステータスの流れ</h4>
+  <div class="flow">
+    <div class="flow-item">注文受付</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-item">処理中</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-item">発送済み</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-item active">納品済み</div>
+  </div>
+
+  <h4>キャンセル申請への対応</h4>
+  <p>医院からキャンセル申請が来た注文は <span class="badge badge-orange">キャンセル申請中</span> と表示されます。内容を確認してステータスを「キャンセル」に変更してください。</p>
+</div>
+
+<hr>
+
+<!-- 8. 発注管理 -->
+<div class="sub-section page-break">
+  <h3>8. 発注管理</h3>
+  <div class="screen-label">管理画面：発注</div>
+  <p>仕入先への発注を管理します。</p>
+  <ul>
+    <li><strong>発注</strong>：発注書の作成・管理</li>
+    <li><strong>🛒 プール</strong>：発注候補商品のまとめ置き場。複数注文から必要商品をプールに集めてまとめて発注できる</li>
+    <li><strong>推奨発注</strong>：在庫が少ない商品を自動で抽出してリスト化</li>
+  </ul>
+
+  <h4>発注書の作成手順</h4>
+  <ol class="steps">
+    <li>「発注」→「新規作成」をクリック</li>
+    <li>仕入先を選択し、商品・数量を入力</li>
+    <li>保存すると発注番号が発行される</li>
+    <li>仕入先への発注後、ステータスを「発注済み」に更新</li>
+  </ol>
+</div>
+
+<hr>
+
+<!-- 9. 仕入納品 -->
+<div class="sub-section no-break">
+  <h3>9. 仕入納品</h3>
+  <div class="screen-label">管理画面：仕入納品</div>
+  <p>仕入先から商品が届いた際に入荷を記録します。</p>
+  <ol class="steps">
+    <li>「仕入納品」を開く</li>
+    <li>対象の発注書を選択して「入荷登録」をクリック</li>
+    <li>実際に届いた数量を確認・入力する</li>
+    <li>登録すると在庫が自動で増加する</li>
+  </ol>
+</div>
+
+<hr>
+
+<!-- 10. 医院納品 -->
+<div class="sub-section no-break">
+  <h3>10. 医院納品</h3>
+  <div class="screen-label">管理画面：医院納品</div>
+  <p>医院への商品納品を記録します。</p>
+  <ul>
+    <li>注文をもとに納品書を作成できる</li>
+    <li>「納品書印刷」で印刷用フォーマットを開ける</li>
+    <li>納品完了後にステータスを「納品済み」に更新する（医院の注文履歴に反映される）</li>
+  </ul>
+</div>
+
+<hr>
+
+<!-- 11. 請求管理 -->
+<div class="sub-section page-break">
+  <h3>11. 請求管理</h3>
+  <div class="screen-label">管理画面：請求</div>
+
+  <h4>請求書の作成</h4>
+  <ol class="steps">
+    <li>「請求」→「新規作成」をクリック</li>
+    <li>対象の医院・請求月を選択</li>
+    <li>該当期間の納品データが自動で読み込まれる</li>
+    <li>内容を確認して「保存」をクリック</li>
+  </ol>
+
+  <h4>一括請求</h4>
+  <p>「一括請求」機能で複数医院分の請求書を一度に作成できます。</p>
+
+  <h4>請求書の印刷</h4>
+  <ol class="steps">
+    <li>請求書一覧から対象を開く</li>
+    <li>「印刷」ボタンをクリック</li>
+    <li>ブラウザの印刷ダイアログが開くのでPDF保存または印刷</li>
+  </ol>
+
+  <h4>売掛金・入金管理</h4>
+  <ul>
+    <li><strong>売掛金台帳</strong>：未回収金額の一覧</li>
+    <li><strong>銀行CSV消込</strong>：銀行の入金データをCSVで取り込んで自動照合</li>
+  </ul>
+</div>
+
+<hr>
+
+<!-- 12. マスター管理 -->
+<div class="sub-section page-break">
+  <h3>12. マスター管理</h3>
+  <div class="screen-label">管理画面：マスター</div>
+  <p>各種マスターデータの管理を行います。「マスター」メニューから各設定ページに移動できます。</p>
+
+  <h4>12-1. 商品マスタ</h4>
+  <ul>
+    <li>取り扱い商品の登録・編集</li>
+    <li>商品名・コード・メーカー・仕入値・定価・カテゴリを管理</li>
+    <li>「有効」フラグをOFFにすると注文画面に表示されなくなる</li>
+    <li><strong>商品画像</strong>（別ページ）：楽天APIで商品画像を一括取得できる</li>
+  </ul>
+
+  <h4>12-2. 得意先（医院）マスタ</h4>
+  <ul>
+    <li>取引医院の情報を管理（医院名・住所・締日など）</li>
+    <li>請求書・納品書に反映される</li>
+  </ul>
+
+  <h4>12-3. ユーザー管理</h4>
+  <p>医院スタッフのログインパスワードを設定します。</p>
+  <ol class="steps">
+    <li>「マスター」→「ユーザー」を開く</li>
+    <li>パスワードを設定したいユーザーの入力欄に新しいパスワードを入力（6文字以上）</li>
+    <li><span class="btn btn-filled">設定する</span> をクリック</li>
+    <li>✓ 設定済み と表示されたら完了</li>
+  </ol>
+  <div class="box box-tip">
+    <div class="box-title">💡 パスワードの共有方法</div>
+    設定したパスワードは画面上に表示されます。スタッフへの共有は口頭またはメモで行ってください。
+  </div>
+
+  <h4>12-4. お知らせ管理</h4>
+  <p>医院スタッフの注文画面に表示されるお知らせを管理します。</p>
+  <ol class="steps">
+    <li>「管理画面」上部ナビの「📢 お知らせ」を開く</li>
+    <li>タイトル（必須）と本文（任意）を入力して「投稿する」をクリック</li>
+    <li>投稿したお知らせは有効/無効の切り替えと削除ができる</li>
+  </ol>
+  <div class="box box-info">
+    <div class="box-title">ℹ 表示される場所</div>
+    有効なお知らせは医院スタッフの注文画面の上部に緑のボーダー付きで表示されます。スタッフが✕を押すと非表示になります（再ログインすると再表示）。
+  </div>
+
+  <h4>12-5. 医院在庫アイテム</h4>
+  <p>医院スタッフの在庫管理画面に表示される商品の <strong>置き場所</strong> と <strong>最低在庫数</strong> を設定します。</p>
+  <ol class="steps">
+    <li>「マスター」→「医院在庫」を開く</li>
+    <li>商品の「置き場所」列をクリックして場所を入力（例：処置室、倉庫、棚A）</li>
+    <li>「最低在庫」列に数値を入力（この数以下になると発注必要バッジが表示される）</li>
+    <li>フォーカスを外すと自動保存される（Enterキーでも保存）</li>
+  </ol>
+  <div class="box box-tip">
+    <div class="box-title">💡 置き場所の活用</div>
+    置き場所を設定すると、スタッフの在庫画面で場所ごとにグループ表示・絞り込みができるようになります。「処置室」「受付」「倉庫」などの単位で管理することをおすすめします。
+  </div>
+</div>
+
+<hr>
+
+<!-- フッター -->
+<div style="text-align:center; margin-top:48px; padding-top:24px; border-top:1px solid #e5e7eb; color:#9ca3af; font-size:9.5pt;">
+  <p>Dental Connect 操作マニュアル</p>
+  <p style="margin-top:4px;">ご不明な点はシステム管理者にお問い合わせください</p>
+</div>
+
+</body>
+</html>
