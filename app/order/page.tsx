@@ -92,7 +92,11 @@ export default function OrderPage() {
     }
   }
 
-  const norm = (v: any) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s+/g, "")
+  const norm = (v: any) => {
+    const s = String(v || "").normalize("NFKC").toLowerCase().replace(/\s+/g, "")
+    // カタカナ → ひらがなに統一（ひらがな・カタカナ・半角カナすべてマッチ）
+    return s.replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
+  }
 
   const categories = useMemo(() => {
     const list = products.map((p) => p.category).filter((c) => c && String(c).trim())
