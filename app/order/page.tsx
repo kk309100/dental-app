@@ -63,7 +63,7 @@ export default function OrderPage() {
 
   async function fetchData(cid: string) {
     const [p, o, i] = await Promise.all([
-      supabase.from("products").select("*").eq("is_active", true).order("name", { ascending: true }),
+      supabase.from("products").select("*").eq("active", true).order("name", { ascending: true }).limit(50000),
       supabase.from("orders").select("*").eq("clinic_id", cid).order("created_at", { ascending: false }),
       supabase.from("order_items").select("*"),
     ])
