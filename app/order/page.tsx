@@ -213,12 +213,16 @@ export default function OrderPage() {
       `}</style>
 
       {/* ヘッダーバー */}
-      <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 20 }}>
+      <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 20 }}>
         <button onClick={() => router.push("/menu")}
           style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: C.primaryBg, color: C.primary, border: `1px solid #b2dfbd`, borderRadius: 8, fontSize: 13, fontWeight: "bold", cursor: "pointer" }}>
           ← メニュー
         </button>
         <span style={{ fontSize: 13, fontWeight: "bold", color: C.sub }}>{clinicName}</span>
+        <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          style={{ padding: "7px 12px", background: "#f3f4f6", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, cursor: "pointer", color: "#374151", fontWeight: "bold" }}>
+          ↑ TOP
+        </button>
       </div>
 
       {/* 検索・スキャン */}
@@ -393,17 +397,6 @@ export default function OrderPage() {
         </div>
       </div>
 
-      {/* トップへ戻るボタン（常時表示） */}
-      {!showCart && !showConfirm && !showComplete && (
-        <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{
-          position: "fixed", bottom: cart.length > 0 ? 88 : 24, left: 20, zIndex: 49,
-          width: 48, height: 48, borderRadius: "50%",
-          background: "#374151", color: "#fff",
-          border: "none", fontSize: 20, cursor: "pointer",
-          boxShadow: "0 3px 12px rgba(0,0,0,0.25)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>↑</button>
-      )}
 
       {/* フローティングカートボタン */}
       {cart.length > 0 && !showCart && !showConfirm && !showComplete && (
@@ -431,6 +424,17 @@ export default function OrderPage() {
               {cart.map((item) => (
                 <CartRow key={item.id} item={item} onMinus={decreaseQty} onPlus={increaseQty} onRemove={removeItem} onSet={setQty} />
               ))}
+            </div>
+            {/* 備考欄（カートでも入力可） */}
+            <div style={{ marginTop: 10 }}>
+              <label style={{ fontSize: 12, fontWeight: "bold", color: C.sub, display: "block", marginBottom: 4 }}>備考（任意）</label>
+              <textarea value={orderNote} onChange={(e) => setOrderNote(e.target.value)}
+                placeholder="例：急ぎでお願いします / ○○先生指定"
+                rows={2} style={{
+                  width: "100%", padding: "9px 12px", borderRadius: 8, border: `1.5px solid ${C.border}`,
+                  fontSize: 13, boxSizing: "border-box" as const, outline: "none", color: C.text,
+                  resize: "none", lineHeight: 1.6,
+                }} />
             </div>
             <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14, marginTop: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
