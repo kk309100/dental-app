@@ -19,36 +19,78 @@ type Product = {
   active?: boolean | null
   location?: string | null
   purchase_maker?: string | null
+  default_supplier_id?: string | null
 }
+
+type Supplier = { id: string; name: string; short_name: string | null }
 
 const PAGE_SIZE = 100
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [maker, setMaker] = useState("")
   const [category, setCategory] = useState("すべて")
+  const [supplierFilter, setSupplierFilter] = useState("すべて")
   const [page, setPage] = useState(1)
-  const [editId, setEditId] = useState<string | null>(null)
+  const [editProduct, setEditProduct] = useState<Product | null>(null)
   const [editForm, setEditForm] = useState<Partial<Product>>({})
-  const [expandedPriceId, setExpandedPriceId] = useState<string | null>(null)  // 価格マトリクス展開中の商品ID
+  const [expandedPriceId, setExpandedPriceId] = useState<string | null>(null)
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState("")
   const [showInactive, setShowInactive] = useState(false)
+  const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { fetchProducts() }, [])
+  useEffect(() => { fetchProducts(); fetchSuppliers() }, [])
 
   async function fetchProducts() {
     setLoading(true)
     const { data } = await supabase
       .from("products")
-      .select("id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker")
+      .select("id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id")
       .order("name", { ascending: true })
       .limit(50000)
     setProducts((data as Product[]) || [])
     setLoading(false)
+  }
+
+  async function fetchSuppliers() {
+    const { data } = await supabase.from("suppliers").select("id,name,short_name").order("name").limit(1000)
+    setSuppliers((data as Supplier[]) || [])
+  }
+
+  function openEdit(p: Product) {
+    setEditProduct(p)
+    setEditForm({ ...p })
+  }
+
+  function closeEdit() { setEditProduct(null); setEditForm({}) }
+
+  async function saveEdit() {
+    if (!editProduct) return
+    setSaving(true)
+    const payload: Record<string, unknown> = {
+      name: editForm.name || editProduct.name,
+      product_code: editForm.product_code || null,
+      manufacturer: editForm.manufacturer || null,
+      category: editForm.category || null,
+      cost: editForm.cost != null ? Number(editForm.cost) || null : null,
+      price: editForm.price != null ? Number(editForm.price) || null : null,
+      stock: editForm.stock != null ? Number(editForm.stock) : null,
+      reorder_level: editForm.reorder_level != null ? Number(editForm.reorder_level) || null : null,
+      location: editForm.location || null,
+      purchase_maker: editForm.purchase_maker || null,
+      default_supplier_id: editForm.default_supplier_id || null,
+      active: editForm.active !== false,
+    }
+    const { error } = await supabase.from("products").update(payload).eq("id", editProduct.id)
+    if (error) { alert("保存失敗: " + error.message); setSaving(false); return }
+    setSaving(false)
+    closeEdit()
+    fetchProducts()
   }
 
   async function importProductsCSV(file: File) {
@@ -61,7 +103,6 @@ export default function AdminProductsPage() {
         for (const k of keys) if (r[k] !== undefined && r[k] !== "") return r[k]
         return ""
       }
-      // 既存マスタ（コード優先・名前fallback）
       const byCode = new Map(products.filter(p => p.product_code).map(p => [norm(p.product_code!), p]))
       const byName = new Map(products.map(p => [norm(p.name), p]))
 
@@ -127,17 +168,26 @@ export default function AdminProductsPage() {
 
   async function toggleActive(p: Product) {
     const newActive = p.active === false ? true : false
-    const { error } = await supabase.from("products").update({ active: newActive }).eq("id", p.id)
-    if (error) { alert("更新失敗: " + error.message); return }
+    await supabase.from("products").update({ active: newActive }).eq("id", p.id)
     fetchProducts()
   }
 
   const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s+/g, "")
 
+  const supplierName = (id: string | null | undefined) =>
+    id ? suppliers.find(s => s.id === id)?.name || "" : ""
+
   const categories = useMemo(() => {
     const list = products.map((p) => p.category).filter((c): c is string => !!c && c.trim() !== "")
     return ["すべて", ...Array.from(new Set(list))]
   }, [products])
+
+  const supplierOptions = useMemo(() => {
+    const names = Array.from(new Set(
+      products.map(p => p.default_supplier_id ? supplierName(p.default_supplier_id) : "").filter(Boolean)
+    ))
+    return ["すべて", "(未設定)", ...names]
+  }, [products, suppliers])
 
   const filtered = useMemo(() => {
     const k = norm(search)
@@ -145,14 +195,17 @@ export default function AdminProductsPage() {
     return products.filter((p) => {
       if (!showInactive && p.active === false) return false
       if (category !== "すべて" && p.category !== category) return false
+      if (supplierFilter === "(未設定)" && p.default_supplier_id) return false
+      if (supplierFilter !== "すべて" && supplierFilter !== "(未設定)") {
+        if (supplierName(p.default_supplier_id) !== supplierFilter) return false
+      }
       if (m && !norm(p.manufacturer || "").includes(m)) return false
       if (!k) return true
-      const target = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""}`)
+      const target = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""} ${p.purchase_maker || ""}`)
       return target.includes(k)
     })
-  }, [products, search, maker, category, showInactive])
+  }, [products, search, maker, category, supplierFilter, showInactive, suppliers])
 
-  // 重複検出（同じ商品コード or 同じ名前）
   const duplicates = useMemo(() => {
     const codeMap = new Map<string, number>()
     const nameMap = new Map<string, number>()
@@ -172,23 +225,7 @@ export default function AdminProductsPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  // ページ範囲リセット
   useEffect(() => { if (page > totalPages) setPage(1) }, [totalPages, page])
-
-  function startEdit(p: Product) {
-    setEditId(p.id)
-    setEditForm({
-      name: p.name, product_code: p.product_code || "", manufacturer: p.manufacturer || "",
-      category: p.category || "", cost: p.cost, price: p.price,
-    })
-  }
-
-  async function saveEdit() {
-    if (!editId) return
-    await supabase.from("products").update(editForm).eq("id", editId)
-    setEditId(null)
-    fetchProducts()
-  }
 
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
@@ -228,100 +265,85 @@ export default function AdminProductsPage() {
       )}
 
       {/* 検索バー */}
-      <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="商品名・コード"
-          className="flex-1 min-w-[160px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
-        />
-        <input
-          value={maker}
-          onChange={(e) => setMaker(e.target.value)}
-          placeholder="メーカー"
-          className="w-32 px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
-        />
+      <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="商品名・コード・ﾒｰｶｰ"
+          className="flex-1 min-w-[160px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+        <input value={maker} onChange={(e) => setMaker(e.target.value)} placeholder="メーカー"
+          className="w-28 px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white" />
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
           {categories.map((c) => <option key={c}>{c}</option>)}
         </select>
-        <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer ml-2">
+        <select value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white max-w-[180px]">
+          {supplierOptions.map((s) => <option key={s}>{s}</option>)}
+        </select>
+        <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
           廃番含む
         </label>
       </div>
 
-      {/* 密テーブル */}
+      {/* テーブル */}
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 240px)" }}>
         <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-100 text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-left" style={td0}>商品名</th>
               <th className="px-2 py-1.5 text-left w-24" style={td0}>コード</th>
-              <th className="px-2 py-1.5 text-left w-32" style={td0}>メーカー</th>
+              <th className="px-2 py-1.5 text-left w-28" style={td0}>メーカー</th>
               <th className="px-2 py-1.5 text-left w-24" style={td0}>カテゴリ</th>
-              <th className="px-2 py-1.5 text-right w-16" style={td0}>仕入</th>
-              <th className="px-2 py-1.5 text-right w-16" style={td0}>定価</th>
+              <th className="px-2 py-1.5 text-left w-28" style={td0}>仕入先</th>
+              <th className="px-2 py-1.5 text-right w-14" style={td0}>仕入</th>
+              <th className="px-2 py-1.5 text-right w-14" style={td0}>定価</th>
               <th className="px-2 py-1.5 text-right w-12" style={td0}>在庫</th>
+              <th className="px-2 py-1.5 text-right w-12" style={td0}>発注点</th>
+              <th className="px-2 py-1.5 text-left w-14" style={td0}>棚</th>
               <th className="px-2 py-1.5 text-center w-24" style={td0}>操作</th>
             </tr>
           </thead>
           <tbody>
             {pageItems.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">該当商品なし</td></tr>
+              <tr><td colSpan={11} className="px-4 py-6 text-center text-gray-400">該当商品なし</td></tr>
             ) : pageItems.map((p, i) => (
               <React.Fragment key={p.id}>
-              <tr className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/40")}>
-                {editId === p.id ? (
-                  <>
-                    <td className="px-1 py-0.5" style={td0}><input value={editForm.name || ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs" /></td>
-                    <td className="px-1 py-0.5" style={td0}><input value={editForm.product_code || ""} onChange={(e) => setEditForm({ ...editForm, product_code: e.target.value })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs" /></td>
-                    <td className="px-1 py-0.5" style={td0}><input value={editForm.manufacturer || ""} onChange={(e) => setEditForm({ ...editForm, manufacturer: e.target.value })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs" /></td>
-                    <td className="px-1 py-0.5" style={td0}><input value={editForm.category || ""} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs" /></td>
-                    <td className="px-1 py-0.5" style={td0}><input type="number" value={editForm.cost ?? ""} onChange={(e) => setEditForm({ ...editForm, cost: Number(e.target.value) || null })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs text-right" /></td>
-                    <td className="px-1 py-0.5" style={td0}><input type="number" value={editForm.price ?? ""} onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) || null })} className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-xs text-right" /></td>
-                    <td className="px-2 py-0.5 text-right text-[11px]" style={td0}>{p.stock ?? 0}</td>
-                    <td className="px-1 py-0.5 text-center" style={td0}>
-                      <button onClick={saveEdit} className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded mr-1">保存</button>
-                      <button onClick={() => setEditId(null)} className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">×</button>
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td className="px-2 py-1 text-[12px]" style={td0}>{p.name}</td>
-                    <td className="px-2 py-1 text-[11px] text-gray-500" style={td0}>{p.product_code || ""}</td>
-                    <td className="px-2 py-1 text-[11px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
-                    <td className="px-2 py-1 text-[11px] text-gray-500" style={td0}>{p.category || ""}</td>
-                    <td className="px-2 py-1 text-right text-[11px] text-gray-600" style={td0}>{p.cost ? p.cost.toLocaleString() : ""}</td>
-                    <td className="px-2 py-1 text-right text-[11px] text-gray-700" style={td0}>{p.price ? p.price.toLocaleString() : ""}</td>
-                    <td className="px-2 py-1 text-right text-[11px]" style={td0}>{p.stock ?? 0}</td>
-                    <td className="px-1 py-1 text-center" style={td0}>
-                      <button onClick={() => setExpandedPriceId(expandedPriceId === p.id ? null : p.id)}
-                        className={"text-[10px] px-1.5 py-0.5 rounded mr-1 " + (expandedPriceId === p.id ? "bg-blue-600 text-white" : "border border-gray-200 hover:bg-blue-50 text-blue-700")}
-                        title="仕入先別/医院別の単価を表示">
-                        💰
-                      </button>
-                      <button onClick={() => startEdit(p)} className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編</button>
-                      <button onClick={() => toggleActive(p)}
-                        className={"text-[10px] px-1.5 py-0.5 rounded " + (p.active === false ? "bg-gray-200 text-gray-600" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100")}
-                        title={p.active === false ? "廃番（クリックで復活）" : "販売中（クリックで廃番）"}>
-                        {p.active === false ? "廃" : "活"}
-                      </button>
-                    </td>
-                  </>
-                )}
-              </tr>
-              {expandedPriceId === p.id && (
-                <tr>
-                  <td colSpan={8} className="p-0">
-                    <ProductPriceMatrix
-                      productId={p.id}
-                      productName={p.name}
-                      standardCost={p.cost}
-                      standardPrice={p.price}
-                    />
+                <tr className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/40") + (p.active === false ? " opacity-40" : "")}>
+                  <td className="px-2 py-1 text-[12px]" style={td0}>{p.name}</td>
+                  <td className="px-2 py-1 text-[11px] text-gray-500 font-mono" style={td0}>{p.product_code || ""}</td>
+                  <td className="px-2 py-1 text-[11px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
+                  <td className="px-2 py-1 text-[11px] text-gray-500" style={td0}>{p.category || ""}</td>
+                  <td className="px-2 py-1 text-[11px]" style={td0}>
+                    {p.default_supplier_id
+                      ? <span className="text-blue-700">{supplierName(p.default_supplier_id)}</span>
+                      : p.purchase_maker
+                        ? <span className="text-gray-400">{p.purchase_maker}</span>
+                        : ""}
+                  </td>
+                  <td className="px-2 py-1 text-right text-[11px] text-gray-600" style={td0}>{p.cost ? p.cost.toLocaleString() : ""}</td>
+                  <td className="px-2 py-1 text-right text-[11px] text-gray-700" style={td0}>{p.price ? p.price.toLocaleString() : ""}</td>
+                  <td className={"px-2 py-1 text-right text-[11px] font-bold " + ((p.stock ?? 0) <= 0 ? "text-red-600" : (p.stock ?? 0) <= (p.reorder_level ?? 10) ? "text-orange-600" : "text-gray-700")} style={td0}>
+                    {p.stock ?? 0}
+                  </td>
+                  <td className="px-2 py-1 text-right text-[11px] text-gray-400" style={td0}>{p.reorder_level ?? ""}</td>
+                  <td className="px-2 py-1 text-[11px] text-gray-500 font-mono" style={td0}>{p.location || ""}</td>
+                  <td className="px-1 py-1 text-center" style={td0}>
+                    <button onClick={() => setExpandedPriceId(expandedPriceId === p.id ? null : p.id)}
+                      className={"text-[10px] px-1.5 py-0.5 rounded mr-1 " + (expandedPriceId === p.id ? "bg-blue-600 text-white" : "border border-gray-200 hover:bg-blue-50 text-blue-700")}
+                      title="仕入先別単価">💰</button>
+                    <button onClick={() => openEdit(p)}
+                      className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
+                    <button onClick={() => toggleActive(p)}
+                      className={"text-[10px] px-1.5 py-0.5 rounded " + (p.active === false ? "bg-gray-200 text-gray-600" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100")}
+                      title={p.active === false ? "廃番（クリックで復活）" : "販売中（クリックで廃番）"}>
+                      {p.active === false ? "廃" : "活"}
+                    </button>
                   </td>
                 </tr>
-              )}
+                {expandedPriceId === p.id && (
+                  <tr>
+                    <td colSpan={11} className="p-0">
+                      <ProductPriceMatrix productId={p.id} productName={p.name} standardCost={p.cost} standardPrice={p.price} />
+                    </td>
+                  </tr>
+                )}
               </React.Fragment>
             ))}
           </tbody>
@@ -336,6 +358,134 @@ export default function AdminProductsPage() {
           <span className="px-2 text-gray-500">{page} / {totalPages} ({filtered.length}件)</span>
           <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-30">›</button>
           <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-30">»</button>
+        </div>
+      )}
+
+      {/* 編集モーダル */}
+      {editProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={closeEdit}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* モーダルヘッダー */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
+              <h2 className="text-sm font-bold text-gray-800">商品編集</h2>
+              <button onClick={closeEdit} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+            </div>
+
+            <div className="overflow-y-auto" style={{ maxHeight: "75vh" }}>
+              <div className="p-5 space-y-4">
+
+                {/* 基本情報 */}
+                <section>
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">基本情報</h3>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-0.5">商品名 <span className="text-red-500">*</span></label>
+                      <input value={editForm.name || ""} onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-0.5">商品コード</label>
+                        <input value={editForm.product_code || ""} onChange={e => setEditForm({ ...editForm, product_code: e.target.value })}
+                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm font-mono" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-0.5">カテゴリ</label>
+                        <input value={editForm.category || ""} onChange={e => setEditForm({ ...editForm, category: e.target.value })}
+                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-0.5">メーカー（ブランド名）</label>
+                      <input value={editForm.manufacturer || ""} onChange={e => setEditForm({ ...editForm, manufacturer: e.target.value })}
+                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm" />
+                    </div>
+                  </div>
+                </section>
+
+                {/* 仕入先 */}
+                <section>
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">仕入先</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-0.5">仕入先（マスタ連携）</label>
+                      <select value={editForm.default_supplier_id || ""} onChange={e => setEditForm({ ...editForm, default_supplier_id: e.target.value || null })}
+                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white">
+                        <option value="">（未設定）</option>
+                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-0.5">ﾒｰｶｰ略称（CSV用）</label>
+                      <input value={editForm.purchase_maker || ""} onChange={e => setEditForm({ ...editForm, purchase_maker: e.target.value })}
+                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm font-mono" />
+                    </div>
+                  </div>
+                </section>
+
+                {/* 価格 */}
+                <section>
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">価格</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-0.5">仕入価格（原価）</label>
+                      <input type="number" value={editForm.cost ?? ""} onChange={e => setEditForm({ ...editForm, cost: Number(e.target.value) || null })}
+                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-0.5">定価（売価）</label>
+                      <input type="number" value={editForm.price ?? ""} onChange={e => setEditForm({ ...editForm, price: Number(e.target.value) || null })}
+                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
+                    </div>
+                  </div>
+                </section>
+
+                {/* 在庫管理 */}
+                <section>
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">在庫管理</h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-0.5">現在在庫数</label>
+                      <input type="number" value={editForm.stock ?? ""} onChange={e => setEditForm({ ...editForm, stock: Number(e.target.value) })}
+                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-0.5">発注点（不足基準）</label>
+                      <input type="number" value={editForm.reorder_level ?? ""} onChange={e => setEditForm({ ...editForm, reorder_level: Number(e.target.value) || null })}
+                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-0.5">棚番号（置き場所）</label>
+                      <input value={editForm.location || ""} onChange={e => setEditForm({ ...editForm, location: e.target.value })}
+                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm font-mono" placeholder="A1-3" />
+                    </div>
+                  </div>
+                </section>
+
+                {/* ステータス */}
+                <section>
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">ステータス</h3>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={editForm.active !== false}
+                      onChange={e => setEditForm({ ...editForm, active: e.target.checked })}
+                      className="w-4 h-4" />
+                    <span className="text-sm text-gray-700">販売中（チェックを外すと廃番）</span>
+                  </label>
+                </section>
+              </div>
+            </div>
+
+            {/* フッター */}
+            <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
+              <button onClick={closeEdit} className="text-xs px-4 py-2 border border-gray-200 rounded hover:bg-gray-100 text-gray-600">
+                キャンセル
+              </button>
+              <button onClick={saveEdit} disabled={saving}
+                className="text-xs px-6 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 disabled:opacity-50">
+                {saving ? "保存中…" : "保存する"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
