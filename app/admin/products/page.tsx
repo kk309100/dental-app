@@ -18,6 +18,7 @@ type Product = {
   price: number | null
   active?: boolean | null
   location?: string | null
+  purchase_maker?: string | null
 }
 
 const PAGE_SIZE = 100
@@ -43,7 +44,7 @@ export default function AdminProductsPage() {
     setLoading(true)
     const { data } = await supabase
       .from("products")
-      .select("id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location")
+      .select("id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker")
       .order("name", { ascending: true })
       .limit(50000)
     setProducts((data as Product[]) || [])
@@ -79,6 +80,7 @@ export default function AdminProductsPage() {
           price: Number(pickKey(r, "定価", "売価", "price").replace(/[¥,]/g, "")) || null,
           reorder_level: Number(pickKey(r, "発注点", "reorder_level")) || null,
           location: pickKey(r, "棚番号", "ロケーション", "location") || null,
+          purchase_maker: pickKey(r, "ﾒｰｶｰ", "仕入れメーカー", "purchase_maker") || null,
         }
         const existing = (code && byCode.get(norm(code))) || byName.get(norm(name))
         if (existing) {
@@ -115,9 +117,10 @@ export default function AdminProductsPage() {
         発注点: p.reorder_level || "",
         在庫: p.stock || 0,
         棚番号: p.location || "",
+        ﾒｰｶｰ: p.purchase_maker || "",
         active: p.active === false ? "0" : "1",
       })),
-      ["商品名", "商品コード", "メーカー", "カテゴリ", "仕入価格", "定価", "発注点", "在庫", "棚番号", "active"]
+      ["商品名", "商品コード", "メーカー", "カテゴリ", "仕入価格", "定価", "発注点", "在庫", "棚番号", "ﾒｰｶｰ", "active"]
     )
     downloadCSV(`商品マスタ_${new Date().toISOString().slice(0, 10)}.csv`, csv)
   }
