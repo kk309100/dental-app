@@ -102,7 +102,7 @@ export default function OrderPage() {
   const filteredProducts = useMemo(() => {
     const k = norm(search)
     return products.filter((p) => {
-      const t = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""} ${p.barcode || ""}`)
+      const t = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""} ${p.barcode || ""} ${p.purchase_maker || ""}`)
       return (!k || t.includes(k)) && (category === "すべて" || p.category === category)
     })
   }, [products, search, category])
@@ -218,9 +218,21 @@ export default function OrderPage() {
 
       {/* 検索・スキャン */}
       <div style={{ background: "#fff", padding: "12px 16px", borderBottom: `1px solid ${C.border}`, position: "sticky", top: 49, zIndex: 19 }}>
-        <input value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔍  商品名・コード・メーカーで検索"
-          style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1.5px solid ${C.border}`, boxSizing: "border-box", fontSize: 14, marginBottom: 10, outline: "none", color: C.text }} />
+        <div style={{ position: "relative", marginBottom: 10 }}>
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="🔍  商品名・コード・メーカーで検索"
+            style={{ width: "100%", padding: "11px 14px", paddingRight: search ? 90 : 14, borderRadius: 10, border: `1.5px solid ${search ? C.primary : C.border}`, boxSizing: "border-box", fontSize: 14, outline: "none", color: C.text }} />
+          {search && (
+            <span style={{
+              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+              fontSize: 12, fontWeight: "bold", color: "#fff",
+              background: filteredProducts.length > 0 ? C.primary : "#9ca3af",
+              borderRadius: 999, padding: "3px 10px", whiteSpace: "nowrap",
+            }}>
+              {filteredProducts.length}件
+            </span>
+          )}
+        </div>
 
         <div className="cat-pills-wrap">
           {categories.map((c: any) => (
