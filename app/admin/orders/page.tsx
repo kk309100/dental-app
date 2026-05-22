@@ -821,12 +821,13 @@ function AdminOrdersPage() {
                 <th className="px-2 py-1.5 text-left">医院</th>
                 <th className="px-2 py-1.5 text-left w-28">日付</th>
                 <th className="px-2 py-1.5 text-right w-24">金額</th>
+                <th className="px-2 py-1.5 text-left w-36">備考</th>
                 <th className="px-2 py-1.5 text-center w-40">操作</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">該当注文なし</td></tr>
+                <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">該当注文なし</td></tr>
               ) : filtered.map((o, i) => {
                 const sc = STATUS_COLORS[o.status] || STATUS_COLORS["キャンセル"]
                 const items = itemsByOrder.get(o.id) || []
@@ -852,6 +853,9 @@ function AdminOrdersPage() {
                       <td className="px-2 py-1">{clinicById.get(o.clinic_id)?.name || "—"}</td>
                       <td className="px-2 py-1 text-[10px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                       <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
+                      <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
+                        {o.note ? <span className="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded text-[10px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
+                      </td>
                       <td className="px-2 py-1 text-center whitespace-nowrap">
                         <button onClick={() => toggleOrderOpen(o.id)} className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">{open ? "−" : "+"}</button>
                         <Link href={`/order-edit/${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">編</button></Link>

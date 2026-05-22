@@ -41,6 +41,7 @@ export default function OrderPage() {
   const [notices, setNotices]           = useState<Notice[]>([])
   const [dismissed, setDismissed]       = useState<string[]>([])
   const [ordererName, setOrdererName]   = useState("")
+  const [orderNote, setOrderNote]       = useState("")
 
   useEffect(() => { checkLogin() }, [])
 
@@ -172,12 +173,12 @@ export default function OrderPage() {
     const { data: ex } = await supabase.from("orders").select("id").gte("created_at", `${y}-${m}-${d}T00:00:00`).lte("created_at", `${y}-${m}-${d}T23:59:59`)
     const dn = `DN-${y}${m}${d}-${String((ex?.length || 0) + 1).padStart(4, "0")}`
     const { data: order, error } = await supabase.from("orders")
-      .insert([{ clinic_id: clinicId, status: "注文受付", total_price: total, delivery_number: dn, orderer_name: ordererName.trim() }]).select().single()
+      .insert([{ clinic_id: clinicId, status: "注文受付", total_price: total, delivery_number: dn, orderer_name: ordererName.trim(), note: orderNote.trim() || null }]).select().single()
     if (error) { alert("注文作成でエラー"); return }
     await supabase.from("order_items").insert(
       cart.map((i) => ({ order_id: order.id, product_id: i.id, product_name: i.name, quantity: i.quantity, price: i.price }))
     )
-    setLastOrderId(order.id); setCart([]); setOrdererName(""); setShowConfirm(false); setShowCart(false); setShowComplete(true)
+    setLastOrderId(order.id); setCart([]); setOrdererName(""); setOrderNote(""); setShowConfirm(false); setShowCart(false); setShowComplete(true)
     await fetchData(clinicId)
   }
 
@@ -446,7 +447,7 @@ export default function OrderPage() {
             <p style={{ fontSize: 13, color: C.sub, marginBottom: 12 }}>医院：<strong style={{ color: C.text }}>{clinicName}</strong></p>
 
             {/* 注文者名 */}
-            <div style={{ marginBottom: 14 }}>
+            <div style={{ marginBottom: 10 }}>
               <label style={{ fontSize: 12, fontWeight: "bold", color: C.sub, display: "block", marginBottom: 5 }}>
                 注文者名 <span style={{ color: "#ef4444" }}>*</span>
               </label>
@@ -458,6 +459,25 @@ export default function OrderPage() {
                   width: "100%", padding: "10px 13px", borderRadius: 8,
                   border: `1.5px solid ${ordererName.trim() ? C.border : "#fca5a5"}`,
                   fontSize: 14, boxSizing: "border-box" as const, outline: "none", color: C.text,
+                }}
+              />
+            </div>
+
+            {/* 備考 */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: "bold", color: C.sub, display: "block", marginBottom: 5 }}>
+                備考（任意）
+              </label>
+              <textarea
+                value={orderNote}
+                onChange={(e) => setOrderNote(e.target.value)}
+                placeholder="例：急ぎでお願いします　／　○○先生指定　など"
+                rows={2}
+                style={{
+                  width: "100%", padding: "10px 13px", borderRadius: 8,
+                  border: `1.5px solid ${C.border}`,
+                  fontSize: 13, boxSizing: "border-box" as const, outline: "none",
+                  color: C.text, resize: "none", lineHeight: 1.6,
                 }}
               />
             </div>
