@@ -300,45 +300,56 @@ export default function OrderPage() {
             </section>
           )}
 
-          {/* お気に入り */}
-          {favoriteProducts.length > 0 && (
-            <section style={{ marginBottom: 20 }}>
-              <h2 style={sh}>❤️ お気に入り</h2>
-              <div style={{ display: "flex", overflowX: "auto", gap: 10, paddingBottom: 6 }}>
-                {favoriteProducts.map((p) => (
-                  <MiniCard key={p.id} product={p} onAdd={addToCart} isFav={true} onFav={toggleFavorite} />
-                ))}
-              </div>
-            </section>
-          )}
+          {/* 検索中は上部セクションを非表示 → 結果をすぐ表示 */}
+          {!search && (
+            <>
+              {/* お気に入り */}
+              {favoriteProducts.length > 0 && (
+                <section style={{ marginBottom: 20 }}>
+                  <h2 style={sh}>❤️ お気に入り</h2>
+                  <div style={{ display: "flex", overflowX: "auto", gap: 10, paddingBottom: 6 }}>
+                    {favoriteProducts.map((p) => (
+                      <MiniCard key={p.id} product={p} onAdd={addToCart} isFav={true} onFav={toggleFavorite} />
+                    ))}
+                  </div>
+                </section>
+              )}
 
-          {/* よく使う商品 */}
-          {frequentProducts.length > 0 && (
-            <section style={{ marginBottom: 20 }}>
-              <h2 style={sh}>⭐ よく使う商品</h2>
-              <div style={{ display: "flex", overflowX: "auto", gap: 10, paddingBottom: 6 }}>
-                {frequentProducts.map((p) => (
-                  <MiniCard key={p.id} product={p} onAdd={addToCart} isFav={favorites.includes(p.id)} onFav={toggleFavorite} />
-                ))}
-              </div>
-            </section>
-          )}
+              {/* よく使う商品 */}
+              {frequentProducts.length > 0 && (
+                <section style={{ marginBottom: 20 }}>
+                  <h2 style={sh}>⭐ よく使う商品</h2>
+                  <div style={{ display: "flex", overflowX: "auto", gap: 10, paddingBottom: 6 }}>
+                    {frequentProducts.map((p) => (
+                      <MiniCard key={p.id} product={p} onAdd={addToCart} isFav={favorites.includes(p.id)} onFav={toggleFavorite} />
+                    ))}
+                  </div>
+                </section>
+              )}
 
-          {/* 最近注文した商品 */}
-          {recentProducts.length > 0 && (
-            <section style={{ marginBottom: 20 }}>
-              <h2 style={sh}>🕐 最近注文した商品</h2>
-              <div style={{ display: "flex", overflowX: "auto", gap: 10, paddingBottom: 6 }}>
-                {recentProducts.map((p: any) => (
-                  <MiniCard key={p.id} product={p} onAdd={addToCart} isFav={favorites.includes(p.id)} onFav={toggleFavorite} />
-                ))}
-              </div>
-            </section>
+              {/* 最近注文した商品 */}
+              {recentProducts.length > 0 && (
+                <section style={{ marginBottom: 20 }}>
+                  <h2 style={sh}>🕐 最近注文した商品</h2>
+                  <div style={{ display: "flex", overflowX: "auto", gap: 10, paddingBottom: 6 }}>
+                    {recentProducts.map((p: any) => (
+                      <MiniCard key={p.id} product={p} onAdd={addToCart} isFav={favorites.includes(p.id)} onFav={toggleFavorite} />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
           )}
 
           {/* 商品一覧 */}
           <section>
-            <h2 style={sh}>商品一覧 <span style={{ fontSize: 12, fontWeight: "normal", color: C.sub }}>{filteredProducts.length}件</span></h2>
+            <h2 style={sh}>
+              {search ? `🔍 検索結果` : "商品一覧"}
+              <span style={{ fontSize: 12, fontWeight: "normal", color: C.sub, marginLeft: 6 }}>{filteredProducts.length}件</span>
+              {search && filteredProducts.length === 0 && (
+                <span style={{ fontSize: 12, fontWeight: "normal", color: "#ef4444", marginLeft: 8 }}>— 見つかりません</span>
+              )}
+            </h2>
             <div className="product-grid">
               {filteredProducts.map((product) => (
                 <div key={product.id} style={{
