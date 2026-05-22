@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Html5Qrcode } from "html5-qrcode"
 
@@ -63,13 +63,13 @@ export default function OrderPage() {
 
   async function fetchData(cid: string) {
     const [p, o, i] = await Promise.all([
-      supabase.from("products").select("*").eq("active", true).order("name", { ascending: true }).limit(50000),
-      supabase.from("orders").select("*").eq("clinic_id", cid).order("created_at", { ascending: false }),
-      supabase.from("order_items").select("*"),
+      fetchAll("products", "*", (q) => q.eq("active", true).order("name", { ascending: true })),
+      fetchAll("orders", "*", (q) => q.eq("clinic_id", cid).order("created_at", { ascending: false })),
+      fetchAll("order_items", "*"),
     ])
-    setProducts(p.data || [])
-    setOrders(o.data || [])
-    setOrderItems(i.data || [])
+    setProducts(p || [])
+    setOrders(o || [])
+    setOrderItems(i || [])
   }
 
   async function fetchFavorites(cid: string) {

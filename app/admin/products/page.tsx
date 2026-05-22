@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { parseCSV, toCSV, downloadCSV } from "@/lib/csv"
 import ProductPriceMatrix from "@/app/components/ProductPriceMatrix"
@@ -48,11 +48,11 @@ export default function AdminProductsPage() {
 
   async function fetchProducts() {
     setLoading(true)
-    const { data } = await supabase
-      .from("products")
-      .select("id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id")
-      .order("name", { ascending: true })
-      .limit(50000)
+    const data = await fetchAll(
+      "products",
+      "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id",
+      (q) => q.order("name", { ascending: true })
+    )
     setProducts((data as Product[]) || [])
     setLoading(false)
   }
