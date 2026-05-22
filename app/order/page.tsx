@@ -396,13 +396,13 @@ export default function OrderPage() {
       {/* トップへ戻るボタン（常時表示） */}
       {!showCart && !showConfirm && !showComplete && (
         <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{
-          position: "fixed", bottom: cart.length > 0 ? 90 : 24, right: 20, zIndex: 49,
-          width: 44, height: 44, borderRadius: "50%",
-          background: "rgba(255,255,255,0.92)", color: C.sub,
-          border: `1.5px solid ${C.border}`, fontSize: 18, cursor: "pointer",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
+          position: "fixed", bottom: cart.length > 0 ? 88 : 24, left: 20, zIndex: 49,
+          width: 48, height: 48, borderRadius: "50%",
+          background: "#374151", color: "#fff",
+          border: "none", fontSize: 20, cursor: "pointer",
+          boxShadow: "0 3px 12px rgba(0,0,0,0.25)",
           display: "flex", alignItems: "center", justifyContent: "center",
-        }}>▲</button>
+        }}>↑</button>
       )}
 
       {/* フローティングカートボタン */}
