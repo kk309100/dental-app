@@ -65,12 +65,12 @@ export default function OrderPage() {
   async function fetchData(cid: string) {
     const [p, o, i] = await Promise.all([
       fetchAll("products", "*", (q) => q.eq("active", true).order("name", { ascending: true })),
-      fetchAll("orders", "*", (q) => q.eq("clinic_id", cid).order("created_at", { ascending: false })),
-      fetchAll("order_items", "*"),
+      supabase.from("orders").select("*").eq("clinic_id", cid).order("created_at", { ascending: false }).limit(200),
+      supabase.from("order_items").select("*").order("created_at", { ascending: false }).limit(2000),
     ])
     setProducts(p || [])
-    setOrders(o || [])
-    setOrderItems(i || [])
+    setOrders((o.data as any[]) || [])
+    setOrderItems((i.data as any[]) || [])
   }
 
   async function fetchFavorites(cid: string) {
