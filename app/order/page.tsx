@@ -42,6 +42,13 @@ export default function OrderPage() {
   const [dismissed, setDismissed]       = useState<string[]>([])
   const [ordererName, setOrdererName]   = useState("")
   const [orderNote, setOrderNote]       = useState("")
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 300)
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
 
   useEffect(() => { checkLogin() }, [])
 
@@ -392,6 +399,18 @@ export default function OrderPage() {
           </section>
         </div>
       </div>
+
+      {/* トップへ戻るボタン */}
+      {showScrollTop && !showCart && !showConfirm && !showComplete && (
+        <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} style={{
+          position: "fixed", bottom: cart.length > 0 ? 90 : 24, right: 20, zIndex: 49,
+          width: 44, height: 44, borderRadius: "50%",
+          background: "rgba(255,255,255,0.92)", color: C.sub,
+          border: `1.5px solid ${C.border}`, fontSize: 18, cursor: "pointer",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.12)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>▲</button>
+      )}
 
       {/* フローティングカートボタン */}
       {cart.length > 0 && !showCart && !showConfirm && !showComplete && (
