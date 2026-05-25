@@ -20,6 +20,16 @@ export default function BulkPrintWrapper() {
 // 商品名の折り返しを考慮し、Half（約144mm）に確実に収まる件数に設定
 const ITEMS_PER_PAGE = 6
 
+type Sheet = {
+  order: Order
+  items: Item[]       // このページに表示する商品
+  allItems: Item[]    // 注文全体の商品（合計金額計算用）
+  clinic: Clinic | null
+  pageNum: number
+  totalPages: number
+  isLastSheet: boolean
+}
+
 function BulkPrint() {
   const sp = useSearchParams()
   const ids = (sp.get("ids") || "").split(",").filter(Boolean)
@@ -50,7 +60,35 @@ function BulkPrint() {
 
   const clinicBy = new Map(clinics.map(c => [c.id, c]))
   const itemsByOrder = new Map<string, Item[]>()
-  items.forEach(i => { if (!itemsByOrder.has(i.order_id)) itemsByOrder.set(i.order_id, []); itemsByOrder.get(i.order_id)!.push(i) })
+  items.forEach(i => {
+    if (!itemsByOrder.has(i.order_id)) itemsByOrder.set(i.order_id, [])
+    itemsByOrder.get(i.order_id)!.push(i)
+  })
+
+  // 全シートを事前に計算（最後のシートを特定するため）
+  const sheets: Sheet[] = []
+  orders.forEach(o => {
+    const allItems = itemsByOrder.get(o.id) || []
+    const cl = clinicBy.get(o.clinic_id) || null
+    const chunks: Item[][] = []
+    for (let i = 0; i < Math.max(1, allItems.length); i += ITEMS_PER_PAGE) {
+      chunks.push(allItems.slice(i, i + ITEMS_PER_PAGE))
+    }
+    chunks.forEach((chunk, idx) => {
+      sheets.push({
+        order: o,
+        items: chunk,
+        allItems,
+        clinic: cl,
+        pageNum: idx + 1,
+        totalPages: chunks.length,
+        isLastSheet: false, // 後で最後だけ true に
+      })
+    })
+  })
+  if (sheets.length > 0) {
+    sheets[sheets.length - 1].isLastSheet = true
+  }
 
   return (
     <>
@@ -59,21 +97,18 @@ function BulkPrint() {
         <button onClick={() => window.close()} className="px-4 py-2 bg-gray-200 text-sm rounded">閉じる</button>
         <span className="ml-3 text-xs text-gray-700">{orders.length}件の納品書（A4 1枚に得意先控+自社控）</span>
       </div>
-      {orders.map(o => {
-        const its = itemsByOrder.get(o.id) || []
-        const cl = clinicBy.get(o.clinic_id) || null
-        const pages: Item[][] = []
-        for (let i = 0; i < Math.max(1, its.length); i += ITEMS_PER_PAGE) {
-          pages.push(its.slice(i, i + ITEMS_PER_PAGE))
-        }
-        return (
-          <div key={o.id}>
-            {pages.map((pi, idx) => (
-              <DeliveryNoteSheet key={idx} order={o} items={pi} clinic={cl} />
-            ))}
-          </div>
-        )
-      })}
+      {sheets.map((s, i) => (
+        <DeliveryNoteSheet
+          key={i}
+          order={s.order}
+          items={s.items}
+          allItems={s.allItems}
+          clinic={s.clinic}
+          pageNum={s.pageNum}
+          totalPages={s.totalPages}
+          isLastSheet={s.isLastSheet}
+        />
+      ))}
       <style jsx global>{`
         @media print {
           body { background: #fff !important; }

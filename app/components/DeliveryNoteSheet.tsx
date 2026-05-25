@@ -2,7 +2,7 @@
 
 // 納品書 1注文 = A4 1枚
 // 上半分: 得意先控え / 中央: 切り取り線 / 下半分: 自社控え（受領印）
-// 商品が多い場合は CSS @page で自然改ページ
+// 商品が多い場合は ITEMS_PER_PAGE で分割し、複数枚に印刷する
 
 import { fmtYen, calcTax, getClinicPrefix, getCorporateLabel } from "@/lib/invoice"
 import { COMPANY } from "@/lib/company"
@@ -14,17 +14,30 @@ type Order = { id: string; delivered_at: string | null; created_at: string; deli
 
 export default function DeliveryNoteSheet({
   order, items, clinic,
+  allItems,       // 注文全商品（合計金額の計算に使う）
+  pageNum,        // このシートのページ番号（1始まり）
+  totalPages,     // この注文の総ページ数
+  isLastSheet,    // 印刷ドキュメント全体の最後のシートか
 }: {
   order: Order
   items: Item[]
   clinic: Clinic | null
+  allItems?: Item[]
+  pageNum?: number
+  totalPages?: number
+  isLastSheet?: boolean
 }) {
-  const subtotal = items.reduce((s, i) => s + Number(i.price || 0) * Number(i.quantity || 0), 0)
+  // 合計は注文全体で計算（分割時も同じ合計を表示）
+  const grandItems = allItems && allItems.length > 0 ? allItems : items
+  const subtotal = grandItems.reduce((s, i) => s + Number(i.price || 0) * Number(i.quantity || 0), 0)
   const tax = calcTax(subtotal)
   const total = subtotal + tax
+
   const dateStr = (order.delivered_at || order.created_at).slice(0, 10).replace(/-/g, "/")
   const corporateLabel = clinic ? getCorporateLabel(clinic.corporate_name, clinic.name, clinic.clinic_type) : ""
   const prefix = clinic ? getClinicPrefix(clinic.name, clinic.corporate_name, clinic.clinic_type) : ""
+  const isMultiPage = totalPages !== undefined && totalPages > 1
+  const pageLabel = isMultiPage ? `${pageNum ?? 1} / ${totalPages}ページ` : ""
 
   function Half({ kind }: { kind: "customer" | "self" }) {
     return (
@@ -47,7 +60,10 @@ export default function DeliveryNoteSheet({
         {/* タイトル */}
         <div style={{ borderBottom: "1.5px solid #111", paddingBottom: 4, marginBottom: 8 }}>
           <h1 style={{ fontSize: 18, letterSpacing: "0.3em", margin: "4px 0 2px", textAlign: "center" }}>納 品 書</h1>
-          <p style={{ textAlign: "center", margin: 0, fontSize: 9, color: "#666" }}>No. {order.delivery_number || order.id.slice(0, 8)}</p>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12 }}>
+            <p style={{ margin: 0, fontSize: 9, color: "#666" }}>No. {order.delivery_number || order.id.slice(0, 8)}</p>
+            {pageLabel && <p style={{ margin: 0, fontSize: 8, color: "#999" }}>（{pageLabel}）</p>}
+          </div>
         </div>
 
         {/* 宛先 + 自社 */}
@@ -126,7 +142,8 @@ export default function DeliveryNoteSheet({
       minHeight: "297mm",
       margin: "0 auto",
       background: "#fff",
-      pageBreakAfter: "always" as const,
+      // 最後のシートは改ページしない（余分な空白ページを防ぐ）
+      pageBreakAfter: isLastSheet ? "auto" : "always",
       boxSizing: "border-box",
     }}>
       <Half kind="customer" />
