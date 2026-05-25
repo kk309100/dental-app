@@ -36,6 +36,7 @@ export default function HistoryPage() {
     order: any
     items: { product_id: string; product_name: string; price: number; quantity: number }[]
   } | null>(null)
+  const [reorderOrdererName, setReorderOrdererName] = useState("")
 
   useEffect(() => { checkLogin() }, [])
 
@@ -123,6 +124,7 @@ export default function HistoryPage() {
   function openReorderModal(order: any) {
     const items = getItems(order.id)
     if (items.length === 0) { alert("再注文できる商品がありません"); return }
+    setReorderOrdererName(order.orderer_name || "")  // 前回の担当者名をプリフィル
     setReorderModal({
       order,
       items: items.map((i) => ({
@@ -144,6 +146,7 @@ export default function HistoryPage() {
     if (!reorderModal) return
     const items = reorderModal.items.filter((i) => i.quantity > 0)
     if (items.length === 0) { alert("数量が0の商品は注文できません"); return }
+    if (!reorderOrdererName.trim()) { alert("担当者名を入力してください。"); return }
     setReorderingId(reorderModal.order.id)
     setReorderModal(null)
     const now = new Date()
@@ -153,13 +156,14 @@ export default function HistoryPage() {
     const deliveryNumber = `DN-${y}${m}${d}-${String((existing?.length || 0) + 1).padStart(4, "0")}`
     const totalPrice = items.reduce((s, i) => s + i.price * i.quantity, 0)
     const { data: newOrder, error } = await supabase.from("orders")
-      .insert([{ clinic_id: clinicId, status: "注文受付", total_price: totalPrice, delivery_number: deliveryNumber }])
+      .insert([{ clinic_id: clinicId, status: "注文受付", total_price: totalPrice, delivery_number: deliveryNumber, orderer_name: reorderOrdererName.trim() }])
       .select().single()
     if (error) { alert("再注文でエラーが出ました"); setReorderingId(null); return }
     await supabase.from("order_items").insert(
       items.map((i) => ({ order_id: newOrder.id, product_id: i.product_id, product_name: i.product_name, quantity: i.quantity, price: i.price }))
     )
     setReorderingId(null)
+    setReorderOrdererName("")
     setReorderDone(true)
     await fetchHistory(clinicId)
   }
@@ -411,6 +415,22 @@ export default function HistoryPage() {
               ))}
             </div>
             <div style={{ borderTop: "1px solid #eee", paddingTop: 14 }}>
+              {/* 担当者名 */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 12, fontWeight: "bold", color: "#6b7280", display: "block", marginBottom: 5 }}>
+                  担当者名 <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <input
+                  value={reorderOrdererName}
+                  onChange={(e) => setReorderOrdererName(e.target.value)}
+                  placeholder="例：山田 太郎"
+                  style={{
+                    width: "100%", padding: "10px 13px", borderRadius: 8,
+                    border: `1.5px solid ${reorderOrdererName.trim() ? "#e5e7eb" : "#fca5a5"}`,
+                    fontSize: 14, boxSizing: "border-box" as const, outline: "none",
+                  }}
+                />
+              </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
                 <span style={{ fontWeight: "bold", fontSize: 14 }}>合計（税抜）</span>
                 <span style={{ fontWeight: "bold", fontSize: 18 }}>
@@ -418,7 +438,7 @@ export default function HistoryPage() {
                 </span>
               </div>
               <button onClick={submitReorder}
-                style={{ width: "100%", padding: 15, borderRadius: 12, background: "#f08c00", color: "#fff", border: "none", fontSize: 16, fontWeight: "bold", cursor: "pointer" }}>
+                style={{ width: "100%", padding: 15, borderRadius: 12, background: "#ea580c", color: "#fff", border: "none", fontSize: 16, fontWeight: "bold", cursor: "pointer", boxShadow: "0 3px 12px rgba(234,88,12,0.4)" }}>
                 この内容で再注文する
               </button>
             </div>

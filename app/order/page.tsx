@@ -211,6 +211,35 @@ export default function OrderPage() {
         .mini-card:active { opacity: 0.8; }
         .cat-sidebar::-webkit-scrollbar { width: 4px; }
         .cat-sidebar::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+
+        /* カート下部固定バー */
+        .cart-bar {
+          position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+          background: #fff;
+          border-top: 2px solid ${C.accent};
+          box-shadow: 0 -4px 20px rgba(0,0,0,0.12);
+          display: flex; align-items: center; gap: 12px;
+          padding: 10px 16px;
+          padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        }
+        .cart-bar-info { flex: 1; min-width: 0; }
+        .cart-bar-qty {
+          font-size: 13px; font-weight: bold; color: ${C.sub};
+          white-space: nowrap;
+        }
+        .cart-bar-price {
+          font-size: 18px; font-weight: bold; color: ${C.accent};
+          white-space: nowrap;
+        }
+        .cart-bar-btn {
+          flex-shrink: 0;
+          padding: 12px 20px; border-radius: 12px;
+          background: ${C.accent}; color: #fff;
+          border: none; font-size: 15px; font-weight: bold; cursor: pointer;
+          box-shadow: 0 3px 10px rgba(234,88,12,0.4);
+          white-space: nowrap;
+        }
+        .cart-bar-btn:active { transform: scale(0.97); }
       `}</style>
 
       {/* ヘッダーバー */}
@@ -268,7 +297,7 @@ export default function OrderPage() {
       {scanning && <div id="reader" style={{ width: "100%" }} />}
 
       {/* サイドバー + コンテンツ */}
-      <div style={{ display: "flex", alignItems: "flex-start", paddingBottom: 120 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", paddingBottom: cart.length > 0 ? 100 : 40 }}>
 
         {/* カテゴリサイドバー（PC） */}
         <div className="cat-sidebar">
@@ -401,18 +430,17 @@ export default function OrderPage() {
       </div>
 
 
-      {/* フローティングカートボタン */}
+      {/* カート下部固定バー */}
       {cart.length > 0 && !showCart && !showConfirm && !showComplete && (
-        <button onClick={() => setShowCart(true)} style={{
-          position: "fixed", bottom: 24, right: 20, zIndex: 50,
-          background: C.accent, color: "#fff", border: "none", borderRadius: 999,
-          padding: "14px 22px", fontSize: 15, fontWeight: "bold", cursor: "pointer",
-          boxShadow: "0 4px 20px rgba(234,88,12,0.5)",
-          display: "flex", alignItems: "center", gap: 10,
-        }}>
-          🛒 {totalQty}点
-          <span style={{ fontSize: 13, opacity: 0.9 }}>¥{totalPrice.toLocaleString()}</span>
-        </button>
+        <div className="cart-bar">
+          <div className="cart-bar-info">
+            <div className="cart-bar-qty">🛒 {totalQty}点</div>
+            <div className="cart-bar-price">¥{totalPrice.toLocaleString()} <span style={{ fontSize: 12, fontWeight: "normal", color: C.sub }}>税抜</span></div>
+          </div>
+          <button className="cart-bar-btn" onClick={() => setShowCart(true)}>
+            カートを確認 →
+          </button>
+        </div>
       )}
 
       {/* カートドロワー */}
