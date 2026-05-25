@@ -8,7 +8,14 @@ const STEPS = ["注文受付", "処理中", "発送済み", "納品済み"]
 const CANCEL_STATUSES = new Set(["キャンセル", "取消", "キャンセル申請中"])
 
 function getStepIndex(status: string) {
-  return STEPS.indexOf(status)
+  // 管理側ステータス → 医院側表示ステップへのマッピング
+  // STEPS = ["注文受付", "処理中", "発送済み", "納品済み"]
+  if (status === "注文受付") return 0
+  if (status === "確認中") return 1          // 処理中
+  if (status === "準備中") return 2          // 発送済み（出荷準備完了）
+  if (status === "納品済み" || status === "納品済") return 3
+  // 不明なステータスは受付済みとして表示（-1 は ProgressBar が壊れる）
+  return 0
 }
 
 function isCancelled(status: string) {
@@ -57,7 +64,11 @@ export default function HistoryPage() {
     const { data: ordersData } = await supabase
       .from("orders").select("*").eq("clinic_id", cid)
       .order("created_at", { ascending: false })
-    const { data: itemsData } = await supabase.from("order_items").select("*")
+    // 自医院の注文IDに絞って取得（全件取得すると他医院データが混入し上限も超える）
+    const orderIds = (ordersData || []).map((o: any) => o.id)
+    const { data: itemsData } = orderIds.length > 0
+      ? await supabase.from("order_items").select("*").in("order_id", orderIds).limit(50000)
+      : { data: [] }
     setOrders(ordersData || [])
     setOrderItems(itemsData || [])
   }

@@ -177,6 +177,9 @@ function ShippingPage() {
     const today = new Date()
     const todayStr = today.toISOString().slice(0, 10)
     const createdSlipIds: string[] = []
+    // 同一商品が複数医院の注文に含まれる場合の二重減算防止
+    // productById はページロード時点の在庫なので、処理済み分を手元で追跡する
+    const deductedQty = new Map<string, number>()
 
     for (const [clinicId, ords] of byCl.entries()) {
       const totalAmount = ords.reduce((s, o) => s + Number(o.total_price || 0), 0)
@@ -216,8 +219,11 @@ function ShippingPage() {
       const itsToShip = items.filter(it => orderIds.includes(it.order_id))
       for (const it of itsToShip) {
         if (!it.product_id) continue
-        const before = Number(productById.get(it.product_id)?.stock || 0)
+        // 今回のバッチ処理で既に減算した分を差し引いた「現在の正しい在庫」を算出
+        const prevDeducted = deductedQty.get(it.product_id) || 0
+        const before = Number(productById.get(it.product_id)?.stock || 0) - prevDeducted
         const after = before - Number(it.quantity)
+        deductedQty.set(it.product_id, prevDeducted + Number(it.quantity))
         await supabase.from("products").update({ stock: after }).eq("id", it.product_id)
         try {
           await supabase.from("stock_movements").insert({
