@@ -7,69 +7,90 @@ import { Ic } from "./_lib/icons"
 import UserBadge from "@/app/components/UserBadge"
 
 const NAV = [
-  { id: "home", href: "/admin", label: "HOME", icon: Ic.dash, exact: true },
-  // 業務フロー順: 注文 → 発注 → 仕入 → 納品 → 請求
-  { id: "orders", href: "/admin/orders", label: "注文", icon: Ic.order },
-  { id: "purchase-orders", href: "/admin/purchase-orders", label: "発注", icon: Ic.truck },
-  { id: "po-pool", href: "/admin/purchase-orders/pool", label: "🛒プール", icon: Ic.purchase },
-  { id: "receivings", href: "/admin/receivings", label: "仕入納品", icon: Ic.purchase },
-  { id: "deliveries", href: "/admin/deliveries", label: "医院納品", icon: Ic.doc },
-  { id: "invoices", href: "/admin/invoices", label: "請求", icon: Ic.sales },
-  { id: "inventory", href: "/admin/inventory", label: "在庫", icon: Ic.product },
-  { id: "sales", href: "/admin/sales", label: "売上", icon: Ic.sales },
-  { id: "masters", href: "/admin/masters", label: "マスター", icon: Ic.dash },
-  { id: "notices", href: "/admin/notices", label: "📢 お知らせ", icon: Ic.dash },
-  // 一番右にダッシュボード
-  { id: "dashboard", href: "/admin/dashboard", label: "📊 ダッシュ", icon: Ic.dash },
+  { id: "home",           href: "/admin",                     label: "ホーム",     icon: Ic.dash,     exact: true },
+  { id: "orders",         href: "/admin/orders",              label: "注文",       icon: Ic.order },
+  { id: "purchase-orders",href: "/admin/purchase-orders",     label: "発注",       icon: Ic.truck },
+  { id: "po-pool",        href: "/admin/purchase-orders/pool",label: "発注プール", icon: Ic.purchase },
+  { id: "receivings",     href: "/admin/receivings",          label: "仕入納品",   icon: Ic.purchase },
+  { id: "deliveries",     href: "/admin/deliveries",          label: "医院納品",   icon: Ic.doc },
+  { id: "invoices",       href: "/admin/invoices",            label: "請求",       icon: Ic.sales },
+  { id: "inventory",      href: "/admin/inventory",           label: "在庫",       icon: Ic.product },
+  { id: "sales",          href: "/admin/sales",               label: "売上",       icon: Ic.sales },
+  { id: "masters",        href: "/admin/masters",             label: "マスター",   icon: Ic.dash },
+  { id: "notices",        href: "/admin/notices",             label: "お知らせ",   icon: Ic.dash },
+  { id: "dashboard",      href: "/admin/dashboard",           label: "分析",       icon: Ic.dash },
 ]
 
 const SUB = [
-  { href: "/admin/supplier-invoices", label: "仕入先請求書付け合わせ", icon: Ic.check },
-  { href: "/admin/invoices/bulk", label: "一括請求", icon: Ic.doc },
-  { href: "/admin/receivables", label: "売掛金台帳", icon: Ic.sales },
-  { href: "/admin/bank-import", label: "銀行CSV消込", icon: Ic.dl },
-  { href: "/admin/purchase-order", label: "推奨発注リスト(旧)", icon: Ic.purchase },
-  { href: "/admin/stocktakes", label: "棚卸", icon: Ic.check },
-  { href: "/admin/stock-movements", label: "在庫履歴", icon: Ic.dash },
-  { href: "/admin/inventory-valuation", label: "在庫評価", icon: Ic.product },
-  { href: "/admin/delivery-search", label: "納品書検索", icon: Ic.search },
+  { href: "/admin/supplier-invoices",    label: "仕入先請求書付け合わせ" },
+  { href: "/admin/invoices/bulk",        label: "一括請求" },
+  { href: "/admin/receivables",          label: "売掛金台帳" },
+  { href: "/admin/bank-import",          label: "銀行CSV消込" },
+  { href: "/admin/purchase-order",       label: "推奨発注リスト(旧)" },
+  { href: "/admin/stocktakes",           label: "棚卸" },
+  { href: "/admin/stock-movements",      label: "在庫履歴" },
+  { href: "/admin/inventory-valuation",  label: "在庫評価" },
+  { href: "/admin/delivery-search",      label: "納品書検索" },
 ]
+
+// アクセントカラー
+const ACCENT = "#2563eb"   // blue-600
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
 
-  const isActive = (href: string, exact?: boolean) => exact ? pathname === href : pathname.startsWith(href)
+  const isActive = (href: string, exact?: boolean) =>
+    exact ? pathname === href : pathname.startsWith(href)
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#f8f9fb", fontFamily: "'Noto Sans JP','Hiragino Kaku Gothic ProN',sans-serif" }}>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300&family=Josefin+Sans:wght@100;200;300&display=swap" />
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f3f4f6", fontFamily: "'Noto Sans JP','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif" }}>
 
-      {/* モバイルメニュー */}
-      {menuOpen && <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setMenuOpen(false)} />}
+      {/* ── モバイルドロワー ── */}
       {menuOpen && (
-        <div className="fixed inset-y-0 left-0 z-50 w-64 bg-white flex flex-col shadow-xl">
-          <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-            <div style={{ fontFamily: "'Josefin Sans',sans-serif", fontWeight: 200, fontSize: 9, letterSpacing: "0.3em", color: "#aaa", textTransform: "uppercase" as const }}>Dental Connect</div>
-            <button onClick={() => setMenuOpen(false)} className="text-gray-400 text-2xl">×</button>
+        <div style={{ position: "fixed", inset: 0, zIndex: 40, background: "rgba(0,0,0,0.5)" }} onClick={() => setMenuOpen(false)} />
+      )}
+      {menuOpen && (
+        <div style={{ position: "fixed", top: 0, bottom: 0, left: 0, zIndex: 50, width: 260, background: "#fff", display: "flex", flexDirection: "column", boxShadow: "4px 0 20px rgba(0,0,0,0.12)" }}>
+          {/* ドロワーヘッダー */}
+          <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #e5e7eb" }}>
+            <span style={{ fontSize: 16, fontWeight: 700, color: "#111" }}>Dental Connect</span>
+            <button onClick={() => setMenuOpen(false)} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: "#9ca3af", lineHeight: 1 }}>×</button>
           </div>
-          <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-            {NAV.map((item) => (
-              <Link key={item.id} href={item.href} onClick={() => setMenuOpen(false)}
-                className={"w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium " + (isActive(item.href, item.exact) ? "text-gray-900 bg-gray-100" : "text-gray-600 hover:bg-gray-50")}>
-                {item.icon}
-                <span style={{ flex: 1, textAlign: "left", fontFamily: "'Josefin Sans',sans-serif", fontWeight: 300, letterSpacing: "0.05em" }}>{item.label}</span>
-              </Link>
-            ))}
-            <div className="pt-3 mt-2 border-t border-gray-100 space-y-0.5">
+          {/* ドロワーナビ */}
+          <nav style={{ flex: 1, padding: "10px 12px", overflowY: "auto" }}>
+            {NAV.map((item) => {
+              const active = isActive(item.href, item.exact)
+              return (
+                <Link key={item.id} href={item.href} onClick={() => setMenuOpen(false)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "11px 14px", borderRadius: 10, marginBottom: 2,
+                    fontSize: 15, fontWeight: active ? 700 : 500,
+                    color: active ? "#fff" : "#374151",
+                    background: active ? ACCENT : "transparent",
+                    textDecoration: "none",
+                  }}>
+                  {item.icon}
+                  <span>{item.label}</span>
+                </Link>
+              )
+            })}
+            <div style={{ borderTop: "1px solid #e5e7eb", marginTop: 12, paddingTop: 12 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.08em", padding: "0 14px 8px", textTransform: "uppercase" }}>その他</p>
               {SUB.map((item) => (
                 <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:bg-gray-50">
-                  {item.icon}
-                  <span style={{ fontFamily: "'Josefin Sans',sans-serif", fontWeight: 300, fontSize: 13 }}>{item.label}</span>
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "10px 14px", borderRadius: 10, marginBottom: 2,
+                    fontSize: 14, fontWeight: 400, color: "#6b7280",
+                    background: "transparent", textDecoration: "none",
+                  }}>
+                  <span>{item.label}</span>
                 </Link>
               ))}
-              <Link href="/login" className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-400 hover:bg-red-50 hover:text-red-500">
+              <Link href="/login"
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 10, fontSize: 14, color: "#ef4444", textDecoration: "none", marginTop: 4 }}>
                 {Ic.lock}<span>ログアウト</span>
               </Link>
             </div>
@@ -77,67 +98,141 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       )}
 
-      {/* トップナビ */}
-      <header className="bg-white sticky top-0 z-30 shrink-0" style={{ borderBottom: "1px solid #e8eaed", boxShadow: "0 1px 8px rgba(0,0,0,0.04)" }}>
-        <div className="flex items-center px-4 h-14">
-          <Link href="/admin" className="flex flex-col mr-6 shrink-0">
-            <span style={{ fontFamily: "'Josefin Sans',sans-serif", fontWeight: 200, fontSize: 8, letterSpacing: "0.3em", color: "#aaa", textTransform: "uppercase" as const }}>Dental Connect</span>
-            <span style={{ fontFamily: "'Cormorant Garamond',serif", fontWeight: 300, fontSize: 13, color: "#222", letterSpacing: "0.05em", marginTop: -2 }}>管理画面</span>
+      {/* ── トップヘッダー ── */}
+      <header style={{
+        background: "#fff", position: "sticky", top: 0, zIndex: 30,
+        borderBottom: "1px solid #e5e7eb",
+        boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", padding: "0 16px", height: 56 }}>
+
+          {/* ロゴ */}
+          <Link href="/admin" style={{ textDecoration: "none", marginRight: 16, flexShrink: 0 }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: ACCENT, letterSpacing: "0.02em" }}>
+              Dental Connect
+            </span>
+            <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 6 }}>管理</span>
           </Link>
-          <nav className="flex items-center flex-1 overflow-x-auto" style={{ gap: 2 }}>
+
+          {/* PCナビ */}
+          <nav style={{ flex: 1, display: "flex", alignItems: "center", gap: 2, overflowX: "auto", scrollbarWidth: "none" }}
+            className="hide-scrollbar">
             {NAV.map((item) => {
               const active = isActive(item.href, item.exact)
               return (
                 <Link key={item.id} href={item.href}
-                  className={"flex items-center gap-1 px-2.5 py-1.5 rounded-lg transition-all whitespace-nowrap " + (active ? "text-gray-900 bg-gray-100 font-semibold" : "text-gray-500 hover:text-gray-800 hover:bg-gray-50")}>
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5,
+                    padding: "6px 11px", borderRadius: 8,
+                    fontSize: 13, fontWeight: active ? 700 : 500,
+                    color: active ? "#fff" : "#6b7280",
+                    background: active ? ACCENT : "transparent",
+                    textDecoration: "none", whiteSpace: "nowrap",
+                    transition: "all 0.15s",
+                  }}>
                   {item.icon}
-                  <span style={{ fontFamily: "'Josefin Sans',sans-serif", fontWeight: 300, letterSpacing: "0.02em", fontSize: 11 }}>{item.label}</span>
+                  <span>{item.label}</span>
                 </Link>
               )
             })}
           </nav>
-          <div className="hidden md:flex items-center gap-2 ml-4 shrink-0">
+
+          {/* 右側 PC */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8, flexShrink: 0 }}
+            className="pc-only">
             <UserBadge />
-            <Link href="/" className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs text-gray-400 hover:bg-gray-50 hover:text-gray-700">
+            <Link href="/" style={{
+              padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+              color: "#6b7280", border: "1px solid #e5e7eb", textDecoration: "none",
+              background: "#f9fafb",
+            }}>
               医院側 →
             </Link>
           </div>
-          <div className="md:hidden flex items-center gap-3 ml-auto">
-            <button onClick={() => setMenuOpen(true)} className="flex flex-col gap-1.5 p-1">
-              <span className="w-5 h-0.5 bg-gray-700 block rounded" />
-              <span className="w-5 h-0.5 bg-gray-700 block rounded" />
-              <span className="w-5 h-0.5 bg-gray-700 block rounded" />
-            </button>
-          </div>
+
+          {/* ハンバーガー（モバイル） */}
+          <button onClick={() => setMenuOpen(true)}
+            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 6, display: "flex", flexDirection: "column", gap: 5 }}
+            className="mobile-only">
+            <span style={{ display: "block", width: 22, height: 2, background: "#374151", borderRadius: 2 }} />
+            <span style={{ display: "block", width: 22, height: 2, background: "#374151", borderRadius: 2 }} />
+            <span style={{ display: "block", width: 22, height: 2, background: "#374151", borderRadius: 2 }} />
+          </button>
         </div>
+
+        <style>{`
+          .hide-scrollbar { scrollbar-width: none; }
+          .hide-scrollbar::-webkit-scrollbar { display: none; }
+          @media (max-width: 767px) {
+            .pc-only { display: none !important; }
+            nav.hide-scrollbar { display: none !important; }
+          }
+          @media (min-width: 768px) {
+            .mobile-only { display: none !important; }
+          }
+        `}</style>
       </header>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="px-4 py-4 md:px-6 md:py-5">
+      {/* ── メインコンテンツ ── */}
+      <main style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ padding: "20px 16px 32px", maxWidth: 1400, margin: "0 auto" }}
+          className="main-inner">
+          <style>{`
+            @media (min-width: 768px) {
+              .main-inner { padding: 24px 24px 40px !important; }
+            }
+          `}</style>
           {children}
         </div>
       </main>
 
-      {/* スマホ底部ナビ */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white z-30 flex" style={{ borderTop: "1px solid #e8eaed", paddingBottom: "env(safe-area-inset-bottom)" }}>
+      {/* ── スマホ底部ナビ ── */}
+      <nav style={{
+        display: "none",
+        position: "fixed", bottom: 0, left: 0, right: 0,
+        background: "#fff", zIndex: 30,
+        borderTop: "1px solid #e5e7eb",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        boxShadow: "0 -2px 10px rgba(0,0,0,0.06)",
+      }} className="mobile-bottom-nav">
+        <style>{`
+          @media (max-width: 767px) {
+            .mobile-bottom-nav { display: flex !important; }
+            .mobile-spacer { display: block !important; }
+          }
+        `}</style>
         {[
-          { href: "/admin", label: "ホーム", icon: Ic.dash, exact: true },
-          { href: "/admin/orders", label: "注文", icon: Ic.order },
-          { href: "/admin/invoices", label: "請求書", icon: Ic.sales },
-          { href: "/admin/masters", label: "マスター", icon: Ic.dash },
-        ].map((item) => (
-          <Link key={item.href} href={item.href} className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5"
-            style={{ color: isActive(item.href, item.exact) ? "#1a1a1a" : "#9ca3af" }}>
-            {item.icon}
-            <span style={{ fontSize: 10, fontFamily: "'Josefin Sans',sans-serif", fontWeight: 300, letterSpacing: "0.08em" }}>{item.label}</span>
-          </Link>
-        ))}
-        <button onClick={() => setMenuOpen(true)} className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5" style={{ color: "#9ca3af" }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
-          <span style={{ fontSize: 10, fontFamily: "'Josefin Sans',sans-serif", fontWeight: 300, letterSpacing: "0.08em" }}>メニュー</span>
+          { href: "/admin",           label: "ホーム",   icon: Ic.dash,    exact: true },
+          { href: "/admin/orders",    label: "注文",     icon: Ic.order },
+          { href: "/admin/invoices",  label: "請求",     icon: Ic.sales },
+          { href: "/admin/inventory", label: "在庫",     icon: Ic.product },
+        ].map((item) => {
+          const active = isActive(item.href, item.exact as boolean | undefined)
+          return (
+            <Link key={item.href} href={item.href}
+              style={{
+                flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+                justifyContent: "center", padding: "8px 4px 10px", gap: 4, textDecoration: "none",
+                color: active ? ACCENT : "#9ca3af",
+              }}>
+              {item.icon}
+              <span style={{ fontSize: 11, fontWeight: active ? 700 : 500 }}>{item.label}</span>
+            </Link>
+          )
+        })}
+        <button onClick={() => setMenuOpen(true)}
+          style={{
+            flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "center", padding: "8px 4px 10px", gap: 4,
+            background: "none", border: "none", cursor: "pointer", color: "#9ca3af",
+          }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width={18} height={18}>
+            <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+          <span style={{ fontSize: 11, fontWeight: 500 }}>メニュー</span>
         </button>
       </nav>
-      <div className="md:hidden h-16" />
+      <div style={{ display: "none" }} className="mobile-spacer"><div style={{ height: 64 }} /></div>
     </div>
   )
 }
