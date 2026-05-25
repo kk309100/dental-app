@@ -6,11 +6,12 @@ import { useRouter } from "next/navigation"
 import { Html5Qrcode } from "html5-qrcode"
 
 const C = {
-  primary:   "#22a648",
-  primaryBg: "#e8f5ec",
-  accent:    "#f08c00",
-  accentBg:  "#fff7e6",
-  scan:      "#22a648",
+  primary:   "#059669",   // エメラルドグリーン（カートに追加）
+  primaryBg: "#d1fae5",
+  accent:    "#ea580c",   // ビビッドオレンジ（注文確認・確定）
+  accentBg:  "#fff7ed",
+  scan:      "#0284c7",   // スカイブルー（バーコードスキャン）
+  confirm:   "#dc2626",   // 赤（注文を確定する）
   text:      "#1a1a1a",
   sub:       "#6b7280",
   border:    "#e5e7eb",
@@ -215,7 +216,7 @@ export default function OrderPage() {
       {/* ヘッダーバー */}
       <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`, padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 20 }}>
         <button onClick={() => router.push("/menu")}
-          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: C.primaryBg, color: C.primary, border: `1px solid #b2dfbd`, borderRadius: 8, fontSize: 13, fontWeight: "bold", cursor: "pointer" }}>
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: C.primaryBg, color: C.primary, border: `1.5px solid ${C.primary}`, borderRadius: 8, fontSize: 13, fontWeight: "bold", cursor: "pointer" }}>
           ← メニュー
         </button>
         <span style={{ fontSize: 13, fontWeight: "bold", color: C.sub }}>{clinicName}</span>
@@ -258,6 +259,7 @@ export default function OrderPage() {
         <button onClick={startScan} style={{
           width: "100%", padding: "11px 0", borderRadius: 10, background: C.scan, color: "#fff",
           border: "none", fontWeight: "bold", fontSize: 14, cursor: "pointer",
+          boxShadow: "0 2px 8px rgba(2,132,199,0.35)",
         }}>
           📷 バーコードでカートに追加
         </button>
@@ -387,6 +389,7 @@ export default function OrderPage() {
                     width: "100%", padding: "10px 0", borderRadius: 10,
                     background: C.primary, color: "#fff", border: "none",
                     fontWeight: "bold", fontSize: 14, cursor: "pointer",
+                    boxShadow: "0 2px 8px rgba(5,150,105,0.4)",
                   }}>
                     ＋ カートに追加
                   </button>
@@ -402,9 +405,9 @@ export default function OrderPage() {
       {cart.length > 0 && !showCart && !showConfirm && !showComplete && (
         <button onClick={() => setShowCart(true)} style={{
           position: "fixed", bottom: 24, right: 20, zIndex: 50,
-          background: C.primary, color: "#fff", border: "none", borderRadius: 999,
+          background: C.accent, color: "#fff", border: "none", borderRadius: 999,
           padding: "14px 22px", fontSize: 15, fontWeight: "bold", cursor: "pointer",
-          boxShadow: "0 4px 20px rgba(34,166,72,0.4)",
+          boxShadow: "0 4px 20px rgba(234,88,12,0.5)",
           display: "flex", alignItems: "center", gap: 10,
         }}>
           🛒 {totalQty}点
@@ -442,8 +445,9 @@ export default function OrderPage() {
                 <span style={{ fontWeight: "bold", fontSize: 20, color: C.primary }}>¥{totalPrice.toLocaleString()}</span>
               </div>
               <button onClick={() => { setShowCart(false); setShowConfirm(true) }} style={{
-                width: "100%", padding: 15, borderRadius: 12, background: C.primary,
+                width: "100%", padding: 15, borderRadius: 12, background: C.accent,
                 color: "#fff", border: "none", fontSize: 16, fontWeight: "bold", cursor: "pointer",
+                boxShadow: "0 3px 12px rgba(234,88,12,0.45)",
               }}>
                 注文確認へ →
               </button>
@@ -517,8 +521,9 @@ export default function OrderPage() {
                 <span style={{ fontWeight: "bold", fontSize: 22, color: C.primary }}>¥{totalPrice.toLocaleString()}</span>
               </div>
               <button onClick={submitOrder} style={{
-                width: "100%", padding: 15, borderRadius: 12, background: C.accent,
+                width: "100%", padding: 15, borderRadius: 12, background: C.confirm,
                 color: "#fff", border: "none", fontSize: 16, fontWeight: "bold", cursor: "pointer", marginBottom: 8,
+                boxShadow: "0 3px 14px rgba(220,38,38,0.45)",
               }}>
                 ✓ 注文を確定する
               </button>
@@ -545,6 +550,7 @@ export default function OrderPage() {
               <button onClick={() => setShowComplete(false)} style={{
                 width: "100%", padding: 14, borderRadius: 12, background: C.primary,
                 color: "#fff", border: "none", fontSize: 15, fontWeight: "bold", cursor: "pointer",
+                boxShadow: "0 2px 10px rgba(5,150,105,0.4)",
               }}>続けて注文する</button>
               <button onClick={() => router.push(`/order-edit/${lastOrderId}`)} style={{
                 width: "100%", padding: 13, borderRadius: 12, background: "#fff",
@@ -578,7 +584,8 @@ function MiniCard({ product, onAdd, isFav, onFav }: any) {
       <p style={{ fontSize: 11, color: "#22a648", fontWeight: "bold", marginBottom: 6 }}>¥{Number(product.price || 0).toLocaleString()}</p>
       <button onClick={() => onAdd(product)} style={{
         width: "100%", padding: "6px 0", borderRadius: 8, border: "none",
-        background: "#22a648", color: "#fff", fontSize: 13, fontWeight: "bold", cursor: "pointer",
+        background: "#059669", color: "#fff", fontSize: 13, fontWeight: "bold", cursor: "pointer",
+        boxShadow: "0 2px 6px rgba(5,150,105,0.4)",
       }}>＋</button>
     </div>
   )
