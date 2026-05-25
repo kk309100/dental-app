@@ -12,6 +12,9 @@ type Item = { id: string; product_name: string | null; quantity: number; price: 
 type Clinic = { id?: string; name: string; corporate_name: string | null; clinic_type: string | null; adress: string | null; phone: string | null }
 type Order = { id: string; delivered_at: string | null; created_at: string; delivery_number: string | null; note?: string | null }
 
+// 常にこの行数分の行を表示（空行で埋める）
+const FIXED_ROWS = 10
+
 export default function DeliveryNoteSheet({
   order, items, clinic,
   allItems,
@@ -27,7 +30,6 @@ export default function DeliveryNoteSheet({
   totalPages?: number
   isLastSheet?: boolean
 }) {
-  // 合計は注文全体で計算（分割時も同じ合計を表示）
   const grandItems = allItems && allItems.length > 0 ? allItems : items
   const subtotal = grandItems.reduce((s, i) => s + Number(i.price || 0) * Number(i.quantity || 0), 0)
   const tax = calcTax(subtotal)
@@ -39,28 +41,26 @@ export default function DeliveryNoteSheet({
   const isMultiPage = totalPages !== undefined && totalPages > 1
   const pageLabel = isMultiPage ? `（${pageNum ?? 1} / ${totalPages}ページ）` : ""
 
-  // kind: "original" = 納品書（上）、"copy" = 納品書控え（下）
+  // 空行を補完して常に FIXED_ROWS 行表示
+  const emptyRows = Math.max(0, FIXED_ROWS - items.length)
+
   function Half({ kind }: { kind: "original" | "copy" }) {
     const isCopy = kind === "copy"
     return (
       <div className="delivery-half" style={{
         position: "relative",
-        // padding を詰めて明細行数を最大化
         padding: "4mm 8mm",
         boxSizing: "border-box",
         minHeight: "148.5mm",
-        // 控えは上部に区切り線
         borderTop: isCopy ? "1.5px solid #555" : "none",
       }}>
-
         {/* 種別タグ（右上） */}
         <div style={{
           position: "absolute", top: 5, right: 6,
           fontSize: 8, fontWeight: 700, padding: "1px 6px",
           border: `1px solid ${isCopy ? "#6b7280" : "#2563eb"}`,
           color: isCopy ? "#6b7280" : "#2563eb",
-          borderRadius: 3,
-          background: "#fff",
+          borderRadius: 3, background: "#fff",
         }}>
           {isCopy ? "納品書控え" : "納品書"}
         </div>
@@ -97,7 +97,7 @@ export default function DeliveryNoteSheet({
           </div>
         </div>
 
-        {/* 明細表 */}
+        {/* 明細表（常に FIXED_ROWS 行） */}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9 }}>
           <thead>
             <tr style={{ background: "#f3f4f6" }}>
@@ -109,11 +109,20 @@ export default function DeliveryNoteSheet({
           </thead>
           <tbody>
             {items.map(i => (
-              <tr key={i.id} style={{ borderBottom: "1px solid #eee" }}>
+              <tr key={i.id} style={{ borderBottom: "1px solid #eee", height: ROW_H }}>
                 <td style={tdC}>{i.product_name || "—"}</td>
                 <td style={{ ...tdC, textAlign: "right" }}>{i.quantity}</td>
                 <td style={{ ...tdC, textAlign: "right" }}>{fmtYen(i.price)}</td>
                 <td style={{ ...tdC, textAlign: "right", fontWeight: 700 }}>{fmtYen(Number(i.quantity) * Number(i.price))}</td>
+              </tr>
+            ))}
+            {/* 空白行で10行固定 */}
+            {Array.from({ length: emptyRows }).map((_, idx) => (
+              <tr key={`empty-${idx}`} style={{ borderBottom: "1px solid #eee", height: ROW_H }}>
+                <td style={tdC}>&nbsp;</td>
+                <td style={{ ...tdC, textAlign: "right" }}></td>
+                <td style={{ ...tdC, textAlign: "right" }}></td>
+                <td style={{ ...tdC, textAlign: "right" }}></td>
               </tr>
             ))}
           </tbody>
@@ -146,22 +155,26 @@ export default function DeliveryNoteSheet({
     )
   }
 
+  // isLastSheet のページ切り替えは CSS クラスで制御（!important に負けないよう）
   return (
-    <div className="delivery-page" style={{
-      width: "210mm",
-      minHeight: "297mm",
-      margin: "0 auto",
-      background: "#fff",
-      pageBreakAfter: isLastSheet ? "auto" : "always",
-      boxSizing: "border-box",
-    }}>
+    <div
+      className={`delivery-page${isLastSheet ? " delivery-page-last" : ""}`}
+      style={{
+        width: "210mm",
+        minHeight: "297mm",
+        margin: "0 auto",
+        background: "#fff",
+        boxSizing: "border-box",
+      }}
+    >
       <Half kind="original" />
       <Half kind="copy" />
     </div>
   )
 }
 
+const ROW_H = "5.2mm"  // 全行を同じ高さに固定
 const th: React.CSSProperties = { padding: "2.5px 4px", textAlign: "left", borderBottom: "1.5px solid #ccc", fontSize: 8.5, color: "#555" }
-const tdC: React.CSSProperties = { padding: "1.5px 4px", fontSize: 9 }
+const tdC: React.CSSProperties = { padding: "1.5px 4px", fontSize: 9, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 0 }
 const tdSm: React.CSSProperties = { padding: "2px 7px", fontSize: 9, color: "#555", border: "1px solid #ddd", background: "#f9fafb" }
 const tdSmR: React.CSSProperties = { padding: "2px 7px", fontSize: 9, textAlign: "right" as const, border: "1px solid #ddd", minWidth: 78 }

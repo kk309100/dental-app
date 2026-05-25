@@ -17,9 +17,8 @@ export default function BulkPrintWrapper() {
   )
 }
 
-// 半ページ（148.5mm）の明細エリア約75mm / 行高さ約5mm = 最大15行
-// 商品名が長い場合も考慮して13行を上限とする
-const ITEMS_PER_PAGE = 13
+// 半ページ（148.5mm）のうち、固定10行を表示（DeliveryNoteSheet の FIXED_ROWS と合わせる）
+const ITEMS_PER_PAGE = 10
 
 type Sheet = {
   order: Order
@@ -115,13 +114,30 @@ function BulkPrint() {
           body { background: #fff !important; }
           .no-print { display: none !important; }
           @page { size: A4; margin: 0; }
-          /* 納品書1枚 = A4 1ページに収める */
+
+          /* ナビ・ヘッダーを完全に非表示（!important 競合対策で visibility も指定） */
+          .admin-layout-header,
+          .mobile-bottom-nav,
+          nav.mobile-bottom-nav,
+          .mobile-spacer {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            overflow: hidden !important;
+          }
+
+          /* 納品書1枚 = A4 1ページに収める（最後のシートは改ページしない） */
           .delivery-page {
-            break-after: page !important;
+            break-after: page;
+            page-break-after: always;
             overflow: hidden !important;
             height: 297mm !important;
-            page-break-after: always !important;
           }
+          .delivery-page-last {
+            break-after: auto !important;
+            page-break-after: auto !important;
+          }
+
           /* 上（納品書）と下（納品書控え）をちょうど半分に */
           .delivery-half {
             height: 148.5mm !important;
