@@ -274,7 +274,7 @@ function SuggestPOPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           {sourceOrderIds.length > 0 ? "📦 注文の不足品 発注" : "発注書の自動提案"}
           <span className="ml-2 text-xs font-normal text-gray-400">
             {sourceOrderIds.length > 0
@@ -306,7 +306,7 @@ function SuggestPOPage() {
         <div className="bg-blue-50 rounded-lg p-3" style={{ border: "1px solid #c7d2fe" }}>
           <p className="text-xs font-bold text-blue-900 mb-1">
             仕入先別 発注予定
-            <span className="ml-2 text-[10px] font-normal text-gray-500">※ 同じ仕入先で「下書き」発注書がある場合は追加 or 新規を選択できます</span>
+            <span className="ml-2 text-[12px] font-normal text-gray-500">※ 同じ仕入先で「下書き」発注書がある場合は追加 or 新規を選択できます</span>
           </p>
           <div className="flex flex-wrap gap-2">
             {Array.from(summary.entries()).map(([sid, amt]) => {
@@ -314,10 +314,10 @@ function SuggestPOPage() {
               return (
                 <button key={sid} onClick={() => sid !== "(未設定)" && createPOForSupplier(sid)}
                   disabled={sid === "(未設定)"}
-                  className={"text-xs px-3 py-1.5 border rounded hover:bg-blue-100 disabled:opacity-50 " + (draft ? "bg-amber-50 border-amber-300" : "bg-white border-blue-200")}>
+                  className={"text-sm px-3 py-1.5 border rounded hover:bg-blue-100 disabled:opacity-50 " + (draft ? "bg-amber-50 border-amber-300" : "bg-white border-blue-200")}>
                   <span className="font-bold">{supplierName(sid as string)}</span>
                   <span className="ml-2 text-blue-700 tabular-nums">{fmtYen(amt)}</span>
-                  {draft && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded font-bold">📝 下書きあり</span>}
+                  {draft && <span className="ml-2 text-[12px] px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded font-bold">📝 下書きあり</span>}
                   {sid !== "(未設定)" && <span className="ml-2 text-blue-500">→ 発注書{draft ? "に追加" : "作成"}</span>}
                 </button>
               )
@@ -327,9 +327,9 @@ function SuggestPOPage() {
       )}
 
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
-        <table className="w-full text-xs">
+        <table className="w-full text-[13px]">
           <thead className="bg-gray-100 sticky top-0">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-center w-8"></th>
               <th className="px-2 py-1.5 text-left" colSpan={2}>商品 / 過去仕入履歴（クリックで選択）</th>
               <th className="px-2 py-1.5 text-right w-16">在庫</th>
@@ -357,7 +357,7 @@ function SuggestPOPage() {
                     <td className="px-2 py-1" colSpan={2}>
                       {/* 商品名 */}
                       <div className="font-bold text-gray-900">{s.product.name}</div>
-                      <div className="text-[10px] text-gray-500 mb-1.5">
+                      <div className="text-[12px] text-gray-500 mb-1.5">
                         {s.product.product_code || ""} {s.product.manufacturer || ""}
                       </div>
                       {/* 過去仕入候補（常時表示・クリックで選択） */}
@@ -373,22 +373,22 @@ function SuggestPOPage() {
                                   supplierOverride: h.supplier_id || undefined,
                                   unitPrice: Number(h.unit_price || 0),
                                 })}
-                                className={"text-[10px] px-2 py-1 border rounded hover:bg-emerald-100 " +
+                                className={"text-[12px] px-2 py-1 border rounded hover:bg-emerald-100 " +
                                   (isSelected ? "bg-emerald-100 border-emerald-400 ring-1 ring-emerald-400" : "bg-white border-gray-200")}
                                 title={`${sup?.name || "(未設定)"} ¥${Number(h.unit_price || 0).toLocaleString()} / ${new Date(h.created_at).toLocaleDateString("ja-JP")}`}
                               >
                                 <span className="font-bold text-gray-900">{sup?.name || "(未設定)"}</span>
                                 <span className="ml-1.5 text-emerald-700 font-bold">¥{Number(h.unit_price || 0).toLocaleString()}</span>
-                                <span className="ml-1 text-gray-400">{new Date(h.created_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}</span>
+                                <span className="ml-1 text-[11px] text-gray-400">{new Date(h.created_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}</span>
                               </button>
                             )
                           })}
                           {history.length > 8 && (
-                            <span className="text-[10px] text-gray-400 px-1.5 py-1">他 {history.length - 8} 件</span>
+                            <span className="text-[12px] text-gray-400 px-1.5 py-1">他 {history.length - 8} 件</span>
                           )}
                         </div>
                       ) : (
-                        <div className="text-[10px] text-gray-400">過去仕入履歴なし</div>
+                        <div className="text-[12px] text-gray-400">過去仕入履歴なし</div>
                       )}
                     </td>
                     <td className={"px-2 py-1 text-right tabular-nums " + (s.systemStock <= 0 ? "text-red-600 font-bold" : "text-gray-700")}>{s.systemStock}</td>
@@ -420,7 +420,7 @@ function SuggestPOPage() {
                       {/* 仕入先（小さく表示・編集可） */}
                       <select value={s.supplierOverride || s.product.default_supplier_id || ""}
                         onChange={e => update(realIdx, { supplierOverride: e.target.value })}
-                        className="w-full mt-0.5 px-1.5 py-0.5 border border-gray-200 rounded text-[10px] bg-blue-50/30">
+                        className="w-full mt-0.5 px-1.5 py-0.5 border border-gray-200 rounded text-[12px] bg-blue-50/30">
                         <option value="">仕入先(未設定)</option>
                         {suppliers.map(sup => <option key={sup.id} value={sup.id}>{supplierOptionLabel(sup)}</option>)}
                       </select>

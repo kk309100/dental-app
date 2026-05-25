@@ -35,13 +35,13 @@ export default function MastersPage() {
   return (
     <div className="space-y-5">
       <div className="text-center pt-2">
-        <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "'Cormorant Garamond',serif", letterSpacing: "0.1em" }}>MASTERS</h1>
-        <p className="text-xs text-gray-400 mt-1" style={{ fontFamily: "'Josefin Sans',sans-serif", letterSpacing: "0.2em" }}>マスター・設定</p>
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>MASTERS</h1>
+        <p style={{ fontSize: 13, color: "#6b7280" }} className="mt-1">マスター・設定管理</p>
       </div>
 
       {groups.map(group => (
         <section key={group}>
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">{group}</h2>
+          <h2 style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", marginBottom: 8 }} className="ml-1 uppercase">{group}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {ITEMS.filter(i => i.group === group).map(item => (
               <BigButton key={item.href} {...item} />
@@ -66,7 +66,7 @@ function BigButton({ href, label, desc, icon, color }: MasterItem) {
         </div>
         <div>
           <p className="text-xl font-bold text-gray-900" style={{ letterSpacing: "0.05em" }}>{label}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">{desc}</p>
+          <p className="text-[12px] text-gray-500 mt-0.5">{desc}</p>
         </div>
       </div>
     </Link>

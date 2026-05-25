@@ -368,23 +368,23 @@ export default function ReceivingPage() {
     <div className="space-y-3">
       {/* タイトル + PDF読込ボタン（タイトル直右に） */}
       <div className="flex items-center flex-wrap gap-3">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           📦 仕入納品（仕入先からの入荷登録）
           <span className="ml-2 text-xs font-normal text-gray-400">手打ち or PDF読込 ・ 商品マスタは自動更新</span>
         </h1>
         <a href="/admin/receivings"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors"
           title="過去の入荷履歴を一覧表示">
           📋 入荷履歴一覧
         </a>
         <a href="/admin/supplier-invoices"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 transition-colors"
           title="月末の仕入先請求書と入荷データを付け合わせ">
           🔍 月次請求書 付け合わせ
         </a>
         <label
           htmlFor="pdf-upload"
-          className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors " + (parsing ? "bg-gray-300 text-gray-600 cursor-wait" : "bg-blue-600 text-white hover:bg-blue-700")}
+          className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold cursor-pointer transition-colors " + (parsing ? "bg-gray-300 text-gray-600 cursor-wait" : "bg-blue-600 text-white hover:bg-blue-700")}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
@@ -446,8 +446,8 @@ export default function ReceivingPage() {
                   <div key={o.orderId} className="flex items-center justify-between text-xs py-0.5 border-b border-gray-100 last:border-0">
                     <span>
                       <strong>{o.clinicName}</strong>
-                      <span className="ml-2 text-gray-500 font-mono text-[10px]">{o.deliveryNumber}</span>
-                      <span className="ml-2 text-gray-400 text-[10px]">{o.itemCount}品</span>
+                      <span className="ml-2 text-gray-500 font-mono text-[12px]">{o.deliveryNumber}</span>
+                      <span className="ml-2 text-gray-400 text-[12px]">{o.itemCount}品</span>
                     </span>
                     <span className="font-bold tabular-nums">{fmtYen(o.totalPrice)}</span>
                   </div>
@@ -466,7 +466,7 @@ export default function ReceivingPage() {
           )}
 
           {postReceiveResult.partiallyImpacted > 0 && (
-            <p className="text-[11px] text-amber-700 mt-2">
+            <p className="text-[13px] text-amber-700 mt-2">
               ⚠ 入庫商品を含むがまだ他の品が在庫不足の注文: {postReceiveResult.partiallyImpacted}件（追加入荷待ち）
             </p>
           )}
@@ -477,14 +477,14 @@ export default function ReceivingPage() {
       <div className="bg-white rounded-lg p-3" style={{ border: "1px solid #e8eaed" }}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
-            <label className="block text-[10px] text-gray-500 mb-0.5 font-bold">仕入先</label>
+            <label className="block text-[12px] text-gray-500 mb-0.5 font-bold">仕入先</label>
             <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
               <option value="">— 仕入先を選択 —</option>
               {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.maker_name ? ` (${s.maker_name})` : ""}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] text-gray-500 mb-0.5 font-bold">入荷日</label>
+            <label className="block text-[12px] text-gray-500 mb-0.5 font-bold">入荷日</label>
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
           </div>
         </div>
@@ -494,7 +494,7 @@ export default function ReceivingPage() {
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
           <thead className="sticky top-0 bg-gray-100">
-            <tr className="text-[10px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-1.5 py-1.5 text-center w-8">#</th>
               <th className="px-1.5 py-1.5 text-left">商品名</th>
               <th className="px-1.5 py-1.5 text-left w-32">JAN / 商品コード</th>
@@ -543,17 +543,17 @@ export default function ReceivingPage() {
                       value={row.productName}
                       onChange={(e) => updateRow(i, { productName: e.target.value })}
                       placeholder="商品名"
-                      className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-[11px]"
+                      className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-[12px]"
                     />
-                    {row.packSize && <div className="text-[9px] text-gray-400 mt-0.5">入数: {row.packSize}</div>}
-                    {row.productName && !existing && <div className="text-[9px] text-yellow-700 mt-0.5">⚡ 新規商品として登録されます</div>}
+                    {row.packSize && <div className="text-[11px] text-gray-400 mt-0.5">入数: {row.packSize}</div>}
+                    {row.productName && !existing && <div className="text-[11px] text-yellow-700 mt-0.5">⚡ 新規商品として登録されます</div>}
                   </td>
-                  <td className="px-1.5 py-0.5 text-[10px] text-gray-500">
+                  <td className="px-1.5 py-0.5 text-[12px] text-gray-500">
                     {row.supplierJan && <div>{row.supplierJan}</div>}
                     {row.supplierCode && <div>{row.supplierCode}</div>}
                   </td>
                   <td className="px-1.5 py-0.5">
-                    <input type="number" value={row.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]" title="数量 = 在庫に加算される数" />
+                    <input type="number" value={row.quantity} onChange={(e) => updateRow(i, { quantity: e.target.value })} className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[12px]" title="数量 = 在庫に加算される数" />
                   </td>
                   <td className="px-1.5 py-0.5">
                     <input
@@ -562,7 +562,7 @@ export default function ReceivingPage() {
                       value={row.unitPrice ? Number(row.unitPrice).toLocaleString("ja-JP", { maximumFractionDigits: 2 }) : ""}
                       onChange={(e) => updateRow(i, { unitPrice: e.target.value.replace(/[^\d.]/g, "") })}
                       placeholder="¥"
-                      className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px]"
+                      className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[12px]"
                     />
                   </td>
                   <td className="px-1.5 py-0.5">
@@ -572,15 +572,15 @@ export default function ReceivingPage() {
                       value={subtotal > 0 ? Math.round(subtotal).toLocaleString("ja-JP") : ""}
                       onChange={(e) => onSubtotalChange(e.target.value)}
                       placeholder="¥"
-                      className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[11px] font-bold"
+                      className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[12px] font-bold"
                       title="小計を編集すると単価が自動逆算（数量固定）"
                     />
                   </td>
                   <td className="px-1.5 py-0.5 text-center">
-                    <button onClick={split} disabled={qty <= 0} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 disabled:opacity-30" title="1パックを複数個に分割（小計固定）">📦 分割</button>
+                    <button onClick={split} disabled={qty <= 0} className="text-[12px] px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 disabled:opacity-30" title="1パックを複数個に分割（小計固定）">📦 分割</button>
                   </td>
                   <td className="px-1.5 py-0.5">
-                    <input value={row.memo} onChange={(e) => updateRow(i, { memo: e.target.value })} placeholder="伝票No等" className="w-full px-1 py-0.5 border border-gray-200 rounded text-[11px]" />
+                    <input value={row.memo} onChange={(e) => updateRow(i, { memo: e.target.value })} placeholder="伝票No等" className="w-full px-1 py-0.5 border border-gray-200 rounded text-[12px]" />
                   </td>
                   <td className="px-1.5 py-0.5 text-center">
                     <button onClick={() => removeRow(i)} className="text-red-500 hover:text-red-700 text-base leading-none">×</button>
@@ -605,7 +605,7 @@ export default function ReceivingPage() {
 
       {/* 凡例 + アクション */}
       <div className="bg-white rounded-lg p-3 sticky bottom-0" style={{ border: "1px solid #e8eaed" }}>
-        <div className="flex items-center gap-3 text-[11px] text-gray-600 mb-2 flex-wrap">
+        <div className="flex items-center gap-3 text-[12px] text-gray-600 mb-2 flex-wrap">
           <span><span className="inline-block w-3 h-3 bg-emerald-50 border border-emerald-200 mr-1 align-middle"></span>商品マスタ既存</span>
           <span><span className="inline-block w-3 h-3 bg-yellow-50 border border-yellow-200 mr-1 align-middle"></span>新規作成される</span>
         </div>
@@ -628,7 +628,7 @@ export default function ReceivingPage() {
       {logs.length > 0 && (
         <div className="bg-white rounded-lg p-3" style={{ border: "1px solid #e8eaed" }}>
           <p className="text-xs font-bold text-gray-500 mb-2">登録結果</p>
-          <div className="space-y-1 max-h-48 overflow-auto text-[11px]">
+          <div className="space-y-1 max-h-48 overflow-auto text-[13px]">
             {logs.map((l, i) => (
               <div key={i} className={l.startsWith("✓") ? "text-emerald-700" : l.startsWith("+") ? "text-blue-700" : "text-red-700"}>{l}</div>
             ))}
@@ -643,7 +643,7 @@ export default function ReceivingPage() {
             const product = products.find((p) => p.id === rc.product_id)
             const supplier = suppliers.find((s) => s.id === rc.supplier_id)
             return (
-              <div key={rc.id} className="flex items-center justify-between py-1.5 px-2 text-[11px] border-b border-gray-100">
+              <div key={rc.id} className="flex items-center justify-between py-1.5 px-2 text-[13px] border-b border-gray-100">
                 <div className="flex-1 min-w-0">
                   <span className="font-semibold">{product?.name || "—"}</span>
                   <span className="text-gray-400 ml-2">{new Date(rc.created_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>

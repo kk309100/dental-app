@@ -30,16 +30,16 @@ export default function DeliverySearchPage() {
 
   return (
     <main style={{ padding: 20 }}>
-      <h1>納品書検索</h1>
+      <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", marginBottom: 12 }}>納品書検索</h1>
 
       <input
         value={number}
         onChange={(e) => setNumber(e.target.value)}
         placeholder="DN-20260430-0001"
-        style={{ padding: 10, width: "100%", marginBottom: 10 }}
+        style={{ padding: 10, width: "100%", marginBottom: 10, fontSize: 14 }}
       />
 
-      <button onClick={search}>検索</button>
+      <button onClick={search} style={{ padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>検索</button>
 
       {order && (
         <div style={{ marginTop: 20 }}>
@@ -47,7 +47,7 @@ export default function DeliverySearchPage() {
           <p>金額：{order.total_price}</p>
           <p>ステータス：{order.status}</p>
 
-          <button onClick={reissue}>再発行</button>
+          <button onClick={reissue} style={{ padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>再発行</button>
         </div>
       )}
     </main>

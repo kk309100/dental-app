@@ -1,0 +1,229 @@
+/*
+ * admin-base.css
+ * 管理画面共通ベーススタイル（全ページに自動適用）
+ * layout.tsx の .main-inner 配下に適用
+ */
+
+/* ══════════════════════════════════════════
+   1. ページタイトル
+══════════════════════════════════════════ */
+.main-inner h1 {
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  color: #111827 !important;
+  font-family: 'Noto Sans JP', 'Hiragino Kaku Gothic ProN', sans-serif !important;
+  letter-spacing: 0.01em !important;
+  line-height: 1.3 !important;
+}
+.main-inner h2 {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: #1f2937 !important;
+  font-family: inherit !important;
+}
+.main-inner h3 {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #374151 !important;
+}
+
+/* ══════════════════════════════════════════
+   2. テーブル
+══════════════════════════════════════════ */
+.main-inner table {
+  font-size: 13px;
+  border-collapse: collapse;
+  width: 100%;
+}
+.main-inner table th {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  padding: 10px 10px !important;
+  background: #f9fafb !important;
+  color: #374151 !important;
+  border-bottom: 2px solid #e5e7eb !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap;
+}
+.main-inner table td {
+  font-size: 13px !important;
+  padding: 9px 10px !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+  vertical-align: middle !important;
+  color: #111827;
+}
+.main-inner table tbody tr:hover td {
+  background: #f9fafb !important;
+}
+/* テーブル内の極小テキストを最低11pxに引き上げ */
+.main-inner table span,
+.main-inner table p,
+.main-inner table div,
+.main-inner table button,
+.main-inner table a {
+  font-size: max(11px, 0.85em);
+}
+
+/* ══════════════════════════════════════════
+   3. フォーム要素
+══════════════════════════════════════════ */
+.main-inner input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) {
+  font-size: 14px !important;
+  min-height: 36px;
+}
+.main-inner select {
+  font-size: 14px !important;
+  min-height: 36px;
+}
+.main-inner textarea {
+  font-size: 14px !important;
+  line-height: 1.6;
+}
+.main-inner label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+/* ══════════════════════════════════════════
+   4. ボタン
+══════════════════════════════════════════ */
+/* 基本 */
+.main-inner button,
+.main-inner a[role="button"] {
+  font-size: 13px !important;
+  min-height: 32px;
+  cursor: pointer;
+}
+/* プライマリボタン（青系・緑系・アクセント系） */
+.main-inner .btn-primary,
+.main-inner button.bg-blue-600,
+.main-inner button.bg-emerald-600,
+.main-inner button.bg-indigo-600 {
+  font-size: 14px !important;
+  padding: 9px 18px !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  min-height: 38px !important;
+}
+/* アウトラインボタン */
+.main-inner button.bg-white,
+.main-inner button.bg-gray-50 {
+  font-size: 13px !important;
+  min-height: 34px !important;
+  border-radius: 8px !important;
+}
+/* 検索・フィルターエリアのボタン */
+.main-inner .filter-bar button,
+.main-inner .search-bar button {
+  font-size: 13px !important;
+  padding: 7px 14px !important;
+}
+
+/* ══════════════════════════════════════════
+   5. バッジ・ステータス
+══════════════════════════════════════════ */
+.main-inner .badge {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 3px 10px !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════
+   6. カード・パネル
+══════════════════════════════════════════ */
+.main-inner .card {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+/* ══════════════════════════════════════════
+   7. 読み込み中テキスト
+══════════════════════════════════════════ */
+.main-inner .loading-text {
+  font-size: 14px !important;
+  color: #9ca3af;
+  text-align: center;
+  padding: 48px 0;
+}
+
+/* ══════════════════════════════════════════
+   8. ページヘッダー標準レイアウト
+══════════════════════════════════════════ */
+.admin-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.admin-page-header .header-left h1 {
+  margin: 0 !important;
+}
+.admin-page-header .header-left p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 2px 0 0 !important;
+}
+.admin-page-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ══════════════════════════════════════════
+   9. フィルターバー
+══════════════════════════════════════════ */
+.admin-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+.admin-filter-bar input,
+.admin-filter-bar select {
+  font-size: 14px !important;
+  padding: 7px 12px !important;
+  border-radius: 8px !important;
+  border: 1.5px solid #e5e7eb !important;
+  background: #f9fafb !important;
+  min-height: 36px;
+}
+.admin-filter-bar input:focus,
+.admin-filter-bar select:focus {
+  border-color: #2563eb !important;
+  background: #fff !important;
+  outline: none;
+}
+
+/* ══════════════════════════════════════════
+   10. レスポンシブ対応
+══════════════════════════════════════════ */
+@media (max-width: 767px) {
+  .main-inner table th,
+  .main-inner table td {
+    padding: 8px 8px !important;
+    font-size: 12px !important;
+  }
+  .main-inner h1 {
+    font-size: 18px !important;
+  }
+  .admin-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -221,7 +221,7 @@ export default function SalesPage() {
 
       <div style={header}>
         <div>
-          <h1 style={{ fontSize: 26, margin: 0 }}>売上管理</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>売上管理</h1>
           <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>
             会計年度: {fyStartMonth}月開始 ・ 売上計上: {SALES_STATUSES.join("/")} ステータス時 ・ 売上日: 納品日(無ければ受注日)
           </p>
@@ -324,7 +324,7 @@ export default function SalesPage() {
                   <td style={tdRBold}>{fmt(p.a)}</td>
                   <td style={tdRSub}>{p.cost > 0 ? fmt(p.cost) : "—"}</td>
                   <td style={tdR}><span style={{ color: p.profit >= 0 ? "#10b981" : "#dc2626", fontWeight: 700 }}>{fmt(p.profit)}</span></td>
-                  <td style={tdR}><span style={{ color: margin >= 30 ? "#10b981" : margin >= 15 ? "#f59e0b" : "#dc2626", fontWeight: 600, fontSize: 11 }}>{p.cost > 0 ? `${margin}%` : "—"}</span></td>
+                  <td style={tdR}><span style={{ color: margin >= 30 ? "#10b981" : margin >= 15 ? "#f59e0b" : "#dc2626", fontWeight: 600, fontSize: 13 }}>{p.cost > 0 ? `${margin}%` : "—"}</span></td>
                 </tr>
               )
             })}
@@ -354,7 +354,7 @@ export default function SalesPage() {
 
       {tab === "profit" && (
         <div style={{ background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: 20 }}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 16 }}>粗利分析サマリ</h2>
+          <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 700 }}>粗利分析サマリ</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10 }}>
             <Kpi label="売上合計" val={fmt(totalGross)} sub="" />
             <Kpi label="原価合計" val={fmt(totalCost)} sub="" />
@@ -389,8 +389,8 @@ export default function SalesPage() {
       {tab === "abc" && (
         <div className="space-y-3">
           <div style={{ background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: 16 }}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 15 }}>📦 商品ABC分析</h2>
-            <p style={{ fontSize: 11, color: "#777", margin: "0 0 12px" }}>
+            <h2 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>📦 商品ABC分析</h2>
+            <p style={{ fontSize: 13, color: "#777", margin: "0 0 12px" }}>
               累積売上比率で分類: <span style={{ color: "#dc2626", fontWeight: 700 }}>A=70%</span>{"<"}
               <span style={{ color: "#f59e0b", fontWeight: 700 }}>B=90%</span>{"<"}
               <span style={{ color: "#9ca3af", fontWeight: 700 }}>C=残り</span>
@@ -410,7 +410,7 @@ export default function SalesPage() {
                 ) : abcProducts.slice(0, 100).map(p => (
                   <tr key={p.name} style={tr}>
                     <td style={{ ...td, textAlign: "center" }}>
-                      <span style={{ display: "inline-block", width: 20, padding: "2px 6px", borderRadius: 4, background: p.cls === "A" ? "#fee2e2" : p.cls === "B" ? "#fef3c7" : "#f3f4f6", color: p.cls === "A" ? "#dc2626" : p.cls === "B" ? "#92400e" : "#6b7280", fontSize: 11, fontWeight: 700 }}>{p.cls}</span>
+                      <span style={{ display: "inline-block", width: 20, padding: "2px 6px", borderRadius: 4, background: p.cls === "A" ? "#fee2e2" : p.cls === "B" ? "#fef3c7" : "#f3f4f6", color: p.cls === "A" ? "#dc2626" : p.cls === "B" ? "#92400e" : "#6b7280", fontSize: 12, fontWeight: 700 }}>{p.cls}</span>
                     </td>
                     <td style={td}>{p.name}</td>
                     <td style={tdRBold}>{fmt(p.a)}</td>
@@ -423,8 +423,8 @@ export default function SalesPage() {
           </div>
 
           <div style={{ background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: 16 }}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 15 }}>🏥 医院ABC分析</h2>
-            <p style={{ fontSize: 11, color: "#777", margin: "0 0 12px" }}>A=主要顧客、C=取引縮小傾向</p>
+            <h2 style={{ margin: "0 0 8px", fontSize: 16, fontWeight: 700 }}>🏥 医院ABC分析</h2>
+            <p style={{ fontSize: 13, color: "#777", margin: "0 0 12px" }}>A=主要顧客、C=取引縮小傾向</p>
             <table style={table}>
               <thead><tr style={tr}>
                 <th style={{ ...th, width: 50, textAlign: "center" }}>分類</th>
@@ -439,7 +439,7 @@ export default function SalesPage() {
                 ) : abcClinics.slice(0, 100).map(c => (
                   <tr key={c.id} style={tr}>
                     <td style={{ ...td, textAlign: "center" }}>
-                      <span style={{ display: "inline-block", width: 20, padding: "2px 6px", borderRadius: 4, background: c.cls === "A" ? "#fee2e2" : c.cls === "B" ? "#fef3c7" : "#f3f4f6", color: c.cls === "A" ? "#dc2626" : c.cls === "B" ? "#92400e" : "#6b7280", fontSize: 11, fontWeight: 700 }}>{c.cls}</span>
+                      <span style={{ display: "inline-block", width: 20, padding: "2px 6px", borderRadius: 4, background: c.cls === "A" ? "#fee2e2" : c.cls === "B" ? "#fef3c7" : "#f3f4f6", color: c.cls === "A" ? "#dc2626" : c.cls === "B" ? "#92400e" : "#6b7280", fontSize: 12, fontWeight: 700 }}>{c.cls}</span>
                     </td>
                     <td style={tdBold}>{c.name}</td>
                     <td style={tdRBold}>{fmt(c.a)}</td>
@@ -459,7 +459,7 @@ export default function SalesPage() {
 function Kpi({ label, val, sub }: { label: string; val: string; sub: string }) {
   return (
     <div style={kpiCard}>
-      <p style={{ fontSize: 11, color: "#777", margin: 0 }}>{label}</p>
+      <p style={{ fontSize: 13, color: "#777", margin: 0 }}>{label}</p>
       <p style={{ fontSize: 22, fontWeight: 700, margin: "4px 0" }}>{val}</p>
       <p style={{ fontSize: 10, color: "#999", margin: 0 }}>{sub}</p>
     </div>
@@ -498,10 +498,10 @@ function fmt(n: number) {
 }
 
 function yoyBadge(a: number, b: number) {
-  if (b === 0 && a > 0) return <span style={{ color: "#10b981", fontSize: 11, fontWeight: 700 }}>NEW</span>
-  if (b === 0) return <span style={{ color: "#ccc", fontSize: 11 }}>—</span>
+  if (b === 0 && a > 0) return <span style={{ color: "#10b981", fontSize: 13, fontWeight: 700 }}>NEW</span>
+  if (b === 0) return <span style={{ color: "#ccc", fontSize: 13 }}>—</span>
   const diff = Math.round((a / b - 1) * 100)
-  return <span style={{ color: diff >= 0 ? "#10b981" : "#dc2626", fontSize: 11, fontWeight: 600 }}>{diff >= 0 ? "+" : ""}{diff}%</span>
+  return <span style={{ color: diff >= 0 ? "#10b981" : "#dc2626", fontSize: 13, fontWeight: 600 }}>{diff >= 0 ? "+" : ""}{diff}%</span>
 }
 
 const page: React.CSSProperties = { maxWidth: 1100, margin: "0 auto", padding: 20 }
@@ -517,11 +517,11 @@ const tabActive: React.CSSProperties = { ...tabBtn, background: "#fff", color: "
 const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse", background: "#fff", border: "1px solid #eee", borderRadius: 10, overflow: "hidden" }
 const tr: React.CSSProperties = { borderTop: "1px solid #f3f4f6" }
 const trTotal: React.CSSProperties = { borderTop: "2px solid #ccc", background: "#fafafa" }
-const th: React.CSSProperties = { textAlign: "left", padding: "10px 12px", fontSize: 11, color: "#999", textTransform: "uppercase", background: "#fafafa" }
+const th: React.CSSProperties = { textAlign: "left", padding: "10px 12px", fontSize: 12, color: "#999", textTransform: "uppercase", background: "#fafafa" }
 const thR: React.CSSProperties = { ...th, textAlign: "right" }
 const td: React.CSSProperties = { padding: "10px 12px", fontSize: 13, color: "#333" }
 const tdR: React.CSSProperties = { ...td, textAlign: "right" }
-const tdSub: React.CSSProperties = { ...td, color: "#777", fontSize: 11 }
+const tdSub: React.CSSProperties = { ...td, color: "#777", fontSize: 13 }
 const tdRSub: React.CSSProperties = { ...tdR, color: "#777" }
 const tdBold: React.CSSProperties = { ...td, fontWeight: 600, color: "#111" }
 const tdRBold: React.CSSProperties = { ...tdR, fontWeight: 700, color: "#111" }

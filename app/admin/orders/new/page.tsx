@@ -279,7 +279,7 @@ function NewOrderPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>
           新規注文
           <span className="ml-2 text-xs font-normal text-gray-400">医院を選び、商品を入力</span>
         </h1>
@@ -348,7 +348,7 @@ function NewOrderPage() {
         {/* PC: テーブル */}
         <table className="w-full text-sm hidden sm:table">
           <thead className="bg-gray-50">
-            <tr className="text-xs text-gray-500">
+            <tr style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-500">
               <th className="px-2 py-2 text-left w-10">#</th>
               <th className="px-2 py-2 text-left">商品名</th>
               <th className="px-2 py-2 text-right w-24">数量</th>
@@ -426,19 +426,19 @@ function NewOrderPage() {
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="text-[10px] text-gray-500">数量</label>
+                  <label style={{ fontSize: 12 }} className="text-gray-500">数量</label>
                   <input type="number" value={r.quantity}
                     onChange={e => updateRow(idx, { quantity: Number(e.target.value) })}
                     className="w-full px-2 py-2 border border-gray-200 rounded text-base text-right" min={0} />
                 </div>
                 <div>
-                  <label className="text-[10px] text-gray-500">単価</label>
+                  <label style={{ fontSize: 12 }} className="text-gray-500">単価</label>
                   <input type="number" value={r.price}
                     onChange={e => updateRow(idx, { price: Number(e.target.value) })}
                     className="w-full px-2 py-2 border border-gray-200 rounded text-base text-right" min={0} />
                 </div>
                 <div>
-                  <label className="text-[10px] text-gray-500">金額</label>
+                  <label style={{ fontSize: 12 }} className="text-gray-500">金額</label>
                   <div className="px-2 py-2 text-base text-right font-bold text-gray-900 tabular-nums">
                     {fmtYen(Number(r.price || 0) * Number(r.quantity || 0))}
                   </div>
@@ -506,7 +506,7 @@ function NewOrderPage() {
                   placeholder="医院名・法人名で検索（カナ/半角全角OK）"
                   className="w-full px-3 py-2 border border-gray-200 rounded text-sm"
                 />
-                <p className="text-[11px] text-gray-500 mt-1">{filteredClinics.length}/{clinics.length}件</p>
+                <p style={{ fontSize: 12 }} className="text-gray-500 mt-1">{filteredClinics.length}/{clinics.length}件</p>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {filteredClinics.length === 0 ? (
@@ -586,9 +586,9 @@ function NewOrderPage() {
                           <>
                             <p className="text-sm font-bold text-emerald-700 tabular-nums">
                               💡 ¥{clinicSpecificPrice!.toLocaleString()}
-                              <span className="ml-1 text-[10px] font-normal text-emerald-600">医院別</span>
+                              <span className="ml-1 font-normal text-emerald-600" style={{ fontSize: 11 }}>医院別</span>
                             </p>
-                            <p className="text-[10px] text-gray-400 line-through tabular-nums">標準 ¥{standardPrice.toLocaleString()}</p>
+                            <p style={{ fontSize: 11 }} className="text-gray-400 line-through tabular-nums">標準 ¥{standardPrice.toLocaleString()}</p>
                           </>
                         ) : (
                           <p className="text-sm font-bold text-gray-900 tabular-nums">¥{standardPrice.toLocaleString()}</p>

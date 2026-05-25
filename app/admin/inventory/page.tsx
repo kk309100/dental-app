@@ -110,7 +110,7 @@ export default function InventoryPage() {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           在庫管理
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{products.length}件 ・ 不足 {lowCount} ・ 0個 {zeroCount}</span>
         </h1>
@@ -130,9 +130,9 @@ export default function InventoryPage() {
       </div>
 
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 200px)" }}>
-        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+        <table className="w-full" style={{ borderCollapse: "collapse", fontSize: 13 }}>
           <thead className="sticky top-0 z-10">
-            <tr className="bg-gray-100 text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="bg-gray-100 text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-left w-16" style={td0}>棚</th>
               <th className="px-2 py-1.5 text-left" style={td0}>商品名</th>
               <th className="px-2 py-1.5 text-left w-24" style={td0}>コード</th>
@@ -158,14 +158,14 @@ export default function InventoryPage() {
                   <td className="px-1 py-0.5" style={td0}>
                     <input defaultValue={p.location || ""} placeholder="A1-3"
                       onBlur={(e) => { if (e.target.value !== (p.location || "")) updateLocation(p.id, e.target.value) }}
-                      className="w-14 px-1 py-0.5 border border-gray-200 rounded text-[11px] font-mono text-gray-700" />
+                      className="w-14 px-1 py-0.5 border border-gray-200 rounded text-[12px] font-mono text-gray-700" />
                   </td>
                   <td className="px-2 py-1 text-[12px]" style={td0}>{p.name}</td>
-                  <td className="px-2 py-1 text-[11px] text-gray-500" style={td0}>{p.product_code || ""}</td>
-                  <td className="px-2 py-1 text-[11px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
-                  <td className="px-2 py-1 text-[11px] text-gray-500" style={td0}>{p.category || ""}</td>
-                  <td className="px-2 py-1 text-right text-[11px] text-gray-600" style={td0}>{p.cost ? p.cost.toLocaleString() : ""}</td>
-                  <td className="px-2 py-1 text-right text-[11px] text-gray-700" style={td0}>{p.price ? p.price.toLocaleString() : ""}</td>
+                  <td className="px-2 py-1 text-[12px] text-gray-500" style={td0}>{p.product_code || ""}</td>
+                  <td className="px-2 py-1 text-[12px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
+                  <td className="px-2 py-1 text-[12px] text-gray-500" style={td0}>{p.category || ""}</td>
+                  <td className="px-2 py-1 text-right text-[12px] text-gray-600" style={td0}>{p.cost ? p.cost.toLocaleString() : ""}</td>
+                  <td className="px-2 py-1 text-right text-[12px] text-gray-700" style={td0}>{p.price ? p.price.toLocaleString() : ""}</td>
                   <td className="px-1 py-0.5 text-right" style={td0}>
                     <input type="number" defaultValue={p.stock ?? 0}
                       onBlur={(e) => { if (Number(e.target.value) !== (p.stock ?? 0)) updateStock(p.id, e.target.value) }}
@@ -177,13 +177,13 @@ export default function InventoryPage() {
                       className="w-10 px-1 py-0.5 border border-gray-200 rounded text-right text-xs" />
                   </td>
                   <td className="px-1 py-1 text-center" style={td0}>
-                    {zero ? <span className="text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">発注必要</span> :
-                     low  ? <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded">発注必要</span> :
-                     <span className="text-[10px] text-green-700">OK</span>}
+                    {zero ? <span className="text-[11px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">発注必要</span> :
+                     low  ? <span className="text-[11px] font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded">発注必要</span> :
+                     <span className="text-[11px] text-green-700">OK</span>}
                   </td>
                   <td className="px-1 py-1 text-center" style={td0}>
                     <button onClick={() => useStock(p.id)} disabled={zero || busy}
-                      className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed">
+                      className="text-[11px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed">
                       {usingId === p.id ? "処理中" : "使用する"}
                     </button>
                   </td>

@@ -126,17 +126,17 @@ export default function DeliveriesPage() {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           📄 納品書一覧
           <span className="ml-2 text-xs font-normal text-gray-400">納品済み {filtered.length}/全{orders.length}件 ・ 合計 {fmtYen(totalAmount)}</span>
         </h1>
         <div className="flex items-center gap-2">
           <Link href="/admin/shipping"
-            className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
+            className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700">
             ＋ 出荷準備（在庫減算→納品書発行）
           </Link>
-          <button onClick={exportCSV} className="px-3 py-1.5 bg-white border border-gray-200 rounded text-xs hover:bg-gray-50">📤 CSV</button>
-          <button onClick={bulkPrint} disabled={selected.size === 0} className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700 disabled:opacity-50">
+          <button onClick={exportCSV} className="px-3 py-2 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📤 CSV</button>
+          <button onClick={bulkPrint} disabled={selected.size === 0} className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded hover:bg-blue-700 disabled:opacity-50">
             🖨 選択を一括印刷 ({selected.size})
           </button>
         </div>
@@ -173,7 +173,7 @@ export default function DeliveriesPage() {
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 240px)" }}>
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-gray-100">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-center w-8">
                 <input type="checkbox" checked={filtered.length > 0 && selected.size === filtered.length} onChange={(e) => e.target.checked ? selectAll() : clearSel()} />
               </th>
@@ -196,19 +196,19 @@ export default function DeliveriesPage() {
               return (
                 <tr key={o.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (selected.has(o.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
                   <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleSel(o.id)} /></td>
-                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-700 whitespace-nowrap">
+                  <td className="px-2 py-1.5 text-center text-[12px] text-gray-700 whitespace-nowrap">
                     {(o.delivered_at || o.created_at).slice(0, 10)}
                   </td>
-                  <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700 whitespace-nowrap">{o.delivery_number || o.id.slice(0, 8)}</td>
+                  <td className="px-2 py-1.5 font-mono text-[12px] text-gray-700 whitespace-nowrap">{o.delivery_number || o.id.slice(0, 8)}</td>
                   <td className="px-2 py-1.5 whitespace-nowrap">{cl?.name || "(削除済み)"}</td>
                   <td className="px-2 py-1.5 text-center whitespace-nowrap"><PaymentBadge method={cl?.payment_method} /></td>
                   <td className="px-2 py-1.5 text-center text-gray-600 whitespace-nowrap">{its.length}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums font-bold whitespace-nowrap">{fmtYen(o.total_price || 0)}</td>
                   <td className="px-2 py-1.5 text-center whitespace-nowrap">
-                    {o.invoice_id ? <span className="text-emerald-600 text-[11px]">✓</span> : <span className="text-gray-300 text-[11px]">—</span>}
+                    {o.invoice_id ? <span className="text-emerald-600 text-[12px]">✓</span> : <span className="text-gray-300 text-[12px]">—</span>}
                   </td>
                   <td className="px-2 py-1.5 text-center whitespace-nowrap">
-                    <Link href={`/admin/deliveries/${o.id}`}><button className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</button></Link>
+                    <Link href={`/admin/deliveries/${o.id}`}><button className="text-[12px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</button></Link>
                   </td>
                 </tr>
               )

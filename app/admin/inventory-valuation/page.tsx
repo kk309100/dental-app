@@ -98,7 +98,7 @@ export default function InventoryValuationPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>
           在庫評価
           <span className="ml-2 text-xs font-normal text-gray-400">原価ベースの在庫資産評価額（経理視点）</span>
         </h1>
@@ -127,7 +127,7 @@ export default function InventoryValuationPage() {
         <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
           <table className="w-full text-xs">
             <thead className="bg-gray-100">
-              <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <tr style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-700 border-b-2 border-gray-300">
                 <th className="px-3 py-1.5 text-left">{groupBy === "category" ? "カテゴリ" : "メーカー"}</th>
                 <th className="px-2 py-1.5 text-right w-20">商品数</th>
                 <th className="px-2 py-1.5 text-right w-20">在庫数</th>
@@ -159,7 +159,7 @@ export default function InventoryValuationPage() {
         <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
           <table className="w-full text-xs">
             <thead className="bg-gray-100 sticky top-0">
-              <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <tr style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-700 border-b-2 border-gray-300">
                 <th className="px-2 py-1.5 text-left">商品名</th>
                 <th className="px-2 py-1.5 text-left w-32">メーカー</th>
                 <th className="px-2 py-1.5 text-right w-16">在庫</th>
@@ -194,7 +194,7 @@ export default function InventoryValuationPage() {
 function KPI({ label, value, amount, unit, color = "#374151", highlight = false }: { label: string; value?: number; amount?: number; unit?: string; color?: string; highlight?: boolean }) {
   return (
     <div className="bg-white rounded p-3" style={{ border: "1px solid #e8eaed" }}>
-      <p className="text-[10px] text-gray-500 font-bold">{label}</p>
+      <p style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-500">{label}</p>
       <p className={"tabular-nums mt-1 " + (highlight ? "text-xl font-bold" : "text-base font-bold")} style={{ color }}>
         {amount !== undefined ? fmtYen(amount) : `${(value || 0).toLocaleString()}${unit || ""}`}
       </p>

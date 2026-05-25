@@ -107,13 +107,13 @@ export default function SupplierInvoicesPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>
           📋 仕入先請求書 付け合わせ
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{invoices.length}件</span>
         </h1>
         <div className="flex items-center gap-2">
           <Link href="/admin/supplier-invoices/new"
-            className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
+            className="px-3 py-2 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700" style={{ fontSize: 13 }}>
             ＋ 月次請求書をアップロード
           </Link>
         </div>
@@ -146,7 +146,7 @@ export default function SupplierInvoicesPage() {
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs">
           <thead className="bg-gray-100">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-700 border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-left">仕入先</th>
               <th className="px-2 py-1.5 text-left w-32">請求書No</th>
               <th className="px-2 py-1.5 text-center w-32">期間</th>
@@ -174,8 +174,8 @@ export default function SupplierInvoicesPage() {
               return (
                 <tr key={iv.id} className="border-b border-gray-100 hover:bg-blue-50/40">
                   <td className="px-2 py-1.5 font-bold">{supplierName(iv.supplier_id)}</td>
-                  <td className="px-2 py-1.5 font-mono text-[11px] text-gray-600">{iv.invoice_number || "—"}</td>
-                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">
+                  <td className="px-2 py-1.5 font-mono text-gray-600" style={{ fontSize: 12 }}>{iv.invoice_number || "—"}</td>
+                  <td className="px-2 py-1.5 text-center text-gray-600" style={{ fontSize: 12 }}>
                     {iv.period_start && iv.period_end ? (
                       `${iv.period_start.slice(5)} 〜 ${iv.period_end.slice(5)}`
                     ) : iv.invoice_date ? (
@@ -188,11 +188,11 @@ export default function SupplierInvoicesPage() {
                   <td className="px-2 py-1.5 text-center text-amber-700 font-bold">{issueCount > 0 ? `⚠ ${issueCount}` : "—"}</td>
                   <td className="px-2 py-1.5 text-center text-red-700 font-bold">{unmatchedCount > 0 ? `❌ ${unmatchedCount}` : "—"}</td>
                   <td className="px-2 py-1.5 text-center">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: sc.bg, color: sc.color }}>{iv.status}</span>
+                    <span className="font-bold px-2 py-0.5 rounded" style={{ fontSize: 11, background: sc.bg, color: sc.color }}>{iv.status}</span>
                   </td>
                   <td className="px-2 py-1.5 text-center">
                     <Link href={`/admin/supplier-invoices/${iv.id}/match`}>
-                      <button className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</button>
+                      <button className="px-3 py-1 border border-gray-200 rounded hover:bg-gray-50" style={{ fontSize: 12 }}>開く</button>
                     </Link>
                   </td>
                 </tr>

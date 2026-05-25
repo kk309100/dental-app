@@ -110,7 +110,7 @@ export default function ReceivablesPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>
           売掛金台帳
           <span className="ml-2 text-xs font-normal text-gray-400">医院別の未収金を一覧</span>
         </h1>
@@ -125,7 +125,7 @@ export default function ReceivablesPage() {
 
       {/* エイジングサマリ */}
       <div className="bg-white rounded p-3" style={{ border: "1px solid #e8eaed" }}>
-        <p className="text-[10px] text-gray-500 font-bold mb-2">エイジング（未収金の経過日数別）</p>
+        <p style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-500 mb-2">エイジング（未収金の経過日数別）</p>
         <div className="grid grid-cols-5 gap-2 text-center">
           <Aging label="期限内" amount={agingTotal["current"]} bg="#ecfdf5" color="#065f46" />
           <Aging label="0-30日" amount={agingTotal["0-30"]} bg="#fef3c7" color="#92400e" />
@@ -151,7 +151,7 @@ export default function ReceivablesPage() {
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs">
           <thead className="bg-gray-100 sticky top-0">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-700 border-b-2 border-gray-300">
               <th className="px-3 py-1.5 text-left">医院</th>
               <th className="px-2 py-1.5 text-center w-16">請求件数</th>
               <th className="px-2 py-1.5 text-right w-28">請求合計</th>
@@ -176,7 +176,7 @@ export default function ReceivablesPage() {
                 <td className={"px-2 py-1.5 text-right tabular-nums " + (r.overdueAmount > 0 ? "text-red-600 font-bold" : "text-gray-300")}>
                   {r.overdueAmount > 0 ? fmtYen(r.overdueAmount) : "—"}
                 </td>
-                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">
+                <td className="px-2 py-1.5 text-center text-gray-600" style={{ fontSize: 12 }}>
                   {r.oldestDue ? new Date(r.oldestDue).toLocaleDateString("ja-JP") : "—"}
                 </td>
               </tr>
@@ -191,7 +191,7 @@ export default function ReceivablesPage() {
 function KPI({ label, value, color = "#374151", highlight = false }: { label: string; value: number; color?: string; highlight?: boolean }) {
   return (
     <div className="bg-white rounded p-3" style={{ border: "1px solid #e8eaed" }}>
-      <p className="text-[10px] text-gray-500 font-bold">{label}</p>
+      <p style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-500">{label}</p>
       <p className={"tabular-nums mt-1 " + (highlight ? "text-xl font-bold" : "text-base font-bold")} style={{ color }}>{fmtYen(value)}</p>
     </div>
   )
@@ -200,7 +200,7 @@ function KPI({ label, value, color = "#374151", highlight = false }: { label: st
 function Aging({ label, amount, bg, color, highlight = false }: { label: string; amount: number; bg: string; color: string; highlight?: boolean }) {
   return (
     <div className="rounded p-2" style={{ background: bg }}>
-      <p className="text-[10px] font-bold" style={{ color }}>{label}</p>
+      <p style={{ fontSize: 12, fontWeight: 700, color }}>{label}</p>
       <p className={"tabular-nums mt-1 " + (highlight ? "text-base font-bold" : "text-sm font-bold")} style={{ color }}>{amount > 0 ? fmtYen(amount) : "—"}</p>
     </div>
   )

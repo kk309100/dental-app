@@ -123,7 +123,7 @@ export default function InvoicesPage() {
 
       <div style={header}>
         <div>
-          <h1 style={{ fontSize: 26, margin: 0 }}>請求書管理</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>請求書管理</h1>
           <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{invoices.length}件</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -168,7 +168,7 @@ export default function InvoicesPage() {
           <option value="amount_asc">💰 金額小→大</option>
         </select>
       </div>
-      <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11, padding: "0 4px" }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, padding: "0 4px" }}>
         <button onClick={selectAll} style={{ padding: "2px 8px", border: "1px solid #ddd", borderRadius: 4, background: "#fff", cursor: "pointer" }}>全選択</button>
         <button onClick={clearSel} style={{ padding: "2px 8px", border: "1px solid #ddd", borderRadius: 4, background: "#fff", cursor: "pointer", color: "#666" }}>解除</button>
         <span style={{ color: "#666" }}>{selected.size}件選択中</span>
@@ -177,9 +177,9 @@ export default function InvoicesPage() {
       {/* 一覧（高密度テーブル） */}
       <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
-        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse", fontSize: 13 }}>
           <thead className="sticky top-0 bg-gray-100">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-center w-8">
                 <input type="checkbox"
                   checked={filtered.length > 0 && selected.size === filtered.length}
@@ -205,19 +205,19 @@ export default function InvoicesPage() {
                 <td className="px-2 py-1.5 text-center">
                   <input type="checkbox" checked={selected.has(iv.id)} onChange={() => toggleSel(iv.id)} />
                 </td>
-                <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700 whitespace-nowrap">{iv.invoice_number}</td>
+                <td className="px-2 py-1.5 font-mono text-[12px] text-gray-700 whitespace-nowrap">{iv.invoice_number}</td>
                 <td className="px-2 py-1.5 text-center whitespace-nowrap"><StatusBadge status={iv.status} /></td>
                 <td className="px-2 py-1.5 whitespace-nowrap">{clinicName(iv.clinic_id)}</td>
                 <td className="px-2 py-1.5 text-center whitespace-nowrap"><PaymentBadge method={clinicPayment(iv.clinic_id)} /></td>
-                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600 whitespace-nowrap">{fmtDate(iv.issue_date)}</td>
-                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600 whitespace-nowrap">{iv.due_date ? fmtDate(iv.due_date) : "—"}</td>
-                <td className="px-2 py-1.5 text-center text-[11px] whitespace-nowrap" style={{ color: iv.paid_at ? "#10b981" : "#9ca3af" }}>
+                <td className="px-2 py-1.5 text-center text-[12px] text-gray-600 whitespace-nowrap">{fmtDate(iv.issue_date)}</td>
+                <td className="px-2 py-1.5 text-center text-[12px] text-gray-600 whitespace-nowrap">{iv.due_date ? fmtDate(iv.due_date) : "—"}</td>
+                <td className="px-2 py-1.5 text-center text-[12px] whitespace-nowrap" style={{ color: iv.paid_at ? "#10b981" : "#9ca3af" }}>
                   {iv.paid_at ? fmtDate(iv.paid_at) : "—"}
                 </td>
-                <td className="px-2 py-1.5 text-right text-[11px] text-gray-500 tabular-nums whitespace-nowrap">{fmtYen(iv.subtotal)}</td>
+                <td className="px-2 py-1.5 text-right text-[12px] text-gray-500 tabular-nums whitespace-nowrap">{fmtYen(iv.subtotal)}</td>
                 <td className="px-2 py-1.5 text-right text-[12px] font-bold tabular-nums whitespace-nowrap">{fmtYen(iv.total)}</td>
                 <td className="px-2 py-1.5 text-center whitespace-nowrap">
-                  <Link href={`/admin/invoices/${iv.id}`} className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
+                  <Link href={`/admin/invoices/${iv.id}`} className="text-[12px] px-3 py-2 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
                 </td>
               </tr>
             ))}
@@ -232,9 +232,9 @@ export default function InvoicesPage() {
 function Kpi({ label, val, sub }: { label: string; val: string; sub: string }) {
   return (
     <div style={kpiCard}>
-      <p style={{ fontSize: 11, color: "#777", margin: 0 }}>{label}</p>
+      <p style={{ fontSize: 12, color: "#777", margin: 0 }}>{label}</p>
       <p style={{ fontSize: 22, fontWeight: 700, margin: "4px 0" }}>{val}</p>
-      {sub && <p style={{ fontSize: 10, color: "#999", margin: 0 }}>{sub}</p>}
+      {sub && <p style={{ fontSize: 12, color: "#999", margin: 0 }}>{sub}</p>}
     </div>
   )
 }
@@ -248,7 +248,7 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
       borderRadius: 99,
       background: s.color + "22",
       color: s.color,
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: 700,
     }}>
       {s.label}
@@ -271,6 +271,6 @@ const card: React.CSSProperties = { background: "#fff", border: "1px solid #eee"
 const cardHead: React.CSSProperties = { display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }
 const cardNum: React.CSSProperties = { fontSize: 14, fontWeight: 700, color: "#111" }
 const cardClinic: React.CSSProperties = { fontSize: 13, color: "#444", margin: "2px 0", fontWeight: 600 }
-const cardMeta: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", fontSize: 11, color: "#777", marginTop: 4 }
+const cardMeta: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12, color: "#777", marginTop: 4 }
 const cardAmount: React.CSSProperties = { fontSize: 18, fontWeight: 800, color: "#111", margin: 0 }
-const cardSubtotal: React.CSSProperties = { fontSize: 10, color: "#999", margin: "2px 0 0" }
+const cardSubtotal: React.CSSProperties = { fontSize: 12, color: "#999", margin: "2px 0 0" }

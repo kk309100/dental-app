@@ -316,7 +316,7 @@ export default function PurchaseOrderPage() {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>
           発注管理
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length} ・ 未発注 {counts.unbought} ・ 発注済 {counts.bought}</span>
         </h1>
@@ -367,7 +367,7 @@ export default function PurchaseOrderPage() {
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
         <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
           <thead className="sticky top-0 bg-gray-100">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-700 border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-center w-8"><input type="checkbox" checked={filtered.length > 0 && selectedIds.size >= filtered.length} onChange={(e) => e.target.checked ? selectAll() : clearSel()} /></th>
               <th className="px-2 py-1.5 text-left">商品名</th>
               <th className="px-2 py-1.5 text-left w-32">メーカー</th>
@@ -391,16 +391,16 @@ export default function PurchaseOrderPage() {
                 <td className="px-2 py-1 text-gray-600">{r.manufacturer}</td>
                 <td className="px-2 py-1 text-right font-bold">{r.quantity}{r.unit}</td>
                 <td className="px-2 py-1 text-gray-700">{r.clinic_name}</td>
-                <td className="px-2 py-1 text-[10px] font-mono text-gray-500">{r.delivery_number}</td>
-                <td className="px-2 py-1 text-[10px] text-gray-500">{r.created_at ? new Date(r.created_at).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" }) : ""}</td>
+                <td className="px-2 py-1 font-mono text-gray-500" style={{ fontSize: 12 }}>{r.delivery_number}</td>
+                <td className="px-2 py-1 text-gray-500" style={{ fontSize: 12 }}>{r.created_at ? new Date(r.created_at).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" }) : ""}</td>
                 <td className="px-2 py-1 text-center">
                   {r.purchase_status === "発注済み" ? (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">発注済</span>
+                    <span className="font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded" style={{ fontSize: 11 }}>発注済</span>
                   ) : (
-                    <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded">未発注</span>
+                    <span className="font-bold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded" style={{ fontSize: 11 }}>未発注</span>
                   )}
                 </td>
-                <td className="px-2 py-1 text-[10px] text-gray-500">{r.purchased_at ? new Date(r.purchased_at).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" }) : "—"}</td>
+                <td className="px-2 py-1 text-gray-500" style={{ fontSize: 12 }}>{r.purchased_at ? new Date(r.purchased_at).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" }) : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -412,7 +412,7 @@ export default function PurchaseOrderPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !poBusy && setShowCreatePOModal(false)}>
           <div className="bg-white rounded-lg w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-gray-100">
-              <h2 className="text-lg font-bold">発注書を作成</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 700 }}>発注書を作成</h2>
               <p className="text-xs text-gray-500 mt-1">
                 メーカー別に発注書を分けます。各メーカーに対する仕入先を選択してください。
                 発注書作成後、元注文は自動で「発注済み」に更新されます。
@@ -436,7 +436,7 @@ export default function PurchaseOrderPage() {
                   {selectedByMaker.map(([maker, rows]) => (
                     <div key={maker} className="border border-gray-200 rounded p-3">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold text-sm">{maker}</span>
+                        <span style={{ fontSize: 16, fontWeight: 700 }}>{maker}</span>
                         <span className="text-xs text-gray-500">{rows.length}行 / {fmtYen(rows.reduce((s, r) => s + r.cost * r.quantity, 0))}</span>
                       </div>
                       <select
@@ -476,11 +476,11 @@ export default function PurchaseOrderPage() {
             acc[r.manufacturer] = (acc[r.manufacturer] || 0) + 1
             return acc
           }, {})).sort((a, b) => b[1] - a[1]).map(([maker, cnt]) => (
-            <div key={maker} className="flex items-center justify-between py-1.5 px-2 text-[11px] border-b border-gray-100">
+            <div key={maker} className="flex items-center justify-between py-1.5 px-2 border-b border-gray-100" style={{ fontSize: 12 }}>
               <span className="font-semibold">{maker}</span>
               <div className="flex items-center gap-2">
                 <span className="text-gray-500">{cnt}件</span>
-                <button onClick={() => { setMakerFilter(maker); setPrintMode(maker) }} className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded">発注書印刷</button>
+                <button onClick={() => { setMakerFilter(maker); setPrintMode(maker) }} className="px-2 py-1 bg-blue-100 text-blue-700 rounded" style={{ fontSize: 11 }}>発注書印刷</button>
               </div>
             </div>
           ))}

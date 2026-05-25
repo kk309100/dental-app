@@ -73,19 +73,19 @@ export default function StocktakesPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           棚卸
           <span className="ml-2 text-xs font-normal text-gray-400">{list.length} 回実施</span>
         </h1>
-        <button onClick={createNew} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
+        <button onClick={createNew} className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700">
           ＋ 新規棚卸
         </button>
       </div>
 
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
-        <table className="w-full text-xs">
+        <table className="w-full text-[13px]">
           <thead className="bg-gray-100">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-3 py-1.5 text-left w-32">棚卸日</th>
               <th className="px-2 py-1.5 text-center w-24">状態</th>
               <th className="px-3 py-1.5 text-left">備考</th>
@@ -100,16 +100,16 @@ export default function StocktakesPage() {
               <tr key={st.id} className="border-b border-gray-100 hover:bg-blue-50/40">
                 <td className="px-3 py-1.5">{new Date(st.taken_on).toLocaleDateString("ja-JP")}</td>
                 <td className="px-2 py-1.5 text-center">
-                  <span className={"text-[10px] font-bold px-2 py-0.5 rounded " + (st.status === "確定" ? "bg-emerald-100 text-emerald-700" : st.status === "取消" ? "bg-gray-200 text-gray-500" : "bg-amber-100 text-amber-800")}>
+                  <span className={"text-[12px] font-bold px-2 py-0.5 rounded " + (st.status === "確定" ? "bg-emerald-100 text-emerald-700" : st.status === "取消" ? "bg-gray-200 text-gray-500" : "bg-amber-100 text-amber-800")}>
                     {st.status}
                   </span>
                 </td>
                 <td className="px-3 py-1.5 text-gray-600">{st.note || ""}</td>
-                <td className="px-2 py-1.5 text-center text-[11px] text-gray-500">
+                <td className="px-2 py-1.5 text-center text-[12px] text-gray-500">
                   {st.finalized_at ? new Date(st.finalized_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" }) : "—"}
                 </td>
                 <td className="px-2 py-1.5 text-center">
-                  <Link href={`/admin/stocktakes/${st.id}`} className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
+                  <Link href={`/admin/stocktakes/${st.id}`} className="text-[12px] px-2 py-1 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
                 </td>
               </tr>
             ))}

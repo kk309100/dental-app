@@ -233,7 +233,7 @@ export default function AdminProductsPage() {
     <div className="space-y-2">
       {/* ヘッダー */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           商品マスタ
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{products.length}件</span>
         </h1>
@@ -241,11 +241,11 @@ export default function AdminProductsPage() {
           <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) importProductsCSV(f) }} />
           <button onClick={() => fileRef.current?.click()} disabled={importing}
-            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
+            className="text-sm px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
             {importing ? "取込中…" : "📥 CSV取込"}
           </button>
           <button onClick={exportProductsCSV}
-            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
+            className="text-sm px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
             📤 CSV出力
           </button>
         </div>
@@ -284,9 +284,9 @@ export default function AdminProductsPage() {
 
       {/* テーブル */}
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 240px)" }}>
-        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+        <table className="w-full" style={{ borderCollapse: "collapse", fontSize: 13 }}>
           <thead className="sticky top-0 z-10">
-            <tr className="bg-gray-100 text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="bg-gray-100 text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-left" style={td0}>商品名</th>
               <th className="px-2 py-1.5 text-left w-24" style={td0}>コード</th>
               <th className="px-2 py-1.5 text-left w-28" style={td0}>メーカー</th>
@@ -307,31 +307,31 @@ export default function AdminProductsPage() {
               <React.Fragment key={p.id}>
                 <tr className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/40") + (p.active === false ? " opacity-40" : "")}>
                   <td className="px-2 py-1 text-[12px]" style={td0}>{p.name}</td>
-                  <td className="px-2 py-1 text-[11px] text-gray-500 font-mono" style={td0}>{p.product_code || ""}</td>
-                  <td className="px-2 py-1 text-[11px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
-                  <td className="px-2 py-1 text-[11px] text-gray-500" style={td0}>{p.category || ""}</td>
-                  <td className="px-2 py-1 text-[11px]" style={td0}>
+                  <td className="px-2 py-1 text-[12px] text-gray-500 font-mono" style={td0}>{p.product_code || ""}</td>
+                  <td className="px-2 py-1 text-[12px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
+                  <td className="px-2 py-1 text-[12px] text-gray-500" style={td0}>{p.category || ""}</td>
+                  <td className="px-2 py-1 text-[12px]" style={td0}>
                     {p.default_supplier_id
                       ? <span className="text-blue-700">{supplierName(p.default_supplier_id)}</span>
                       : p.purchase_maker
                         ? <span className="text-gray-400">{p.purchase_maker}</span>
                         : ""}
                   </td>
-                  <td className="px-2 py-1 text-right text-[11px] text-gray-600" style={td0}>{p.cost ? p.cost.toLocaleString() : ""}</td>
-                  <td className="px-2 py-1 text-right text-[11px] text-gray-700" style={td0}>{p.price ? p.price.toLocaleString() : ""}</td>
-                  <td className={"px-2 py-1 text-right text-[11px] font-bold " + ((p.stock ?? 0) <= 0 ? "text-red-600" : (p.stock ?? 0) <= (p.reorder_level ?? 10) ? "text-orange-600" : "text-gray-700")} style={td0}>
+                  <td className="px-2 py-1 text-right text-[12px] text-gray-600" style={td0}>{p.cost ? p.cost.toLocaleString() : ""}</td>
+                  <td className="px-2 py-1 text-right text-[12px] text-gray-700" style={td0}>{p.price ? p.price.toLocaleString() : ""}</td>
+                  <td className={"px-2 py-1 text-right text-[12px] font-bold " + ((p.stock ?? 0) <= 0 ? "text-red-600" : (p.stock ?? 0) <= (p.reorder_level ?? 10) ? "text-orange-600" : "text-gray-700")} style={td0}>
                     {p.stock ?? 0}
                   </td>
-                  <td className="px-2 py-1 text-right text-[11px] text-gray-400" style={td0}>{p.reorder_level ?? ""}</td>
-                  <td className="px-2 py-1 text-[11px] text-gray-500 font-mono" style={td0}>{p.location || ""}</td>
+                  <td className="px-2 py-1 text-right text-[12px] text-gray-400" style={td0}>{p.reorder_level ?? ""}</td>
+                  <td className="px-2 py-1 text-[12px] text-gray-500 font-mono" style={td0}>{p.location || ""}</td>
                   <td className="px-1 py-1 text-center" style={td0}>
                     <button onClick={() => setExpandedPriceId(expandedPriceId === p.id ? null : p.id)}
-                      className={"text-[10px] px-1.5 py-0.5 rounded mr-1 " + (expandedPriceId === p.id ? "bg-blue-600 text-white" : "border border-gray-200 hover:bg-blue-50 text-blue-700")}
+                      className={"text-[11px] px-1.5 py-0.5 rounded mr-1 " + (expandedPriceId === p.id ? "bg-blue-600 text-white" : "border border-gray-200 hover:bg-blue-50 text-blue-700")}
                       title="仕入先別単価">💰</button>
                     <button onClick={() => openEdit(p)}
-                      className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
+                      className="text-[11px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
                     <button onClick={() => toggleActive(p)}
-                      className={"text-[10px] px-1.5 py-0.5 rounded " + (p.active === false ? "bg-gray-200 text-gray-600" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100")}
+                      className={"text-[11px] px-1.5 py-0.5 rounded " + (p.active === false ? "bg-gray-200 text-gray-600" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100")}
                       title={p.active === false ? "廃番（クリックで復活）" : "販売中（クリックで廃番）"}>
                       {p.active === false ? "廃" : "活"}
                     </button>
@@ -376,27 +376,27 @@ export default function AdminProductsPage() {
 
                 {/* 基本情報 */}
                 <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">基本情報</h3>
+                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">基本情報</h3>
                   <div className="grid grid-cols-1 gap-2.5">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-0.5">商品名 <span className="text-red-500">*</span></label>
+                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>商品名 <span className="text-red-500">*</span></label>
                       <input value={editForm.name || ""} onChange={e => setEditForm({ ...editForm, name: e.target.value })}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm" />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs text-gray-600 mb-0.5">商品コード</label>
+                        <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>商品コード</label>
                         <input value={editForm.product_code || ""} onChange={e => setEditForm({ ...editForm, product_code: e.target.value })}
                           className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm font-mono" />
                       </div>
                       <div>
-                        <label className="block text-xs text-gray-600 mb-0.5">カテゴリ</label>
+                        <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>カテゴリ</label>
                         <input value={editForm.category || ""} onChange={e => setEditForm({ ...editForm, category: e.target.value })}
                           className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm" />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-0.5">メーカー（ブランド名）</label>
+                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>メーカー（ブランド名）</label>
                       <input value={editForm.manufacturer || ""} onChange={e => setEditForm({ ...editForm, manufacturer: e.target.value })}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm" />
                     </div>
@@ -405,10 +405,10 @@ export default function AdminProductsPage() {
 
                 {/* 仕入先 */}
                 <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">仕入先</h3>
+                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">仕入先</h3>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-0.5">仕入先（マスタ連携）</label>
+                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>仕入先（マスタ連携）</label>
                       <select value={editForm.default_supplier_id || ""} onChange={e => setEditForm({ ...editForm, default_supplier_id: e.target.value || null })}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white">
                         <option value="">（未設定）</option>
@@ -416,7 +416,7 @@ export default function AdminProductsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-0.5">ﾒｰｶｰ略称（CSV用）</label>
+                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>ﾒｰｶｰ略称（CSV用）</label>
                       <input value={editForm.purchase_maker || ""} onChange={e => setEditForm({ ...editForm, purchase_maker: e.target.value })}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm font-mono" />
                     </div>
@@ -425,15 +425,15 @@ export default function AdminProductsPage() {
 
                 {/* 価格 */}
                 <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">価格</h3>
+                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">価格</h3>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-0.5">仕入価格（原価）</label>
+                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>仕入価格（原価）</label>
                       <input type="number" value={editForm.cost ?? ""} onChange={e => setEditForm({ ...editForm, cost: Number(e.target.value) || null })}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-0.5">定価（売価）</label>
+                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>定価（売価）</label>
                       <input type="number" value={editForm.price ?? ""} onChange={e => setEditForm({ ...editForm, price: Number(e.target.value) || null })}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
                     </div>
@@ -442,20 +442,20 @@ export default function AdminProductsPage() {
 
                 {/* 在庫管理 */}
                 <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">在庫管理</h3>
+                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">在庫管理</h3>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-0.5">現在在庫数</label>
+                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>現在在庫数</label>
                       <input type="number" value={editForm.stock ?? ""} onChange={e => setEditForm({ ...editForm, stock: Number(e.target.value) })}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-0.5">発注点（不足基準）</label>
+                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>発注点（不足基準）</label>
                       <input type="number" value={editForm.reorder_level ?? ""} onChange={e => setEditForm({ ...editForm, reorder_level: Number(e.target.value) || null })}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-0.5">棚番号（置き場所）</label>
+                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>棚番号（置き場所）</label>
                       <input value={editForm.location || ""} onChange={e => setEditForm({ ...editForm, location: e.target.value })}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm font-mono" placeholder="A1-3" />
                     </div>
@@ -464,7 +464,7 @@ export default function AdminProductsPage() {
 
                 {/* ステータス */}
                 <section>
-                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">ステータス</h3>
+                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">ステータス</h3>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={editForm.active !== false}
                       onChange={e => setEditForm({ ...editForm, active: e.target.checked })}
@@ -477,11 +477,11 @@ export default function AdminProductsPage() {
 
             {/* フッター */}
             <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
-              <button onClick={closeEdit} className="text-xs px-4 py-2 border border-gray-200 rounded hover:bg-gray-100 text-gray-600">
+              <button onClick={closeEdit} className="text-sm px-4 py-2 border border-gray-200 rounded hover:bg-gray-100 text-gray-600">
                 キャンセル
               </button>
               <button onClick={saveEdit} disabled={saving}
-                className="text-xs px-6 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 disabled:opacity-50">
+                className="text-sm px-6 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 disabled:opacity-50">
                 {saving ? "保存中…" : "保存する"}
               </button>
             </div>

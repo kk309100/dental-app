@@ -142,7 +142,7 @@ export default function ReceivingsListPage() {
     <div className="space-y-2">
       {/* ヘッダ */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           📋 仕入納品一覧
           <span className="ml-2 text-xs font-normal text-gray-400">
             該当 {totals.count} 件 ・ 合計 {fmtYen(totals.totalAmount)}
@@ -150,13 +150,13 @@ export default function ReceivingsListPage() {
         </h1>
         <div className="flex items-center gap-2">
           <button onClick={exportCSV}
-            className="px-3 py-1.5 bg-white border border-gray-200 rounded text-xs hover:bg-gray-50">📤 CSV出力</button>
+            className="px-3 py-2 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📤 CSV出力</button>
           <Link href="/admin/receiving"
-            className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
+            className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700">
             ＋ 入荷登録（手打ち or PDF読込）
           </Link>
           <Link href="/admin/supplier-invoices"
-            className="px-3 py-1.5 bg-purple-100 text-purple-700 text-xs font-bold rounded hover:bg-purple-200">
+            className="px-3 py-2 bg-purple-100 text-purple-700 text-sm font-bold rounded hover:bg-purple-200">
             🔍 月次請求書付け合わせ
           </Link>
         </div>
@@ -191,9 +191,9 @@ export default function ReceivingsListPage() {
       {/* サブタブ + 一覧 */}
       <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="仕入先">
         <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
-          <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <table className="w-full text-[13px]" style={{ borderCollapse: "collapse" }}>
             <thead className="sticky top-0 bg-gray-100">
-              <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
                 <th className="px-2 py-1.5 text-center w-24">入荷日</th>
                 <th className="px-2 py-1.5 text-left w-40">仕入先</th>
                 <th className="px-2 py-1.5 text-left w-24">商品コード</th>
@@ -215,22 +215,22 @@ export default function ReceivingsListPage() {
                 const matched = !!r.supplier_invoice_item_id
                 return (
                   <tr key={r.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
-                    <td className="px-2 py-1.5 text-center text-[11px] text-gray-700">
+                    <td className="px-2 py-1.5 text-center text-[12px] text-gray-700">
                       {new Date(r.created_at).toLocaleDateString("ja-JP", { year: "2-digit", month: "2-digit", day: "2-digit" })}
                     </td>
-                    <td className="px-2 py-1.5 text-[11px]">{supplierName(r.supplier_id)}</td>
-                    <td className="px-2 py-1.5 text-[10px] text-gray-500 font-mono">{p?.product_code || "—"}</td>
+                    <td className="px-2 py-1.5 text-[12px]">{supplierName(r.supplier_id)}</td>
+                    <td className="px-2 py-1.5 text-[12px] text-gray-500 font-mono">{p?.product_code || "—"}</td>
                     <td className="px-2 py-1.5">{productName(r.product_id)}</td>
-                    <td className="px-2 py-1.5 text-[10px] text-gray-500">{p?.manufacturer || "—"}</td>
+                    <td className="px-2 py-1.5 text-[12px] text-gray-500">{p?.manufacturer || "—"}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{r.quantity}</td>
-                    <td className="px-2 py-1.5 text-right text-[11px] text-gray-600 tabular-nums">{fmtYen(r.unit_price || 0)}</td>
+                    <td className="px-2 py-1.5 text-right text-[12px] text-gray-600 tabular-nums">{fmtYen(r.unit_price || 0)}</td>
                     <td className="px-2 py-1.5 text-right text-[12px] font-bold tabular-nums">{fmtYen(amount)}</td>
-                    <td className="px-2 py-1.5 text-[10px] text-gray-500">{r.memo || ""}</td>
+                    <td className="px-2 py-1.5 text-[12px] text-gray-500">{r.memo || ""}</td>
                     <td className="px-2 py-1.5 text-center">
                       {matched ? (
-                        <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">✅</span>
+                        <span className="text-[12px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">✅</span>
                       ) : (
-                        <span className="text-[10px] text-gray-400">—</span>
+                        <span className="text-[12px] text-gray-400">—</span>
                       )}
                     </td>
                   </tr>

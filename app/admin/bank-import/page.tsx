@@ -220,7 +220,7 @@ export default function BankImportPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>
           📥 銀行入金CSV消込
           <span className="ml-2 text-xs font-normal text-gray-400">CSVから自動マッチ → 1クリック消込</span>
         </h1>
@@ -231,7 +231,7 @@ export default function BankImportPage() {
         <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }}
           onChange={e => { const f = e.target.files?.[0]; if (f) importFile(f) }} />
         <button onClick={() => fileRef.current?.click()}
-          className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">📥 銀行CSV選択</button>
+          className="px-3 py-2 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700" style={{ fontSize: 13 }}>📥 銀行CSV選択</button>
         <select value={bankFormat} onChange={e => setBankFormat(e.target.value)}
           className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
           {BANK_FORMATS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
@@ -240,7 +240,7 @@ export default function BankImportPage() {
           ※ 想定列: 日付 / 入金額 / 振込人（または摘要）
         </span>
         {lines.length > 0 && (
-          <button onClick={commitAll} disabled={busy} className="ml-auto px-4 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700 disabled:bg-gray-300">
+          <button onClick={commitAll} disabled={busy} className="ml-auto px-4 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 disabled:bg-gray-300" style={{ fontSize: 13 }}>
             {busy ? "処理中…" : `✓ マッチ済を一括消込（${lines.filter(l => !l.saved && l.selectedInvoiceId).length}件）`}
           </button>
         )}
@@ -261,7 +261,7 @@ export default function BankImportPage() {
           <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
             <table className="w-full text-xs">
               <thead className="bg-gray-100">
-                <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+                <tr style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-700 border-b-2 border-gray-300">
                   <th className="px-2 py-1.5 text-center w-24">入金日</th>
                   <th className="px-2 py-1.5 text-right w-24">金額</th>
                   <th className="px-2 py-1.5 text-left w-40">振込人</th>
@@ -274,7 +274,7 @@ export default function BankImportPage() {
                   const realIdx = lines.indexOf(l)
                   return (
                     <tr key={realIdx} className={"border-b border-gray-100 " + (l.saved ? "bg-emerald-50/40" : !l.selectedInvoiceId ? "bg-amber-50/30" : "")}>
-                      <td className="px-2 py-1.5 text-center text-[11px]">{l.paid_on}</td>
+                      <td className="px-2 py-1.5 text-center" style={{ fontSize: 12 }}>{l.paid_on}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums font-bold">{fmtYen(l.amount)}</td>
                       <td className="px-2 py-1.5">{l.payer_name}</td>
                       <td className="px-2 py-1.5">
@@ -298,7 +298,7 @@ export default function BankImportPage() {
                       <td className="px-2 py-1.5 text-center">
                         {!l.saved && l.selectedInvoiceId && (
                           <button onClick={() => commit(realIdx)} disabled={busy}
-                            className="text-[10px] px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300">
+                            className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300" style={{ fontSize: 12 }}>
                             消込
                           </button>
                         )}

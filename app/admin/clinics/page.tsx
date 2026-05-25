@@ -247,7 +247,7 @@ export default function AdminClinicsPage() {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           医院管理
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{clinics.length}件</span>
         </h1>
@@ -255,11 +255,11 @@ export default function AdminClinicsPage() {
           <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f) }} />
           <button onClick={() => fileRef.current?.click()} disabled={importing}
-            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
+            className="text-sm px-3 py-2 bg-white border border-gray-200 rounded hover:bg-gray-50">
             {importing ? "取込中…" : "📥 CSV取込"}
           </button>
-          <button onClick={downloadCSV} className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">📤 CSV出力</button>
-          <button onClick={openAdd} className="text-xs px-3 py-1.5 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700">＋ 医院を追加</button>
+          <button onClick={downloadCSV} className="text-sm px-3 py-2 bg-white border border-gray-200 rounded hover:bg-gray-50">📤 CSV出力</button>
+          <button onClick={openAdd} className="text-sm px-3 py-2 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700">＋ 医院を追加</button>
         </div>
       </div>
 
@@ -295,7 +295,7 @@ export default function AdminClinicsPage() {
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 200px)" }}>
         <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
           <thead className="sticky top-0 bg-gray-100">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-left whitespace-nowrap">医院名</th>
               <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">法人名</th>
               <th className="px-2 py-1.5 text-left whitespace-nowrap w-24">先方担当</th>
@@ -315,28 +315,28 @@ export default function AdminClinicsPage() {
             ) : filtered.map((c, i) => (
               <tr key={c.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
                 <td className="px-2 py-1.5 font-bold text-gray-900 whitespace-nowrap">{c.name}</td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{c.corporate_name || "—"}</td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{c.contact || "—"}</td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{c.sales_rep || "—"}</td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap font-mono">{c.phone || "—"}</td>
-                <td className="px-2 py-1.5 text-center text-[11px] text-gray-600 whitespace-nowrap">{c.closing_day || "月末"}</td>
+                <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap">{c.corporate_name || "—"}</td>
+                <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap">{c.contact || "—"}</td>
+                <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap">{c.sales_rep || "—"}</td>
+                <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap font-mono">{c.phone || "—"}</td>
+                <td className="px-2 py-1.5 text-center text-[12px] text-gray-600 whitespace-nowrap">{c.closing_day || "月末"}</td>
                 <td className="px-2 py-1.5 text-center whitespace-nowrap">
                   {c.payment_method ? (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                    <span className="text-[12px] font-bold px-1.5 py-0.5 rounded"
                       style={{
                         background: c.payment_method === "カード" ? "#fee2e2" : c.payment_method === "現金" ? "#dcfce7" : "#dbeafe",
                         color: c.payment_method === "カード" ? "#b91c1c" : c.payment_method === "現金" ? "#15803d" : "#1e40af",
                       }}>
                       {c.payment_method}
                     </span>
-                  ) : <span className="text-[10px] text-gray-400">—</span>}
+                  ) : <span className="text-[12px] text-gray-400">—</span>}
                 </td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-500" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.adress || ""}>
+                <td className="px-2 py-1.5 text-[12px] text-gray-500" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.adress || ""}>
                   {c.adress || "—"}
                 </td>
                 <td className="px-2 py-1.5 text-center whitespace-nowrap">
-                  <button onClick={() => openEdit(c)} className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
-                  <button onClick={() => del(c.id, c.name)} className="text-[10px] px-1.5 py-0.5 border border-red-200 bg-red-50 rounded hover:bg-red-100 text-red-700">削除</button>
+                  <button onClick={() => openEdit(c)} className="text-[12px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
+                  <button onClick={() => del(c.id, c.name)} className="text-[12px] px-1.5 py-0.5 border border-red-200 bg-red-50 rounded hover:bg-red-100 text-red-700">削除</button>
                 </td>
               </tr>
             ))}
@@ -457,6 +457,6 @@ const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: 
 const modal: React.CSSProperties = { background: "#fff", borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }
 const modalHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #eee" }
 const fieldWrap: React.CSSProperties = { marginBottom: 10 }
-const fieldLabel: React.CSSProperties = { display: "block", fontSize: 11, color: "#777", marginBottom: 4, fontWeight: 600 }
-const fieldInput: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 13, boxSizing: "border-box", background: "#fff" }
+const fieldLabel: React.CSSProperties = { display: "block", fontSize: 13, color: "#777", marginBottom: 4, fontWeight: 600 }
+const fieldInput: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14, boxSizing: "border-box", background: "#fff" }
 const errBox: React.CSSProperties = { padding: 10, background: "#fff5f5", border: "1px solid #fcc", borderRadius: 6, color: "#dc2626", fontSize: 12, marginBottom: 12 }

@@ -118,7 +118,7 @@ export default function SettingsPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-3">
       <div className="flex items-center flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">自社情報設定</h1>
+        <h1 className="font-bold text-gray-900" style={{ fontSize: 20 }}>自社情報設定</h1>
         <span className="text-xs text-gray-400">請求書・納品書・発注書に印字されます</span>
       </div>
 
@@ -164,7 +164,7 @@ export default function SettingsPage() {
         <Field label="社判画像 URL" value={form.seal_image_url} onChange={v => setForm({ ...form, seal_image_url: v })}
           placeholder="/seal.png" />
         <div>
-          <label className="block text-xs font-bold text-gray-700 mb-1">請求書フッター</label>
+          <label className="block font-bold text-gray-700 mb-1" style={{ fontSize: 13 }}>請求書フッター</label>
           <textarea value={form.invoice_footer} onChange={e => setForm({ ...form, invoice_footer: e.target.value })}
             rows={2} placeholder="振込手数料は貴院負担でお願いいたします。"
             className="w-full px-3 py-2 border border-gray-200 rounded text-sm" />
@@ -185,7 +185,7 @@ export default function SettingsPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-lg p-4 space-y-2" style={{ border: "1px solid #e8eaed" }}>
-      <h2 className="text-sm font-bold text-gray-700 mb-2">{title}</h2>
+      <h2 className="font-bold text-gray-700 mb-2" style={{ fontSize: 16 }}>{title}</h2>
       {children}
     </div>
   )
@@ -194,7 +194,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
     <div>
-      <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>
+      <label className="block font-bold text-gray-700 mb-1" style={{ fontSize: 13 }}>{label}</label>
       <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         className="w-full px-3 py-2 border border-gray-200 rounded text-sm" />
     </div>
@@ -204,7 +204,7 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
 function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
   return (
     <div>
-      <label className="block text-xs font-bold text-gray-700 mb-1">{label}</label>
+      <label className="block font-bold text-gray-700 mb-1" style={{ fontSize: 13 }}>{label}</label>
       <select value={value} onChange={e => onChange(e.target.value)}
         className="w-full px-3 py-2 border border-gray-200 rounded text-sm bg-white">
         {options.map(o => <option key={o}>{o}</option>)}

@@ -216,7 +216,7 @@ export default function PalladiumPage() {
 
       <div style={header}>
         <div>
-          <h1 style={{ fontSize: 26, margin: 0 }}>パラ価格管理</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>パラ価格管理</h1>
           <p style={{ fontSize: 12, color: "#999", margin: "4px 0 0" }}>{rows.length}件</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -247,7 +247,7 @@ export default function PalladiumPage() {
       {/* 最新価格カード */}
       {latest && (
         <div style={latestBox}>
-          <p style={{ fontSize: 11, color: "#999", margin: "0 0 8px" }}>
+          <p style={{ fontSize: 12, color: "#999", margin: "0 0 8px" }}>
             最新価格（{fmtDate(latest.date)}）
           </p>
           <div style={latestGrid}>
@@ -271,7 +271,7 @@ export default function PalladiumPage() {
 
       {/* 履歴 */}
       <div style={{ marginTop: 16 }}>
-        <h2 style={{ fontSize: 14, marginBottom: 8 }}>履歴</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>履歴</h2>
         {rows.length === 0 ? (
           <p style={{ padding: 32, textAlign: "center", color: "#999" }}>価格データがまだ登録されていません</p>
         ) : (
@@ -303,7 +303,7 @@ export default function PalladiumPage() {
                         </td>
                       )
                     })}
-                    <td style={{ ...td, fontSize: 11, color: "#666", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.memo}</td>
+                    <td style={{ ...td, fontSize: 12, color: "#666", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.memo}</td>
                     <td style={{ ...td, textAlign: "right" }}>
                       <button onClick={() => openEdit(r)} style={btnEdit}>編集</button>
                       <button onClick={() => del(r.id, r.date)} style={{ ...btnDel, marginLeft: 4 }}>削除</button>
@@ -321,7 +321,7 @@ export default function PalladiumPage() {
         <div style={overlay} onClick={() => setShowForm(false)}>
           <div style={modal} onClick={(e) => e.stopPropagation()}>
             <div style={modalHeader}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>{editId ? "価格を編集" : "価格を追加"}</h2>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{editId ? "価格を編集" : "価格を追加"}</h2>
               <button onClick={() => setShowForm(false)} style={btnClose}>×</button>
             </div>
             <div style={{ padding: 20 }}>
@@ -383,16 +383,16 @@ const btnClose: React.CSSProperties = { background: "none", border: "none", font
 const latestBox: React.CSSProperties = { background: "#fff", border: "2px solid #111", borderRadius: 12, padding: 16, marginBottom: 16 }
 const latestGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }
 const latestCard: React.CSSProperties = { background: "#fafafa", borderRadius: 8, padding: 12, textAlign: "center" }
-const productLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, marginBottom: 4 }
+const productLabel: React.CSSProperties = { fontSize: 12, fontWeight: 700, marginBottom: 4 }
 const tokaBadge: React.CSSProperties = { display: "inline-block", marginTop: 4, padding: "1px 6px", borderRadius: 4, background: "#fef3c7", color: "#92400e", fontSize: 10, fontWeight: 700 }
 const tokaBadgeSmall: React.CSSProperties = { display: "inline-block", padding: "0 4px", borderRadius: 3, background: "#fef3c7", color: "#92400e", fontSize: 9, fontWeight: 700 }
 const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse", background: "#fff", border: "1px solid #eee", borderRadius: 8 }
-const th: React.CSSProperties = { borderBottom: "2px solid #111", padding: "8px 10px", textAlign: "left", fontSize: 11, fontWeight: 700, background: "#fafafa" }
-const td: React.CSSProperties = { borderBottom: "1px solid #eee", padding: "8px 10px", fontSize: 12 }
+const th: React.CSSProperties = { borderBottom: "2px solid #111", padding: "8px 10px", textAlign: "left", fontSize: 12, fontWeight: 700, background: "#fafafa" }
+const td: React.CSSProperties = { borderBottom: "1px solid #eee", padding: "8px 10px", fontSize: 13 }
 const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 40, zIndex: 50 }
 const modal: React.CSSProperties = { background: "#fff", borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }
 const modalHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #eee" }
 const fieldWrap: React.CSSProperties = { marginBottom: 10 }
-const fieldLabel: React.CSSProperties = { display: "block", fontSize: 11, color: "#777", marginBottom: 4, fontWeight: 600 }
-const fieldInput: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 13, boxSizing: "border-box", background: "#fff" }
-const errBox: React.CSSProperties = { padding: 10, background: "#fff5f5", border: "1px solid #fcc", borderRadius: 6, color: "#dc2626", fontSize: 12, marginBottom: 12 }
+const fieldLabel: React.CSSProperties = { display: "block", fontSize: 12, color: "#777", marginBottom: 4, fontWeight: 600 }
+const fieldInput: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14, boxSizing: "border-box", background: "#fff" }
+const errBox: React.CSSProperties = { padding: 10, background: "#fff5f5", border: "1px solid #fcc", borderRadius: 6, color: "#dc2626", fontSize: 13, marginBottom: 12 }

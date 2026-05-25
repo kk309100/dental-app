@@ -127,7 +127,7 @@ export default function PurchaseOrdersListPage() {
   if (tableMissing) {
     return (
       <div className="max-w-2xl mx-auto bg-amber-50 border border-amber-200 rounded-lg p-6 mt-12">
-        <h1 className="text-lg font-bold text-amber-900 mb-2">📋 発注書管理（未セットアップ）</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#92400e" }} className="mb-2">📋 発注書管理（未セットアップ）</h1>
         <p className="text-sm text-amber-800 mb-3">
           purchase_orders テーブルがまだ作成されていません。<br />
           Supabase Studio で <code className="bg-white px-1.5 py-0.5 rounded">db/migrations/2026-05-05_full_overhaul.sql</code> を実行してください。
@@ -140,21 +140,21 @@ export default function PurchaseOrdersListPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>
           発注書管理
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全 {pos.length} 件</span>
         </h1>
         <div className="flex items-center gap-2">
           <button onClick={bulkPrint} disabled={selected.size === 0}
-            className="px-3 py-1.5 bg-gray-800 text-white text-xs font-bold rounded hover:bg-gray-700 disabled:opacity-40">
+            className="px-3 py-1.5 bg-gray-800 text-white text-sm font-bold rounded hover:bg-gray-700 disabled:opacity-40">
             🖨 選択を一括印刷 ({selected.size})
           </button>
           <Link href="/admin/purchase-orders/suggest"
-            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">
+            className="px-3 py-1.5 bg-blue-600 text-white text-sm font-bold rounded hover:bg-blue-700">
             🤖 在庫不足から自動作成
           </Link>
           <Link href="/admin/purchase-orders/new"
-            className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
+            className="px-3 py-1.5 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700">
             ＋ 新規発注書
           </Link>
         </div>
@@ -189,7 +189,7 @@ export default function PurchaseOrdersListPage() {
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs">
           <thead className="bg-gray-100">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-center w-8">
                 <input type="checkbox" checked={filtered.length > 0 && selected.size === filtered.length} onChange={e => e.target.checked ? selectAll() : clearSel()} />
               </th>
@@ -211,23 +211,23 @@ export default function PurchaseOrdersListPage() {
               return (
                 <tr key={p.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (selected.has(p.id) ? "bg-blue-100" : "")}>
                   <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSel(p.id)} /></td>
-                  <td className="px-3 py-1.5 font-mono text-[11px] text-gray-700">{p.po_number || p.id.slice(0, 8)}</td>
+                  <td className="px-3 py-1.5 font-mono text-[12px] text-gray-700">{p.po_number || p.id.slice(0, 8)}</td>
                   <td className="px-3 py-1.5">{supplierName(p.supplier_id)}</td>
                   <td className="px-2 py-1.5 text-center">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: sc.bg, color: sc.color }}>{p.status}</span>
+                    <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: sc.bg, color: sc.color }}>{p.status}</span>
                   </td>
-                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">
+                  <td className="px-2 py-1.5 text-center text-[12px] text-gray-600">
                     {p.ordered_at ? new Date(p.ordered_at).toLocaleDateString("ja-JP") : "—"}
                   </td>
-                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">
+                  <td className="px-2 py-1.5 text-center text-[12px] text-gray-600">
                     {p.expected_at ? new Date(p.expected_at).toLocaleDateString("ja-JP") : "—"}
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums font-bold">{fmtYen(p.total_amount || 0)}</td>
-                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-500">
+                  <td className="px-2 py-1.5 text-center text-[12px] text-gray-500">
                     {p.sent_method || "—"}
                   </td>
                   <td className="px-2 py-1.5 text-center">
-                    <Link href={`/admin/purchase-orders/${p.id}`} className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
+                    <Link href={`/admin/purchase-orders/${p.id}`} className="text-[12px] px-3 py-2 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
                   </td>
                 </tr>
               )

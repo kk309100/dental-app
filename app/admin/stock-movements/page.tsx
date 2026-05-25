@@ -117,7 +117,7 @@ export default function StockMovementsPage() {
 
   return (
     <div className="space-y-3">
-      <h1 className="text-lg font-bold text-gray-900">
+      <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>
         在庫移動履歴
         <span className="ml-2 text-xs font-normal text-gray-400">直近 {mvmts.length} 件</span>
       </h1>
@@ -125,7 +125,7 @@ export default function StockMovementsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {summary.map(s => (
           <div key={s.type} className="bg-white rounded p-3" style={{ border: "1px solid #e8eaed" }}>
-            <p className="text-[10px] text-gray-500 font-bold">
+            <p style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-500">
               <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ background: TYPE_COLORS[s.type] || "#9ca3af" }}></span>
               {s.type}
             </p>
@@ -151,7 +151,7 @@ export default function StockMovementsPage() {
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs">
           <thead className="bg-gray-100 sticky top-0">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-700 border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-center w-32">日時</th>
               <th className="px-2 py-1.5 text-center w-20">種別</th>
               <th className="px-2 py-1.5 text-left">商品</th>
@@ -169,15 +169,15 @@ export default function StockMovementsPage() {
               const color = TYPE_COLORS[m.movement_type] || "#9ca3af"
               return (
                 <tr key={m.id} className="border-b border-gray-100 hover:bg-blue-50/40">
-                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{new Date(m.occurred_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })}</td>
+                  <td className="px-2 py-1.5 text-center text-gray-600" style={{ fontSize: 12 }}>{new Date(m.occurred_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" })}</td>
                   <td className="px-2 py-1.5 text-center">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: color + "22", color }}>{m.movement_type}</span>
+                    <span className="font-bold px-2 py-0.5 rounded" style={{ fontSize: 11, background: color + "22", color }}>{m.movement_type}</span>
                   </td>
-                  <td className="px-2 py-1.5">{p?.name || "(削除済み)"} <span className="text-[10px] text-gray-400">{p?.product_code || ""}</span></td>
+                  <td className="px-2 py-1.5">{p?.name || "(削除済み)"} <span style={{ fontSize: 11 }} className="text-gray-400">{p?.product_code || ""}</span></td>
                   <td className={"px-2 py-1.5 text-right tabular-nums font-bold " + (m.quantity > 0 ? "text-emerald-700" : "text-red-600")}>{m.quantity > 0 ? "+" : ""}{m.quantity}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-gray-500">{m.before_stock ?? "—"}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-gray-700 font-bold">{m.after_stock ?? "—"}</td>
-                  <td className="px-2 py-1.5 text-[11px] text-gray-600">{m.reason || ""} {m.ref_type ? `(${m.ref_type})` : ""}</td>
+                  <td className="px-2 py-1.5 text-gray-600" style={{ fontSize: 12 }}>{m.reason || ""} {m.ref_type ? `(${m.ref_type})` : ""}</td>
                 </tr>
               )
             })}

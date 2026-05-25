@@ -286,7 +286,7 @@ function ShippingPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center flex-wrap gap-2 no-print">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           🚚 医院納品（出荷準備→納品書発行）
           <span className="ml-2 text-xs font-normal text-gray-400">医院への出荷準備・在庫減算・納品書発行</span>
         </h1>
@@ -306,7 +306,7 @@ function ShippingPage() {
             <p className="text-sm font-bold text-emerald-900">
               仕入入荷で出荷可能になった注文 {selected.size}件 を選択しました
             </p>
-            <p className="text-[11px] text-emerald-700 mt-0.5">
+            <p className="text-[13px] text-emerald-700 mt-0.5">
               下に該当医院グループが自動展開されています。「✓ 出荷確定」ボタンで一括処理できます。
             </p>
           </div>
@@ -331,9 +331,9 @@ function ShippingPage() {
         <div className="bg-blue-50 rounded-lg p-3 flex items-center gap-3 flex-wrap no-print sticky top-14 z-20" style={{ border: "1px solid #c7d2fe" }}>
           <span className="text-sm font-bold text-blue-900">{selected.size}件 / {selectedItems.length}行 選択中</span>
           <button onClick={printPickingList}
-            className="text-xs px-3 py-1.5 bg-white border border-blue-200 text-blue-700 rounded hover:bg-blue-50">🖨 ピッキングリスト印刷</button>
+            className="text-sm px-3 py-1.5 bg-white border border-blue-200 text-blue-700 rounded hover:bg-blue-50">🖨 ピッキングリスト印刷</button>
           <button onClick={confirmShipment} disabled={busy}
-            className="text-xs px-4 py-1.5 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700 disabled:bg-gray-400">
+            className="text-sm px-4 py-1.5 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700 disabled:bg-gray-400">
             {busy ? "処理中…" : "✓ 出荷確定（納品書発行＋在庫減算＋納品済）"}
           </button>
           <button onClick={() => setSelected(new Set())} className="ml-auto text-xs text-gray-500 underline">選択解除</button>
@@ -378,13 +378,13 @@ function ShippingPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleSelect(o.id)} />
                           <span className="text-xs text-gray-500 font-mono">{o.delivery_number || o.id.slice(0, 8)}</span>
-                          <span className="text-[10px] text-gray-400">{new Date(o.created_at).toLocaleDateString("ja-JP")}</span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded"
+                          <span className="text-[12px] text-gray-400">{new Date(o.created_at).toLocaleDateString("ja-JP")}</span>
+                          <span className="text-[12px] font-bold px-2 py-0.5 rounded"
                             style={{ background: o.status === "注文受付" ? "#fef3c7" : o.status === "確認中" ? "#dbeafe" : "#e0e7ff", color: o.status === "注文受付" ? "#92400e" : o.status === "確認中" ? "#1e40af" : "#3730a3" }}>
                             {o.status}
                           </span>
-                          {o.sales_rep && <span className="text-[10px] text-gray-500">担当: {o.sales_rep}</span>}
-                          {o.note && <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 rounded">📝 {o.note}</span>}
+                          {o.sales_rep && <span className="text-[12px] text-gray-500">担当: {o.sales_rep}</span>}
+                          {o.note && <span className="text-[12px] text-amber-700 bg-amber-50 px-1.5 rounded">📝 {o.note}</span>}
                           <span className={"text-[10px] font-bold px-2 py-0.5 rounded ml-auto " + (ready === "ready" ? "bg-emerald-100 text-emerald-700" : ready === "partial" ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-700")}>
                             {ready === "ready" ? "🟢 出荷OK" : ready === "partial" ? "🟡 一部不足" : "🔴 在庫不足"}
                           </span>
@@ -392,7 +392,7 @@ function ShippingPage() {
                         </div>
                         <div className="ml-6">
                           {/* ヘッダ */}
-                          <div className="flex items-center text-[10px] py-0.5 text-gray-500 border-b border-gray-200">
+                          <div className="flex items-center text-[12px] py-0.5 text-gray-500 border-b border-gray-200">
                             <span className="w-12">棚</span>
                             <span className="flex-1">商品名</span>
                             <span className="w-12 text-right">数量</span>
@@ -433,8 +433,8 @@ function ShippingPage() {
                               fetchData()
                             }
                             return (
-                              <div key={it.id} className={"flex items-center text-[11px] py-0.5 gap-0.5 " + (noPrice ? "bg-amber-50" : "")}>
-                                <span className="font-mono text-gray-500 w-12 text-[10px]">{loc ? `[${loc}]` : ""}</span>
+                              <div key={it.id} className={"flex items-center text-[13px] py-0.5 gap-0.5 " + (noPrice ? "bg-amber-50" : "")}>
+                                <span className="font-mono text-gray-500 w-12 text-[12px]">{loc ? `[${loc}]` : ""}</span>
                                 <span className="flex-1 truncate">{it.product_name || "(商品名なし)"}</span>
                                 {/* 数量 */}
                                 <input type="number" defaultValue={qty}
@@ -446,7 +446,7 @@ function ShippingPage() {
                                       fetchData()
                                     }
                                   }}
-                                  className="w-12 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[11px] bg-white" />
+                                  className="w-12 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[13px] bg-white" />
                                 {/* 仕入（products.cost マスタ更新）*/}
                                 <input type="number" defaultValue={cost}
                                   disabled={!it.product_id}
@@ -457,7 +457,7 @@ function ShippingPage() {
                                       fetchData()
                                     }
                                   }}
-                                  className="w-20 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[10px] text-gray-600 bg-gray-50 disabled:opacity-50"
+                                  className="w-20 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[13px] text-gray-600 bg-gray-50 disabled:opacity-50"
                                   title="仕入価格（商品マスタを更新）" />
                                 {/* 定価（products.price マスタ更新） */}
                                 <input type="number" defaultValue={listPrice}
@@ -469,12 +469,12 @@ function ShippingPage() {
                                       fetchData()
                                     }
                                   }}
-                                  className="w-20 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[10px] text-gray-600 bg-gray-50 disabled:opacity-50"
+                                  className="w-20 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[13px] text-gray-600 bg-gray-50 disabled:opacity-50"
                                   title="定価（商品マスタを更新）" />
                                 {/* 販売価格 */}
                                 <input type="number" defaultValue={sellPrice}
                                   onBlur={(e) => updateSellPrice(Number(e.target.value))}
-                                  className={"w-24 text-right tabular-nums px-1 py-0.5 border rounded text-[11px] font-bold " + (noPrice ? "border-amber-400 bg-amber-50" : "border-blue-300 bg-blue-50")}
+                                  className={"w-24 text-right tabular-nums px-1 py-0.5 border rounded text-[13px] font-bold " + (noPrice ? "border-amber-400 bg-amber-50" : "border-blue-300 bg-blue-50")}
                                   title="販売価格（明細だけに反映）" />
                                 {/* 粗利（編集すると 販売価格 = 仕入 + 粗利 で逆算）*/}
                                 <input type="number" defaultValue={gross}
@@ -483,7 +483,7 @@ function ShippingPage() {
                                     const newPrice = cost + v
                                     if (newPrice >= 0) updateSellPrice(newPrice)
                                   }}
-                                  className={"w-16 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[10px] " + (gross >= 0 ? "text-gray-700" : "text-red-600 font-bold bg-red-50")}
+                                  className={"w-16 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[13px] " + (gross >= 0 ? "text-gray-700" : "text-red-600 font-bold bg-red-50")}
                                   title="粗利（編集すると販売価格が逆算: 仕入+粗利）" />
                                 {/* 粗利% */}
                                 <input type="number" step="0.1" defaultValue={grossRate}
@@ -493,7 +493,7 @@ function ShippingPage() {
                                     const newPrice = Math.round(cost / (1 - v / 100))
                                     updateSellPrice(newPrice)
                                   }}
-                                  className={"w-14 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[10px] " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold bg-red-50" : "text-gray-500")}
+                                  className={"w-14 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[13px] " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold bg-red-50" : "text-gray-500")}
                                   title="粗利%（編集すると販売価格が逆算: 仕入÷(1-粗利%)）" />
                                 {/* 小計（編集すると 販売価格 = 小計÷数量 で逆算）*/}
                                 <input type="number" defaultValue={lineSubtotal}
@@ -504,16 +504,16 @@ function ShippingPage() {
                                       if (newPrice >= 0) updateSellPrice(newPrice)
                                     }
                                   }}
-                                  className="w-24 text-right tabular-nums px-1 py-0.5 border border-blue-300 rounded text-[11px] font-bold bg-blue-50"
+                                  className="w-24 text-right tabular-nums px-1 py-0.5 border border-blue-300 rounded text-[13px] font-bold bg-blue-50"
                                   title="小計（編集すると販売価格が逆算: 小計÷数量）" />
-                                <span className={"w-12 text-right text-[10px] tabular-nums " + (enough ? "text-gray-500" : "text-red-600 font-bold")}>
+                                <span className={"w-12 text-right text-[13px] tabular-nums " + (enough ? "text-gray-500" : "text-red-600 font-bold")}>
                                   {stock}
                                 </span>
                               </div>
                             )
                           })}
                           {its.some(it => !it.price || Number(it.price) === 0) && (
-                            <p className="ml-2 text-[10px] text-amber-700 font-bold mt-1">⚠ 単価0円の商品があります。納品書発行前に必ず単価を入力してください（黄色の入力欄）</p>
+                            <p className="ml-2 text-[12px] text-amber-700 font-bold mt-1">⚠ 単価0円の商品があります。納品書発行前に必ず単価を入力してください（黄色の入力欄）</p>
                           )}
                         </div>
                       </div>

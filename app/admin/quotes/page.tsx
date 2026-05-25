@@ -113,13 +113,13 @@ export default function QuotesPage() {
 
       {/* ヘッダ + アクションボタン */}
       <div className="flex items-center flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           見積書管理
           <span className="ml-2 text-xs font-normal text-gray-400">
             該当 {filtered.length}/全{quotes.length} ・ 進行中 {counts.active} ・ 売上化済 {counts.converted}
           </span>
         </h1>
-        <Link href="/admin/quotes/create" className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700">
+        <Link href="/admin/quotes/create" className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700">
           ＋ 見積書を作成
         </Link>
       </div>
@@ -149,9 +149,9 @@ export default function QuotesPage() {
       {/* テーブル */}
       <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
-        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+        <table className="w-full text-[13px]" style={{ borderCollapse: "collapse" }}>
           <thead className="sticky top-0 bg-gray-100">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-left w-32">見積書No</th>
               <th className="px-2 py-1.5 text-center w-24">状態</th>
               <th className="px-2 py-1.5 text-left">医院</th>
@@ -168,18 +168,18 @@ export default function QuotesPage() {
               const sc = QUOTE_STATUSES[q.status]
               return (
                 <tr key={q.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
-                  <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700">{q.quote_number}</td>
+                  <td className="px-2 py-1.5 font-mono text-[12px] text-gray-700">{q.quote_number}</td>
                   <td className="px-2 py-1.5 text-center">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: sc.color + "22", color: sc.color }}>
+                    <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: sc.color + "22", color: sc.color }}>
                       {sc.label}
                     </span>
                   </td>
                   <td className="px-2 py-1.5">{clinicName(q.clinic_id)}</td>
-                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{fmtDate(q.issue_date)}</td>
-                  <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{q.expiry_date ? fmtDate(q.expiry_date) : "—"}</td>
+                  <td className="px-2 py-1.5 text-center text-[12px] text-gray-600">{fmtDate(q.issue_date)}</td>
+                  <td className="px-2 py-1.5 text-center text-[12px] text-gray-600">{q.expiry_date ? fmtDate(q.expiry_date) : "—"}</td>
                   <td className="px-2 py-1.5 text-right text-[12px] font-bold">{fmtYen(q.total)}</td>
                   <td className="px-2 py-1.5 text-center">
-                    <Link href={`/admin/quotes/${q.id}`} className="text-[10px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
+                    <Link href={`/admin/quotes/${q.id}`} className="text-[12px] px-2 py-1 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
                   </td>
                 </tr>
               )

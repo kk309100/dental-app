@@ -128,7 +128,7 @@ export default function POPoolPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           🛒 発注プール
           <span className="ml-2 text-xs font-normal text-gray-400">
             {pos.length}仕入先 / {totalItems}明細 / 合計 {fmtYen(totalAcrossAll)}
@@ -140,7 +140,7 @@ export default function POPoolPage() {
             <button
               onClick={handleConfirmAll}
               disabled={busy === "all"}
-              className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700 disabled:opacity-50">
+              className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700 disabled:opacity-50">
               {busy === "all" ? "処理中…" : `🚀 全部一括発注確定 (${pos.length}社)`}
             </button>
           )}
@@ -155,7 +155,7 @@ export default function POPoolPage() {
       {pos.length === 0 ? (
         <div className="bg-white rounded-lg p-8 text-center" style={{ border: "1px solid #e8eaed" }}>
           <p className="text-gray-400 text-sm">プール中の下書き発注書はありません</p>
-          <p className="text-[11px] text-gray-400 mt-2">
+          <p className="text-[12px] text-gray-400 mt-2">
             注文一覧で「→発注」ボタンを押すと、ここに不足商品が仕入先別に集約されます
           </p>
           <Link href="/admin/orders" className="inline-block mt-3 text-xs text-blue-600 underline">→ 注文一覧へ</Link>
@@ -173,14 +173,14 @@ export default function POPoolPage() {
                 <div className="px-3 py-2 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-3">
                     <span className="text-base font-bold text-gray-900">🏭 {supplierName}</span>
-                    <span className="text-[10px] text-gray-500 font-mono">{po.po_number}</span>
+                    <span className="text-[12px] text-gray-500 font-mono">{po.po_number}</span>
                     <span className="text-xs text-gray-600">{poItems.length}品 / {fmtYen(total)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleConfirm(po.id, supplierName, total, "FAX")}
                       disabled={busy === po.id || poItems.length === 0}
-                      className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700 disabled:opacity-50">
+                      className="px-3 py-1.5 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700 disabled:opacity-50">
                       ✓ 発注確定 (FAX)
                     </button>
                     <Link href={`/admin/purchase-orders/${po.id}`} className="text-xs text-blue-600 underline">編集</Link>
@@ -193,9 +193,9 @@ export default function POPoolPage() {
                   </div>
                 </div>
                 {/* 明細 */}
-                <table className="w-full text-xs">
+                <table className="w-full text-[13px]">
                   <thead className="bg-gray-50">
-                    <tr className="text-[10px] text-gray-500">
+                    <tr className="text-[12px] text-gray-500">
                       <th className="px-2 py-1 text-left">商品名</th>
                       <th className="px-2 py-1 text-left">納品先（医院）</th>
                       <th className="px-2 py-1 text-right w-16">数量</th>
@@ -210,7 +210,7 @@ export default function POPoolPage() {
                     ) : poItems.map(it => (
                       <tr key={it.id} className="border-t border-gray-100">
                         <td className="px-2 py-1.5">{it.product_name || "(商品名なし)"}</td>
-                        <td className="px-2 py-1.5 text-[10px] text-gray-500">{it.note || "—"}</td>
+                        <td className="px-2 py-1.5 text-[12px] text-gray-500">{it.note || "—"}</td>
                         <td className="px-2 py-1.5 text-right">
                           <input type="number"
                             defaultValue={it.quantity}

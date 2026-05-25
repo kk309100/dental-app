@@ -162,7 +162,7 @@ function AdminOrdersPage() {
   function BizBadge({ state }: { state: BizState }) {
     const s = BIZ_BADGES[state]
     return (
-      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 whitespace-nowrap"
+      <span className="text-[11px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-1 whitespace-nowrap"
         style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
         <span>{s.icon}</span><span>{s.label}</span>
       </span>
@@ -173,13 +173,13 @@ function AdminOrdersPage() {
   function SourceBadge({ source }: { source: string | null | undefined }) {
     const isAdmin = source === "admin"
     return isAdmin ? (
-      <span className="text-[10px] px-1 py-0.5 rounded inline-flex items-center whitespace-nowrap"
+      <span className="text-[11px] px-1 py-0.5 rounded inline-flex items-center whitespace-nowrap"
         style={{ background: "#fef3c7", color: "#92400e" }}
         title="LINE/電話/口頭で受けた注文を事務入力">
         📞 事務
       </span>
     ) : (
-      <span className="text-[10px] px-1 py-0.5 rounded inline-flex items-center whitespace-nowrap"
+      <span className="text-[11px] px-1 py-0.5 rounded inline-flex items-center whitespace-nowrap"
         style={{ background: "#dbeafe", color: "#1e40af" }}
         title="医院側のシステムから直接注文">
         🏥 Web
@@ -192,7 +192,7 @@ function AdminOrdersPage() {
     const s = BIZ_BADGES[state]
     const showCount = (state === "need_po" || state === "partial" || state === "waiting") && shortCount > 0
     return (
-      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap"
+      <span className="text-[11px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap"
         style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
         <span>{s.icon}</span>
         <span>{s.label}</span>
@@ -445,7 +445,7 @@ function AdminOrdersPage() {
           <div className="rounded-lg p-3 animate-pulse-soft" style={{ background: "linear-gradient(135deg,#fee2e2,#fecaca)", border: "2px solid #ef4444" }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-bold text-red-900">🆕 医院Webから新規注文 {newOrders.length}件 (要対応)</span>
-              <span className="text-[10px] text-red-700">最新順</span>
+              <span className="text-[11px] text-red-700">最新順</span>
             </div>
             <div className="bg-white rounded p-2 max-h-60 overflow-auto">
               {newOrders.slice(0, 10).map(o => {
@@ -453,12 +453,12 @@ function AdminOrdersPage() {
                 return (
                   <div key={o.id} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-0 text-xs">
                     <span className="font-bold text-gray-900">{cl?.name || "(医院不明)"}</span>
-                    <span className="text-[10px] text-gray-500 mx-2">{fmtTimeAgo(o.created_at)}</span>
-                    <span className="text-gray-600 mx-2 font-mono text-[10px]">{o.delivery_number || o.id.slice(0, 8)}</span>
+                    <span className="text-[11px] text-gray-500 mx-2">{fmtTimeAgo(o.created_at)}</span>
+                    <span className="text-gray-600 mx-2 font-mono text-[11px]">{o.delivery_number || o.id.slice(0, 8)}</span>
                     <span className="font-bold text-gray-900 tabular-nums mr-2">{fmtYen(o.total_price || 0)}</span>
                     <button
                       onClick={() => updateStatus(o.id, "確認中")}
-                      className="text-[10px] px-2 py-0.5 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                      className="text-[11px] px-2 py-0.5 bg-emerald-600 text-white rounded hover:bg-emerald-700"
                       title="この注文を「確認中」に進めて、新規アラートから外す">
                       確認
                     </button>
@@ -466,7 +466,7 @@ function AdminOrdersPage() {
                 )
               })}
               {newOrders.length > 10 && (
-                <p className="text-[10px] text-gray-500 text-center mt-1">他 {newOrders.length - 10}件 ...</p>
+                <p className="text-[11px] text-gray-500 text-center mt-1">他 {newOrders.length - 10}件 ...</p>
               )}
             </div>
           </div>
@@ -474,7 +474,7 @@ function AdminOrdersPage() {
       })()}
 
       <div className="flex items-center flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>
           注文管理
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{orders.length} ・ 未納品 {counts.undelivered} ・ 納品済 {counts.delivered}</span>
         </h1>
@@ -527,7 +527,7 @@ function AdminOrdersPage() {
         return (
           <div className="bg-blue-50 rounded-lg p-2 flex items-center gap-2 text-xs flex-wrap" style={{ border: "1px solid #c7d2fe" }}>
             <span className="font-bold text-blue-900">{selectedOrderIds.size}件選択中</span>
-            <span className="text-[10px] text-gray-600">
+            <span className="text-[11px] text-gray-600">
               在庫: <span className="text-emerald-700 font-bold">🟢{selectedOk}</span> / <span className={selectedShort > 0 ? "text-red-600 font-bold" : "text-gray-400"}>🔴{selectedShort}不足</span>
             </span>
             <button
@@ -621,7 +621,7 @@ function AdminOrdersPage() {
                     // 全件納品済み（取消なし） → 「✅ 全件納品済」
                     if (allDelivered) {
                       return (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded inline-flex items-center gap-1"
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded inline-flex items-center gap-1"
                           style={{ background: "#dcfce7", color: "#15803d", border: "1px solid #86efac" }}>
                           ✅ 全件納品済
                         </span>
@@ -632,13 +632,13 @@ function AdminOrdersPage() {
                       return (
                         <span className="flex items-center gap-1 flex-wrap">
                           {delivered > 0 && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                            <span className="text-[11px] font-bold px-1.5 py-0.5 rounded"
                               style={{ background: "#dcfce7", color: "#15803d", border: "1px solid #86efac" }}>
                               ✅ 納品済 {delivered}
                             </span>
                           )}
                           {cancelled > 0 && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                            <span className="text-[11px] font-bold px-1.5 py-0.5 rounded"
                               style={{ background: "#f3f4f6", color: "#6b7280", border: "1px solid #d1d5db" }}>
                               ✕ 取消 {cancelled}
                             </span>
@@ -651,14 +651,14 @@ function AdminOrdersPage() {
                       <span className="flex items-center gap-1 ml-2 flex-wrap">
                         {(["need_po", "partial", "waiting", "ready"] as const).map(s => (
                           bizCounts[s] ? (
-                            <span key={s} className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"
+                            <span key={s} className="text-[11px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"
                               style={{ background: BIZ_BADGES[s].bg, color: BIZ_BADGES[s].color, border: `1px solid ${BIZ_BADGES[s].border}` }}>
                               {BIZ_BADGES[s].icon}{BIZ_BADGES[s].label} {bizCounts[s]}
                             </span>
                           ) : null
                         ))}
                         {finished > 0 && (
-                          <span className="text-[10px] text-gray-500" title={`納品済 ${delivered} / 取消 ${cancelled}`}>
+                          <span className="text-[11px] text-gray-500" title={`納品済 ${delivered} / 取消 ${cancelled}`}>
                             （納品済 {delivered}/{total}{cancelled > 0 ? ` ・取消 ${cancelled}` : ""}）
                           </span>
                         )}
@@ -672,7 +672,7 @@ function AdminOrdersPage() {
                         e.stopPropagation()
                         addToPool(undeliveredOrders.map(o => o.id))
                       }}
-                      className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500 text-white hover:bg-amber-600"
+                      className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-500 text-white hover:bg-amber-600"
                       title="この医院の不足分を発注プールに追加"
                     >🛒 プール追加</button>
                   )}
@@ -684,7 +684,7 @@ function AdminOrdersPage() {
                 {open && (
                   <table className="w-full text-xs">
                     <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr className="text-[10px] text-gray-500 uppercase">
+                      <tr className="text-[11px] text-gray-500 uppercase">
                         <th className="px-2 py-1 text-center w-8"></th>
                         <th className="px-2 py-1 text-left w-24">状態</th>
                         <th className="px-2 py-1 text-center w-32">業務状態</th>
@@ -709,7 +709,7 @@ function AdminOrdersPage() {
                                 <input type="checkbox" checked={selectedOrderIds.has(o.id)} onChange={() => toggleSelect(o.id)} />
                               </td>
                               <td className="px-2 py-1">
-                                <select value={o.status} onChange={(e) => updateStatus(o.id, e.target.value)} className="px-1.5 py-0.5 rounded text-[10px] font-bold border-0 cursor-pointer w-full" style={{ background: sc.bg, color: sc.color }}>
+                                <select value={o.status} onChange={(e) => updateStatus(o.id, e.target.value)} className="px-1.5 py-0.5 rounded text-[11px] font-bold border-0 cursor-pointer w-full" style={{ background: sc.bg, color: sc.color }}>
                                   {STATUSES.map((s) => <option key={s}>{s}</option>)}
                                 </select>
                               </td>
@@ -717,27 +717,27 @@ function AdminOrdersPage() {
                                 <BizBadgeWithCount state={biz} shortCount={ss.short} />
                               </td>
                               <td className="px-2 py-1 text-center"><SourceBadge source={o.source} /></td>
-                              <td className="px-2 py-1 font-mono text-[10px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
-                              <td className="px-2 py-1 text-[10px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+                              <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
+                              <td className="px-2 py-1 text-[11px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                               <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                               <td className="px-2 py-1 text-center whitespace-nowrap">
-                                <button onClick={() => toggleOrderOpen(o.id)} className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="明細を開閉">{isOpen ? "−" : "+"}</button>
-                                <Link href={`/order-edit/${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="編集">編</button></Link>
+                                <button onClick={() => toggleOrderOpen(o.id)} className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="明細を開閉">{isOpen ? "−" : "+"}</button>
+                                <Link href={`/order-edit/${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="編集">編</button></Link>
                                 {/* 出荷可能なら「納品」ボタン目立つ表示 */}
                                 {biz === "ready" && (
                                   <Link href={`/admin/shipping?orders=${o.id}`}>
-                                    <button className="text-[10px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>
+                                    <button className="text-[11px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>
                                   </Link>
                                 )}
-                                <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
-                                <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
+                                <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
+                                <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
                                 {ss.short > 0 && (
                                   <button
                                     onClick={() => addToPool([o.id])}
-                                    className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1"
+                                    className="text-[11px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1"
                                     title="不足分を発注プールに追加">プール</button>
                                 )}
-                                <button onClick={() => deleteOrder(o.id, o.delivery_number)} className="text-[10px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" title="この注文を削除（納品済みは強い警告あり）">🗑</button>
+                                <button onClick={() => deleteOrder(o.id, o.delivery_number)} className="text-[11px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" title="この注文を削除（納品済みは強い警告あり）">🗑</button>
                               </td>
                             </tr>
                             {isOpen && (
@@ -745,7 +745,7 @@ function AdminOrdersPage() {
                                 <td colSpan={8} className="px-4 py-2">
                                   {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
                                     <table className="w-full text-[11px]">
-                                      <thead className="text-[10px] text-gray-500">
+                                      <thead className="text-[12px] text-gray-500">
                                         <tr>
                                           <th className="text-left px-1 py-0.5 w-16">在庫</th>
                                           <th className="text-left px-1 py-0.5">商品名</th>
@@ -774,7 +774,7 @@ function AdminOrdersPage() {
                                           return (
                                             <tr key={it.id} className="border-b border-gray-100">
                                               <td className="px-1 py-0.5">
-                                                <span className={"text-[9px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
+                                                <span className={"text-[11px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
                                                   {enough ? "OK" : `0`}
                                                 </span>
                                               </td>
@@ -841,7 +841,7 @@ function AdminOrdersPage() {
                         <input type="checkbox" checked={selectedOrderIds.has(o.id)} onChange={() => toggleSelect(o.id)} />
                       </td>
                       <td className="px-1 py-0.5">
-                        <select value={o.status} onChange={(e) => updateStatus(o.id, e.target.value)} className="px-1.5 py-0.5 rounded text-[10px] font-bold border-0 cursor-pointer w-full" style={{ background: sc.bg, color: sc.color }}>
+                        <select value={o.status} onChange={(e) => updateStatus(o.id, e.target.value)} className="px-1.5 py-0.5 rounded text-[11px] font-bold border-0 cursor-pointer w-full" style={{ background: sc.bg, color: sc.color }}>
                           {STATUSES.map((s) => <option key={s}>{s}</option>)}
                         </select>
                       </td>
@@ -849,31 +849,31 @@ function AdminOrdersPage() {
                         <BizBadgeWithCount state={biz} shortCount={ss.short} />
                       </td>
                       <td className="px-2 py-1 text-center"><SourceBadge source={o.source} /></td>
-                      <td className="px-2 py-1 font-mono text-[10px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
+                      <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
                       <td className="px-2 py-1">{clinicById.get(o.clinic_id)?.name || "—"}</td>
-                      <td className="px-2 py-1 text-[10px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+                      <td className="px-2 py-1 text-[11px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                       <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
-                        {o.note ? <span className="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded text-[10px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
+                        {o.note ? <span className="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded text-[11px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
                       </td>
                       <td className="px-2 py-1 text-center whitespace-nowrap">
-                        <button onClick={() => toggleOrderOpen(o.id)} className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">{open ? "−" : "+"}</button>
-                        <Link href={`/order-edit/${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">編</button></Link>
+                        <button onClick={() => toggleOrderOpen(o.id)} className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">{open ? "−" : "+"}</button>
+                        <Link href={`/order-edit/${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">編</button></Link>
                         {biz === "ready" && (
                           <Link href={`/admin/shipping?orders=${o.id}`}>
-                            <button className="text-[10px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>
+                            <button className="text-[11px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>
                           </Link>
                         )}
-                        <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
-                        <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[10px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
+                        <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
+                        <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
                         {ss.short > 0 && (
                           <button
                             onClick={() => addToPool([o.id])}
-                            className="text-[10px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1"
+                            className="text-[11px] px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1"
                             title="不足分を発注プールに追加">プール</button>
                         )}
                         {!["納品済み", "納品済"].includes(o.status) && (
-                          <button onClick={() => deleteOrder(o.id, o.delivery_number)} className="text-[10px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" title="この注文を削除">🗑</button>
+                          <button onClick={() => deleteOrder(o.id, o.delivery_number)} className="text-[11px] px-1.5 py-0.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" title="この注文を削除">🗑</button>
                         )}
                       </td>
                     </tr>
@@ -882,7 +882,7 @@ function AdminOrdersPage() {
                         <td colSpan={9} className="px-4 py-2">
                           {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
                             <table className="w-full text-[11px]">
-                              <thead className="text-[10px] text-gray-500">
+                              <thead className="text-[12px] text-gray-500">
                                 <tr>
                                   <th className="text-left px-1 py-0.5 w-16">在庫</th>
                                   <th className="text-left px-1 py-0.5">商品名</th>
@@ -910,7 +910,7 @@ function AdminOrdersPage() {
                                 return (
                                   <tr key={it.id} className="border-b border-gray-100">
                                     <td className="px-1 py-0.5">
-                                      <span className={"text-[9px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
+                                      <span className={"text-[11px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
                                         {enough ? "OK" : `0`}
                                       </span>
                                     </td>
@@ -1006,7 +1006,7 @@ function AdminOrdersPage() {
                   <>
                     {pinned.length > 0 && (
                       <div className="mb-3">
-                        <p className="text-[10px] text-emerald-700 font-bold mb-1">⭐ メイン仕入先</p>
+                        <p className="text-[11px] text-emerald-700 font-bold mb-1">⭐ メイン仕入先</p>
                         <div className="grid grid-cols-2 gap-2">
                           {pinned.map(s => <SupBtn key={s.id} s={s} highlight />)}
                         </div>
@@ -1014,7 +1014,7 @@ function AdminOrdersPage() {
                     )}
                     {others.length > 0 && (
                       <div>
-                        {pinned.length > 0 && <p className="text-[10px] text-gray-500 mb-1">その他 {others.length}社</p>}
+                        {pinned.length > 0 && <p className="text-[11px] text-gray-500 mb-1">その他 {others.length}社</p>}
                         <div className="grid grid-cols-2 gap-2 max-h-72 overflow-auto">
                           {others.map(s => <SupBtn key={s.id} s={s} />)}
                         </div>

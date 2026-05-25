@@ -175,7 +175,7 @@ export default function AdminSuppliersPage() {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           仕入先管理
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{suppliers.length}件</span>
         </h1>
@@ -183,11 +183,11 @@ export default function AdminSuppliersPage() {
           <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) importCSV(f) }} />
           <button onClick={() => fileRef.current?.click()} disabled={importing}
-            className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">
+            className="text-sm px-3 py-2 bg-white border border-gray-200 rounded hover:bg-gray-50">
             {importing ? "取込中…" : "📥 CSV取込"}
           </button>
-          <button onClick={downloadCSV} className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-50">📤 CSV出力</button>
-          <button onClick={openAdd} className="text-xs px-3 py-1.5 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700">＋ 仕入先を追加</button>
+          <button onClick={downloadCSV} className="text-sm px-3 py-2 bg-white border border-gray-200 rounded hover:bg-gray-50">📤 CSV出力</button>
+          <button onClick={openAdd} className="text-sm px-3 py-2 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700">＋ 仕入先を追加</button>
         </div>
       </div>
 
@@ -217,9 +217,9 @@ export default function AdminSuppliersPage() {
 
       {/* 高密度テーブル */}
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 200px)" }}>
-        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+        <table className="w-full" style={{ borderCollapse: "collapse", fontSize: 13 }}>
           <thead className="sticky top-0 bg-gray-100">
-            <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
+            <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-left whitespace-nowrap">仕入先名</th>
               <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">メーカー</th>
               <th className="px-2 py-1.5 text-left whitespace-nowrap w-28">担当者</th>
@@ -238,19 +238,19 @@ export default function AdminSuppliersPage() {
             ) : filtered.map((s, i) => (
               <tr key={s.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
                 <td className="px-2 py-1.5 font-bold text-gray-900 whitespace-nowrap">{s.name}</td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{s.maker_name || "—"}</td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap">{s.contact || "—"}</td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap font-mono">{s.phone || "—"}</td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-600 whitespace-nowrap font-mono">{s.email || "—"}</td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-500" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.address || ""}>
+                <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap">{s.maker_name || "—"}</td>
+                <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap">{s.contact || "—"}</td>
+                <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap font-mono">{s.phone || "—"}</td>
+                <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap font-mono">{s.email || "—"}</td>
+                <td className="px-2 py-1.5 text-[12px] text-gray-500" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.address || ""}>
                   {s.address || "—"}
                 </td>
-                <td className="px-2 py-1.5 text-[11px] text-gray-500" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.notes || ""}>
+                <td className="px-2 py-1.5 text-[12px] text-gray-500" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.notes || ""}>
                   {s.notes || "—"}
                 </td>
                 <td className="px-2 py-1.5 text-center whitespace-nowrap">
-                  <button onClick={() => openEdit(s)} className="text-[10px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
-                  <button onClick={() => del(s.id, s.name)} className="text-[10px] px-1.5 py-0.5 border border-red-200 bg-red-50 rounded hover:bg-red-100 text-red-700">削除</button>
+                  <button onClick={() => openEdit(s)} className="text-[11px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
+                  <button onClick={() => del(s.id, s.name)} className="text-[11px] px-1.5 py-0.5 border border-red-200 bg-red-50 rounded hover:bg-red-100 text-red-700">削除</button>
                 </td>
               </tr>
             ))}
@@ -316,14 +316,14 @@ const btnClose: React.CSSProperties = { background: "none", border: "none", font
 const searchInput: React.CSSProperties = { width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 13, marginBottom: 12, boxSizing: "border-box" }
 const card: React.CSSProperties = { background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: 14, display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }
 const cardName: React.CSSProperties = { fontSize: 15, fontWeight: 700, margin: 0, color: "#111" }
-const cardSub: React.CSSProperties = { fontSize: 11, color: "#777", margin: "2px 0 0" }
-const cardMeta: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, fontSize: 11, color: "#555" }
-const cardAddr: React.CSSProperties = { fontSize: 11, color: "#777", margin: "4px 0 0" }
-const cardNotes: React.CSSProperties = { fontSize: 11, color: "#666", margin: "2px 0 0", whiteSpace: "pre-wrap" }
+const cardSub: React.CSSProperties = { fontSize: 13, color: "#777", margin: "2px 0 0" }
+const cardMeta: React.CSSProperties = { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6, fontSize: 13, color: "#555" }
+const cardAddr: React.CSSProperties = { fontSize: 13, color: "#777", margin: "4px 0 0" }
+const cardNotes: React.CSSProperties = { fontSize: 13, color: "#666", margin: "2px 0 0", whiteSpace: "pre-wrap" }
 const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 40, zIndex: 50 }
 const modal: React.CSSProperties = { background: "#fff", borderRadius: 12, width: "100%", maxWidth: 480, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }
 const modalHeader: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #eee" }
 const fieldWrap: React.CSSProperties = { marginBottom: 10 }
-const fieldLabel: React.CSSProperties = { display: "block", fontSize: 11, color: "#777", marginBottom: 4, fontWeight: 600 }
-const fieldInput: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 13, boxSizing: "border-box", background: "#fff" }
+const fieldLabel: React.CSSProperties = { display: "block", fontSize: 13, color: "#777", marginBottom: 4, fontWeight: 600 }
+const fieldInput: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14, boxSizing: "border-box", background: "#fff" }
 const errBox: React.CSSProperties = { padding: 10, background: "#fff5f5", border: "1px solid #fcc", borderRadius: 6, color: "#dc2626", fontSize: 12, marginBottom: 12 }

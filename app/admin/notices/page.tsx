@@ -57,7 +57,7 @@ export default function NoticesPage() {
 
       {/* 新規作成フォーム */}
       <div style={{ background: "#fff", borderRadius: 14, padding: 20, marginBottom: 28, border: "1px solid #e5e7eb", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
-        <h2 style={{ fontSize: 15, fontWeight: "bold", marginBottom: 14, color: "#333" }}>新しいお知らせを投稿</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14, color: "#333" }}>新しいお知らせを投稿</h2>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -81,7 +81,7 @@ export default function NoticesPage() {
       </div>
 
       {/* お知らせ一覧 */}
-      <h2 style={{ fontSize: 15, fontWeight: "bold", marginBottom: 12, color: "#333" }}>投稿済み一覧</h2>
+      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: "#333" }}>投稿済み一覧</h2>
       {loading ? (
         <p style={{ color: "#999", fontSize: 14 }}>読み込み中…</p>
       ) : notices.length === 0 ? (
@@ -99,13 +99,13 @@ export default function NoticesPage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                     <span style={{
-                      fontSize: 11, fontWeight: "bold", padding: "2px 8px", borderRadius: 999,
+                      fontSize: 13, fontWeight: "bold", padding: "2px 8px", borderRadius: 999,
                       background: n.is_active ? "#e8f5ec" : "#f3f4f6",
                       color: n.is_active ? "#22a648" : "#9ca3af",
                     }}>
                       {n.is_active ? "表示中" : "非表示"}
                     </span>
-                    <span style={{ fontSize: 11, color: "#9ca3af" }}>{fmtDate(n.created_at)}</span>
+                    <span style={{ fontSize: 12, color: "#9ca3af" }}>{fmtDate(n.created_at)}</span>
                   </div>
                   <p style={{ margin: 0, fontWeight: "bold", fontSize: 14, color: "#111" }}>{n.title}</p>
                   {n.body && <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>{n.body}</p>}

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useState } from "react"
 import { Ic } from "./_lib/icons"
 import UserBadge from "@/app/components/UserBadge"
+import "./admin-base.css"
 
 const NAV = [
   { id: "home",           href: "/admin",                     label: "ホーム",     icon: Ic.dash,     exact: true },

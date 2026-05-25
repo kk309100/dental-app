@@ -322,7 +322,7 @@ export default function SimulationPage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-900">
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827" }}>
           📊 シミュレーション
           <span className="ml-2 text-xs font-normal text-gray-400">業務フローを大量データで一気にテスト</span>
         </h1>
@@ -330,14 +330,14 @@ export default function SimulationPage() {
       </div>
 
       <div className="bg-white rounded-lg p-4 space-y-3" style={{ border: "1px solid #e8eaed" }}>
-        <h2 className="text-sm font-bold">設定</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-          <label>医院数<input type="number" value={opts.clinics} onChange={e => setOpts({ ...opts, clinics: Number(e.target.value) })} className="w-full mt-1 px-2 py-1 border rounded" /></label>
-          <label>商品種類<input type="number" value={opts.productsPerOrder} onChange={e => setOpts({ ...opts, productsPerOrder: Number(e.target.value) })} className="w-full mt-1 px-2 py-1 border rounded" /></label>
-          <label>期間（月）<input type="number" value={opts.months} onChange={e => setOpts({ ...opts, months: Number(e.target.value) })} className="w-full mt-1 px-2 py-1 border rounded" /></label>
-          <label>在庫十分%<input type="number" value={opts.stockHigh} onChange={e => setOpts({ ...opts, stockHigh: Number(e.target.value) })} className="w-full mt-1 px-2 py-1 border rounded" /></label>
-          <label>規定不足%<input type="number" value={opts.stockLow} onChange={e => setOpts({ ...opts, stockLow: Number(e.target.value) })} className="w-full mt-1 px-2 py-1 border rounded" /></label>
-          <label>在庫切れ%<input type="number" value={opts.stockZero} onChange={e => setOpts({ ...opts, stockZero: Number(e.target.value) })} className="w-full mt-1 px-2 py-1 border rounded" /></label>
+        <h2 style={{ fontSize: 16, fontWeight: 700 }}>設定</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3" style={{ fontSize: 13 }}>
+          <label>医院数<input type="number" value={opts.clinics} onChange={e => setOpts({ ...opts, clinics: Number(e.target.value) })} className="w-full mt-1 px-2 py-1.5 border rounded" style={{ fontSize: 14 }} /></label>
+          <label>商品種類<input type="number" value={opts.productsPerOrder} onChange={e => setOpts({ ...opts, productsPerOrder: Number(e.target.value) })} className="w-full mt-1 px-2 py-1.5 border rounded" style={{ fontSize: 14 }} /></label>
+          <label>期間（月）<input type="number" value={opts.months} onChange={e => setOpts({ ...opts, months: Number(e.target.value) })} className="w-full mt-1 px-2 py-1.5 border rounded" style={{ fontSize: 14 }} /></label>
+          <label>在庫十分%<input type="number" value={opts.stockHigh} onChange={e => setOpts({ ...opts, stockHigh: Number(e.target.value) })} className="w-full mt-1 px-2 py-1.5 border rounded" style={{ fontSize: 14 }} /></label>
+          <label>規定不足%<input type="number" value={opts.stockLow} onChange={e => setOpts({ ...opts, stockLow: Number(e.target.value) })} className="w-full mt-1 px-2 py-1.5 border rounded" style={{ fontSize: 14 }} /></label>
+          <label>在庫切れ%<input type="number" value={opts.stockZero} onChange={e => setOpts({ ...opts, stockZero: Number(e.target.value) })} className="w-full mt-1 px-2 py-1.5 border rounded" style={{ fontSize: 14 }} /></label>
         </div>
         <div className="flex gap-2">
           <button onClick={run} disabled={running} className="px-5 py-2 bg-emerald-600 text-white text-sm font-bold rounded disabled:opacity-50">
@@ -349,7 +349,7 @@ export default function SimulationPage() {
         </div>
       </div>
 
-      <div className="bg-gray-900 text-white rounded-lg p-3 font-mono text-[11px] max-h-[60vh] overflow-y-auto">
+      <div className="bg-gray-900 text-white rounded-lg p-3 font-mono max-h-[60vh] overflow-y-auto" style={{ fontSize: 12 }}>
         <p className="text-gray-400">📜 ログ</p>
         {logs.length === 0 ? (
           <p className="text-gray-500 mt-2">「シミュレーション開始」を押すとここに進捗が出ます。</p>

@@ -72,7 +72,7 @@ export default function AdminDashboard() {
       {/* タイトル */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">ダッシュボード</h1>
-        <p className="text-xs text-gray-400 mt-0.5">{fmtDate(new Date())} 現在</p>
+        <p className="text-sm text-gray-400 mt-0.5">{fmtDate(new Date())} 現在</p>
       </div>
 
       {/* KPI カード */}
@@ -123,7 +123,7 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-sm font-bold text-gray-900">未収金一覧</p>
-              <p className="text-xs text-gray-400">発行済みで入金待ちの請求書</p>
+              <p className="text-sm text-gray-400">発行済みで入金待ちの請求書</p>
             </div>
             <Link href="/admin/invoices" className="text-xs text-blue-600 hover:underline">すべて</Link>
           </div>
@@ -150,7 +150,7 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-sm font-bold text-gray-900">在庫アラート</p>
-              <p className="text-xs text-gray-400">最低在庫を下回っています</p>
+              <p className="text-sm text-gray-400">最低在庫を下回っています</p>
             </div>
             <Link href="/admin/inventory" className="text-xs text-blue-600 hover:underline">すべて</Link>
           </div>
@@ -175,8 +175,8 @@ export default function AdminDashboard() {
 
       {/* 全機能リンク（フッタ） */}
       <div className="bg-white rounded-xl p-4" style={{ border: "1px solid #e8eaed" }}>
-        <p className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">すべての機能</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-xs">
+        <p className="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wider">すべての機能</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-sm">
           {[
             { href: "/admin/orders", label: "注文一覧" },
             { href: "/admin/delivered", label: "納品済み一覧" },
@@ -201,9 +201,9 @@ export default function AdminDashboard() {
 function KpiCard({ label, value, sub, href, color = "#111" }: { label: string; value: string; sub?: string; href: string; color?: string }) {
   return (
     <Link href={href} className="bg-white rounded-xl p-4 hover:shadow transition-shadow" style={{ border: "1px solid #e8eaed", display: "block" }}>
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className="text-sm text-gray-500 mb-1">{label}</p>
       <p className="text-xl font-bold" style={{ color }}>{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-sm text-gray-400 mt-0.5">{sub}</p>}
     </Link>
   )
 }
