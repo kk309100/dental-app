@@ -1,7 +1,7 @@
 "use client"
 
-// 納品書 1注文 = A4 1枚
-// 上半分: 得意先控え / 中央: 切り取り線 / 下半分: 自社控え（受領印）
+// 納品書 A4 1枚
+// 上半分（148.5mm）: 納品書 / 下半分（148.5mm）: 納品書控え
 // 商品が多い場合は ITEMS_PER_PAGE で分割し、複数枚に印刷する
 
 import { fmtYen, calcTax, getClinicPrefix, getCorporateLabel } from "@/lib/invoice"
@@ -14,10 +14,10 @@ type Order = { id: string; delivered_at: string | null; created_at: string; deli
 
 export default function DeliveryNoteSheet({
   order, items, clinic,
-  allItems,       // 注文全商品（合計金額の計算に使う）
-  pageNum,        // このシートのページ番号（1始まり）
-  totalPages,     // この注文の総ページ数
-  isLastSheet,    // 印刷ドキュメント全体の最後のシートか
+  allItems,
+  pageNum,
+  totalPages,
+  isLastSheet,
 }: {
   order: Order
   items: Item[]
@@ -37,53 +37,63 @@ export default function DeliveryNoteSheet({
   const corporateLabel = clinic ? getCorporateLabel(clinic.corporate_name, clinic.name, clinic.clinic_type) : ""
   const prefix = clinic ? getClinicPrefix(clinic.name, clinic.corporate_name, clinic.clinic_type) : ""
   const isMultiPage = totalPages !== undefined && totalPages > 1
-  const pageLabel = isMultiPage ? `${pageNum ?? 1} / ${totalPages}ページ` : ""
+  const pageLabel = isMultiPage ? `（${pageNum ?? 1} / ${totalPages}ページ）` : ""
 
-  function Half({ kind }: { kind: "customer" | "self" }) {
+  // kind: "original" = 納品書（上）、"copy" = 納品書控え（下）
+  function Half({ kind }: { kind: "original" | "copy" }) {
+    const isCopy = kind === "copy"
     return (
       <div className="delivery-half" style={{
         position: "relative",
-        padding: "8mm 10mm",
+        // padding を詰めて明細行数を最大化
+        padding: "4mm 8mm",
         boxSizing: "border-box",
-        // 画面: min-height で内容が見切れない / 印刷: CSS で固定高さ
-        minHeight: "calc((297mm - 8mm) / 2)",
+        minHeight: "148.5mm",
+        // 控えは上部に区切り線
+        borderTop: isCopy ? "1.5px solid #555" : "none",
       }}>
-        {/* 控え種別タグ */}
+
+        {/* 種別タグ（右上） */}
         <div style={{
-          position: "absolute", top: 4, right: 8, fontSize: 9, fontWeight: 700, padding: "1px 6px",
-          border: `1px solid ${kind === "customer" ? "#0d9488" : "#dc2626"}`,
-          color: kind === "customer" ? "#0d9488" : "#dc2626", borderRadius: 3,
+          position: "absolute", top: 5, right: 6,
+          fontSize: 8, fontWeight: 700, padding: "1px 6px",
+          border: `1px solid ${isCopy ? "#6b7280" : "#2563eb"}`,
+          color: isCopy ? "#6b7280" : "#2563eb",
+          borderRadius: 3,
+          background: "#fff",
         }}>
-          {kind === "customer" ? "得意先控え" : "自社控え"}
+          {isCopy ? "納品書控え" : "納品書"}
         </div>
 
         {/* タイトル */}
-        <div style={{ borderBottom: "1.5px solid #111", paddingBottom: 4, marginBottom: 8 }}>
-          <h1 style={{ fontSize: 18, letterSpacing: "0.3em", margin: "4px 0 2px", textAlign: "center" }}>納 品 書</h1>
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12 }}>
-            <p style={{ margin: 0, fontSize: 9, color: "#666" }}>No. {order.delivery_number || order.id.slice(0, 8)}</p>
-            {pageLabel && <p style={{ margin: 0, fontSize: 8, color: "#999" }}>（{pageLabel}）</p>}
+        <div style={{ borderBottom: "1.5px solid #111", paddingBottom: 3, marginBottom: 4 }}>
+          <h1 style={{ fontSize: 16, letterSpacing: "0.3em", margin: "2px 0 1px", textAlign: "center" }}>
+            {isCopy ? "納 品 書 控" : "納 品 書"}
+          </h1>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10 }}>
+            <p style={{ margin: 0, fontSize: 8, color: "#666" }}>No. {order.delivery_number || order.id.slice(0, 8)}</p>
+            {pageLabel && <p style={{ margin: 0, fontSize: 8, color: "#999" }}>{pageLabel}</p>}
           </div>
         </div>
 
         {/* 宛先 + 自社 */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 4 }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 3 }}>
           <div style={{ flex: 1 }}>
-            {corporateLabel && <p style={{ margin: "0 0 1px", fontSize: 9, color: "#444" }}>{corporateLabel}</p>}
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 2 }}>
+            {corporateLabel && <p style={{ margin: "0 0 0px", fontSize: 8, color: "#444" }}>{corporateLabel}</p>}
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 1 }}>
               {prefix}{clinic?.name || "(医院不明)"} 御中
             </p>
-            {clinic?.adress && <p style={{ margin: "2px 0 0", fontSize: 8, color: "#666" }}>{clinic.adress}</p>}
-            {clinic?.phone && <p style={{ margin: 0, fontSize: 8, color: "#666" }}>TEL {clinic.phone}</p>}
-            <p style={{ margin: "4px 0 0", fontSize: 9, color: "#444" }}>納品日: {dateStr}</p>
+            {clinic?.adress && <p style={{ margin: "1px 0 0", fontSize: 7.5, color: "#666" }}>{clinic.adress}</p>}
+            {clinic?.phone && <p style={{ margin: 0, fontSize: 7.5, color: "#666" }}>TEL {clinic.phone}</p>}
+            <p style={{ margin: "2px 0 0", fontSize: 8, color: "#444" }}>納品日: {dateStr}</p>
           </div>
-          <div style={{ flexShrink: 0, fontSize: 8, lineHeight: 1.3, position: "relative", paddingRight: 38, minWidth: 170 }}>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 700 }}>{COMPANY.name}</p>
+          <div style={{ flexShrink: 0, fontSize: 7.5, lineHeight: 1.3, position: "relative", paddingRight: 36, minWidth: 160 }}>
+            <p style={{ margin: 0, fontSize: 9, fontWeight: 700 }}>{COMPANY.name}</p>
             <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
             <p style={{ margin: 0 }}>{COMPANY.address}</p>
             <p style={{ margin: 0 }}>TEL {COMPANY.phone}</p>
             {COMPANY.fax && <p style={{ margin: 0 }}>FAX {COMPANY.fax}</p>}
-            <div style={{ position: "absolute", top: -2, right: 0 }}><Seal size={36} /></div>
+            <div style={{ position: "absolute", top: -2, right: 0 }}><Seal size={32} /></div>
           </div>
         </div>
 
@@ -92,9 +102,9 @@ export default function DeliveryNoteSheet({
           <thead>
             <tr style={{ background: "#f3f4f6" }}>
               <th style={th}>商品名</th>
-              <th style={{ ...th, textAlign: "right", width: 30 }}>数量</th>
-              <th style={{ ...th, textAlign: "right", width: 50 }}>単価</th>
-              <th style={{ ...th, textAlign: "right", width: 60 }}>金額</th>
+              <th style={{ ...th, textAlign: "right", width: 28 }}>数量</th>
+              <th style={{ ...th, textAlign: "right", width: 48 }}>単価</th>
+              <th style={{ ...th, textAlign: "right", width: 58 }}>金額</th>
             </tr>
           </thead>
           <tbody>
@@ -109,22 +119,22 @@ export default function DeliveryNoteSheet({
           </tbody>
         </table>
 
-        {/* 合計 + 受領印（自社控のみ） */}
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginTop: 10 }}>
-          {kind === "self" && (
-            <div style={{ display: "flex", gap: 6 }}>
-              <div style={{ textAlign: "center", border: "1.5px solid #111", borderRadius: 3, padding: "2px 4px", minWidth: 64 }}>
-                <p style={{ margin: 0, fontSize: 8, color: "#666" }}>受領印</p>
-                <div style={{ width: 44, height: 44, margin: "2px auto", border: "1px dashed #aaa", borderRadius: 3 }}></div>
+        {/* 合計 + 受領印（控えのみ） */}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginTop: 6 }}>
+          {isCopy && (
+            <div style={{ display: "flex", gap: 5 }}>
+              <div style={{ textAlign: "center", border: "1.5px solid #111", borderRadius: 3, padding: "2px 3px", minWidth: 58 }}>
+                <p style={{ margin: 0, fontSize: 7.5, color: "#666" }}>受領印</p>
+                <div style={{ width: 40, height: 40, margin: "2px auto", border: "1px dashed #aaa", borderRadius: 3 }}></div>
               </div>
-              <div style={{ textAlign: "center", border: "1.5px solid #111", borderRadius: 3, padding: "2px 4px", minWidth: 100, alignSelf: "flex-end" }}>
-                <p style={{ margin: 0, fontSize: 8, color: "#666" }}>受領日</p>
-                <div style={{ height: 18, lineHeight: "18px", margin: "2px 4px 0", borderBottom: "1px solid #aaa", color: "#bbb", fontSize: 9 }}>　年　月　日</div>
+              <div style={{ textAlign: "center", border: "1.5px solid #111", borderRadius: 3, padding: "2px 3px", minWidth: 90, alignSelf: "flex-end" }}>
+                <p style={{ margin: 0, fontSize: 7.5, color: "#666" }}>受領日</p>
+                <div style={{ height: 16, lineHeight: "16px", margin: "2px 3px 0", borderBottom: "1px solid #aaa", color: "#bbb", fontSize: 8 }}>　年　月　日</div>
               </div>
             </div>
           )}
           <div style={{ flex: 1 }} />
-          <table style={{ borderCollapse: "collapse", fontSize: 9, minWidth: 180 }}>
+          <table style={{ borderCollapse: "collapse", fontSize: 9, minWidth: 175 }}>
             <tbody>
               <tr><td style={tdSm}>小計</td><td style={tdSmR}>{fmtYen(subtotal)}</td></tr>
               <tr><td style={tdSm}>消費税(10%)</td><td style={tdSmR}>{fmtYen(tax)}</td></tr>
@@ -142,27 +152,16 @@ export default function DeliveryNoteSheet({
       minHeight: "297mm",
       margin: "0 auto",
       background: "#fff",
-      // 最後のシートは改ページしない（余分な空白ページを防ぐ）
       pageBreakAfter: isLastSheet ? "auto" : "always",
       boxSizing: "border-box",
     }}>
-      <Half kind="customer" />
-      {/* 切り取り線 */}
-      <div className="cut-line" style={{
-        height: "8mm", display: "flex", alignItems: "center", justifyContent: "center",
-        borderTop: "1.5px dashed #888", borderBottom: "1.5px dashed #888",
-        boxSizing: "border-box",
-      }}>
-        <span style={{ background: "#fff", padding: "0 12px", fontSize: 10, color: "#666", letterSpacing: "0.2em" }}>
-          ✂　　切　り　取　り　線　　✂
-        </span>
-      </div>
-      <Half kind="self" />
+      <Half kind="original" />
+      <Half kind="copy" />
     </div>
   )
 }
 
-const th: React.CSSProperties = { padding: "3px 4px", textAlign: "left", borderBottom: "1.5px solid #ccc", fontSize: 9, color: "#555" }
-const tdC: React.CSSProperties = { padding: "2px 4px", fontSize: 9 }
-const tdSm: React.CSSProperties = { padding: "2px 8px", fontSize: 9, color: "#555", border: "1px solid #ddd", background: "#f9fafb" }
-const tdSmR: React.CSSProperties = { padding: "2px 8px", fontSize: 9, textAlign: "right" as const, border: "1px solid #ddd", minWidth: 80 }
+const th: React.CSSProperties = { padding: "2.5px 4px", textAlign: "left", borderBottom: "1.5px solid #ccc", fontSize: 8.5, color: "#555" }
+const tdC: React.CSSProperties = { padding: "1.5px 4px", fontSize: 9 }
+const tdSm: React.CSSProperties = { padding: "2px 7px", fontSize: 9, color: "#555", border: "1px solid #ddd", background: "#f9fafb" }
+const tdSmR: React.CSSProperties = { padding: "2px 7px", fontSize: 9, textAlign: "right" as const, border: "1px solid #ddd", minWidth: 78 }

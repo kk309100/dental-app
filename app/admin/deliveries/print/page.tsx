@@ -17,8 +17,9 @@ export default function BulkPrintWrapper() {
   )
 }
 
-// 商品名の折り返しを考慮し、Half（約144mm）に確実に収まる件数に設定
-const ITEMS_PER_PAGE = 6
+// 半ページ（148.5mm）の明細エリア約75mm / 行高さ約5mm = 最大15行
+// 商品名が長い場合も考慮して13行を上限とする
+const ITEMS_PER_PAGE = 13
 
 type Sheet = {
   order: Order
@@ -121,14 +122,12 @@ function BulkPrint() {
             height: 297mm !important;
             page-break-after: always !important;
           }
-          /* 上下それぞれの Half を固定高さに */
+          /* 上（納品書）と下（納品書控え）をちょうど半分に */
           .delivery-half {
-            height: calc((297mm - 8mm) / 2) !important;
+            height: 148.5mm !important;
             min-height: unset !important;
             overflow: hidden !important;
           }
-          /* 切り取り線は改ページさせない */
-          .cut-line { break-before: avoid !important; break-inside: avoid !important; }
           /* テーブル行を途中で切らない */
           .delivery-page table tr { break-inside: avoid; }
         }
