@@ -28,11 +28,11 @@ export default function DeliveryNoteSheet({
 
   function Half({ kind }: { kind: "customer" | "self" }) {
     return (
-      <div style={{
+      <div className="delivery-half" style={{
         position: "relative",
         padding: "8mm 10mm",
         boxSizing: "border-box",
-        // 固定高さを廃止 → 明細が多い場合に自然に伸びてページをまたぐ
+        // 画面: min-height で内容が見切れない / 印刷: CSS で固定高さ
         minHeight: "calc((297mm - 8mm) / 2)",
       }}>
         {/* 控え種別タグ */}

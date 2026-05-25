@@ -227,3 +227,20 @@
     align-items: flex-start;
   }
 }
+
+/* ══════════════════════════════════════════
+   11. 印刷時: 管理レイアウトのナビを非表示
+══════════════════════════════════════════ */
+@media print {
+  /* 管理ヘッダー・モバイルナビ・スペーサーを非表示 */
+  .admin-layout-header,
+  .mobile-bottom-nav,
+  .mobile-spacer { display: none !important; }
+
+  /* main-inner のパディングをゼロにして印刷領域を最大化 */
+  .main-inner {
+    padding: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+}

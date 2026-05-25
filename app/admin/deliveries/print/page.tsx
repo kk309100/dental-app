@@ -17,7 +17,8 @@ export default function BulkPrintWrapper() {
   )
 }
 
-const ITEMS_PER_PAGE = 10
+// 商品名の折り返しを考慮し、Half（約144mm）に確実に収まる件数に設定
+const ITEMS_PER_PAGE = 6
 
 function BulkPrint() {
   const sp = useSearchParams()
@@ -78,14 +79,23 @@ function BulkPrint() {
           body { background: #fff !important; }
           .no-print { display: none !important; }
           @page { size: A4; margin: 0; }
-          /* 納品書ごとに改ページ */
-          .delivery-page { break-after: page !important; }
-          /* テーブル行が途中で切れないようにする */
-          .delivery-page table { break-inside: auto; }
-          .delivery-page table tr { break-inside: avoid; break-after: auto; }
-          .delivery-page table thead { display: table-header-group; }
-          /* 切り取り線で改ページさせない */
-          .delivery-page .cut-line { break-inside: avoid; break-before: avoid; break-after: avoid; }
+          /* 納品書1枚 = A4 1ページに収める */
+          .delivery-page {
+            break-after: page !important;
+            overflow: hidden !important;
+            height: 297mm !important;
+            page-break-after: always !important;
+          }
+          /* 上下それぞれの Half を固定高さに */
+          .delivery-half {
+            height: calc((297mm - 8mm) / 2) !important;
+            min-height: unset !important;
+            overflow: hidden !important;
+          }
+          /* 切り取り線は改ページさせない */
+          .cut-line { break-before: avoid !important; break-inside: avoid !important; }
+          /* テーブル行を途中で切らない */
+          .delivery-page table tr { break-inside: avoid; }
         }
         @media screen {
           body { background: #f3f4f6; }

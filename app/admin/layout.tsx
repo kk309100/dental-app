@@ -100,7 +100,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       )}
 
       {/* ── トップヘッダー ── */}
-      <header style={{
+      <header className="admin-layout-header" style={{
         background: "#fff", position: "sticky", top: 0, zIndex: 30,
         borderBottom: "1px solid #e5e7eb",
         boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
