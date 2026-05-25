@@ -43,6 +43,7 @@ export default function OrderPage() {
   const [dismissed, setDismissed]       = useState<string[]>([])
   const [ordererName, setOrdererName]   = useState("")
   const [orderNote, setOrderNote]       = useState("")
+  const [lastOrdererName, setLastOrdererName] = useState("")
 
   useEffect(() => { checkLogin() }, [])
 
@@ -179,6 +180,7 @@ export default function OrderPage() {
     await supabase.from("order_items").insert(
       cart.map((i) => ({ order_id: order.id, product_id: i.id, product_name: i.name, quantity: i.quantity, price: i.price }))
     )
+    setLastOrdererName(ordererName.trim())
     setLastOrderId(order.id); setCart([]); setOrdererName(""); setOrderNote(""); setShowConfirm(false); setShowCart(false); setShowComplete(true)
     await fetchData(clinicId)
   }
@@ -573,7 +575,7 @@ export default function OrderPage() {
             <div style={{ width: 72, height: 72, borderRadius: "50%", background: C.primaryBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, margin: "0 auto 16px" }}>✅</div>
             <h2 style={{ fontSize: 20, fontWeight: "bold", color: C.primary, marginBottom: 6 }}>注文が完了しました</h2>
             <p style={{ fontSize: 13, color: C.sub, marginBottom: 4 }}>{clinicName}</p>
-            <p style={{ fontSize: 13, color: C.sub, marginBottom: 28 }}>注文者：{ordererName || "-"}</p>
+            <p style={{ fontSize: 13, color: C.sub, marginBottom: 28 }}>注文者：{lastOrdererName || "-"}</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <button onClick={() => setShowComplete(false)} style={{
                 width: "100%", padding: 14, borderRadius: 12, background: C.primary,
