@@ -172,6 +172,16 @@ function BulkPrint() {
         @media print {
           .no-print { display: none !important; }
           @page { size: A4; margin: 10mm; }
+          /* 請求書ごとに改ページ */
+          .print-page { break-after: page !important; }
+          /* テーブル行が途中で切れないようにする */
+          .print-page table { break-inside: auto; }
+          .print-page table thead { display: table-header-group; }
+          .print-page table tr { break-inside: avoid; break-after: auto; }
+          /* フッター（小計/消費税/合計）は一緒に保つ */
+          .print-page table tfoot { break-inside: avoid; }
+          /* ヘッダーブロックを明細と分離させない */
+          .print-page header { break-inside: avoid; break-after: avoid; }
         }
       `}</style>
     </>

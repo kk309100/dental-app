@@ -78,6 +78,14 @@ function BulkPrint() {
           body { background: #fff !important; }
           .no-print { display: none !important; }
           @page { size: A4; margin: 0; }
+          /* 納品書ごとに改ページ */
+          .delivery-page { break-after: page !important; }
+          /* テーブル行が途中で切れないようにする */
+          .delivery-page table { break-inside: auto; }
+          .delivery-page table tr { break-inside: avoid; break-after: auto; }
+          .delivery-page table thead { display: table-header-group; }
+          /* 切り取り線で改ページさせない */
+          .delivery-page .cut-line { break-inside: avoid; break-before: avoid; break-after: avoid; }
         }
         @media screen {
           body { background: #f3f4f6; }

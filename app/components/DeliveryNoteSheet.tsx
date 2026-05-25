@@ -32,9 +32,8 @@ export default function DeliveryNoteSheet({
         position: "relative",
         padding: "8mm 10mm",
         boxSizing: "border-box",
-        // A4 (297mm) - 切取線 8mm = 289mm を上下で2分 → 144.5mm
-        // border 1.5mm 等を考慮しても 297mm を超えないように calc で正確に半分に
-        height: "calc((297mm - 8mm) / 2)",
+        // 固定高さを廃止 → 明細が多い場合に自然に伸びてページをまたぐ
+        minHeight: "calc((297mm - 8mm) / 2)",
       }}>
         {/* 控え種別タグ */}
         <div style={{
@@ -95,7 +94,7 @@ export default function DeliveryNoteSheet({
         </table>
 
         {/* 合計 + 受領印（自社控のみ） */}
-        <div style={{ position: "absolute", left: "10mm", right: "10mm", bottom: "6mm", display: "flex", alignItems: "flex-end", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginTop: 10 }}>
           {kind === "self" && (
             <div style={{ display: "flex", gap: 6 }}>
               <div style={{ textAlign: "center", border: "1.5px solid #111", borderRadius: 3, padding: "2px 4px", minWidth: 64 }}>
@@ -124,21 +123,18 @@ export default function DeliveryNoteSheet({
   return (
     <div className="delivery-page" style={{
       width: "210mm",
-      height: "297mm",
+      minHeight: "297mm",
       margin: "0 auto",
       background: "#fff",
       pageBreakAfter: "always" as const,
-      position: "relative",
       boxSizing: "border-box",
-      overflow: "hidden", // 印刷時の空白ページ防止: 297mm を絶対に超えないようにクリップ
     }}>
       <Half kind="customer" />
-      {/* 切り取り線 (高さ8mm; border は box-sizing: border-box でも別計算されるため、box-sizing 必須) */}
-      <div style={{
+      {/* 切り取り線 */}
+      <div className="cut-line" style={{
         height: "8mm", display: "flex", alignItems: "center", justifyContent: "center",
         borderTop: "1.5px dashed #888", borderBottom: "1.5px dashed #888",
         boxSizing: "border-box",
-        position: "relative",
       }}>
         <span style={{ background: "#fff", padding: "0 12px", fontSize: 10, color: "#666", letterSpacing: "0.2em" }}>
           ✂　　切　り　取　り　線　　✂
