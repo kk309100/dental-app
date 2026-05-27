@@ -217,26 +217,29 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
             <section key={pageIdx} className="invoice-page" style={{
               width: "210mm", minHeight: "297mm", padding: "10mm 12mm 10mm",
               boxSizing: "border-box", margin: "0 auto", pageBreakAfter: isLastPage ? "auto" : "always",
-              position: "relative", overflow: "hidden",
+              position: "relative",
             }}>
-              {/* カード決済ウォーターマーク */}
+              {/* カード決済ウォーターマーク（overflow:hidden を内側の絶対配置ラッパーに閉じ込める） */}
               {clinic?.payment_method === "カード" && (
                 <div style={{
-                  position: "absolute",
-                  top: "50%", left: "50%",
-                  transform: "translate(-50%, -50%) rotate(-25deg)",
-                  fontSize: 52, fontWeight: 900,
-                  color: "rgba(220, 38, 38, 0.13)",
-                  border: "6px solid rgba(220, 38, 38, 0.13)",
-                  padding: "10px 28px",
-                  borderRadius: 6,
-                  whiteSpace: "nowrap",
-                  pointerEvents: "none",
-                  zIndex: 0,
-                  letterSpacing: "0.15em",
-                  WebkitPrintColorAdjust: "exact",
-                  printColorAdjust: "exact",
-                } as React.CSSProperties}>カード決済</div>
+                  position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: 0,
+                }}>
+                  <div style={{
+                    position: "absolute",
+                    top: "50%", left: "50%",
+                    transform: "translate(-50%, -50%) rotate(-25deg)",
+                    fontSize: 52, fontWeight: 900,
+                    color: "rgba(220, 38, 38, 0.13)",
+                    border: "6px solid rgba(220, 38, 38, 0.13)",
+                    padding: "10px 28px",
+                    borderRadius: 6,
+                    whiteSpace: "nowrap",
+                    pointerEvents: "none",
+                    letterSpacing: "0.15em",
+                    WebkitPrintColorAdjust: "exact",
+                    printColorAdjust: "exact",
+                  } as React.CSSProperties}>カード決済</div>
+                </div>
               )}
 
               {isFirstPage ? (
