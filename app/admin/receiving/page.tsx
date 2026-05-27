@@ -375,7 +375,7 @@ export default function ReceivingPage() {
         .in("id", orderIds)
       if (error) throw new Error(error.message)
       setDeliveredOrderIds(prev => new Set([...prev, ...orderIds]))
-      window.open(`/admin/deliveries/print?ids=${orderIds.join(",")}`, "_blank")
+      window.open(`/admin/deliveries/print?ids=${orderIds.join(",")}&merge=1`, "_blank")
     } catch (e) {
       alert("納品書作成に失敗しました: " + (e as Error).message)
     } finally {
