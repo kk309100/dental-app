@@ -54,6 +54,8 @@ export default function ReceivingPage() {
   const [submitting, setSubmitting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [logs, setLogs] = useState<string[]>([])
+  const [deliveredOrderIds, setDeliveredOrderIds] = useState<Set<string>>(new Set())
+  const [creatingDelivery, setCreatingDelivery] = useState(false)
   // 仕入登録後の「これで出荷可能になった注文」結果
   const [postReceiveResult, setPostReceiveResult] = useState<null | {
     receivedRows: number
@@ -362,6 +364,25 @@ export default function ReceivingPage() {
     })
   }
 
+  // 指定注文を「納品済み」に更新して納品書印刷ページを開く
+  async function createDeliveryNote(orderIds: string[]) {
+    if (orderIds.length === 0) return
+    setCreatingDelivery(true)
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "納品済み", delivered_at: new Date().toISOString() })
+        .in("id", orderIds)
+      if (error) throw new Error(error.message)
+      setDeliveredOrderIds(prev => new Set([...prev, ...orderIds]))
+      window.open(`/admin/deliveries/print?ids=${orderIds.join(",")}`, "_blank")
+    } catch (e) {
+      alert("納品書作成に失敗しました: " + (e as Error).message)
+    } finally {
+      setCreatingDelivery(false)
+    }
+  }
+
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   return (
@@ -441,27 +462,61 @@ export default function ReceivingPage() {
               <p className="text-xs font-bold text-emerald-900 mb-1">
                 🚚 これで出荷可能になった注文 <span className="text-base">{postReceiveResult.nowShippable.length}件</span>
               </p>
-              <div className="bg-white rounded p-2 mb-2 max-h-48 overflow-auto" style={{ border: "1px solid #d1fae5" }}>
-                {postReceiveResult.nowShippable.map((o) => (
-                  <div key={o.orderId} className="flex items-center justify-between text-xs py-0.5 border-b border-gray-100 last:border-0">
-                    <span>
-                      <strong>{o.clinicName}</strong>
-                      <span className="ml-2 text-gray-500 font-mono text-[12px]">{o.deliveryNumber}</span>
-                      <span className="ml-2 text-gray-400 text-[12px]">{o.itemCount}品</span>
-                    </span>
-                    <span className="font-bold tabular-nums">{fmtYen(o.totalPrice)}</span>
-                  </div>
-                ))}
+              <div className="bg-white rounded p-2 mb-2 max-h-64 overflow-auto" style={{ border: "1px solid #d1fae5" }}>
+                {postReceiveResult.nowShippable.map((o) => {
+                  const done = deliveredOrderIds.has(o.orderId)
+                  return (
+                    <div key={o.orderId} className="flex items-center justify-between text-xs py-1 border-b border-gray-100 last:border-0 gap-2">
+                      <span className="flex items-center gap-2 min-w-0">
+                        {done && <span className="text-emerald-600 font-bold shrink-0">✓</span>}
+                        <strong className={done ? "text-gray-400 line-through" : ""}>{o.clinicName}</strong>
+                        <span className="text-gray-500 font-mono text-[11px]">{o.deliveryNumber}</span>
+                        <span className="text-gray-400 text-[11px]">{o.itemCount}品</span>
+                      </span>
+                      <span className="flex items-center gap-2 shrink-0">
+                        <span className="font-bold tabular-nums">{fmtYen(o.totalPrice)}</span>
+                        {done ? (
+                          <span className="px-2 py-0.5 text-[11px] text-emerald-700 bg-emerald-100 rounded font-bold">納品書作成済み</span>
+                        ) : (
+                          <button
+                            onClick={() => createDeliveryNote([o.orderId])}
+                            disabled={creatingDelivery}
+                            className="px-2 py-0.5 text-[11px] font-bold rounded border border-blue-400 text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50"
+                          >
+                            📄 納品書作成
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
-              <button
-                onClick={() => {
-                  const ids = postReceiveResult.nowShippable.map(o => o.orderId).join(",")
-                  window.location.href = `/admin/shipping?orders=${ids}`
-                }}
-                className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700 mr-2"
-              >
-                → 出荷準備へ（{postReceiveResult.nowShippable.length}件を選択済みで開く）
-              </button>
+              {/* 未作成の注文だけ対象にするボタン群 */}
+              {(() => {
+                const undelivered = postReceiveResult.nowShippable.filter(o => !deliveredOrderIds.has(o.orderId))
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    {undelivered.length > 0 && (
+                      <button
+                        onClick={() => createDeliveryNote(undelivered.map(o => o.orderId))}
+                        disabled={creatingDelivery}
+                        className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        📄 全件一括で納品書作成（{undelivered.length}件）
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        const ids = postReceiveResult.nowShippable.map(o => o.orderId).join(",")
+                        window.location.href = `/admin/shipping?orders=${ids}`
+                      }}
+                      className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700"
+                    >
+                      → 出荷準備へ（{postReceiveResult.nowShippable.length}件）
+                    </button>
+                  </div>
+                )
+              })()}
             </div>
           )}
 
