@@ -132,12 +132,17 @@ function BulkPrint() {
               })()}
             </p>
             {cl?.payment_method === "カード" && (
-              <div style={{ marginTop: 8 }}>
+              <div style={{ margin: "10px 0" }}>
                 <div style={{
                   display: "inline-block",
-                  padding: "6px 16px", border: "2px solid #dc2626", color: "#dc2626",
-                  fontWeight: 700, fontSize: 14, letterSpacing: "0.15em",
-                  background: "rgba(255,255,255,0.9)", borderRadius: 4,
+                  padding: "8px 24px",
+                  background: "#dc2626",
+                  color: "#fff",
+                  fontWeight: 900,
+                  fontSize: 18,
+                  letterSpacing: "0.2em",
+                  borderRadius: 4,
+                  boxShadow: "0 2px 6px rgba(220,38,38,0.4)",
                 }}>💳 カード決済</div>
               </div>
             )}
