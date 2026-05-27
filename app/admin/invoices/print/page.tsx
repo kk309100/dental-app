@@ -90,8 +90,9 @@ function BulkPrint() {
         const summary = Array.from(map.values()).sort((a, b) => b.amount - a.amount)
         const corporateLabel = cl ? getCorporateLabel(cl.corporate_name, cl.name, cl.clinic_type) : ""
         const prefix = cl ? getClinicPrefix(cl.name, cl.corporate_name, cl.clinic_type) : ""
+        const isLast = inv.id === invoices[invoices.length - 1]?.id
         return (
-          <main key={inv.id} className="bg-white max-w-3xl mx-auto p-8 mb-8 print-page" style={{ pageBreakAfter: "always", minHeight: "27cm" }}>
+          <main key={inv.id} className={`bg-white max-w-3xl mx-auto p-8 mb-8 print-page${isLast ? " print-page-last" : ""}`} style={{ minHeight: "27cm" }}>
             <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
               <h1 style={{ fontSize: 28, letterSpacing: "0.3em", margin: "20px 0 4px", textAlign: "center" }}>請　求　書</h1>
               <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {inv.invoice_number}</p>
@@ -113,8 +114,22 @@ function BulkPrint() {
                 <div style={{ position: "absolute", top: 0, right: 0 }}><Seal size={64} /></div>
               </div>
             </div>
-            <p style={{ margin: "16px 0 6px", fontSize: 11, color: "#666" }}>
-              発行日: {fmtDate(inv.issue_date)}　お支払期限: {inv.due_date ? fmtDate(inv.due_date) : "—"}
+            <p style={{ margin: "16px 0 6px", fontSize: 12, color: "#333" }}>
+              {(() => {
+                const issueDate = new Date(inv.issue_date)
+                const issueFmt = `${issueDate.getFullYear()}年${issueDate.getMonth() + 1}月${issueDate.getDate()}日`
+                let dueFmt: string
+                if (inv.due_date) {
+                  const d = new Date(inv.due_date)
+                  dueFmt = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
+                } else {
+                  const endOfNextMonth = new Date(issueDate.getFullYear(), issueDate.getMonth() + 2, 0)
+                  dueFmt = `${endOfNextMonth.getFullYear()}年${endOfNextMonth.getMonth() + 1}月${endOfNextMonth.getDate()}日`
+                }
+                return (
+                  <>締切日（請求日）: <strong>{issueFmt}</strong>　お支払期限: <strong>{dueFmt}</strong>（締切日より1ヶ月後）</>
+                )
+              })()}
             </p>
             {cl?.payment_method === "カード" && (
               <div style={{ marginTop: 8 }}>
@@ -171,9 +186,20 @@ function BulkPrint() {
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
+          /* ナビ・ヘッダーを完全に非表示 */
+          .admin-layout-header,
+          .mobile-bottom-nav,
+          nav.mobile-bottom-nav,
+          .mobile-spacer {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            overflow: hidden !important;
+          }
           @page { size: A4; margin: 10mm; }
-          /* 請求書ごとに改ページ */
-          .print-page { break-after: page !important; }
+          /* 請求書ごとに改ページ（最終ページは除く） */
+          .print-page { break-after: page; }
+          .print-page-last { break-after: auto !important; }
           /* テーブル行が途中で切れないようにする */
           .print-page table { break-inside: auto; }
           .print-page table thead { display: table-header-group; }

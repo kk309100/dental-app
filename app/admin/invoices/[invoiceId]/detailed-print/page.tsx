@@ -267,7 +267,16 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; margin: 0 !important; }
-          nav { display: none !important; }
+          nav, header,
+          .admin-layout-header,
+          .mobile-bottom-nav,
+          nav.mobile-bottom-nav,
+          .mobile-spacer {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            overflow: hidden !important;
+          }
           .invoice-doc { background: #fff; }
           .invoice-page {
             margin: 0 !important;
@@ -316,7 +325,7 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           }}>請求明細書</h1>
         </div>
         <div style={{ flex: 1, textAlign: "right", fontSize: 9 }}>
-          Page: {pageInfo.current}
+          {pageInfo.current} / {pageInfo.total} ページ
         </div>
       </div>
 
@@ -339,21 +348,40 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
         </div>
       </div>
 
-      {/* 下段: 締切日（左） / 振込先（右） */}
+      {/* 下段: 請求書番号 + 締切日・支払期限（左） / 振込先（右） */}
       <div style={{ display: "flex", marginTop: 8, gap: 16, alignItems: "flex-end" }}>
-        <div style={{ flex: 1, fontSize: 10 }}>
-          {/* 請求書番号枠（茶屋歯科の参照） */}
+        <div style={{ flex: 1 }}>
+          {/* 請求書番号枠 */}
           <div style={{
             border: "1px solid #000", display: "inline-block",
-            padding: "2px 12px", marginRight: 12, fontSize: 10,
+            padding: "2px 12px", marginBottom: 5, fontSize: 10,
           }}>
             {invoice.invoice_number}
           </div>
-          <span style={{ marginLeft: 4 }}>
-            {new Date(invoice.issue_date).getFullYear()} 年
-            {" " + (new Date(invoice.issue_date).getMonth() + 1).toString().padStart(2, " ")} 月
-            {" " + new Date(invoice.issue_date).getDate().toString().padStart(2, " ")} 日締切
-          </span>
+          {/* 締切日・支払期限 */}
+          {(() => {
+            const issueDate = new Date(invoice.issue_date)
+            const issueFmt = `${issueDate.getFullYear()}年${issueDate.getMonth() + 1}月${issueDate.getDate()}日`
+            let dueFmt: string
+            if (invoice.due_date) {
+              const d = new Date(invoice.due_date)
+              dueFmt = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
+            } else {
+              // 翌月末（締日より1ヶ月後）
+              const endOfNextMonth = new Date(issueDate.getFullYear(), issueDate.getMonth() + 2, 0)
+              dueFmt = `${endOfNextMonth.getFullYear()}年${endOfNextMonth.getMonth() + 1}月${endOfNextMonth.getDate()}日`
+            }
+            return (
+              <div style={{
+                display: "inline-flex", gap: 24, alignItems: "center",
+                border: "1px solid #999", padding: "4px 10px",
+                fontSize: 10, background: "#fafafa",
+              }}>
+                <span>締切日（請求日）：<strong>{issueFmt}</strong></span>
+                <span>お支払期限：<strong>{dueFmt}</strong>（締切日より1ヶ月後）</span>
+              </div>
+            )
+          })()}
         </div>
         <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4 }}>
           振込先: {company.bankName} {company.bankBranch} {company.bankType} {company.bankAccount}<br />
@@ -368,7 +396,7 @@ function MiniHeader({ clinicFullName, pageInfo }: { clinicFullName: string; page
   return (
     <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
       <div style={{ flex: 1, fontSize: 11 }}>{clinicFullName}　御中</div>
-      <div style={{ fontSize: 10 }}>Page: {pageInfo.current}</div>
+      <div style={{ fontSize: 10 }}>{pageInfo.current} / {pageInfo.total} ページ</div>
     </div>
   )
 }
