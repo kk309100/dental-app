@@ -429,9 +429,11 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
 
 function MiniHeader({ clinicFullName, pageInfo }: { clinicFullName: string; pageInfo: { current: number; total: number } }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-      <div style={{ flex: 1, fontSize: 11 }}>{clinicFullName}　御中</div>
-      <div style={{ fontSize: 10 }}>{pageInfo.current} / {pageInfo.total} ページ</div>
+    <div style={{ display: "flex", alignItems: "center", marginBottom: 6, borderBottom: "2px solid #000", paddingBottom: 4 }}>
+      <div style={{ flex: 1, fontSize: 13, fontWeight: 700 }}>{clinicFullName}　御中</div>
+      <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.05em" }}>
+        {pageInfo.current} / {pageInfo.total} ページ
+      </div>
     </div>
   )
 }
