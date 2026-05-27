@@ -172,10 +172,9 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
   const clinicPrefix = clinic ? getClinicPrefix(clinic.name, clinic.corporate_name, clinic.clinic_type) : ""
   const clinicFullName = `${clinicPrefix}${clinic?.name || "(医院不明)"}`
 
-  // 1ページあたりの明細行数（茶屋歯科参考: 1ページ目 約20行、2ページ目以降 約45行）
-  // CSS で page-break を使って制御するため、ここでは固定分割
-  const FIRST_PAGE_LINES = 20
-  const NEXT_PAGE_LINES = 45
+  // 1ページあたりの明細行数
+  const FIRST_PAGE_LINES = 15
+  const NEXT_PAGE_LINES = 30
   const pages: typeof lines[] = []
   if (lines.length <= FIRST_PAGE_LINES) {
     pages.push(lines)
@@ -395,7 +394,7 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
               }}>💳 カード決済</span>
             </div>
           )}
-          {/* 締切日・支払期限 */}
+          {/* 締切日・支払期限（2行1列） */}
           {(() => {
             const issueDate = new Date(invoice.issue_date)
             const issueFmt = `${issueDate.getFullYear()}年${issueDate.getMonth() + 1}月${issueDate.getDate()}日`
@@ -404,18 +403,17 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
               const d = new Date(invoice.due_date)
               dueFmt = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
             } else {
-              // 翌月末（締日より1ヶ月後）
               const endOfNextMonth = new Date(issueDate.getFullYear(), issueDate.getMonth() + 2, 0)
               dueFmt = `${endOfNextMonth.getFullYear()}年${endOfNextMonth.getMonth() + 1}月${endOfNextMonth.getDate()}日`
             }
             return (
-              <div style={{
-                display: "inline-flex", gap: 24, alignItems: "center",
-                border: "1px solid #999", padding: "4px 10px",
-                fontSize: 10, background: "#fafafa",
-              }}>
-                <span>締切日（請求日）：<strong>{issueFmt}</strong></span>
-                <span>お支払期限：<strong>{dueFmt}</strong>（締切日より1ヶ月後）</span>
+              <div style={{ display: "inline-block", border: "1px solid #999", fontSize: 10, background: "#fafafa" }}>
+                <div style={{ padding: "2px 10px", borderBottom: "1px solid #999", whiteSpace: "nowrap" }}>
+                  締切日（請求日）：<strong>{issueFmt}</strong>
+                </div>
+                <div style={{ padding: "2px 10px", whiteSpace: "nowrap" }}>
+                  お支払期限：<strong>{dueFmt}</strong>（締切日より1ヶ月後）
+                </div>
               </div>
             )
           })()}
@@ -503,9 +501,10 @@ type LineRow = {
 function DetailTable({ lines, startIdx, fixedRows }: { lines: LineRow[]; startIdx: number; fixedRows: number }) {
   // A4(210mm) - 左右パディング(12mm×2) = 186mm のコンテンツ幅
   // 固定列: 日付26mm + 数量10mm + 売単価24mm + 金額22mm = 82mm → 商品名列 = 104mm
+  // 各アイテムは2行で表示するため、空スロット数 = fixedRows - lines.length
   const emptyCount = Math.max(0, fixedRows - lines.length)
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, fontSize: 9, tableLayout: "fixed" }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, fontSize: 9, tableLayout: "fixed", border: "2px solid #000" }}>
       <colgroup>
         <col style={{ width: "26mm" }} />
         <col />
@@ -514,12 +513,12 @@ function DetailTable({ lines, startIdx, fixedRows }: { lines: LineRow[]; startId
         <col style={{ width: "22mm" }} />
       </colgroup>
       <thead>
-        <tr style={{ background: "#fff", borderTop: "1px solid #000", borderBottom: "1px solid #000" }}>
-          <th style={{ ...cellLabel, textAlign: "left", padding: "2px 3px" }}>日付/伝票No.</th>
-          <th style={{ ...cellLabel, textAlign: "left", padding: "2px 3px" }}>区分/メーカー/クラス/経費分類/(ロット番号) // 商品コード/商品名/摘要</th>
-          <th style={{ ...cellLabel, textAlign: "right", padding: "2px 3px" }}>数量</th>
-          <th style={{ ...cellLabel, textAlign: "right", padding: "2px 3px" }}>(定価)/売単価</th>
-          <th style={{ ...cellLabel, textAlign: "right", padding: "2px 3px" }}>金額</th>
+        <tr style={{ background: "#f0f0f0", borderBottom: "2px solid #000" }}>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "left", padding: "2px 3px" }}>日付/伝票No.</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "left", padding: "2px 3px" }}>区分/メーカー/クラス/経費分類 // 商品コード/商品名</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>数量</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>(定価)/売単価</th>
+          <th style={{ ...cellLabel, border: "none", textAlign: "right", padding: "2px 3px" }}>金額</th>
         </tr>
       </thead>
       <tbody>
@@ -528,15 +527,24 @@ function DetailTable({ lines, startIdx, fixedRows }: { lines: LineRow[]; startId
         ) : lines.map((l, i) => (
           <DetailRowPair key={startIdx + i} line={l} />
         ))}
-        {/* 固定行数に足りない分を空白行で埋める */}
+        {/* 固定行数に足りない分を空白スロット（2行1組）で埋める */}
         {Array.from({ length: emptyCount }).map((_, i) => (
-          <tr key={`empty-${i}`} style={{ borderBottom: "1px solid #ddd", height: "9.2mm" }}>
-            <td style={emptyCell}></td>
-            <td style={emptyCell}></td>
-            <td style={emptyCell}></td>
-            <td style={emptyCell}></td>
-            <td style={emptyCell}></td>
-          </tr>
+          <>
+            <tr key={`empty-a-${i}`} style={{ borderTop: "1px solid #ccc", height: "4.6mm" }}>
+              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
+              <td style={emptyCell}></td>
+            </tr>
+            <tr key={`empty-b-${i}`} style={{ borderBottom: "1px solid #ccc", height: "4.6mm" }}>
+              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
+              <td style={emptyCell}></td>
+            </tr>
+          </>
         ))}
       </tbody>
     </table>
