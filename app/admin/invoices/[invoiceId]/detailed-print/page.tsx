@@ -217,10 +217,29 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
             <section key={pageIdx} className="invoice-page" style={{
               width: "210mm", minHeight: "297mm", padding: "10mm 12mm 10mm",
               boxSizing: "border-box", margin: "0 auto", pageBreakAfter: isLastPage ? "auto" : "always",
-              position: "relative",
+              position: "relative", overflow: "hidden",
             }}>
+              {/* カード決済ウォーターマーク */}
+              {clinic?.payment_method === "カード" && (
+                <div style={{
+                  position: "absolute",
+                  top: "50%", left: "50%",
+                  transform: "translate(-50%, -50%) rotate(-25deg)",
+                  fontSize: 52, fontWeight: 900,
+                  color: "rgba(220, 38, 38, 0.13)",
+                  border: "6px solid rgba(220, 38, 38, 0.13)",
+                  padding: "10px 28px",
+                  borderRadius: 6,
+                  whiteSpace: "nowrap",
+                  pointerEvents: "none",
+                  zIndex: 0,
+                  letterSpacing: "0.15em",
+                  WebkitPrintColorAdjust: "exact",
+                  printColorAdjust: "exact",
+                } as React.CSSProperties}>カード決済</div>
+              )}
+
               {isFirstPage ? (
-                /* ── 1ページ目: フルヘッダー ── */
                 <FullHeader
                   company={company}
                   clinic={clinic}
@@ -230,7 +249,6 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
                   pageInfo={{ current: 1, total: totalPages }}
                 />
               ) : (
-                /* ── 2ページ目以降: ミニヘッダー ── */
                 <MiniHeader
                   clinicFullName={clinicFullName}
                   pageInfo={{ current: pageIdx + 1, total: totalPages }}
@@ -239,21 +257,22 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
 
               {isFirstPage && (
                 <>
-                  {/* サマリー表（7列） */}
                   <SummaryTable summary={summary} />
-                  {/* 税率内訳 */}
                   <TaxBreakdownLine taxBreakdown={taxBreakdown} />
-                  {/* カテゴリ別小計（12区分） */}
                   <CategoryTable byCategory={byCategory} />
                 </>
               )}
 
-              {/* 明細表 */}
-              <DetailTable lines={pageLines} startIdx={isFirstPage ? 0 : (FIRST_PAGE_LINES + (pageIdx - 1) * NEXT_PAGE_LINES)} />
+              {/* 明細表（固定行数でパディング） */}
+              <DetailTable
+                lines={pageLines}
+                startIdx={isFirstPage ? 0 : (FIRST_PAGE_LINES + (pageIdx - 1) * NEXT_PAGE_LINES)}
+                fixedRows={isFirstPage ? FIRST_PAGE_LINES : NEXT_PAGE_LINES}
+              />
 
               {/* フッター（最終ページのみ） */}
               {isLastPage && (
-                <div style={{ marginTop: 20, fontSize: 10 }}>
+                <div style={{ fontSize: 10, marginTop: 4 }}>
                   <p style={{ margin: 0 }}>　上記の通り御請求申し上げます</p>
                   <p style={{ margin: 0 }}>　御照合の上、万が一相違の点が御座いましたら至急御連絡下さい</p>
                 </div>
@@ -478,9 +497,10 @@ type LineRow = {
   quantity: number; list_price: number; unit_price: number; amount: number
 }
 
-function DetailTable({ lines, startIdx }: { lines: LineRow[]; startIdx: number }) {
+function DetailTable({ lines, startIdx, fixedRows }: { lines: LineRow[]; startIdx: number; fixedRows: number }) {
   // A4(210mm) - 左右パディング(12mm×2) = 186mm のコンテンツ幅
   // 固定列: 日付26mm + 数量10mm + 売単価24mm + 金額22mm = 82mm → 商品名列 = 104mm
+  const emptyCount = Math.max(0, fixedRows - lines.length)
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, fontSize: 9, tableLayout: "fixed" }}>
       <colgroup>
@@ -492,18 +512,28 @@ function DetailTable({ lines, startIdx }: { lines: LineRow[]; startIdx: number }
       </colgroup>
       <thead>
         <tr style={{ background: "#fff", borderTop: "1px solid #000", borderBottom: "1px solid #000" }}>
-          <th style={{ ...cellLabel, textAlign: "left", padding: "2px 3px" }}>日付/伝票№.</th>
-          <th style={{ ...cellLabel, textAlign: "left", padding: "2px 3px" }}>区分/メーカー/クラス/経費分類 // 商品コード/商品名</th>
+          <th style={{ ...cellLabel, textAlign: "left", padding: "2px 3px" }}>日付/伝票No.</th>
+          <th style={{ ...cellLabel, textAlign: "left", padding: "2px 3px" }}>区分/メーカー/クラス/経費分類/(ロット番号) // 商品コード/商品名/摘要</th>
           <th style={{ ...cellLabel, textAlign: "right", padding: "2px 3px" }}>数量</th>
           <th style={{ ...cellLabel, textAlign: "right", padding: "2px 3px" }}>(定価)/売単価</th>
           <th style={{ ...cellLabel, textAlign: "right", padding: "2px 3px" }}>金額</th>
         </tr>
       </thead>
       <tbody>
-        {lines.length === 0 ? (
+        {lines.length === 0 && emptyCount === 0 ? (
           <tr><td colSpan={5} style={{ padding: 16, textAlign: "center", color: "#999" }}>明細なし</td></tr>
         ) : lines.map((l, i) => (
           <DetailRowPair key={startIdx + i} line={l} />
+        ))}
+        {/* 固定行数に足りない分を空白行で埋める */}
+        {Array.from({ length: emptyCount }).map((_, i) => (
+          <tr key={`empty-${i}`} style={{ borderBottom: "1px solid #ddd", height: "9.2mm" }}>
+            <td style={emptyCell}></td>
+            <td style={emptyCell}></td>
+            <td style={emptyCell}></td>
+            <td style={emptyCell}></td>
+            <td style={emptyCell}></td>
+          </tr>
         ))}
       </tbody>
     </table>
@@ -517,26 +547,31 @@ function DetailRowPair({ line }: { line: LineRow }) {
   return (
     <>
       <tr style={{ borderTop: "1px solid #ddd" }}>
-        <td style={{ padding: "1px 3px", fontSize: 9, overflow: "hidden" }}>{line.date}</td>
-        <td style={{ padding: "1px 3px", fontSize: 9, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-          売上 {line.manufacturer}
-          <span style={{ marginLeft: 8 }}>{line.expense_category}</span>
+        <td style={{ padding: "1px 3px", fontSize: 9 }}>{line.date}</td>
+        {/* 経費分類を右端に寄せる（参考PDF準拠） */}
+        <td style={{ padding: "1px 3px", fontSize: 9 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", overflow: "hidden" }}>
+            <span style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+              売上　{line.manufacturer}
+            </span>
+            <span style={{ flexShrink: 0, marginLeft: 4 }}>{line.expense_category}</span>
+          </div>
         </td>
         <td style={{ padding: "1px 3px", textAlign: "right" }}></td>
-        <td style={{ padding: "1px 3px", textAlign: "right", fontSize: 9, color: "#666" }}>
+        <td style={{ padding: "1px 3px", textAlign: "right", fontSize: 9, color: "#555" }}>
           ({line.list_price.toLocaleString()})
         </td>
         <td style={{ padding: "1px 3px", textAlign: "right" }}></td>
       </tr>
-      <tr>
-        <td style={{ padding: "1px 3px", fontSize: 9, textAlign: "right", overflow: "hidden", whiteSpace: "nowrap" }}>{line.delivery_number}</td>
-        <td style={{ padding: "1px 3px 4px", fontSize: 9, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+      <tr style={{ borderBottom: "1px solid #eee" }}>
+        <td style={{ padding: "1px 3px 3px", fontSize: 9, textAlign: "right" }}>{line.delivery_number}</td>
+        <td style={{ padding: "1px 3px 3px", fontSize: 9, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
           {line.product_code && <span style={{ marginRight: 6 }}>{line.product_code}</span>}
           {line.product_name}
         </td>
-        <td style={{ padding: "1px 3px 4px", textAlign: "right", fontSize: 9 }}>{line.quantity}</td>
-        <td style={{ padding: "1px 3px 4px", textAlign: "right", fontSize: 9 }}>{line.unit_price.toLocaleString()}</td>
-        <td style={{ padding: "1px 3px 4px", textAlign: "right", fontSize: 9, fontWeight: 700 }}>{line.amount.toLocaleString()}</td>
+        <td style={{ padding: "1px 3px 3px", textAlign: "right", fontSize: 9 }}>{line.quantity}</td>
+        <td style={{ padding: "1px 3px 3px", textAlign: "right", fontSize: 9 }}>{line.unit_price.toLocaleString()}</td>
+        <td style={{ padding: "1px 3px 3px", textAlign: "right", fontSize: 9, fontWeight: 700 }}>{line.amount.toLocaleString()}</td>
       </tr>
     </>
   )
@@ -563,5 +598,6 @@ const cellNum: React.CSSProperties = {
   fontFamily: "'MS Mincho', monospace",
 }
 
+const emptyCell: React.CSSProperties = { padding: "1px 3px", fontSize: 9 }
 const btnDark: React.CSSProperties = { padding: "6px 14px", borderRadius: 6, border: "none", background: "#111", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }
 const btnGray: React.CSSProperties = { padding: "6px 14px", borderRadius: 6, border: "1px solid #ddd", background: "#f7f7f7", fontSize: 12, cursor: "pointer", color: "#333" }
