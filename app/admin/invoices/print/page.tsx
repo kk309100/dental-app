@@ -136,13 +136,14 @@ function BulkPrint() {
                 <div style={{
                   display: "inline-block",
                   padding: "8px 24px",
-                  background: "#dc2626",
-                  color: "#fff",
+                  border: "3px solid #dc2626",
+                  color: "#dc2626",
                   fontWeight: 900,
                   fontSize: 18,
                   letterSpacing: "0.2em",
                   borderRadius: 4,
-                  boxShadow: "0 2px 6px rgba(220,38,38,0.4)",
+                  WebkitPrintColorAdjust: "exact",
+                  printColorAdjust: "exact",
                 }}>💳 カード決済</div>
               </div>
             )}
