@@ -358,6 +358,21 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           }}>
             {invoice.invoice_number}
           </div>
+          {/* カード決済 */}
+          {clinic?.payment_method === "カード" && (
+            <div style={{ marginBottom: 5 }}>
+              <span style={{
+                display: "inline-block",
+                padding: "3px 14px",
+                border: "2.5px solid #dc2626",
+                color: "#dc2626",
+                fontWeight: 900,
+                fontSize: 12,
+                letterSpacing: "0.15em",
+                borderRadius: 3,
+              }}>💳 カード決済</span>
+            </div>
+          )}
           {/* 締切日・支払期限 */}
           {(() => {
             const issueDate = new Date(invoice.issue_date)
@@ -464,15 +479,24 @@ type LineRow = {
 }
 
 function DetailTable({ lines, startIdx }: { lines: LineRow[]; startIdx: number }) {
+  // A4(210mm) - 左右パディング(12mm×2) = 186mm のコンテンツ幅
+  // 固定列: 日付26mm + 数量10mm + 売単価24mm + 金額22mm = 82mm → 商品名列 = 104mm
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, fontSize: 9 }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, fontSize: 9, tableLayout: "fixed" }}>
+      <colgroup>
+        <col style={{ width: "26mm" }} />
+        <col />
+        <col style={{ width: "10mm" }} />
+        <col style={{ width: "24mm" }} />
+        <col style={{ width: "22mm" }} />
+      </colgroup>
       <thead>
         <tr style={{ background: "#fff", borderTop: "1px solid #000", borderBottom: "1px solid #000" }}>
-          <th style={{ ...cellLabel, width: "12%", textAlign: "left", padding: "2px 4px" }}>日付/伝票№.</th>
-          <th style={{ ...cellLabel, textAlign: "left", padding: "2px 4px" }}>区分/メーカー/クラス/経費分類/(ロット番号) // 商品コード/商品名/摘要</th>
-          <th style={{ ...cellLabel, width: "6%", textAlign: "right", padding: "2px 4px" }}>数量</th>
-          <th style={{ ...cellLabel, width: "10%", textAlign: "right", padding: "2px 4px" }}>(定価)/売単価</th>
-          <th style={{ ...cellLabel, width: "10%", textAlign: "right", padding: "2px 4px" }}>金額</th>
+          <th style={{ ...cellLabel, textAlign: "left", padding: "2px 3px" }}>日付/伝票№.</th>
+          <th style={{ ...cellLabel, textAlign: "left", padding: "2px 3px" }}>区分/メーカー/クラス/経費分類 // 商品コード/商品名</th>
+          <th style={{ ...cellLabel, textAlign: "right", padding: "2px 3px" }}>数量</th>
+          <th style={{ ...cellLabel, textAlign: "right", padding: "2px 3px" }}>(定価)/売単価</th>
+          <th style={{ ...cellLabel, textAlign: "right", padding: "2px 3px" }}>金額</th>
         </tr>
       </thead>
       <tbody>
@@ -493,26 +517,26 @@ function DetailRowPair({ line }: { line: LineRow }) {
   return (
     <>
       <tr style={{ borderTop: "1px solid #ddd" }}>
-        <td style={{ padding: "1px 4px", fontSize: 9 }}>{line.date}</td>
-        <td style={{ padding: "1px 4px", fontSize: 9 }}>
+        <td style={{ padding: "1px 3px", fontSize: 9, overflow: "hidden" }}>{line.date}</td>
+        <td style={{ padding: "1px 3px", fontSize: 9, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
           売上 {line.manufacturer}
-          <span style={{ marginLeft: 12 }}>{line.expense_category}</span>
+          <span style={{ marginLeft: 8 }}>{line.expense_category}</span>
         </td>
-        <td style={{ padding: "1px 4px", textAlign: "right" }}></td>
-        <td style={{ padding: "1px 4px", textAlign: "right", fontSize: 9, color: "#666" }}>
+        <td style={{ padding: "1px 3px", textAlign: "right" }}></td>
+        <td style={{ padding: "1px 3px", textAlign: "right", fontSize: 9, color: "#666" }}>
           ({line.list_price.toLocaleString()})
         </td>
-        <td style={{ padding: "1px 4px", textAlign: "right" }}></td>
+        <td style={{ padding: "1px 3px", textAlign: "right" }}></td>
       </tr>
       <tr>
-        <td style={{ padding: "1px 4px", fontSize: 9, textAlign: "right" }}>{line.delivery_number}</td>
-        <td style={{ padding: "1px 4px 4px", fontSize: 9 }}>
+        <td style={{ padding: "1px 3px", fontSize: 9, textAlign: "right", overflow: "hidden", whiteSpace: "nowrap" }}>{line.delivery_number}</td>
+        <td style={{ padding: "1px 3px 4px", fontSize: 9, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
           {line.product_code && <span style={{ marginRight: 6 }}>{line.product_code}</span>}
           {line.product_name}
         </td>
-        <td style={{ padding: "1px 4px 4px", textAlign: "right", fontSize: 9 }}>{line.quantity}</td>
-        <td style={{ padding: "1px 4px 4px", textAlign: "right", fontSize: 9 }}>{line.unit_price.toLocaleString()}</td>
-        <td style={{ padding: "1px 4px 4px", textAlign: "right", fontSize: 9 }}>{line.amount.toLocaleString()}</td>
+        <td style={{ padding: "1px 3px 4px", textAlign: "right", fontSize: 9 }}>{line.quantity}</td>
+        <td style={{ padding: "1px 3px 4px", textAlign: "right", fontSize: 9 }}>{line.unit_price.toLocaleString()}</td>
+        <td style={{ padding: "1px 3px 4px", textAlign: "right", fontSize: 9, fontWeight: 700 }}>{line.amount.toLocaleString()}</td>
       </tr>
     </>
   )
