@@ -7,8 +7,9 @@
 import { fmtYen, calcTax, getClinicPrefix, getCorporateLabel } from "@/lib/invoice"
 import { COMPANY } from "@/lib/company"
 import Seal from "@/app/components/Seal"
+import Barcode from "react-barcode"
 
-type Item = { id: string; product_name: string | null; quantity: number; price: number }
+type Item = { id: string; product_name: string | null; quantity: number; price: number; barcode?: string | null }
 type Clinic = { id?: string; name: string; corporate_name: string | null; clinic_type: string | null; adress: string | null; phone: string | null }
 type Order = { id: string; delivered_at: string | null; created_at: string; delivery_number: string | null; note?: string | null }
 
@@ -43,6 +44,7 @@ export default function DeliveryNoteSheet({
 
   // 空行を補完して常に FIXED_ROWS 行表示
   const emptyRows = Math.max(0, FIXED_ROWS - items.length)
+  const hasAnyBarcode = items.some(i => i.barcode)
 
   function Half({ kind }: { kind: "original" | "copy" }) {
     const isCopy = kind === "copy"
@@ -99,17 +101,39 @@ export default function DeliveryNoteSheet({
 
         {/* 明細表（常に FIXED_ROWS 行・table-layout:fixed で列幅確定） */}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 9, tableLayout: "fixed" }}>
+          <colgroup>
+            {hasAnyBarcode && <col style={{ width: "22mm" }} />}
+            <col />
+            <col style={{ width: "9mm" }} />
+            <col style={{ width: "21mm" }} />
+            <col style={{ width: "26mm" }} />
+          </colgroup>
           <thead>
             <tr style={{ background: "#f3f4f6" }}>
+              {hasAnyBarcode && <th style={th}>バーコード</th>}
               <th style={th}>商品名</th>
-              <th style={{ ...th, textAlign: "right", width: "9mm" }}>数量</th>
-              <th style={{ ...th, textAlign: "right", width: "21mm" }}>単価</th>
-              <th style={{ ...th, textAlign: "right", width: "26mm" }}>金額</th>
+              <th style={{ ...th, textAlign: "right" }}>数量</th>
+              <th style={{ ...th, textAlign: "right" }}>単価</th>
+              <th style={{ ...th, textAlign: "right" }}>金額</th>
             </tr>
           </thead>
           <tbody>
             {items.map(i => (
               <tr key={i.id} style={{ borderBottom: "1px solid #eee", height: ROW_H }}>
+                {hasAnyBarcode && (
+                  <td style={{ padding: "1px 2px", verticalAlign: "middle" }}>
+                    {i.barcode ? (
+                      <Barcode
+                        value={i.barcode}
+                        width={0.9}
+                        height={24}
+                        fontSize={6}
+                        margin={0}
+                        displayValue={true}
+                      />
+                    ) : null}
+                  </td>
+                )}
                 <td style={tdName}>{i.product_name || "—"}</td>
                 <td style={{ ...tdNum, textAlign: "right" }}>{i.quantity}</td>
                 <td style={{ ...tdNum, textAlign: "right" }}>{fmtYen(i.price)}</td>
@@ -119,6 +143,7 @@ export default function DeliveryNoteSheet({
             {/* 空白行で10行固定 */}
             {Array.from({ length: emptyRows }).map((_, idx) => (
               <tr key={`empty-${idx}`} style={{ borderBottom: "1px solid #eee", height: ROW_H }}>
+                {hasAnyBarcode && <td style={{ padding: "1px 2px" }}></td>}
                 <td style={tdName}>&nbsp;</td>
                 <td style={tdNum}></td>
                 <td style={tdNum}></td>

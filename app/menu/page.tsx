@@ -64,6 +64,14 @@ export default function MenuPage() {
       color: "#f08c00",
       bg: "#fff3d6",
     },
+    {
+      href: "/scan",
+      icon: "📷",
+      label: "納品スキャン",
+      desc: "バーコードを読み取って在庫を追加",
+      color: "#7c3aed",
+      bg: "#f3e8ff",
+    },
   ]
 
   return (

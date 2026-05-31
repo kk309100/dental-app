@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import DeliveryNoteSheet from "@/app/components/DeliveryNoteSheet"
 
 type Order = { id: string; clinic_id: string; created_at: string; delivered_at: string | null; total_price: number; delivery_number: string | null; note: string | null }
-type Item = { id: string; order_id: string; product_name: string | null; quantity: number; price: number }
+type Item = { id: string; order_id: string; product_name: string | null; quantity: number; price: number; product_id: string | null }
 type Clinic = { id: string; name: string; corporate_name: string | null; clinic_type: string | null; adress: string | null; phone: string | null }
 
 export default function BulkPrintWrapper() {
@@ -37,6 +37,7 @@ function BulkPrint() {
   const [orders, setOrders] = useState<Order[]>([])
   const [items, setItems] = useState<Item[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])
+  const [barcodeMap, setBarcodeMap] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     if (ids.length === 0) return
@@ -44,13 +45,19 @@ function BulkPrint() {
     let printTimer: ReturnType<typeof setTimeout> | null = null
     Promise.all([
       supabase.from("orders").select("*").in("id", ids),
-      supabase.from("order_items").select("*").in("order_id", ids),
+      supabase.from("order_items").select("id,order_id,product_name,quantity,price,product_id").in("order_id", ids),
       supabase.from("clinics").select("*").limit(50000),
-    ]).then(([o, i, c]) => {
+      supabase.from("products").select("id,barcode").limit(50000),
+    ]).then(([o, i, c, p]) => {
       if (cancelled) return
       setOrders((o.data as Order[]) || [])
       setItems((i.data as Item[]) || [])
       setClinics((c.data as Clinic[]) || [])
+      const bm = new Map<string, string>()
+      ;(p.data || []).forEach((prod: { id: string; barcode: string | null }) => {
+        if (prod.barcode) bm.set(prod.id, prod.barcode)
+      })
+      setBarcodeMap(bm)
       printTimer = setTimeout(() => { if (!cancelled) window.print() }, 800)
     })
     return () => {
@@ -60,8 +67,13 @@ function BulkPrint() {
   }, [ids.join(",")])
 
   const clinicBy = new Map(clinics.map(c => [c.id, c]))
+  // バーコードをアイテムに付与
+  const itemsWithBarcode = items.map(i => ({
+    ...i,
+    barcode: i.product_id ? (barcodeMap.get(i.product_id) || null) : null,
+  }))
   const itemsByOrder = new Map<string, Item[]>()
-  items.forEach(i => {
+  itemsWithBarcode.forEach(i => {
     if (!itemsByOrder.has(i.order_id)) itemsByOrder.set(i.order_id, [])
     itemsByOrder.get(i.order_id)!.push(i)
   })
