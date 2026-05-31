@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase, fetchAll } from '../../lib/supabase'
 
 export default function PurchasePage() {
   const [products, setProducts] = useState<any[]>([])
@@ -12,18 +12,10 @@ export default function PurchasePage() {
   }, [])
 
   async function fetchData() {
-    const { data: productData, error: productError } = await supabase
-      .from('products')
-      .select('*')
-      .order('stock', { ascending: true })
-
-    const { data: manufacturerData, error: manufacturerError } = await supabase
-      .from('manufacturers')
-      .select('*')
-
-    if (productError) console.error(productError)
-    if (manufacturerError) console.error(manufacturerError)
-
+    const [productData, manufacturerData] = await Promise.all([
+      fetchAll('products', '*', (q) => q.order('stock', { ascending: true })),
+      fetchAll('manufacturers', '*'),
+    ])
     setProducts(productData || [])
     setManufacturers(manufacturerData || [])
   }
