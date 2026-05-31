@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import Barcode from "react-barcode"
 
 export default function BarcodePage() {
@@ -12,11 +12,11 @@ export default function BarcodePage() {
   useEffect(() => { fetchProducts() }, [])
 
   async function fetchProducts() {
-    const { data } = await supabase
-      .from("products")
-      .select("id,name,product_code,barcode,active")
-      .order("name", { ascending: true })
-      .limit(50000)
+    const data = await fetchAll(
+      "products",
+      "id,name,product_code,barcode,active",
+      (q) => q.order("name", { ascending: true })
+    )
     setProducts(data || [])
   }
 

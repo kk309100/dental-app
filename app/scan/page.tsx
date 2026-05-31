@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 
 type Product = { id: string; name: string; barcode: string; stock: number | null }
 type ScanResult = { product: Product; qty: number; done: boolean }
@@ -34,12 +34,11 @@ function ScanReceive() {
       const { data: profile } = await supabase.from("profiles").select("clinic_id").eq("id", user.id).single()
       if (profile?.clinic_id) setClinicId(profile.clinic_id)
 
-      const { data } = await supabase
-        .from("products")
-        .select("id,name,barcode,stock")
-        .not("barcode", "is", null)
-        .neq("barcode", "")
-        .limit(50000)
+      const data = await fetchAll(
+        "products",
+        "id,name,barcode,stock",
+        (q) => q.not("barcode", "is", null).neq("barcode", "")
+      )
       setProducts((data as Product[]) || [])
     })()
   }, [])
