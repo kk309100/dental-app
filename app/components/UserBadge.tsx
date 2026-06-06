@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 
-const KEY = "dental-app:user_name"
+const KEY = "denthub:user_name"
 
 /**
  * 監査ログ・各種記録の actor として使う「操作者名」を localStorage に保存する小さい設定UI。
@@ -49,7 +49,10 @@ export default function UserBadge() {
   return (
     <button
       onClick={() => { setDraft(name); setEditing(true) }}
-      className="text-xs text-gray-500 hover:text-gray-900 px-2 py-1 rounded hover:bg-gray-100"
+      className="text-xs px-2 py-1 rounded"
+      style={{ color: "#bfdbfe", background: "transparent" }}
+      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.15)"; (e.currentTarget as HTMLButtonElement).style.color = "#fff" }}
+      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "#bfdbfe" }}
       title="クリックして変更"
     >
       👤 {name || "(操作者未設定)"}

@@ -11,7 +11,10 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.104.1",
     "html5-qrcode": "^2.3.8",
+    "lucide-react": "^1.17.0",
     "next": "16.2.4",
+    "pdfjs-dist": "^6.0.227",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.4",
     "react-barcode": "^1.6.1",
     "react-dom": "19.2.4"

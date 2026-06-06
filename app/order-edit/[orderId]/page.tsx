@@ -79,6 +79,13 @@ export default function OrderEditPage() {
 
     setItems(updatedItems)
     await recalculateTotal(updatedItems)
+    // 管理画面に「医院修正あり」を通知するため note にフラグを立てる
+    const currentNote: string = order?.note || ""
+    if (!currentNote.includes("【医院修正】")) {
+      const newNote = "【医院修正】" + (currentNote ? " " + currentNote : "")
+      await supabase.from("orders").update({ note: newNote }).eq("id", orderId)
+      setOrder((prev: any) => ({ ...prev, note: newNote }))
+    }
   }
 
   if (loading) return <p style={{ padding: 20 }}>読み込み中...</p>

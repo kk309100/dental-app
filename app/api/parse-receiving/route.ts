@@ -54,10 +54,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { pdfBase64 } = await req.json()
-    if (!pdfBase64) {
-      return NextResponse.json({ error: "pdfBase64 が空" }, { status: 400 })
+    const body = await req.json()
+    const { pdfBase64, imageBase64, mediaType } = body
+
+    if (!pdfBase64 && !imageBase64) {
+      return NextResponse.json({ error: "pdfBase64 または imageBase64 が必要です" }, { status: 400 })
     }
+
+    // PDF は document ブロック、画像は image ブロックで送信
+    const contentBlock = pdfBase64
+      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } }
+      : { type: "image",    source: { type: "base64", media_type: mediaType || "image/jpeg", data: imageBase64 } }
 
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -67,17 +74,14 @@ export async function POST(req: NextRequest) {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5",
+        model: "claude-opus-4-5",
         max_tokens: 4096,
         system: SYSTEM_PROMPT,
         messages: [
           {
             role: "user",
             content: [
-              {
-                type: "document",
-                source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
-              },
+              contentBlock,
               {
                 type: "text",
                 text: "この仕入納品書から明細を抽出してJSONで返してください。",
@@ -90,8 +94,11 @@ export async function POST(req: NextRequest) {
 
     if (!r.ok) {
       const errText = await r.text()
-      console.error("Claude API error:", errText)
-      return NextResponse.json({ error: `Claude API: ${r.status}`, detail: errText.slice(0, 500) }, { status: 502 })
+      console.error("Claude API error:", r.status, errText)
+      // エラー詳細をフロントに返してデバッグしやすくする
+      let detail = errText.slice(0, 800)
+      try { detail = JSON.stringify(JSON.parse(errText), null, 2).slice(0, 800) } catch {}
+      return NextResponse.json({ error: `Claude API エラー (${r.status})`, detail }, { status: 502 })
     }
 
     const result = await r.json()

@@ -14,7 +14,7 @@ type TabKey = "monthly" | "clinic" | "product" | "rep" | "profit" | "abc"
 
 // 「納品済」「納品済み」両方を売上対象として扱う（DB の表記ゆれを吸収）
 const SALES_STATUSES = ["納品済み", "納品済"]
-const FY_START_KEY = "dental-app:fy_start_month"
+const FY_START_KEY = "denthub:fy_start_month"
 
 export default function SalesPage() {
   const [orders, setOrders] = useState<Order[]>([])

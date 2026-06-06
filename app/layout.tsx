@@ -2,8 +2,8 @@ import './globals.css'
 import TopNav from './components/TopNav'
 
 export const metadata = {
-  title: '歯科注文アプリ',
-  description: '歯科医院向け注文管理アプリ',
+  title: 'DentHub',
+  description: '歯科医院とディーラーをつなぐ発注・在庫管理プラットフォーム',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

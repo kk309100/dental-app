@@ -170,6 +170,16 @@ function AdminOrdersPage() {
   }
 
   // 注文経路バッジ（コンパクト版: アイコン+短い文字）
+  function ClinicEditBadge() {
+    return (
+      <span className="text-[11px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap ml-1"
+        style={{ background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5" }}
+        title="医院側が注文内容を修正しました">
+        ✏️ 修正あり
+      </span>
+    )
+  }
+
   function SourceBadge({ source }: { source: string | null | undefined }) {
     const isAdmin = source === "admin"
     return isAdmin ? (
@@ -716,7 +726,10 @@ function AdminOrdersPage() {
                               <td className="px-2 py-1 text-center">
                                 <BizBadgeWithCount state={biz} shortCount={ss.short} />
                               </td>
-                              <td className="px-2 py-1 text-center"><SourceBadge source={o.source} /></td>
+                              <td className="px-2 py-1 text-center">
+                                <SourceBadge source={o.source} />
+                                {o.note?.includes("【医院修正】") && <ClinicEditBadge />}
+                              </td>
                               <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
                               <td className="px-2 py-1 text-[11px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                               <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
@@ -848,7 +861,10 @@ function AdminOrdersPage() {
                       <td className="px-2 py-1 text-center">
                         <BizBadgeWithCount state={biz} shortCount={ss.short} />
                       </td>
-                      <td className="px-2 py-1 text-center"><SourceBadge source={o.source} /></td>
+                      <td className="px-2 py-1 text-center">
+                        <SourceBadge source={o.source} />
+                        {o.note?.includes("【医院修正】") && <ClinicEditBadge />}
+                      </td>
                       <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
                       <td className="px-2 py-1">{clinicById.get(o.clinic_id)?.name || "—"}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>

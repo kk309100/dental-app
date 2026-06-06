@@ -10,6 +10,7 @@ export type GroupableRow = {
   date: string         // YYYY-MM-DD
   party: string        // 医院名 or 仕入先名
   amount: number       // 金額
+  ref?: string         // 伝票No・納品書No等（医院別明細表示に使用）
   items?: { name: string; quantity: number; price: number }[]  // 明細（商品別集計用）
 }
 
@@ -113,39 +114,136 @@ function ByDate({ rows }: { rows: GroupableRow[] }) {
 }
 
 function ByParty({ rows, partyLabel }: { rows: GroupableRow[]; partyLabel: string }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
+
   const groups = useMemo(() => {
-    const m = new Map<string, { party: string; count: number; amount: number }>()
+    const m = new Map<string, { party: string; count: number; amount: number; orders: GroupableRow[] }>()
     rows.forEach(r => {
-      const e = m.get(r.party) || { party: r.party, count: 0, amount: 0 }
-      e.count++; e.amount += Number(r.amount || 0)
+      const e = m.get(r.party) || { party: r.party, count: 0, amount: 0, orders: [] }
+      e.count++
+      e.amount += Number(r.amount || 0)
+      e.orders.push(r)
       m.set(r.party, e)
     })
-    return Array.from(m.values()).sort((a, b) => b.amount - a.amount)
+    // 各グループの orders を日付降順に並べる
+    const arr = Array.from(m.values()).sort((a, b) => b.amount - a.amount)
+    arr.forEach(g => g.orders.sort((a, b) => b.date.localeCompare(a.date)))
+    return arr
   }, [rows])
+
   const total = groups.reduce((s, g) => s + g.amount, 0)
+
+  function toggleParty(party: string) {
+    setExpanded(prev => {
+      const n = new Set(prev)
+      if (n.has(party)) n.delete(party); else n.add(party)
+      return n
+    })
+  }
+  function toggleOrder(id: string) {
+    setExpandedOrders(prev => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+  }
+
   return (
     <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
       <table className="w-full text-xs">
         <thead className="bg-gray-100 sticky top-0">
           <tr className="text-[11px] text-gray-700 font-bold border-b-2 border-gray-300">
             <th className="px-3 py-1.5 text-left">{partyLabel}</th>
-            <th className="px-3 py-1.5 text-right w-24">件数</th>
-            <th className="px-3 py-1.5 text-right w-32">金額</th>
-            <th className="px-3 py-1.5 text-right w-28">構成比</th>
+            <th className="px-3 py-1.5 text-right w-20">件数</th>
+            <th className="px-3 py-1.5 text-right w-32">金額合計</th>
+            <th className="px-3 py-1.5 text-right w-24">構成比</th>
           </tr>
         </thead>
         <tbody>
-          {groups.map(g => (
-            <tr key={g.party} className="border-b border-gray-100 hover:bg-blue-50/40">
-              <td className="px-3 py-1.5">{g.party}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums">{g.count}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums font-bold">{fmtYen(g.amount)}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{total > 0 ? `${(g.amount / total * 100).toFixed(1)}%` : "—"}</td>
-            </tr>
-          ))}
+          {groups.map(g => {
+            const isOpen = expanded.has(g.party)
+            return (
+              <>
+                {/* 医院ヘッダー行 */}
+                <tr
+                  key={g.party}
+                  className="border-b border-gray-200 cursor-pointer hover:bg-emerald-50/60"
+                  style={{ background: isOpen ? "#f0fdf4" : undefined }}
+                  onClick={() => toggleParty(g.party)}
+                >
+                  <td className="px-3 py-2 font-bold" style={{ fontSize: 12 }}>
+                    <span style={{ marginRight: 6, color: "#6b7280", fontSize: 10 }}>{isOpen ? "▼" : "▶"}</span>
+                    {g.party}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-gray-600">{g.count}件</td>
+                  <td className="px-3 py-2 text-right tabular-nums font-bold" style={{ fontSize: 12 }}>{fmtYen(g.amount)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-gray-500 text-[11px]">
+                    {total > 0 ? `${(g.amount / total * 100).toFixed(1)}%` : "—"}
+                  </td>
+                </tr>
+
+                {/* 展開: 納品書一覧 */}
+                {isOpen && g.orders.map(order => {
+                  const isOrderOpen = expandedOrders.has(order.id)
+                  const hasItems = (order.items || []).length > 0
+                  return (
+                    <>
+                      {/* 納品書行 */}
+                      <tr
+                        key={`order-${order.id}`}
+                        className="border-b border-gray-100 hover:bg-blue-50/40"
+                        style={{ background: "#f8fafc" }}
+                        onClick={() => hasItems && toggleOrder(order.id)}
+                      >
+                        <td className="py-1.5" style={{ paddingLeft: 32 }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {hasItems && (
+                              <span style={{ color: "#9ca3af", fontSize: 9, flexShrink: 0 }}>{isOrderOpen ? "▼" : "▶"}</span>
+                            )}
+                            <span style={{ color: "#6b7280", fontSize: 11 }}>{order.date}</span>
+                            {order.ref && (
+                              <span style={{ fontFamily: "monospace", fontSize: 11, color: "#374151" }}>{order.ref}</span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-gray-500 text-[11px]">
+                          {(order.items || []).length}品目
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-[11px]">{fmtYen(order.amount)}</td>
+                        <td></td>
+                      </tr>
+
+                      {/* 展開: 明細 */}
+                      {isOrderOpen && (order.items || []).map((it, idx) => (
+                        <tr
+                          key={`item-${order.id}-${idx}`}
+                          className="border-b border-gray-50"
+                          style={{ background: "#fafbff" }}
+                        >
+                          <td className="py-1" style={{ paddingLeft: 54 }}>
+                            <span style={{ fontSize: 11, color: "#374151" }}>{it.name}</span>
+                          </td>
+                          <td className="px-3 py-1 text-right tabular-nums text-[11px] text-gray-600">
+                            {it.quantity}個
+                          </td>
+                          <td className="px-3 py-1 text-right tabular-nums text-[11px]">
+                            {fmtYen(it.price * it.quantity)}
+                          </td>
+                          <td className="px-3 py-1 text-right text-[10px] text-gray-400">
+                            @{fmtYen(it.price)}
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  )
+                })}
+              </>
+            )
+          })}
           <tr className="bg-gray-50 border-t-2 border-gray-300">
             <td className="px-3 py-2 font-bold">合計</td>
-            <td className="px-3 py-2 text-right tabular-nums font-bold">{rows.length}</td>
+            <td className="px-3 py-2 text-right tabular-nums font-bold">{rows.length}件</td>
             <td className="px-3 py-2 text-right tabular-nums font-bold">{fmtYen(total)}</td>
             <td></td>
           </tr>

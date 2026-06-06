@@ -260,7 +260,7 @@ export default function HistoryPage() {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 14, fontWeight: "bold", color: "#111" }}>
-                      ¥{monthTotal.toLocaleString()}
+                      <span style={{ fontSize: 11, fontWeight: "normal", color: "#6b7280", marginRight: 3 }}>税抜</span>¥{monthTotal.toLocaleString()}
                     </span>
                     <span style={{ fontSize: 12, color: "#6b7280" }}>{collapsed ? "▼" : "▲"}</span>
                   </div>

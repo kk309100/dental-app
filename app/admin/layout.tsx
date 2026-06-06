@@ -1,10 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useState } from "react"
+import { usePathname, useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import { Ic } from "./_lib/icons"
 import UserBadge from "@/app/components/UserBadge"
+import { supabase } from "@/lib/supabase"
 import "./admin-base.css"
 
 const NAV = [
@@ -18,11 +19,13 @@ const NAV = [
   { id: "inventory",      href: "/admin/inventory",           label: "在庫",       icon: Ic.product },
   { id: "sales",          href: "/admin/sales",               label: "売上",       icon: Ic.sales },
   { id: "masters",        href: "/admin/masters",             label: "マスター",   icon: Ic.dash },
+  { id: "repair-orders",  href: "/admin/repair-orders",        label: "修理依頼",   icon: Ic.wrench },
   { id: "notices",        href: "/admin/notices",             label: "お知らせ",   icon: Ic.dash },
   { id: "dashboard",      href: "/admin/dashboard",           label: "分析",       icon: Ic.dash },
 ]
 
 const SUB = [
+  { href: "/admin/audit",                label: "📋 請求書チェック" },
   { href: "/admin/supplier-invoices",    label: "仕入先請求書付け合わせ" },
   { href: "/admin/invoices/bulk",        label: "一括請求" },
   { href: "/admin/payments",             label: "入金処理" },
@@ -33,6 +36,7 @@ const SUB = [
   { href: "/admin/stock-movements",      label: "在庫履歴" },
   { href: "/admin/inventory-valuation",  label: "在庫評価" },
   { href: "/admin/delivery-search",      label: "納品書検索" },
+  { href: "/admin/products/dedup",       label: "商品重複管理" },
 ]
 
 // アクセントカラー
@@ -40,7 +44,34 @@ const ACCENT = "#2563eb"   // blue-600
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router   = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [subOpen, setSubOpen]   = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) {
+        router.replace("/login")
+        return
+      }
+      const { data: profile } = await supabase
+        .from("profiles").select("role").eq("id", session.user.id).single()
+      if (profile?.role !== "admin") {
+        router.replace("/login")
+        return
+      }
+      setAuthChecked(true)
+    })
+  }, [])
+
+  if (!authChecked) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f3f4f6" }}>
+        <div style={{ fontSize: 14, color: "#9ca3af" }}>認証確認中…</div>
+      </div>
+    )
+  }
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : pathname.startsWith(href)
@@ -56,7 +87,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div style={{ position: "fixed", top: 0, bottom: 0, left: 0, zIndex: 50, width: 260, background: "#fff", display: "flex", flexDirection: "column", boxShadow: "4px 0 20px rgba(0,0,0,0.12)" }}>
           {/* ドロワーヘッダー */}
           <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #e5e7eb" }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: "#111" }}>Dental Connect</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: "#111" }}>DentHub</span>
             <button onClick={() => setMenuOpen(false)} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: "#9ca3af", lineHeight: 1 }}>×</button>
           </div>
           {/* ドロワーナビ */}
@@ -102,22 +133,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* ── トップヘッダー ── */}
       <header className="admin-layout-header" style={{
-        background: "#fff", position: "sticky", top: 0, zIndex: 30,
-        borderBottom: "1px solid #e5e7eb",
-        boxShadow: "0 1px 6px rgba(0,0,0,0.06)",
+        background: "#1e3a8a",
+        position: "sticky", top: 0, zIndex: 30,
+        boxShadow: "0 2px 10px rgba(0,0,0,0.25)",
       }}>
         <div style={{ display: "flex", alignItems: "center", padding: "0 16px", height: 56 }}>
 
           {/* ロゴ */}
-          <Link href="/admin" style={{ textDecoration: "none", marginRight: 16, flexShrink: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 800, color: ACCENT, letterSpacing: "0.02em" }}>
-              Dental Connect
+          <Link href="/admin" style={{ textDecoration: "none", marginRight: 16, flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: "0.02em" }}>
+              DentHub
             </span>
-            <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 6 }}>管理</span>
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: "#93c5fd",
+              background: "rgba(255,255,255,0.12)", padding: "2px 7px", borderRadius: 4, letterSpacing: "0.05em",
+            }}>管理</span>
           </Link>
 
           {/* PCナビ */}
-          <nav style={{ flex: 1, display: "flex", alignItems: "center", gap: 2, overflowX: "auto", scrollbarWidth: "none" }}
+          <nav style={{ flex: 1, display: "flex", alignItems: "center", gap: 1, overflowX: "auto", scrollbarWidth: "none" }}
             className="hide-scrollbar">
             {NAV.map((item) => {
               const active = isActive(item.href, item.exact)
@@ -125,10 +159,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <Link key={item.id} href={item.href}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
-                    padding: "6px 11px", borderRadius: 8,
-                    fontSize: 13, fontWeight: active ? 700 : 500,
-                    color: active ? "#fff" : "#6b7280",
-                    background: active ? ACCENT : "transparent",
+                    padding: "6px 11px", borderRadius: 7,
+                    fontSize: 13, fontWeight: active ? 700 : 400,
+                    color: active ? "#fff" : "#bfdbfe",
+                    background: active ? "rgba(255,255,255,0.18)" : "transparent",
                     textDecoration: "none", whiteSpace: "nowrap",
                     transition: "all 0.15s",
                   }}>
@@ -142,11 +176,59 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {/* 右側 PC */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: 8, flexShrink: 0 }}
             className="pc-only">
+
+            {/* その他ドロップダウン */}
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setSubOpen(v => !v)}
+                onBlur={() => setTimeout(() => setSubOpen(false), 150)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "6px 11px", borderRadius: 7, border: "none", cursor: "pointer",
+                  fontSize: 13, fontWeight: 400,
+                  color: subOpen ? "#fff" : "#bfdbfe",
+                  background: subOpen ? "rgba(255,255,255,0.18)" : "transparent",
+                  transition: "all 0.15s",
+                }}
+              >
+                その他
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  style={{ transition: "transform 0.2s", transform: subOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {subOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 100,
+                  background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
+                  border: "1px solid #e5e7eb", minWidth: 200, padding: "6px 0", overflow: "hidden",
+                }}>
+                  {SUB.map(item => (
+                    <Link key={item.href} href={item.href}
+                      onClick={() => setSubOpen(false)}
+                      style={{
+                        display: "block", padding: "9px 16px", fontSize: 13,
+                        color: pathname.startsWith(item.href) ? "#2563eb" : "#374151",
+                        background: pathname.startsWith(item.href) ? "#eff6ff" : "transparent",
+                        textDecoration: "none", fontWeight: pathname.startsWith(item.href) ? 700 : 400,
+                        whiteSpace: "nowrap",
+                      }}
+                      onMouseEnter={e => { if (!pathname.startsWith(item.href)) (e.currentTarget as HTMLElement).style.background = "#f9fafb" }}
+                      onMouseLeave={e => { if (!pathname.startsWith(item.href)) (e.currentTarget as HTMLElement).style.background = "transparent" }}
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <UserBadge />
             <Link href="/" style={{
               padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-              color: "#6b7280", border: "1px solid #e5e7eb", textDecoration: "none",
-              background: "#f9fafb",
+              color: "#fff", border: "1px solid rgba(255,255,255,0.3)", textDecoration: "none",
+              background: "rgba(255,255,255,0.1)",
             }}>
               医院側 →
             </Link>
@@ -156,9 +238,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <button onClick={() => setMenuOpen(true)}
             style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 6, display: "flex", flexDirection: "column", gap: 5 }}
             className="mobile-only">
-            <span style={{ display: "block", width: 22, height: 2, background: "#374151", borderRadius: 2 }} />
-            <span style={{ display: "block", width: 22, height: 2, background: "#374151", borderRadius: 2 }} />
-            <span style={{ display: "block", width: 22, height: 2, background: "#374151", borderRadius: 2 }} />
+            <span style={{ display: "block", width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
+            <span style={{ display: "block", width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
+            <span style={{ display: "block", width: 22, height: 2, background: "#fff", borderRadius: 2 }} />
           </button>
         </div>
 

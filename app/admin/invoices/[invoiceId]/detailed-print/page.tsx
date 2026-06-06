@@ -173,7 +173,8 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
   const clinicFullName = `${clinicPrefix}${clinic?.name || "(医院不明)"}`
 
   // 1ページあたりの明細行数
-  const FIRST_PAGE_LINES = 15
+  // ※ 各アイテムは2行（~9mm）で表示。1ページ目ヘッダー~65mm を差し引いた残り~212mmに収まる数
+  const FIRST_PAGE_LINES = 20
   const NEXT_PAGE_LINES = 30
   const pages: typeof lines[] = []
   if (lines.length <= FIRST_PAGE_LINES) {
@@ -285,6 +286,23 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
       </div>
 
       <style jsx global>{`
+        /* ── admin-base.css の table/h1 強制スタイルを詳細印刷ページ内で上書き ── */
+        /* 詳細: .main-inner table td (0,1,2) を .invoice-doc .invoice-page table td (0,2,2) で上回る */
+        .invoice-doc .invoice-page table td,
+        .invoice-doc .invoice-page table th {
+          padding: 2px 4px !important;
+          font-size: 9px !important;
+        }
+        .invoice-doc .invoice-page table td div,
+        .invoice-doc .invoice-page table td span,
+        .invoice-doc .invoice-page table td p,
+        .invoice-doc .invoice-page table th div,
+        .invoice-doc .invoice-page table th span {
+          font-size: 9px !important;
+        }
+        .invoice-doc .invoice-page h1 {
+          font-size: 22px !important;
+        }
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; margin: 0 !important; }
@@ -335,7 +353,7 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
     <>
       {/* 上段: 自社住所（左） / タイトル（中央） / Page（右） */}
       <div style={{ display: "flex", alignItems: "flex-start", marginBottom: 4 }}>
-        <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4 }}>
+        <div style={{ flex: 1, fontSize: 8, lineHeight: 1.4 }}>
           〒{company.postalCode}<br />
           {company.address}
         </div>

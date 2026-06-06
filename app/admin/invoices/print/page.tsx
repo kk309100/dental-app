@@ -131,22 +131,6 @@ function BulkPrint() {
                 )
               })()}
             </p>
-            {cl?.payment_method === "カード" && (
-              <div style={{ margin: "10px 0" }}>
-                <div style={{
-                  display: "inline-block",
-                  padding: "8px 24px",
-                  border: "3px solid #dc2626",
-                  color: "#dc2626",
-                  fontWeight: 900,
-                  fontSize: 18,
-                  letterSpacing: "0.2em",
-                  borderRadius: 4,
-                  WebkitPrintColorAdjust: "exact",
-                  printColorAdjust: "exact",
-                }}>💳 カード決済</div>
-              </div>
-            )}
             <div style={{ background: "#f9fafb", border: "1px solid #ddd", borderRadius: 4, padding: 16, margin: "12px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 14 }}>ご請求金額（税込）</span>
@@ -190,6 +174,21 @@ function BulkPrint() {
         )
       })}
       <style jsx global>{`
+        /* ── admin-base.css の table/h1 強制スタイルを請求書印刷ページ内で上書き ── */
+        /* .print-page.print-page table td (0,2,2) > .main-inner table td (0,1,2) */
+        .print-page.print-page table td,
+        .print-page.print-page table th {
+          padding: 6px 8px !important;
+          font-size: 12px !important;
+        }
+        .print-page.print-page table td div,
+        .print-page.print-page table td span,
+        .print-page.print-page table td p {
+          font-size: 12px !important;
+        }
+        .print-page.print-page h1 {
+          font-size: 28px !important;
+        }
         @media print {
           .no-print { display: none !important; }
           /* ナビ・ヘッダーを完全に非表示 */

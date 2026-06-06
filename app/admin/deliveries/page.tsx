@@ -81,6 +81,7 @@ export default function DeliveriesPage() {
     date: ((o.delivered_at || o.created_at) || "").slice(0, 10),
     party: clinicById.get(o.clinic_id)?.name || "(医院不明)",
     amount: Number(o.total_price || 0),
+    ref: o.delivery_number || o.id.slice(0, 8),
     items: (itemsByOrder.get(o.id) || []).map(it => ({
       name: it.product_name || "(不明)",
       quantity: Number(it.quantity || 0),

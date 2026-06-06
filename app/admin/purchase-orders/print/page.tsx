@@ -114,6 +114,20 @@ function BulkPrint() {
         )
       })}
       <style jsx global>{`
+        /* ── admin-base.css の table/h1 強制スタイルを発注書印刷ページ内で上書き ── */
+        .print-page.print-page table td,
+        .print-page.print-page table th {
+          padding: 4px 8px !important;
+          font-size: 11px !important;
+        }
+        .print-page.print-page table td div,
+        .print-page.print-page table td span,
+        .print-page.print-page table td p {
+          font-size: 11px !important;
+        }
+        .print-page.print-page h1 {
+          font-size: 28px !important;
+        }
         @media print {
           .no-print { display: none !important; }
           @page { size: A4; margin: 10mm; }

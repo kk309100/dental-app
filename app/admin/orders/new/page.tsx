@@ -20,9 +20,9 @@ type Product = { id: string; name: string; product_code: string | null; price: n
 type Row = { product_id: string | null; product_name: string; quantity: number; price: number; note?: string }
 type RecentOrder = { id: string; clinic_id: string; created_at: string; total_price: number; delivery_number: string | null }
 
-const SALES_REP_KEY = "dental-app:sales_rep"
-const RECENT_CLINIC_KEY = "dental-app:recent_clinic"
-const DRAFT_KEY = "dental-app:order_draft"
+const SALES_REP_KEY = "denthub:sales_rep"
+const RECENT_CLINIC_KEY = "denthub:recent_clinic"
+const DRAFT_KEY = "denthub:order_draft"
 
 // 半角・全角・カナ・ひらがな・大文字小文字を統一して検索可能にする
 function nfkc(s: string) { return String(s || "").normalize("NFKC").toLowerCase() }

@@ -49,7 +49,7 @@ export default function ReceivingPage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState("")
-  const [parsedMeta, setParsedMeta] = useState<{ supplier_name?: string; invoice_number?: string; invoice_date?: string; total?: number } | null>(null)
+  const [parsedMeta, setParsedMeta] = useState<{ supplier_name?: string; invoice_number?: string; invoice_date?: string; total?: number; itemCount?: number; rawJson?: string } | null>(null)
 
   const [submitting, setSubmitting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -101,44 +101,90 @@ export default function ReceivingPage() {
 
   async function uploadAndParse(file?: File) {
     const target = file || pdfFile
-    if (!target) { setParseError("PDF を選択してください"); return }
+    if (!target) { setParseError("ファイルを選択してください"); return }
     if (file) setPdfFile(file)
     setParsing(true)
     setParseError("")
     setParsedMeta(null)
     try {
-      const buf = await target.arrayBuffer()
-      const base64 = Buffer.from(buf).toString("base64")
+      const isPdf = target.type === "application/pdf" || target.name.toLowerCase().endsWith(".pdf")
+
+      let body: Record<string, any>
+      if (isPdf) {
+        // PDF → base64 に変換してそのまま送信（claude-opus-4-5 がネイティブ対応）
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload  = () => resolve((reader.result as string).split(",")[1])
+          reader.onerror = () => reject(new Error("ファイル読み込み失敗"))
+          reader.readAsDataURL(target)
+        })
+        body = { pdfBase64: b64 }
+      } else {
+        // 画像ファイル: FileReader で確実にbase64変換（大ファイル対応）
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload  = () => resolve((reader.result as string).split(",")[1])
+          reader.onerror = () => reject(new Error("ファイル読み込み失敗"))
+          reader.readAsDataURL(target)
+        })
+        body = { imageBase64: b64, mediaType: target.type || "image/jpeg" }
+      }
+
       const r = await fetch("/api/parse-receiving", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pdfBase64: base64 }),
+        body: JSON.stringify(body),
       })
+      const resJson = await r.json()
       if (!r.ok) {
-        const err = await r.json()
-        throw new Error(err.error || "解析失敗")
+        const msg = resJson.detail
+          ? `${resJson.error}\n\n【詳細】${resJson.detail}`
+          : (resJson.error || "解析失敗")
+        throw new Error(msg)
       }
-      const { data } = await r.json()
-      setParsedMeta({ supplier_name: data.supplier_name, invoice_number: data.invoice_number, invoice_date: data.invoice_date, total: data.total })
+      const { data } = resJson
+
+      // items 配列を正規化（Claudeがフィールド名をずらして返す場合に対応）
+      const rawItems: any[] = Array.isArray(data.items) ? data.items
+        : Array.isArray(data.line_items) ? data.line_items
+        : Array.isArray(data.products) ? data.products
+        : []
+
+      const newRows: Row[] = rawItems.map((it: any) => ({
+        productName: it.supplier_product_name || it.product_name || it.name || it.商品名 || "",
+        supplierJan: it.supplier_jan || it.jan || it.jan_code || it.barcode || "",
+        supplierCode: it.supplier_product_code || it.product_code || it.code || it.品番 || "",
+        packSize: it.pack_size || it.quantity_per_pack || it.入数 || "",
+        quantity: String(it.quantity ?? it.qty ?? it.数量 ?? ""),
+        unitPrice: String(it.unit_price ?? it.price ?? it.単価 ?? ""),
+        memo: "",
+        manufacturer: it.manufacturer || it.maker || it.メーカー || "",
+      })).filter(r => r.productName)  // 商品名が空の行は除去
+
+      // 常にrawJsonを保持（デバッグ用）
+      const rawJsonStr = JSON.stringify(data, null, 2)
+      setParsedMeta({
+        supplier_name: data.supplier_name,
+        invoice_number: data.invoice_number,
+        invoice_date: data.invoice_date,
+        total: data.total,
+        itemCount: newRows.length,
+        rawJson: rawJsonStr,
+      })
 
       if (data.invoice_date) setDate(data.invoice_date)
       if (!supplierId && data.supplier_name) {
-        const matched = suppliers.find((s) => data.supplier_name.includes(s.name) || s.name.includes(data.supplier_name.split(/\s+/)[0]))
+        const matched = suppliers.find((s) =>
+          data.supplier_name.includes(s.name) || s.name.includes(data.supplier_name.split(/\s+/)[0])
+        )
         if (matched) setSupplierId(matched.id)
       }
 
-      const newRows: Row[] = data.items.map((it: any) => ({
-        productName: it.supplier_product_name || "",
-        supplierJan: it.supplier_jan || "",
-        supplierCode: it.supplier_product_code || "",
-        packSize: it.pack_size || "",
-        quantity: String(it.quantity || ""),
-        unitPrice: String(it.unit_price || ""),
-        memo: "",
-        manufacturer: "",
-      }))
-      const padded = newRows.length >= INITIAL_ROWS ? newRows : [...newRows, ...Array.from({ length: INITIAL_ROWS - newRows.length }, newRow)]
+      const padded = newRows.length >= INITIAL_ROWS
+        ? newRows
+        : [...newRows, ...Array.from({ length: INITIAL_ROWS - newRows.length }, newRow)]
       setRows(padded)
+      setTimeout(() => document.getElementById("receiving-table")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200)
     } catch (e) {
       setParseError((e as Error).message)
     } finally {
@@ -410,16 +456,15 @@ export default function ReceivingPage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          {parsing ? "AI解析中…" : "📄 PDFから読込"}
+          {parsing ? "AI解析中…" : "📄 PDF / 📷 写真から読込"}
         </label>
         <input
           id="pdf-upload"
           type="file"
-          accept="application/pdf"
+          accept="application/pdf,image/*"
           onChange={(e) => {
             const f = e.target.files?.[0]
             if (f) uploadAndParse(f)
-            // ファイル選択をリセット（同じファイル再選択可能に）
             e.target.value = ""
           }}
           className="hidden"
@@ -427,15 +472,41 @@ export default function ReceivingPage() {
         />
       </div>
 
-      {/* 解析結果バナー（あるときだけ） */}
+      {/* 解析結果バナー */}
       {parseError && (
-        <div className="bg-red-50 text-red-700 text-xs p-2 rounded" style={{ border: "1px solid #fca5a5" }}>
-          ⚠ PDF解析失敗: {parseError}
+        <div className="rounded-lg p-3" style={{ border: "1px solid #fca5a5", background: "#fff1f2" }}>
+          <p className="text-sm font-bold text-red-700 mb-1">⚠ PDF解析失敗</p>
+          <pre className="text-xs text-red-600 whitespace-pre-wrap break-all max-h-40 overflow-auto">{parseError}</pre>
         </div>
       )}
       {parsedMeta && (
-        <div className="bg-blue-50 text-blue-800 text-xs p-2 rounded" style={{ border: "1px solid #c7d2fe" }}>
-          ✅ <strong>{pdfFile?.name}</strong> 解析成功: {parsedMeta.supplier_name || "—"} / No.{parsedMeta.invoice_number || "—"} / 合計 {parsedMeta.total ? fmtYen(parsedMeta.total) : "—"} → 下の表に流し込み済み
+        <div className="rounded-lg p-3" style={{
+          border: `2px solid ${(parsedMeta.itemCount ?? 0) > 0 ? "#059669" : "#f59e0b"}`,
+          background: (parsedMeta.itemCount ?? 0) > 0 ? "#f0fdf4" : "#fffbeb"
+        }}>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold" style={{ color: (parsedMeta.itemCount ?? 0) > 0 ? "#065f46" : "#92400e" }}>
+                {(parsedMeta.itemCount ?? 0) > 0 ? `✅ 解析成功 — ${parsedMeta.itemCount}行を下の表に反映` : "⚠ 解析成功（明細が抽出できませんでした）"}
+              </p>
+              <p className="text-xs text-gray-600 mt-0.5">
+                {parsedMeta.supplier_name && `仕入先: ${parsedMeta.supplier_name}　`}
+                {parsedMeta.invoice_number && `伝票No: ${parsedMeta.invoice_number}　`}
+                {parsedMeta.total && `合計: ${fmtYen(parsedMeta.total)}`}
+              </p>
+              {(parsedMeta.itemCount ?? 0) > 0 && (
+                <p className="text-xs mt-1.5 text-emerald-800">
+                  ① 下の表で内容確認・修正　② 仕入先・入荷日を確認　③ 右下の <strong>「仕入登録」ボタン</strong> を押す
+                </p>
+              )}
+              {/* 常にrawJSONを折り畳みで表示（明細0件のとき特に役立つ） */}
+              <details className="mt-2">
+                <summary className="text-xs cursor-pointer text-gray-400 hover:text-gray-600">▶ Claudeの返答（JSON）を確認</summary>
+                <pre className="mt-1 text-xs bg-white p-2 rounded border border-gray-200 overflow-auto max-h-60 text-gray-700 whitespace-pre-wrap break-all">{parsedMeta.rawJson}</pre>
+              </details>
+            </div>
+            <button onClick={() => setParsedMeta(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none shrink-0">✕</button>
+          </div>
         </div>
       )}
 
@@ -546,7 +617,7 @@ export default function ReceivingPage() {
       </div>
 
       {/* 入力表 */}
-      <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
+      <div id="receiving-table" className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
           <thead className="sticky top-0 bg-gray-100">
             <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
