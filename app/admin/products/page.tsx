@@ -20,6 +20,7 @@ type Product = {
   location?: string | null
   purchase_maker?: string | null
   default_supplier_id?: string | null
+  image_url?: string | null
 }
 
 type Supplier = { id: string; name: string; short_name: string | null }
@@ -42,7 +43,9 @@ export default function AdminProductsPage() {
   const [importMsg, setImportMsg] = useState("")
   const [showInactive, setShowInactive] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [imageUploading, setImageUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const imgFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchProducts(); fetchSuppliers() }, [])
 
@@ -50,7 +53,7 @@ export default function AdminProductsPage() {
     setLoading(true)
     const data = await fetchAll(
       "products",
-      "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id",
+      "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id,image_url",
       (q) => q.order("name", { ascending: true })
     )
     setProducts((data as Product[]) || [])
@@ -85,12 +88,55 @@ export default function AdminProductsPage() {
       purchase_maker: editForm.purchase_maker || null,
       default_supplier_id: editForm.default_supplier_id || null,
       active: editForm.active !== false,
+      image_url: editForm.image_url !== undefined ? (editForm.image_url || null) : editProduct.image_url,
     }
     const { error } = await supabase.from("products").update(payload).eq("id", editProduct.id)
     if (error) { alert("保存失敗: " + error.message); setSaving(false); return }
     setSaving(false)
     closeEdit()
     fetchProducts()
+  }
+
+  async function uploadProductImage(file: File) {
+    if (!editProduct) return
+    setImageUploading(true)
+    try {
+      // canvas でJPEG変換（HEIC・PNG・WebP対応）
+      const jpeg = await new Promise<Blob>((resolve, reject) => {
+        const url = URL.createObjectURL(file)
+        const img = new Image()
+        img.onload = () => {
+          const MAX = 1600
+          let w = img.naturalWidth, h = img.naturalHeight
+          if (w > MAX || h > MAX) {
+            if (w > h) { h = Math.round(h * MAX / w); w = MAX }
+            else { w = Math.round(w * MAX / h); h = MAX }
+          }
+          const canvas = document.createElement("canvas")
+          canvas.width = w; canvas.height = h
+          const ctx = canvas.getContext("2d")
+          if (!ctx) { URL.revokeObjectURL(url); reject(new Error("canvas取得失敗")); return }
+          ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, h)
+          ctx.drawImage(img, 0, 0, w, h)
+          URL.revokeObjectURL(url)
+          canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("JPEG変換失敗")), "image/jpeg", 0.85)
+        }
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像読み込み失敗")) }
+        img.src = url
+      })
+      const form = new FormData()
+      form.append("file", jpeg, `${editProduct.id}.jpg`)
+      form.append("productId", editProduct.id)
+      const res = await fetch("/api/admin/upload-product-image", { method: "POST", body: form })
+      const json = await res.json()
+      if (!res.ok) { alert(`アップロード失敗: ${json.error ?? res.statusText}`); return }
+      setEditForm(f => ({ ...f, image_url: json.publicUrl }))
+    } catch (e) {
+      alert(`画像変換失敗: ${(e as Error).message}`)
+    } finally {
+      setImageUploading(false)
+      if (imgFileRef.current) imgFileRef.current.value = ""
+    }
   }
 
   async function importProductsCSV(file: File) {
@@ -458,6 +504,44 @@ export default function AdminProductsPage() {
                       <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>棚番号（置き場所）</label>
                       <input value={editForm.location || ""} onChange={e => setEditForm({ ...editForm, location: e.target.value })}
                         className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm font-mono" placeholder="A1-3" />
+                    </div>
+                  </div>
+                </section>
+
+                {/* 商品画像 */}
+                <section>
+                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">商品画像</h3>
+                  <div className="flex gap-3 items-start">
+                    {/* サムネイル */}
+                    <div className="w-20 h-20 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center border border-gray-200">
+                      {editForm.image_url ? (
+                        <img src={editForm.image_url} alt="" className="w-full h-full object-contain"
+                          onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none" }} />
+                      ) : (
+                        <span className="text-2xl text-gray-300">🖼</span>
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      {/* ファイルアップロード */}
+                      <input ref={imgFileRef} type="file" accept="image/*" style={{ display: "none" }}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) uploadProductImage(f) }} />
+                      <button type="button" onClick={() => imgFileRef.current?.click()} disabled={imageUploading}
+                        className="w-full text-sm px-3 py-1.5 border-2 border-dashed border-blue-300 rounded text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50">
+                        {imageUploading ? "アップロード中…" : "📷 写真をアップロード（JPG・PNG・HEIC）"}
+                      </button>
+                      {/* URL直入力 */}
+                      <input
+                        value={editForm.image_url || ""}
+                        onChange={e => setEditForm({ ...editForm, image_url: e.target.value })}
+                        placeholder="または画像URLを貼り付け（https://...）"
+                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-xs text-gray-600"
+                      />
+                      {editForm.image_url && (
+                        <button type="button" onClick={() => setEditForm({ ...editForm, image_url: "" })}
+                          className="text-xs text-red-500 hover:text-red-700 underline">
+                          画像を削除
+                        </button>
+                      )}
                     </div>
                   </div>
                 </section>
