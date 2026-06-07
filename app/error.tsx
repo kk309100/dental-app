@@ -5,6 +5,15 @@ import { useEffect } from "react"
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error("[GlobalError]", error)
+    // ChunkLoadError はデプロイ後のキャッシュ不一致で発生するため自動リロード
+    if (
+      error.name === "ChunkLoadError" ||
+      error.message?.includes("Failed to load chunk") ||
+      error.message?.includes("Loading chunk") ||
+      error.message?.includes("Importing a module script failed")
+    ) {
+      window.location.reload()
+    }
   }, [error])
 
   return (
