@@ -67,18 +67,31 @@ export default function AdminClinicsPage() {
   const [errMsg, setErrMsg] = useState("")
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState("")
+  // ログイン設定関連
+  const [clinicProfiles, setClinicProfiles] = useState<Map<string, string>>(new Map())
+  const [formLoginCode, setFormLoginCode] = useState("")
+  const [loginModal, setLoginModal] = useState<{ clinicId: string; clinicName: string } | null>(null)
+  const [loginCode, setLoginCode] = useState("")
+  const [loginSaving, setLoginSaving] = useState(false)
+  const [loginErr, setLoginErr] = useState("")
+  const [loginDone, setLoginDone] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from("clinics")
-      .select("*")
-      .order("name", { ascending: true })
+    const [{ data, error }, { data: profiles }] = await Promise.all([
+      supabase.from("clinics").select("*").order("name", { ascending: true }),
+      supabase.from("profiles").select("clinic_id, login_code").eq("role", "clinic"),
+    ])
     if (error) setErrMsg(`読込エラー: ${error.message}`)
     setClinics(data || [])
+    const map = new Map<string, string>()
+    profiles?.forEach((p: any) => {
+      if (p.clinic_id) map.set(p.clinic_id, p.login_code ?? "")
+    })
+    setClinicProfiles(map)
     setLoading(false)
   }
 
@@ -106,9 +119,17 @@ export default function AdminClinicsPage() {
 
   function openAdd() {
     setForm(empty)
+    setFormLoginCode("")
     setEditId(null)
     setErrMsg("")
     setShowForm(true)
+  }
+
+  function openLoginModal(c: Clinic) {
+    setLoginCode(clinicProfiles.get(c.id) ?? "")
+    setLoginErr("")
+    setLoginDone(false)
+    setLoginModal({ clinicId: c.id, clinicName: c.name })
   }
 
   function openEdit(c: Clinic) {
@@ -134,6 +155,11 @@ export default function AdminClinicsPage() {
       setErrMsg("医院名を入力してください")
       return
     }
+    const code = formLoginCode.trim()
+    if (!editId && code && code.length < 6) {
+      setErrMsg("ログインパスワードは6文字以上にしてください")
+      return
+    }
     setSaving(true)
     setErrMsg("")
     try {
@@ -141,8 +167,29 @@ export default function AdminClinicsPage() {
         const { error } = await supabase.from("clinics").update(form).eq("id", editId)
         if (error) throw error
       } else {
-        const { error } = await supabase.from("clinics").insert(form)
+        const { data: inserted, error } = await supabase.from("clinics").insert(form).select("id").single()
         if (error) throw error
+
+        // ログインパスワードが指定されていればアカウント作成
+        if (code && inserted?.id) {
+          const { data: { session } } = await supabase.auth.getSession()
+          const token = session?.access_token
+          if (token) {
+            const res = await fetch("/api/admin/create-clinic-user", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ clinicId: inserted.id, loginCode: code }),
+            })
+            const json = await res.json()
+            if (!res.ok) {
+              setErrMsg(`医院は作成されましたが、ログイン設定に失敗しました: ${json.error}`)
+              setSaving(false)
+              setShowForm(false)
+              await fetchData()
+              return
+            }
+          }
+        }
       }
       setShowForm(false)
       await fetchData()
@@ -151,6 +198,45 @@ export default function AdminClinicsPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function saveLoginCode() {
+    if (!loginModal) return
+    const code = loginCode.trim()
+    if (code.length < 6) { setLoginErr("パスワードは6文字以上にしてください"); return }
+
+    setLoginSaving(true)
+    setLoginErr("")
+    setLoginDone(false)
+
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (!token) { setLoginErr("セッションが切れています。再ログインしてください。"); setLoginSaving(false); return }
+
+    const res = await fetch("/api/admin/create-clinic-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ clinicId: loginModal.clinicId, loginCode: code }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setLoginErr(json.error)
+      setLoginSaving(false)
+      return
+    }
+
+    // ローカルの状態を更新
+    setClinicProfiles((prev) => {
+      const next = new Map(prev)
+      next.set(loginModal.clinicId, code)
+      return next
+    })
+    setLoginDone(true)
+    setLoginSaving(false)
+    setTimeout(() => {
+      setLoginModal(null)
+      setLoginDone(false)
+    }, 1500)
   }
 
   async function del(id: string, name: string) {
@@ -336,6 +422,18 @@ export default function AdminClinicsPage() {
                 </td>
                 <td className="px-2 py-1.5 text-center whitespace-nowrap">
                   <button onClick={() => openEdit(c)} className="text-[12px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
+                  <button
+                    onClick={() => openLoginModal(c)}
+                    className="text-[12px] px-1.5 py-0.5 border rounded mr-1"
+                    style={{
+                      background: clinicProfiles.has(c.id) ? "#dcfce7" : "#f9fafb",
+                      border: clinicProfiles.has(c.id) ? "1px solid #bbf7d0" : "1px solid #e5e7eb",
+                      color: clinicProfiles.has(c.id) ? "#15803d" : "#6b7280",
+                    }}
+                    title={clinicProfiles.has(c.id) ? `現在のPW: ${clinicProfiles.get(c.id)}` : "ログインパスワードを設定"}
+                  >
+                    {clinicProfiles.has(c.id) ? "🔑" : "PW"}
+                  </button>
                   <button onClick={() => del(c.id, c.name)} className="text-[12px] px-1.5 py-0.5 border border-red-200 bg-red-50 rounded hover:bg-red-100 text-red-700">削除</button>
                 </td>
               </tr>
@@ -343,6 +441,52 @@ export default function AdminClinicsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* ログイン設定モーダル */}
+      {loginModal && (
+        <div style={overlay} onClick={() => setLoginModal(null)}>
+          <div style={{ ...modal, maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
+            <div style={modalHeader}>
+              <h2 style={{ margin: 0, fontSize: 16 }}>🔑 ログイン設定</h2>
+              <button onClick={() => setLoginModal(null)} style={btnClose}>×</button>
+            </div>
+            <div style={{ padding: 20 }}>
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: "#555" }}>
+                <strong>{loginModal.clinicName}</strong> のログインパスワードを設定します。<br />
+                医院スタッフはこのパスワード1つだけでログインできます。
+              </p>
+              {clinicProfiles.has(loginModal.clinicId) && (
+                <div style={{ marginBottom: 10, padding: "6px 10px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, fontSize: 12, color: "#166534" }}>
+                  現在のPW：<code style={{ background: "#dcfce7", padding: "1px 6px", borderRadius: 4 }}>{clinicProfiles.get(loginModal.clinicId)}</code>
+                </div>
+              )}
+              {loginErr && <div style={errBox}>{loginErr}</div>}
+              {loginDone && <div style={{ padding: 10, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, color: "#15803d", fontSize: 13, marginBottom: 10 }}>✅ 設定しました</div>}
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  type="text"
+                  value={loginCode}
+                  onChange={(e) => setLoginCode(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveLoginCode() }}
+                  placeholder={clinicProfiles.has(loginModal.clinicId) ? "新しいパスワード（6文字以上）" : "パスワードを設定（6文字以上）"}
+                  style={{ ...fieldInput, flex: 1 }}
+                  autoFocus
+                />
+                <button
+                  onClick={saveLoginCode}
+                  disabled={loginSaving || loginDone}
+                  style={{ ...btnDark, whiteSpace: "nowrap", background: loginDone ? "#059669" : "#111", cursor: loginSaving ? "not-allowed" : "pointer" }}
+                >
+                  {loginDone ? "✓ 完了" : loginSaving ? "設定中…" : "設定する"}
+                </button>
+              </div>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: "#9ca3af" }}>
+                英数字・記号を組み合わせた6文字以上のパスワードを推奨します。
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* フォーム モーダル */}
       {showForm && (
@@ -398,6 +542,23 @@ export default function AdminClinicsPage() {
                   <option value="その他">その他</option>
                 </select>
               </div>
+
+              {/* 新規追加時のみログインパスワード欄を表示 */}
+              {!editId && (
+                <div style={{ ...fieldWrap, marginTop: 16, padding: "12px 14px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+                  <label style={{ ...fieldLabel, color: "#475569" }}>ログインパスワード（任意）</label>
+                  <input
+                    type="text"
+                    value={formLoginCode}
+                    onChange={(e) => setFormLoginCode(e.target.value)}
+                    placeholder="6文字以上（省略可・後から設定も可）"
+                    style={fieldInput}
+                  />
+                  <p style={{ margin: "4px 0 0", fontSize: 11, color: "#94a3b8" }}>
+                    入力すると医院スタッフがこのパスワードでログインできるようになります。後からでも設定できます（一覧の🔑ボタン）。
+                  </p>
+                </div>
+              )}
 
               <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
                 <button onClick={save} style={btnDark} disabled={saving}>{saving ? "保存中…" : "保存"}</button>
