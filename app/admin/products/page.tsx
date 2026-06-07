@@ -409,166 +409,249 @@ export default function AdminProductsPage() {
 
       {/* 編集モーダル */}
       {editProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={closeEdit}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-            {/* モーダルヘッダー */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50">
-              <h2 className="text-sm font-bold text-gray-800">商品編集</h2>
-              <button onClick={closeEdit} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 50,
+          background: "rgba(0,0,0,0.45)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "16px",
+        }} onClick={closeEdit}>
+          <div style={{
+            background: "#fff", borderRadius: 20,
+            boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+            width: "100%", maxWidth: 640,
+            display: "flex", flexDirection: "column",
+            maxHeight: "90vh", overflow: "hidden",
+          }} onClick={e => e.stopPropagation()}>
+
+            {/* ── モーダルヘッダー ── */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 20px",
+              borderBottom: "1px solid #f3f4f6",
+              background: "#f8fafc", borderRadius: "20px 20px 0 0",
+              gap: 12,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                  background: "#ecfdf5", border: "1.5px solid #a7f3d0",
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15,
+                }}>✏️</div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>商品編集</div>
+                  <div style={{
+                    fontSize: 14, fontWeight: 700, color: "#111827",
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 360,
+                  }}>{editProduct.name}</div>
+                </div>
+              </div>
+              <button onClick={closeEdit} style={{
+                background: "#f3f4f6", border: "none", borderRadius: 8,
+                width: 32, height: 32, fontSize: 16, color: "#6b7280",
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+              }}>×</button>
             </div>
 
-            <div className="overflow-y-auto" style={{ maxHeight: "75vh" }}>
-              <div className="p-5 space-y-4">
+            {/* ── スクロールエリア ── */}
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
 
-                {/* 基本情報 */}
-                <section>
-                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">基本情報</h3>
-                  <div className="grid grid-cols-1 gap-2.5">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>商品名 <span className="text-red-500">*</span></label>
+                {/* ── 基本情報 ── */}
+                <EditSection label="基本情報">
+                  <div style={grid1}>
+                    <EditField label="商品名" required>
                       <input value={editForm.name || ""} onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>商品コード</label>
-                        <input value={editForm.product_code || ""} onChange={e => setEditForm({ ...editForm, product_code: e.target.value })}
-                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm font-mono" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>カテゴリ</label>
-                        <input value={editForm.category || ""} onChange={e => setEditForm({ ...editForm, category: e.target.value })}
-                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm" />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>メーカー（ブランド名）</label>
-                      <input value={editForm.manufacturer || ""} onChange={e => setEditForm({ ...editForm, manufacturer: e.target.value })}
-                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm" />
-                    </div>
+                        style={fieldStyle} />
+                    </EditField>
                   </div>
-                </section>
+                  <div style={grid2}>
+                    <EditField label="商品コード">
+                      <input value={editForm.product_code || ""} onChange={e => setEditForm({ ...editForm, product_code: e.target.value })}
+                        style={{ ...fieldStyle, fontFamily: "monospace" }} />
+                    </EditField>
+                    <EditField label="カテゴリ">
+                      <input value={editForm.category || ""} onChange={e => setEditForm({ ...editForm, category: e.target.value })}
+                        style={fieldStyle} />
+                    </EditField>
+                  </div>
+                  <div style={grid1}>
+                    <EditField label="メーカー（ブランド名）">
+                      <input value={editForm.manufacturer || ""} onChange={e => setEditForm({ ...editForm, manufacturer: e.target.value })}
+                        style={fieldStyle} />
+                    </EditField>
+                  </div>
+                </EditSection>
 
-                {/* 仕入先 */}
-                <section>
-                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">仕入先</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>仕入先（マスタ連携）</label>
+                {/* ── 仕入先 ── */}
+                <EditSection label="仕入先">
+                  <div style={grid2}>
+                    <EditField label="仕入先（マスタ連携）">
                       <select value={editForm.default_supplier_id || ""} onChange={e => setEditForm({ ...editForm, default_supplier_id: e.target.value || null })}
-                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white">
+                        style={{ ...fieldStyle, background: "#fff" }}>
                         <option value="">（未設定）</option>
                         {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>ﾒｰｶｰ略称（CSV用）</label>
+                    </EditField>
+                    <EditField label="メーカー略称（CSV用）">
                       <input value={editForm.purchase_maker || ""} onChange={e => setEditForm({ ...editForm, purchase_maker: e.target.value })}
-                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm font-mono" />
-                    </div>
+                        style={{ ...fieldStyle, fontFamily: "monospace" }} />
+                    </EditField>
                   </div>
-                </section>
+                </EditSection>
 
-                {/* 価格 */}
-                <section>
-                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">価格</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>仕入価格（原価）</label>
-                      <input type="number" value={editForm.cost ?? ""} onChange={e => setEditForm({ ...editForm, cost: Number(e.target.value) || null })}
-                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>定価（売価）</label>
-                      <input type="number" value={editForm.price ?? ""} onChange={e => setEditForm({ ...editForm, price: Number(e.target.value) || null })}
-                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
-                    </div>
+                {/* ── 価格 ── */}
+                <EditSection label="価格">
+                  <div style={grid2}>
+                    <EditField label="仕入価格（原価）">
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#9ca3af", pointerEvents: "none" }}>¥</span>
+                        <input type="number" value={editForm.cost ?? ""} onChange={e => setEditForm({ ...editForm, cost: Number(e.target.value) || null })}
+                          style={{ ...fieldStyle, paddingLeft: 22, textAlign: "right" }} min={0} />
+                      </div>
+                    </EditField>
+                    <EditField label="定価（売価）">
+                      <div style={{ position: "relative" }}>
+                        <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#9ca3af", pointerEvents: "none" }}>¥</span>
+                        <input type="number" value={editForm.price ?? ""} onChange={e => setEditForm({ ...editForm, price: Number(e.target.value) || null })}
+                          style={{ ...fieldStyle, paddingLeft: 22, textAlign: "right" }} min={0} />
+                      </div>
+                    </EditField>
                   </div>
-                </section>
+                  {/* 粗利プレビュー */}
+                  {editForm.cost != null && editForm.price != null && editForm.cost > 0 && editForm.price > 0 && (
+                    <div style={{ marginTop: 6, padding: "7px 12px", background: "#ecfdf5", borderRadius: 8, fontSize: 12, color: "#065f46", display: "flex", gap: 16 }}>
+                      <span>粗利：¥{(Number(editForm.price) - Number(editForm.cost)).toLocaleString()}</span>
+                      <span>利益率：{Math.round((1 - Number(editForm.cost) / Number(editForm.price)) * 100)}%</span>
+                    </div>
+                  )}
+                </EditSection>
 
-                {/* 在庫管理 */}
-                <section>
-                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">在庫管理</h3>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>現在在庫数</label>
+                {/* ── 在庫管理 ── */}
+                <EditSection label="在庫管理">
+                  <div style={grid3}>
+                    <EditField label="現在在庫数">
                       <input type="number" value={editForm.stock ?? ""} onChange={e => setEditForm({ ...editForm, stock: Number(e.target.value) })}
-                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>発注点（不足基準）</label>
+                        style={{ ...fieldStyle, textAlign: "right" }} min={0} />
+                    </EditField>
+                    <EditField label="発注点（不足基準）">
                       <input type="number" value={editForm.reorder_level ?? ""} onChange={e => setEditForm({ ...editForm, reorder_level: Number(e.target.value) || null })}
-                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm text-right" min={0} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-0.5" style={{ fontSize: 13 }}>棚番号（置き場所）</label>
+                        style={{ ...fieldStyle, textAlign: "right" }} min={0} />
+                    </EditField>
+                    <EditField label="棚番号">
                       <input value={editForm.location || ""} onChange={e => setEditForm({ ...editForm, location: e.target.value })}
-                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm font-mono" placeholder="A1-3" />
-                    </div>
+                        style={{ ...fieldStyle, fontFamily: "monospace" }} placeholder="A1-3" />
+                    </EditField>
                   </div>
-                </section>
+                </EditSection>
 
-                {/* 商品画像 */}
-                <section>
-                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">商品画像</h3>
-                  <div className="flex gap-3 items-start">
+                {/* ── 商品画像 ── */}
+                <EditSection label="商品画像">
+                  <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
                     {/* サムネイル */}
-                    <div className="w-20 h-20 flex-shrink-0 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center border border-gray-200">
+                    <div style={{
+                      width: 84, height: 84, flexShrink: 0, borderRadius: 12,
+                      background: "#f8fafc", border: "1.5px solid #e5e7eb",
+                      overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
                       {editForm.image_url ? (
-                        <img src={editForm.image_url} alt="" className="w-full h-full object-contain"
+                        <img src={editForm.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }}
                           onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none" }} />
                       ) : (
-                        <span className="text-2xl text-gray-300">🖼</span>
+                        <span style={{ fontSize: 28, color: "#d1d5db" }}>🖼</span>
                       )}
                     </div>
-                    <div className="flex-1 space-y-2">
-                      {/* ファイルアップロード */}
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
                       <input ref={imgFileRef} type="file" accept="image/*" style={{ display: "none" }}
                         onChange={e => { const f = e.target.files?.[0]; if (f) uploadProductImage(f) }} />
                       <button type="button" onClick={() => imgFileRef.current?.click()} disabled={imageUploading}
-                        className="w-full text-sm px-3 py-1.5 border-2 border-dashed border-blue-300 rounded text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50">
-                        {imageUploading ? "アップロード中…" : "📷 写真をアップロード（JPG・PNG・HEIC）"}
+                        style={{
+                          width: "100%", padding: "9px 12px",
+                          border: "2px dashed #a7f3d0", borderRadius: 10,
+                          background: imageUploading ? "#f0fdf4" : "#f8fffe",
+                          color: "#059669", fontSize: 13, fontWeight: 700,
+                          cursor: imageUploading ? "not-allowed" : "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                          opacity: imageUploading ? 0.7 : 1,
+                        }}>
+                        <span>{imageUploading ? "⏳" : "📷"}</span>
+                        {imageUploading ? "アップロード中…" : "写真をアップロード（JPG・PNG・HEIC）"}
                       </button>
-                      {/* URL直入力 */}
                       <input
                         value={editForm.image_url || ""}
                         onChange={e => setEditForm({ ...editForm, image_url: e.target.value })}
                         placeholder="または画像URLを貼り付け（https://...）"
-                        className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-xs text-gray-600"
+                        style={{ ...fieldStyle, fontSize: 12, color: "#6b7280" }}
                       />
                       {editForm.image_url && (
                         <button type="button" onClick={() => setEditForm({ ...editForm, image_url: "" })}
-                          className="text-xs text-red-500 hover:text-red-700 underline">
+                          style={{ background: "none", border: "none", fontSize: 12, color: "#ef4444", cursor: "pointer", padding: 0, textAlign: "left", textDecoration: "underline" }}>
                           画像を削除
                         </button>
                       )}
                     </div>
                   </div>
-                </section>
+                </EditSection>
 
-                {/* ステータス */}
-                <section>
-                  <h3 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-2">ステータス</h3>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={editForm.active !== false}
-                      onChange={e => setEditForm({ ...editForm, active: e.target.checked })}
-                      className="w-4 h-4" />
-                    <span className="text-sm text-gray-700">販売中（チェックを外すと廃番）</span>
+                {/* ── ステータス ── */}
+                <EditSection label="ステータス">
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 0" }}>
+                    <div style={{
+                      width: 44, height: 24, borderRadius: 12,
+                      background: editForm.active !== false ? "#059669" : "#d1d5db",
+                      position: "relative", transition: "background 0.2s", flexShrink: 0,
+                    }}>
+                      <div style={{
+                        position: "absolute", top: 3,
+                        left: editForm.active !== false ? 23 : 3,
+                        width: 18, height: 18, borderRadius: "50%",
+                        background: "#fff", transition: "left 0.2s",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                      }} />
+                      <input type="checkbox" checked={editForm.active !== false}
+                        onChange={e => setEditForm({ ...editForm, active: e.target.checked })}
+                        style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", cursor: "pointer", margin: 0 }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: editForm.active !== false ? "#059669" : "#6b7280" }}>
+                        {editForm.active !== false ? "販売中" : "廃番（非表示）"}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>
+                        {editForm.active !== false ? "医院の注文画面に表示されます" : "注文画面から非表示になります"}
+                      </div>
+                    </div>
                   </label>
-                </section>
+                </EditSection>
+
               </div>
             </div>
 
-            {/* フッター */}
-            <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
-              <button onClick={closeEdit} className="text-sm px-4 py-2 border border-gray-200 rounded hover:bg-gray-100 text-gray-600">
+            {/* ── フッター ── */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 20px",
+              borderTop: "1px solid #f3f4f6",
+              background: "#f8fafc", borderRadius: "0 0 20px 20px",
+              gap: 10,
+            }}>
+              <button onClick={closeEdit} style={{
+                padding: "9px 20px", borderRadius: 10,
+                border: "1.5px solid #e5e7eb", background: "#fff",
+                fontSize: 13, fontWeight: 600, color: "#6b7280", cursor: "pointer",
+              }}>
                 キャンセル
               </button>
-              <button onClick={saveEdit} disabled={saving}
-                className="text-sm px-6 py-2 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 disabled:opacity-50">
-                {saving ? "保存中…" : "保存する"}
+              <button onClick={saveEdit} disabled={saving} style={{
+                padding: "9px 28px", borderRadius: 10, border: "none",
+                background: saving ? "#a7f3d0" : "#059669",
+                color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer",
+                boxShadow: saving ? "none" : "0 2px 8px rgba(5,150,105,0.30)",
+                transition: "background 0.15s",
+              }}>
+                {saving ? "保存中…" : "✓ 保存する"}
               </button>
             </div>
+
           </div>
         </div>
       )}
@@ -577,3 +660,48 @@ export default function AdminProductsPage() {
 }
 
 const td0: React.CSSProperties = { borderRight: "1px solid #f0f0f0" }
+
+// ── 編集モーダル用ヘルパー ─────────────────────────────────
+const fieldStyle: React.CSSProperties = {
+  width: "100%", padding: "8px 10px",
+  borderRadius: 8, border: "1.5px solid #e5e7eb",
+  fontSize: 13, color: "#111827", background: "#fff",
+  outline: "none", boxSizing: "border-box",
+}
+const grid1: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr", gap: 10 }
+const grid2: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }
+const grid3: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }
+
+function EditSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background: "#fff", borderRadius: 14,
+      border: "1.5px solid #f3f4f6",
+      overflow: "hidden",
+      boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+    }}>
+      <div style={{
+        padding: "8px 14px", background: "#f8fafc",
+        borderBottom: "1px solid #f3f4f6",
+        fontSize: 11, fontWeight: 700, color: "#9ca3af",
+        letterSpacing: "0.08em", textTransform: "uppercase" as const,
+      }}>
+        {label}
+      </div>
+      <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function EditField({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 4 }}>
+        {label}{required && <span style={{ color: "#ef4444", marginLeft: 3 }}>*</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
