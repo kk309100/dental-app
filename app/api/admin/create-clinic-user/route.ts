@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
-import { randomUUID } from "crypto"
 
 const SUPABASE_URL = "https://alcetorurdocopxatego.supabase.co"
 
@@ -75,7 +74,8 @@ export async function POST(request: NextRequest) {
   }
 
   // 新規 auth ユーザーを作成（メールは内部用ダミー）
-  const fakeEmail = `clinic_${randomUUID()}@internal.local`
+  const uid = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`
+  const fakeEmail = `clinic_${uid}@internal.local`
   const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
     email: fakeEmail,
     password: code,
