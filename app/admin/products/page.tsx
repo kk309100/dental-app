@@ -44,6 +44,8 @@ export default function AdminProductsPage() {
   const [showInactive, setShowInactive] = useState(false)
   const [saving, setSaving] = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
+  const [linking, setLinking] = useState(false)
+  const [linkMsg, setLinkMsg] = useState("")
   const fileRef = useRef<HTMLInputElement>(null)
   const imgFileRef = useRef<HTMLInputElement>(null)
 
@@ -220,6 +222,80 @@ export default function AdminProductsPage() {
 
   const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s+/g, "")
 
+  // 半角・全角・記号を除去した正規化（仕入先マッチング用）
+  const normS = (v: string) =>
+    String(v || "").normalize("NFKC").toLowerCase()
+      .replace(/[\s　・\-_\/\(\)（）,.、。]/g, "")
+
+  // purchase_maker → supplier マッチング
+  function matchSupplier(purchaseMaker: string): Supplier | null {
+    const pm = normS(purchaseMaker)
+    if (!pm || pm.length < 1) return null
+
+    // 1. short_name と完全一致
+    const byShort = suppliers.find(s => s.short_name && normS(s.short_name) === pm)
+    if (byShort) return byShort
+
+    // 2. supplier.name と完全一致
+    const byName = suppliers.find(s => normS(s.name) === pm)
+    if (byName) return byName
+
+    // 3. supplier.name が purchase_maker で始まる（例: "TP" → "TPオーソドンテックス・ジャパン"）
+    if (pm.length >= 2) {
+      const byPrefix = suppliers.find(s => normS(s.name).startsWith(pm))
+      if (byPrefix) return byPrefix
+    }
+
+    // 4. purchase_maker が short_name で始まる（例: "TPオーソ" → "TP"）
+    const byShortPrefix = suppliers.find(s => s.short_name && normS(s.short_name).length >= 2 && pm.startsWith(normS(s.short_name)))
+    if (byShortPrefix) return byShortPrefix
+
+    // 5. purchase_maker が supplier.name を含む or 逆（部分一致）
+    if (pm.length >= 3) {
+      const byContain = suppliers.find(s => normS(s.name).includes(pm) || pm.includes(normS(s.name).slice(0, Math.min(normS(s.name).length, pm.length))))
+      if (byContain) return byContain
+    }
+
+    return null
+  }
+
+  async function autoLinkSuppliers() {
+    const unlinked = products.filter(p => p.purchase_maker && !p.default_supplier_id)
+    if (unlinked.length === 0) { setLinkMsg("⚠ リンク対象の商品がありません（全商品に仕入先が設定済み）"); return }
+
+    // マッチング結果をプレビュー
+    const matches: { product: Product; supplier: Supplier }[] = []
+    const noMatch: Product[] = []
+    for (const p of unlinked) {
+      const s = matchSupplier(p.purchase_maker!)
+      if (s) matches.push({ product: p, supplier: s })
+      else noMatch.push(p)
+    }
+
+    if (matches.length === 0) {
+      setLinkMsg(`⚠ マッチする仕入先が見つかりませんでした（未リンク: ${unlinked.length}件）`)
+      return
+    }
+
+    // プレビュー表示して確認
+    const preview = matches.slice(0, 5).map(m => `・${m.product.purchase_maker} → ${m.supplier.name}`).join("\n")
+    const more = matches.length > 5 ? `\n…他${matches.length - 5}件` : ""
+    if (!confirm(`${matches.length}件の商品を仕入先にリンクします。\n\n${preview}${more}\n\nよろしいですか？`)) return
+
+    setLinking(true)
+    setLinkMsg("")
+    let linked = 0
+    for (const { product, supplier } of matches) {
+      const { error } = await supabase.from("products")
+        .update({ default_supplier_id: supplier.id })
+        .eq("id", product.id)
+      if (!error) linked++
+    }
+    setLinkMsg(`✅ ${linked}件をリンクしました${noMatch.length > 0 ? `（未一致: ${noMatch.length}件）` : ""}`)
+    setLinking(false)
+    await fetchProducts()
+  }
+
   const supplierName = (id: string | null | undefined) =>
     id ? suppliers.find(s => s.id === id)?.name || "" : ""
 
@@ -284,6 +360,12 @@ export default function AdminProductsPage() {
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{products.length}件</span>
         </h1>
         <div className="flex items-center gap-2">
+          <button onClick={autoLinkSuppliers} disabled={linking}
+            className="text-sm px-3 py-1.5 rounded font-bold"
+            style={{ background: linking ? "#d1fae5" : "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0", cursor: linking ? "not-allowed" : "pointer" }}
+            title="purchase_makerをサプライヤーマスタに全角半角正規化＋前方一致でリンク">
+            {linking ? "リンク中…" : "🔗 仕入先を自動リンク"}
+          </button>
           <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) importProductsCSV(f) }} />
           <button onClick={() => fileRef.current?.click()} disabled={importing}
@@ -296,6 +378,13 @@ export default function AdminProductsPage() {
           </button>
         </div>
       </div>
+
+      {linkMsg && (
+        <div className="text-xs px-3 py-2 rounded whitespace-pre-line"
+          style={{ background: linkMsg.startsWith("✅") ? "#ecfdf5" : "#fff7ed", color: linkMsg.startsWith("✅") ? "#065f46" : "#92400e", border: "1px solid " + (linkMsg.startsWith("✅") ? "#bbf7d0" : "#fed7aa") }}>
+          {linkMsg}
+        </div>
+      )}
 
       {importMsg && (
         <div className="text-xs px-3 py-2 rounded whitespace-pre-line"
@@ -360,7 +449,14 @@ export default function AdminProductsPage() {
                     {p.default_supplier_id
                       ? <span className="text-blue-700">{supplierName(p.default_supplier_id)}</span>
                       : p.purchase_maker
-                        ? <span className="text-gray-400">{p.purchase_maker}</span>
+                        ? (() => {
+                            const matched = matchSupplier(p.purchase_maker!)
+                            return matched
+                              ? <span style={{ color: "#d97706" }} title={`"${p.purchase_maker}"→ 自動リンク候補: ${matched.name}`}>
+                                  {p.purchase_maker} <span style={{ fontSize: 10 }}>≈{matched.name.slice(0, 8)}…</span>
+                                </span>
+                              : <span className="text-gray-400">{p.purchase_maker}</span>
+                          })()
                         : ""}
                   </td>
                   <td className="px-2 py-1 text-right text-[12px] text-gray-600" style={td0}>{p.cost ? p.cost.toLocaleString() : ""}</td>
