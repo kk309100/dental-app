@@ -285,6 +285,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             .mobile-bottom-nav { display: flex !important; }
             .mobile-spacer { display: block !important; }
           }
+          @media print {
+            .mobile-bottom-nav { display: none !important; }
+            .mobile-spacer { display: none !important; }
+          }
         `}</style>
         {[
           { href: "/admin",           label: "ホーム",   icon: Ic.dash,    exact: true },
