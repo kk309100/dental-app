@@ -8,6 +8,12 @@ import UserBadge from "@/app/components/UserBadge"
 import { supabase } from "@/lib/supabase"
 import "./admin-base.css"
 
+// ─── Googleフォームフィードバック設定 ──────────────────────────────
+// Googleフォームを作成後、以下にURLを貼り付けてください
+// （フォーム画面の「送信」→リンクマーク→URLをコピー）
+const FEEDBACK_FORM_URL = ""
+// ──────────────────────────────────────────────────────────────────
+
 const NAV = [
   { id: "home",           href: "/admin",                     label: "ホーム",     icon: Ic.dash,     exact: true },
   { id: "orders",         href: "/admin/orders",              label: "注文",       icon: Ic.order },
@@ -38,6 +44,7 @@ const SUB = [
   { href: "/admin/inventory-valuation",  label: "在庫評価" },
   { href: "/admin/delivery-search",      label: "納品書検索" },
   { href: "/admin/products/dedup",       label: "商品重複管理" },
+  { href: "/admin/product-images",       label: "🖼 商品画像管理" },
 ]
 
 // アクセントカラー
@@ -46,9 +53,12 @@ const ACCENT = "#2563eb"   // blue-600
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router   = useRouter()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [subOpen, setSubOpen]   = useState(false)
+  const [menuOpen, setMenuOpen]       = useState(false)
+  const [subOpen, setSubOpen]         = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackText, setFeedbackText] = useState("")
+  const [feedbackCopied, setFeedbackCopied] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -323,6 +333,123 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </button>
       </nav>
       <div style={{ display: "none" }} className="mobile-spacer"><div style={{ height: 64 }} /></div>
+
+      {/* ── フィードバックボタン（固定・印刷時非表示） ── */}
+      <div className="no-print" style={{ position: "fixed", right: 16, bottom: 80, zIndex: 40 }}>
+        {!feedbackOpen && (
+          <button
+            onClick={() => { setFeedbackOpen(true); setFeedbackText(""); setFeedbackCopied(false) }}
+            title="気になったこと・修正希望を記録する"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "8px 14px", borderRadius: 999,
+              background: "#7c3aed", color: "#fff",
+              border: "none", cursor: "pointer",
+              fontSize: 13, fontWeight: 700,
+              boxShadow: "0 4px 16px rgba(124,58,237,0.4)",
+            }}>
+            📝 フィードバック
+          </button>
+        )}
+      </div>
+
+      {/* ── フィードバックモーダル ── */}
+      {feedbackOpen && (
+        <>
+          {/* 背景オーバーレイ */}
+          <div
+            className="no-print"
+            onClick={() => setFeedbackOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 45, background: "rgba(0,0,0,0.4)" }}
+          />
+          {/* モーダル本体 */}
+          <div
+            className="no-print"
+            style={{
+              position: "fixed", right: 16, bottom: 80, zIndex: 50,
+              width: 340, background: "#fff", borderRadius: 14,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+              border: "1px solid #e5e7eb", overflow: "hidden",
+            }}>
+            {/* ヘッダー */}
+            <div style={{ background: "#7c3aed", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>📝 フィードバック記録</span>
+              <button onClick={() => setFeedbackOpen(false)} style={{ background: "none", border: "none", color: "#e9d5ff", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+            </div>
+            {/* 内容 */}
+            <div style={{ padding: 16 }}>
+              {/* 現在のページ */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", display: "block", marginBottom: 4 }}>📍 現在のページ</label>
+                <div style={{ background: "#f3f4f6", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", wordBreak: "break-all" }}>
+                  {pathname}
+                </div>
+              </div>
+              {/* フィードバック内容 */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", display: "block", marginBottom: 4 }}>💬 気になったこと・修正内容</label>
+                <textarea
+                  autoFocus
+                  value={feedbackText}
+                  onChange={e => setFeedbackText(e.target.value)}
+                  placeholder="例）発注書の○○が見づらい&#10;例）在庫画面で△△機能がほしい"
+                  rows={4}
+                  style={{
+                    width: "100%", padding: "8px 10px", border: "1.5px solid #d1d5db",
+                    borderRadius: 8, fontSize: 13, resize: "vertical", boxSizing: "border-box",
+                    outline: "none", lineHeight: 1.6,
+                  }}
+                />
+              </div>
+              {/* ボタン */}
+              <div style={{ display: "flex", gap: 8 }}>
+                {/* クリップボードにコピー */}
+                <button
+                  disabled={!feedbackText.trim()}
+                  onClick={async () => {
+                    const text = `【ページ】${pathname}\n【内容】${feedbackText.trim()}\n【日時】${new Date().toLocaleString("ja-JP")}`
+                    await navigator.clipboard.writeText(text)
+                    setFeedbackCopied(true)
+                    setTimeout(() => setFeedbackCopied(false), 3000)
+                  }}
+                  style={{
+                    flex: 1, padding: "9px 0", borderRadius: 8, border: "1px solid #d1d5db",
+                    background: feedbackCopied ? "#d1fae5" : "#f9fafb",
+                    color: feedbackCopied ? "#059669" : "#374151",
+                    fontSize: 12, fontWeight: 700, cursor: feedbackText.trim() ? "pointer" : "not-allowed",
+                  }}>
+                  {feedbackCopied ? "✅ コピーしました" : "📋 テキストコピー"}
+                </button>
+                {/* Googleフォームへ */}
+                <button
+                  disabled={!feedbackText.trim() || !FEEDBACK_FORM_URL}
+                  onClick={() => {
+                    if (!FEEDBACK_FORM_URL) {
+                      alert("Googleフォームのアドレスが未設定です。\n開発者にFEEDBACK_FORM_URLを設定してもらってください。")
+                      return
+                    }
+                    const url = new URL(FEEDBACK_FORM_URL)
+                    url.searchParams.set("usp", "sf_link")
+                    window.open(url.toString(), "_blank")
+                  }}
+                  style={{
+                    flex: 1, padding: "9px 0", borderRadius: 8, border: "none",
+                    background: feedbackText.trim() && FEEDBACK_FORM_URL ? "#7c3aed" : "#d1d5db",
+                    color: "#fff", fontSize: 12, fontWeight: 700,
+                    cursor: feedbackText.trim() && FEEDBACK_FORM_URL ? "pointer" : "not-allowed",
+                  }}>
+                  📤 フォームへ
+                </button>
+              </div>
+              {!FEEDBACK_FORM_URL && (
+                <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 8, textAlign: "center" }}>
+                  💡 テキストコピー → Googleフォームに貼り付けてください
+                </p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
