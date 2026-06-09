@@ -8,16 +8,18 @@ import UserBadge from "@/app/components/UserBadge"
 import { supabase } from "@/lib/supabase"
 import "./admin-base.css"
 
-// ─── Googleフォームフィードバック設定 ──────────────────────────────
-// 【設定手順】
-// 1. Googleフォームを作成（フィールド: ページ / 内容 / 優先度）
-// 2. フォームのURLを FEEDBACK_FORM_URL に設定
-// 3. 各フィールドの「事前入力URLのエントリーID」を以下に設定
-//    （フォーム編集画面 → ⋮ → 事前入力リンクを取得 → entry.XXXXXXXX の番号をコピー）
-const FEEDBACK_FORM_URL = ""          // 例: "https://docs.google.com/forms/d/e/1FAIpQLSxxxxx/viewform"
-const FEEDBACK_ENTRY_PAGE     = ""   // ページURLフィールドのentry ID 例: "entry.123456789"
-const FEEDBACK_ENTRY_CONTENT  = ""   // 内容フィールドのentry ID    例: "entry.987654321"
-const FEEDBACK_ENTRY_PRIORITY = ""   // 優先度フィールドのentry ID  例: "entry.111222333"
+// ─── フィードバック localStorage キー ────────────────────────────
+const FB_KEY = "denthub_feedback_v1"
+type FeedbackItem = {
+  id: string; timestamp: string; page: string;
+  content: string; priority: "高"|"中"|"低"; status: "未対応"|"対応中"|"完了"
+}
+function loadFeedbacks(): FeedbackItem[] {
+  try { return JSON.parse(localStorage.getItem(FB_KEY) || "[]") } catch { return [] }
+}
+function saveFeedbacks(items: FeedbackItem[]) {
+  localStorage.setItem(FB_KEY, JSON.stringify(items))
+}
 // ──────────────────────────────────────────────────────────────────
 
 const NAV = [
@@ -50,7 +52,8 @@ const SUB = [
   { href: "/admin/inventory-valuation",  label: "在庫評価" },
   { href: "/admin/delivery-search",      label: "納品書検索" },
   { href: "/admin/products/dedup",       label: "商品重複管理" },
-  { href: "/admin/product-images",       label: "🖼 商品画像管理" },
+  { href: "/admin/product-images",        label: "🖼 商品画像管理" },
+  { href: "/admin/feedback",              label: "📋 修正依頼一覧" },
 ]
 
 // アクセントカラー
@@ -62,10 +65,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [menuOpen, setMenuOpen]       = useState(false)
   const [subOpen, setSubOpen]         = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
-  const [feedbackOpen, setFeedbackOpen]       = useState(false)
-  const [feedbackText, setFeedbackText]       = useState("")
+  const [feedbackOpen, setFeedbackOpen]         = useState(false)
+  const [feedbackText, setFeedbackText]         = useState("")
   const [feedbackPriority, setFeedbackPriority] = useState<"高"|"中"|"低">("中")
-  const [feedbackCopied, setFeedbackCopied]   = useState(false)
+  const [feedbackSaved, setFeedbackSaved]       = useState(false)
+  const [feedbackPendingCount, setFeedbackPendingCount] = useState(0)
+
+  // 未対応件数バッジ用
+  useEffect(() => {
+    const update = () => {
+      const count = loadFeedbacks().filter(f => f.status !== "完了").length
+      setFeedbackPendingCount(count)
+    }
+    update()
+    window.addEventListener("storage", update)
+    return () => window.removeEventListener("storage", update)
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -345,7 +360,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="no-print" style={{ position: "fixed", right: 16, bottom: 80, zIndex: 40 }}>
         {!feedbackOpen && (
           <button
-            onClick={() => { setFeedbackOpen(true); setFeedbackText(""); setFeedbackPriority("中"); setFeedbackCopied(false) }}
+            onClick={() => { setFeedbackOpen(true); setFeedbackText(""); setFeedbackPriority("中"); setFeedbackSaved(false) }}
             title="気になったこと・修正希望を記録する"
             style={{
               display: "flex", alignItems: "center", gap: 6,
@@ -355,7 +370,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               fontSize: 13, fontWeight: 700,
               boxShadow: "0 4px 16px rgba(124,58,237,0.4)",
             }}>
-            📝 フィードバック
+            📝 修正メモ
+            {feedbackPendingCount > 0 && (
+              <span style={{ background: "#ef4444", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 800, padding: "1px 6px", marginLeft: 2 }}>
+                {feedbackPendingCount}
+              </span>
+            )}
           </button>
         )}
       </div>
@@ -371,108 +391,89 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
             border: "1px solid #e5e7eb", overflow: "hidden",
           }}>
-            {/* ヘッダー */}
             <div style={{ background: "#7c3aed", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>📝 修正依頼を記録</span>
+              <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>📝 修正メモを記録</span>
               <button onClick={() => setFeedbackOpen(false)} style={{ background: "none", border: "none", color: "#e9d5ff", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
             </div>
-            <div style={{ padding: 16 }}>
-              {/* 現在のページ */}
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", display: "block", marginBottom: 4 }}>📍 ページ（自動）</label>
-                <div style={{ background: "#f3f4f6", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", wordBreak: "break-all" }}>
-                  {pathname}
+
+            {feedbackSaved ? (
+              /* 保存完了画面 */
+              <div style={{ padding: 24, textAlign: "center" }}>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#059669", marginBottom: 6 }}>保存しました！</div>
+                <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 20 }}>修正依頼一覧で確認・Claude Codeへの送信ができます</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Link href="/admin/feedback" onClick={() => setFeedbackOpen(false)}
+                    style={{ flex: 1, padding: "10px 0", background: "#7c3aed", color: "#fff", borderRadius: 8, fontSize: 13, fontWeight: 700, textDecoration: "none", display: "block", textAlign: "center" }}>
+                    📋 一覧を見る
+                  </Link>
+                  <button onClick={() => { setFeedbackText(""); setFeedbackPriority("中"); setFeedbackSaved(false) }}
+                    style={{ flex: 1, padding: "10px 0", background: "#f3f4f6", color: "#374151", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                    ＋ もう1件追加
+                  </button>
                 </div>
               </div>
-              {/* 優先度 */}
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", display: "block", marginBottom: 4 }}>🔥 優先度</label>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {(["高","中","低"] as const).map(p => (
-                    <button key={p} onClick={() => setFeedbackPriority(p)} style={{
-                      flex: 1, padding: "6px 0", borderRadius: 7, border: "2px solid",
-                      fontSize: 13, fontWeight: 700, cursor: "pointer",
-                      borderColor: feedbackPriority === p ? (p === "高" ? "#ef4444" : p === "中" ? "#f59e0b" : "#6b7280") : "#e5e7eb",
-                      background: feedbackPriority === p ? (p === "高" ? "#fee2e2" : p === "中" ? "#fef3c7" : "#f3f4f6") : "#fff",
-                      color: feedbackPriority === p ? (p === "高" ? "#b91c1c" : p === "中" ? "#92400e" : "#374151") : "#9ca3af",
-                    }}>{p === "高" ? "🔴 高" : p === "中" ? "🟡 中" : "⚪ 低"}</button>
-                  ))}
+            ) : (
+              <div style={{ padding: 16 }}>
+                {/* ページ */}
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", display: "block", marginBottom: 4 }}>📍 ページ（自動）</label>
+                  <div style={{ background: "#f3f4f6", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", wordBreak: "break-all" }}>{pathname}</div>
                 </div>
-              </div>
-              {/* 内容 */}
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", display: "block", marginBottom: 4 }}>💬 修正内容</label>
-                <textarea
-                  autoFocus
-                  value={feedbackText}
-                  onChange={e => setFeedbackText(e.target.value)}
-                  placeholder={"例）発注書の商品コードが切れて印刷される\n例）在庫画面でCSVダウンロードがほしい"}
-                  rows={4}
-                  style={{
-                    width: "100%", padding: "8px 10px", border: "1.5px solid #d1d5db",
-                    borderRadius: 8, fontSize: 13, resize: "vertical", boxSizing: "border-box",
-                    outline: "none", lineHeight: 1.6,
-                  }}
-                />
-              </div>
-              {/* ボタン群 */}
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                {/* テキストコピー（Claude Codeへの貼り付け用） */}
+                {/* 優先度 */}
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", display: "block", marginBottom: 4 }}>🔥 優先度</label>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {(["高","中","低"] as const).map(p => (
+                      <button key={p} onClick={() => setFeedbackPriority(p)} style={{
+                        flex: 1, padding: "6px 0", borderRadius: 7, border: "2px solid", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                        borderColor: feedbackPriority === p ? (p === "高" ? "#ef4444" : p === "中" ? "#f59e0b" : "#6b7280") : "#e5e7eb",
+                        background: feedbackPriority === p ? (p === "高" ? "#fee2e2" : p === "中" ? "#fef3c7" : "#f3f4f6") : "#fff",
+                        color: feedbackPriority === p ? (p === "高" ? "#b91c1c" : p === "中" ? "#92400e" : "#374151") : "#9ca3af",
+                      }}>{p === "高" ? "🔴 高" : p === "中" ? "🟡 中" : "⚪ 低"}</button>
+                    ))}
+                  </div>
+                </div>
+                {/* 内容 */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", display: "block", marginBottom: 4 }}>💬 修正してほしいこと</label>
+                  <textarea
+                    autoFocus
+                    value={feedbackText}
+                    onChange={e => setFeedbackText(e.target.value)}
+                    placeholder={"例）発注書の商品コードが印刷で切れる\n例）在庫画面にCSV出力ボタンがほしい"}
+                    rows={4}
+                    style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #d1d5db", borderRadius: 8, fontSize: 13, resize: "vertical", boxSizing: "border-box", outline: "none", lineHeight: 1.6 }}
+                  />
+                </div>
+                {/* 保存ボタン */}
                 <button
                   disabled={!feedbackText.trim()}
-                  onClick={async () => {
-                    const dt = new Date().toLocaleString("ja-JP")
-                    const text = [
-                      "以下の修正依頼に対応してください。既存機能は壊さないでください。Supabaseのデータ構造は変更しないでください。",
-                      "",
-                      `【ページ】${pathname}`,
-                      `【内容】${feedbackText.trim()}`,
-                      `【優先度】${feedbackPriority}`,
-                      `【報告日時】${dt}`,
-                      "",
-                      "修正をお願いします。",
-                    ].join("\n")
-                    await navigator.clipboard.writeText(text)
-                    setFeedbackCopied(true)
-                    setTimeout(() => setFeedbackCopied(false), 3000)
-                  }}
-                  style={{
-                    flex: 1, padding: "9px 0", borderRadius: 8, border: "1px solid #d1d5db",
-                    background: feedbackCopied ? "#d1fae5" : "#f9fafb",
-                    color: feedbackCopied ? "#059669" : "#374151",
-                    fontSize: 12, fontWeight: 700, cursor: feedbackText.trim() ? "pointer" : "not-allowed",
-                  }}>
-                  {feedbackCopied ? "✅ コピー済み" : "📋 Claude Code用コピー"}
-                </button>
-                {/* Googleフォームへ（entry ID設定済みの場合は自動入力） */}
-                <button
-                  disabled={!feedbackText.trim() || !FEEDBACK_FORM_URL}
                   onClick={() => {
-                    if (!FEEDBACK_FORM_URL) {
-                      alert("Googleフォームのアドレスが未設定です。\nコードの FEEDBACK_FORM_URL を設定してください。")
-                      return
+                    if (!feedbackText.trim()) return
+                    const items = loadFeedbacks()
+                    const newItem: FeedbackItem = {
+                      id: Date.now().toString(),
+                      timestamp: new Date().toISOString(),
+                      page: pathname,
+                      content: feedbackText.trim(),
+                      priority: feedbackPriority,
+                      status: "未対応",
                     }
-                    const url = new URL(FEEDBACK_FORM_URL)
-                    if (FEEDBACK_ENTRY_PAGE)     url.searchParams.set(FEEDBACK_ENTRY_PAGE, pathname)
-                    if (FEEDBACK_ENTRY_CONTENT)  url.searchParams.set(FEEDBACK_ENTRY_CONTENT, feedbackText.trim())
-                    if (FEEDBACK_ENTRY_PRIORITY) url.searchParams.set(FEEDBACK_ENTRY_PRIORITY, feedbackPriority)
-                    window.open(url.toString(), "_blank")
+                    saveFeedbacks([newItem, ...items])
+                    setFeedbackPendingCount(items.filter(f => f.status !== "完了").length + 1)
+                    setFeedbackSaved(true)
                   }}
                   style={{
-                    flex: 1, padding: "9px 0", borderRadius: 8, border: "none",
-                    background: feedbackText.trim() && FEEDBACK_FORM_URL ? "#7c3aed" : "#d1d5db",
-                    color: "#fff", fontSize: 12, fontWeight: 700,
-                    cursor: feedbackText.trim() && FEEDBACK_FORM_URL ? "pointer" : "not-allowed",
+                    width: "100%", padding: "11px 0", borderRadius: 8, border: "none",
+                    background: feedbackText.trim() ? "#7c3aed" : "#d1d5db",
+                    color: "#fff", fontSize: 14, fontWeight: 700,
+                    cursor: feedbackText.trim() ? "pointer" : "not-allowed",
                   }}>
-                  📤 フォームへ
+                  💾 修正メモを保存する
                 </button>
               </div>
-              <p style={{ fontSize: 11, color: "#9ca3af", margin: 0, textAlign: "center", lineHeight: 1.5 }}>
-                {FEEDBACK_FORM_URL
-                  ? "「フォームへ」→ スプレッドシートに記録 → 修正依頼をClaude Codeに送信"
-                  : "「📋 Claude Code用コピー」→ このチャットに貼り付けで即依頼できます"}
-              </p>
-            </div>
+            )}
           </div>
         </>
       )}
