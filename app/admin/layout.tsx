@@ -15,6 +15,7 @@ const NAV = [
   { id: "po-pool",        href: "/admin/purchase-orders/pool",label: "発注プール", icon: Ic.purchase },
   { id: "receivings",     href: "/admin/receivings",          label: "仕入納品",   icon: Ic.purchase },
   { id: "deliveries",     href: "/admin/deliveries",          label: "医院納品",   icon: Ic.doc },
+  { id: "quotes",         href: "/admin/quotes",              label: "見積",       icon: Ic.quote },
   { id: "invoices",       href: "/admin/invoices",            label: "請求",       icon: Ic.sales },
   { id: "inventory",      href: "/admin/inventory",           label: "在庫",       icon: Ic.product },
   { id: "sales",          href: "/admin/sales",               label: "売上",       icon: Ic.sales },
@@ -288,6 +289,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {[
           { href: "/admin",           label: "ホーム",   icon: Ic.dash,    exact: true },
           { href: "/admin/orders",    label: "注文",     icon: Ic.order },
+          { href: "/admin/quotes",    label: "見積",     icon: Ic.quote },
           { href: "/admin/invoices",  label: "請求",     icon: Ic.sales },
           { href: "/admin/inventory", label: "在庫",     icon: Ic.product },
         ].map((item) => {
