@@ -291,6 +291,8 @@ export default function DeliveryPage() {
         }
 
         @media print {
+          .mobile-bottom-nav { display: none !important; }
+          nav { display: none !important; }
           header, nav, .no-print {
             display: none !important;
           }

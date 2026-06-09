@@ -130,6 +130,8 @@ function BulkPrint() {
         }
         @media print {
           .no-print { display: none !important; }
+          .mobile-bottom-nav { display: none !important; }
+          nav { display: none !important; }
           @page { size: A4; margin: 10mm; }
           /* 発注書ごとに改ページ */
           .print-page { break-after: page !important; }

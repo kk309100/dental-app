@@ -342,6 +342,8 @@ function NewPOPage() {
             <style jsx global>{`
               @media print {
                 body > div:not(.print-keep) { display: none !important; }
+                .mobile-bottom-nav { display: none !important; }
+                nav { display: none !important; }
                 .print-area { padding: 0 !important; }
               }
             `}</style>

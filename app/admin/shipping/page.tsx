@@ -566,6 +566,8 @@ function ShippingPage() {
 
       <style jsx global>{`
         @media print {
+          .mobile-bottom-nav { display: none !important; }
+          nav { display: none !important; }
           .no-print { display: none !important; }
           @page { size: A4; margin: 10mm; }
         }

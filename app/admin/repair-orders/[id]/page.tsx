@@ -301,6 +301,8 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
 
       <style jsx global>{`
         @media print {
+          .mobile-bottom-nav { display: none !important; }
+          nav { display: none !important; }
           body { background: #fff !important; }
           .no-print { display: none !important; }
           .print-area { border: none !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }

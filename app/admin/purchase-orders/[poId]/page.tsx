@@ -347,7 +347,10 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
+          .mobile-bottom-nav { display: none !important; }
+          nav { display: none !important; }
           .print-area { box-shadow: none !important; border: none !important; max-width: none !important; }
+          @page { size: A4 portrait; margin: 10mm; }
         }
       `}</style>
     </div>

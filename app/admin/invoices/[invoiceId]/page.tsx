@@ -600,6 +600,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
 
       <style jsx global>{`
         @media print {
+          .mobile-bottom-nav { display: none !important; }
+          nav { display: none !important; }
           .no-print { display: none !important; }
           body { background: white !important; }
           nav { display: none !important; }
