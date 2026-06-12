@@ -25,6 +25,7 @@ function saveFeedbacks(items: FeedbackItem[]) {
 const NAV = [
   { id: "home",           href: "/admin",                     label: "ホーム",     icon: Ic.dash,     exact: true },
   { id: "orders",         href: "/admin/orders",              label: "注文",       icon: Ic.order },
+  { id: "order-process",  href: "/admin/orders/process",      label: "受注処理",   icon: Ic.order },
   { id: "purchase-orders",href: "/admin/purchase-orders",     label: "発注",       icon: Ic.truck },
   { id: "po-pool",        href: "/admin/purchase-orders/pool",label: "発注プール", icon: Ic.purchase },
   { id: "receivings",     href: "/admin/receivings",          label: "仕入納品",   icon: Ic.purchase },

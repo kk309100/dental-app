@@ -32,23 +32,25 @@ export default function AdminHomePage() {
   }
 
   const badges = useMemo(() => {
+    const newOrders        = orders.filter((o) => ["注文受付","確認中"].includes(o.status)).length
     const pendingOrders    = orders.filter((o) => ["注文受付","確認中","準備中"].includes(o.status)).length
     const undeliveredCount = orders.filter((o) => !["納品済み","納品済","キャンセル","取消"].includes(o.status)).length
     const unbilled         = orders.filter((o) => ["納品済み","納品済"].includes(o.status) && !o.invoice_id).length
     const unpaidInvoices   = invoices.filter((i) => i.status === "issued").length
     const lowStock         = products.filter((p) => p.stock !== null && p.reorder_level !== null && p.stock <= p.reorder_level).length
-    return { pendingOrders, undeliveredCount, unbilled, unpaidInvoices, lowStock }
+    return { newOrders, pendingOrders, undeliveredCount, unbilled, unpaidInvoices, lowStock }
   }, [orders, invoices, products])
 
   const buttons: ButtonItem[] = [
-    { href: "/admin/orders",          label: "注文管理",   desc: "受注・ステータス確認",       icon: Ic.order,    color: "#2563eb", badge: badges.pendingOrders,    badgeLabel: "未処理" },
-    { href: "/admin/purchase-orders", label: "発注管理",   desc: "発注書の作成・確認",          icon: Ic.truck,    color: "#0891b2" },
-    { href: "/admin/receiving",       label: "仕入納品",   desc: "仕入先からの納品処理",        icon: Ic.purchase, color: "#7c3aed" },
-    { href: "/admin/shipping",        label: "医院納品",   desc: "出荷・納品書発行",           icon: Ic.doc,      color: "#059669", badge: badges.undeliveredCount, badgeLabel: "未納品" },
-    { href: "/admin/invoices",        label: "請求管理",   desc: "請求書発行・入金管理",        icon: Ic.sales,    color: "#dc2626", badge: (badges.unbilled || badges.unpaidInvoices) || undefined, badgeLabel: badges.unbilled > 0 ? "未請求" : "未収" },
-    { href: "/admin/sales",           label: "売上分析",   desc: "月次・医院・商品別",          icon: Ic.sales,    color: "#059669" },
-    { href: "/admin/inventory",       label: "在庫管理",   desc: "在庫数・発注点の確認",        icon: Ic.product,  color: "#d97706", badge: badges.lowStock,         badgeLabel: "在庫不足" },
-    { href: "/admin/masters",         label: "マスター",   desc: "医院・仕入先・商品・設定",    icon: Ic.dash,     color: "#475569" },
+    { href: "/admin/orders/process",  label: "📥 受注処理",  desc: "新着注文→在庫振り分け・発注",  icon: Ic.order,    color: "#ea580c", badge: badges.newOrders || undefined,  badgeLabel: "新着" },
+    { href: "/admin/orders",          label: "注文管理",   desc: "受注・ステータス確認",         icon: Ic.order,    color: "#2563eb", badge: badges.pendingOrders || undefined, badgeLabel: "未処理" },
+    { href: "/admin/purchase-orders", label: "発注管理",   desc: "発注書の作成・確認",           icon: Ic.truck,    color: "#0891b2" },
+    { href: "/admin/receiving",       label: "仕入納品",   desc: "仕入先からの納品処理",         icon: Ic.purchase, color: "#7c3aed" },
+    { href: "/admin/shipping",        label: "医院納品",   desc: "出荷・納品書発行",            icon: Ic.doc,      color: "#059669", badge: badges.undeliveredCount || undefined, badgeLabel: "未納品" },
+    { href: "/admin/invoices",        label: "請求管理",   desc: "請求書発行・入金管理",         icon: Ic.sales,    color: "#dc2626", badge: (badges.unbilled || badges.unpaidInvoices) || undefined, badgeLabel: badges.unbilled > 0 ? "未請求" : "未収" },
+    { href: "/admin/sales",           label: "売上分析",   desc: "月次・医院・商品別",           icon: Ic.sales,    color: "#059669" },
+    { href: "/admin/inventory",       label: "在庫管理",   desc: "在庫数・発注点の確認",         icon: Ic.product,  color: "#d97706", badge: badges.lowStock || undefined, badgeLabel: "在庫不足" },
+    { href: "/admin/masters",         label: "マスター",   desc: "医院・仕入先・商品・設定",     icon: Ic.dash,     color: "#475569" },
   ]
 
   const quickLinks = [
