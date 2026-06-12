@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { Html5Qrcode } from "html5-qrcode"
+import { playBeep } from "@/lib/beep"
 import { useRouter } from "next/navigation"
 
 const C = {
@@ -172,7 +173,8 @@ export default function ClinicInventoryPage() {
           await scanner.stop()
           setScanning(false)
           const found = items.find((i) => String(i.barcode || "") === code)
-          if (!found) { alert("商品が見つかりません"); return }
+          if (!found) { playBeep("error"); alert("商品が見つかりません"); return }
+          playBeep("success")
           setActionModal({ item: found, type: "use", qty: 1 })
           itemRefs.current[found.id]?.scrollIntoView({ behavior: "smooth", block: "center" })
         }, () => {})

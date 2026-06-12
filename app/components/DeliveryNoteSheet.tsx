@@ -20,9 +20,9 @@ type Order  = { id: string; delivered_at: string | null; created_at: string; del
 
 const ROW_H  = "18mm"  // QR読み取り可能サイズ確保（5行 × 18mm = 90mm）
 const COL_BC = "20mm"  // QRコード列幅
-const COL_QT = "9mm"   // 数量
-const COL_UP = "21mm"  // 単価
-const COL_AM = "26mm"  // 金額
+const COL_QT = "10mm"  // 数量（拡大）
+const COL_UP = "24mm"  // 単価（拡大）
+const COL_AM = "28mm"  // 金額（拡大）
 const QR_PX  = 64      // QRコードサイズ(px) ≈ 17mm印刷時 → スマホ読取OK
 
 export default function DeliveryNoteSheet({
@@ -54,16 +54,16 @@ export default function DeliveryNoteSheet({
 
   // ── 列ヘッダー共通スタイル ─────────────────────────
   const colHead = (extra?: React.CSSProperties): React.CSSProperties => ({
-    padding: "2px 3px",
-    fontSize: 8.5,
+    padding: "2px 4px",
+    fontSize: 9.5,
     fontWeight: 700,
     color: "#555",
     ...extra,
   })
   // ── データセル共通スタイル ─────────────────────────
   const cell = (extra?: React.CSSProperties): React.CSSProperties => ({
-    padding: "1px 3px",
-    fontSize: 9,
+    padding: "1px 4px",
+    fontSize: 10,
     display: "flex",
     alignItems: "center",
     overflow: "hidden",
@@ -75,7 +75,7 @@ export default function DeliveryNoteSheet({
     return (
       <div style={{
         position: "relative",
-        padding: "2mm 6mm 1mm",
+        padding: "2mm 4mm 1mm 10mm",
         boxSizing: "border-box",
         height: "148.5mm",
         overflow: "hidden",
@@ -94,7 +94,7 @@ export default function DeliveryNoteSheet({
 
         {/* タイトル（div で h1 を避ける → admin-base の h1 強制スタイルを回避） */}
         <div style={{ borderBottom: "1.5px solid #111", paddingBottom: 2, marginBottom: 3 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.3em", margin: "1px 0", textAlign: "center", color: "#111" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.3em", margin: "1px 0", textAlign: "center", color: "#111" }}>
             {isCopy ? "納 品 書 控" : "納 品 書"}
           </div>
           <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
@@ -141,7 +141,7 @@ export default function DeliveryNoteSheet({
             <div key={i.id} style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #eee", height: ROW_H }}>
               {/* 商品名 */}
               <div style={{ ...cell({ flex: 1, minWidth: 0, alignItems: "flex-start", flexDirection: "column", justifyContent: "center" }) }}>
-                <div style={{ fontSize: 9, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{i.product_name || "—"}</div>
+                <div style={{ fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{i.product_name || "—"}</div>
                 {i.lot_number && <div style={{ fontSize: 7, color: "#555", whiteSpace: "nowrap", marginTop: 2 }}>LOT: {i.lot_number}</div>}
               </div>
               {/* QRコード（スマホ読取対応: ~17mm印刷時） */}
@@ -192,15 +192,15 @@ export default function DeliveryNoteSheet({
           )}
           <div style={{ flex: 1 }} />
           {/* 小計 / 消費税 / 合計（div で実装） */}
-          <div style={{ minWidth: "56mm", fontSize: 9, border: "1px solid #ddd" }}>
+          <div style={{ minWidth: "60mm", fontSize: 10, border: "1px solid #ddd" }}>
             {[
               { label: "小計",       val: fmtYen(subtotal), bg: "#f9fafb", bold: false },
               { label: "消費税(10%)", val: fmtYen(tax),      bg: "#f9fafb", bold: false },
               { label: "合計",        val: fmtYen(total),    bg: "#fef3c7", bold: true  },
             ].map(row => (
               <div key={row.label} style={{ display: "flex", background: row.bg, borderTop: "1px solid #ddd" }}>
-                <div style={{ flex: 1, padding: "1px 5px", fontSize: 8.5, color: "#555", fontWeight: row.bold ? 700 : 400 }}>{row.label}</div>
-                <div style={{ padding: "1px 5px", fontSize: row.bold ? 11 : 8.5, fontWeight: row.bold ? 700 : 400, textAlign: "right", minWidth: "22mm" }}>{row.val}</div>
+                <div style={{ flex: 1, padding: "2px 6px", fontSize: 9.5, color: "#555", fontWeight: row.bold ? 700 : 400 }}>{row.label}</div>
+                <div style={{ padding: "2px 6px", fontSize: row.bold ? 12 : 9.5, fontWeight: row.bold ? 700 : 400, textAlign: "right", minWidth: "24mm" }}>{row.val}</div>
               </div>
             ))}
           </div>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode"
+import { playBeep } from "@/lib/beep"
 
 const SCAN_FORMATS = [
   Html5QrcodeSupportedFormats.EAN_13,
@@ -233,9 +234,11 @@ export default function OrderPage() {
 
           const p = barcodeMap.get(code)
           if (!p) {
+            playBeep("error")
             alert(`「${code}」に一致する商品が見つかりません`)
             return
           }
+          playBeep("success")
           if (typeof navigator.vibrate === "function") navigator.vibrate(60)
           addToCart(p)
           // カメラは継続（手動で閉じるまでスキャン可能）

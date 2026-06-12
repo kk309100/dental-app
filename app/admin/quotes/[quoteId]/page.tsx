@@ -22,7 +22,7 @@ type Quote = {
   created_at: string
 }
 type Clinic = { id: string; name: string; corporate_name: string | null; clinic_type: string | null; adress: string | null }
-type QuoteItem = { id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; sort_order: number }
+type QuoteItem = { id: string; product_id: string | null; product_name: string | null; quantity: number; unit_price: number; sort_order: number }
 
 export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId: string }> }) {
   const { quoteId } = use(params)
@@ -75,7 +75,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
       const stockMap = new Map((products || []).map((p: any) => [p.id, Number(p.stock || 0)]))
 
       // 2. 注文作成 (status="準備中": 在庫ある分は出荷準備可能、不足分は発注後に出荷)
-      const totalPrice = items.reduce((s, it) => s + Number(it.price) * Number(it.quantity), 0)
+      const totalPrice = items.reduce((s, it) => s + Number(it.unit_price) * Number(it.quantity), 0)
       const { data: ord, error: oe } = await supabase.from("orders").insert({
         clinic_id: quote.clinic_id,
         status: "準備中",
@@ -92,7 +92,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
         product_id: it.product_id,
         product_name: it.product_name,
         quantity: it.quantity,
-        price: it.price,
+        price: it.unit_price,
       }))
       const { error: ie } = await supabase.from("order_items").insert(itemRows)
       if (ie) throw new Error("明細作成失敗: " + ie.message)
@@ -184,7 +184,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
         product_id: it.product_id,
         product_name: it.product_name,
         quantity: it.quantity,
-        price: it.price,
+        price: it.unit_price,
       }))
       if (itemsPayload.length > 0) {
         const { error: ie } = await supabase.from("order_items").insert(itemsPayload)
@@ -309,8 +309,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
                 <tr key={it.id}>
                   <td style={td}>{it.product_name}</td>
                   <td style={{ ...td, textAlign: "right" }}>{it.quantity}</td>
-                  <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price)}</td>
-                  <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price * it.quantity)}</td>
+                  <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.unit_price)}</td>
+                  <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.unit_price * it.quantity)}</td>
                 </tr>
               ))}
             {Array.from({ length: Math.max(0, 10 - items.length) }).map((_, i) => (

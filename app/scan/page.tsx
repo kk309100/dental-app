@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode"
+import { playBeep } from "@/lib/beep"
 
 type Product = { id: string; name: string; barcode: string; stock: number | null; price: number | null }
 type CartItem = { product: Product; qty: number }
@@ -99,7 +100,8 @@ function ScanReceive() {
           // O(1) Map検索
           const found = barcodeMap.get(code)
           if (!found) {
-            // 触覚フィードバック（エラー）
+            // 音・触覚フィードバック（エラー）
+            playBeep("error")
             if (typeof navigator.vibrate === "function") navigator.vibrate([80, 50, 80])
             if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
             setScanFlash({ name: `「${code}」は未登録`, ok: false })
@@ -109,7 +111,8 @@ function ScanReceive() {
             return
           }
 
-          // 触覚フィードバック（成功）
+          // 音・触覚フィードバック（成功）
+          playBeep("success")
           if (typeof navigator.vibrate === "function") navigator.vibrate(60)
 
           // カメラ内フラッシュ表示

@@ -192,7 +192,7 @@ function CreateQuotePage() {
         product_id: l.productId,
         product_name: l.productName,
         quantity: l.quantity,
-        price: l.price,
+        unit_price: l.price,
         sort_order: i,
       }))
       const { error: e2 } = await supabase.from("quote_items").insert(itemsPayload)
