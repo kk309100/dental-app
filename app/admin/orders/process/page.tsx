@@ -1,55 +1,37 @@
 "use client"
 
-// 受注処理ページ
-// 新着注文（注文受付）を一覧表示し、1クリックで
-//   在庫あり → ステータス「準備中」（出荷準備）
-//   在庫なし → 発注プール自動追加
-// まで処理できる業務フロー専用画面
+// 受注処理ページ（売上処理対応版）
+// 新着注文（注文受付/確認中）を1クリックで処理：
+//   全商品在庫あり + 売上モードON → 納品済み + 請求書即時作成
+//   全商品在庫あり + 売上モードOFF → 準備中（出荷準備へ）
+//   在庫不足あり → 準備中 + 不足分を発注プール自動追加
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { poolFromOrders } from "@/lib/po-pool"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, calcTax, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
 import Link from "next/link"
 
 // ─── 型定義 ───────────────────────────────────────────────
 type Order = {
-  id: string
-  clinic_id: string
-  status: string
-  created_at: string
-  total_price: number
-  delivery_number: string | null
-  source: string | null
-  note: string | null
+  id: string; clinic_id: string; status: string
+  created_at: string; total_price: number
+  delivery_number: string | null; source: string | null; note: string | null
 }
 type OrderItem = {
-  id: string
-  order_id: string
-  product_id: string | null
-  product_name: string | null
-  quantity: number
-  price: number
+  id: string; order_id: string; product_id: string | null
+  product_name: string | null; quantity: number; price: number
 }
-type Product = {
-  id: string
-  name: string
-  stock: number | null
-}
-type Clinic = {
-  id: string
-  name: string
-  corporate_name: string | null
-}
+type Product  = { id: string; name: string; stock: number | null }
+type Clinic   = { id: string; name: string; corporate_name: string | null }
 
-// 処理結果
 type ProcessResult = {
-  orderId: string
-  clinicName: string
-  inStockCount: number
-  shortCount: number
+  orderId: string; clinicName: string
+  inStockCount: number; shortCount: number
+  invoiceNumber: string | null    // 売上モード時に作成した請求書番号
   poolAdded: { supplier_name: string; added_items: number }[]
   skippedNoSupplier: number
+  mode: "sold" | "prepared"      // sold=売上完了 / prepared=準備中
   error: string | null
 }
 
@@ -59,19 +41,22 @@ const C = {
   red:    { bg: "#fee2e2", color: "#b91c1c", border: "#fca5a5" },
   yellow: { bg: "#fef3c7", color: "#92400e", border: "#fde68a" },
   blue:   { bg: "#dbeafe", color: "#1e40af", border: "#93c5fd" },
-  gray:   { bg: "#f3f4f6", color: "#6b7280", border: "#d1d5db" },
+  orange: { bg: "#fff7ed", color: "#9a3412", border: "#fdba74" },
+  purple: { bg: "#f5f3ff", color: "#6d28d9", border: "#c4b5fd" },
 }
 
 export default function OrderProcessPage() {
-  const [orders, setOrders]       = useState<Order[]>([])
-  const [items, setItems]         = useState<OrderItem[]>([])
-  const [products, setProducts]   = useState<Product[]>([])
-  const [clinics, setClinics]     = useState<Clinic[]>([])
-  const [loading, setLoading]     = useState(true)
+  const [orders, setOrders]         = useState<Order[]>([])
+  const [items, setItems]           = useState<OrderItem[]>([])
+  const [products, setProducts]     = useState<Product[]>([])
+  const [clinics, setClinics]       = useState<Clinic[]>([])
+  const [loading, setLoading]       = useState(true)
   const [processing, setProcessing] = useState<Set<string>>(new Set())
-  const [results, setResults]     = useState<ProcessResult[]>([])
+  const [results, setResults]       = useState<ProcessResult[]>([])
   const [showResult, setShowResult] = useState(false)
   const [processingAll, setProcessingAll] = useState(false)
+  // 売上モード: ON=全在庫あり注文を即座に「納品済み+請求書作成」、OFF=「準備中」のみ
+  const [sellMode, setSellMode]     = useState(true)
 
   useEffect(() => { fetchData() }, [])
 
@@ -94,9 +79,9 @@ export default function OrderProcessPage() {
     setLoading(false)
   }
 
-  // O(1) ルックアップ
-  const productById = useMemo(() => new Map(products.map(p => [p.id, p])), [products])
-  const clinicById  = useMemo(() => new Map(clinics.map(c => [c.id, c])), [clinics])
+  // ルックアップ
+  const productById  = useMemo(() => new Map(products.map(p => [p.id, p])), [products])
+  const clinicById   = useMemo(() => new Map(clinics.map(c => [c.id, c])), [clinics])
   const itemsByOrder = useMemo(() => {
     const m = new Map<string, OrderItem[]>()
     for (const it of items) {
@@ -106,45 +91,78 @@ export default function OrderProcessPage() {
     return m
   }, [items])
 
-  // 在庫状態の計算
-  function stockStatus(item: OrderItem): { ok: boolean; stock: number; short: number } {
+  // 在庫状態
+  function stockStatus(item: OrderItem) {
     const p = item.product_id ? productById.get(item.product_id) : null
     const stock = Number(p?.stock || 0)
     const need  = Number(item.quantity || 0)
     return { ok: stock >= need, stock, short: Math.max(0, need - stock) }
   }
-
-  // 注文全体の在庫サマリ
   function orderStockSummary(orderId: string) {
     const its = itemsByOrder.get(orderId) || []
     let inStock = 0, short = 0
-    for (const it of its) {
-      if (stockStatus(it).ok) inStock++
-      else short++
-    }
+    for (const it of its) { stockStatus(it).ok ? inStock++ : short++ }
     return { inStock, short, total: its.length }
   }
 
-  // 1件処理
+  // ─── 請求書を作成して invoice_id を返す ────────────────────
+  async function createInvoiceForOrder(order: Order, its: OrderItem[]): Promise<string> {
+    const subtotal = its.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 0), 0)
+    const tax      = calcTax(subtotal)
+    const total    = subtotal + tax
+    const now      = new Date()
+    const invoice_number = await generateInvoiceNumber(now)
+    const { data: inv, error: ie } = await supabase.from("invoices").insert({
+      clinic_id:      order.clinic_id,
+      invoice_number,
+      issue_date:     now.toISOString().slice(0, 10),
+      due_date:       calcDueDate(now),
+      subtotal, tax, total,
+      status:        "issued",
+      notes:         `注文 ${order.delivery_number || order.id.slice(0, 8)} より自動作成`,
+    }).select().single()
+    if (ie || !inv) throw new Error("請求書作成失敗: " + (ie?.message || ""))
+    return inv.id as string
+  }
+
+  // ─── 1件処理 ────────────────────────────────────────────
   async function processOrder(order: Order) {
     if (processing.has(order.id)) return
     setProcessing(prev => new Set([...prev, order.id]))
 
     try {
-      const clinic = clinicById.get(order.clinic_id)
-      const clinicName = clinic?.name || "(不明)"
+      const clinicName = clinicById.get(order.clinic_id)?.name || "(不明)"
+      const summary    = orderStockSummary(order.id)
+      const its        = itemsByOrder.get(order.id) || []
+      const allInStock = summary.short === 0 && summary.total > 0
 
-      // 1. 在庫チェック
-      const summary = orderStockSummary(order.id)
+      let invoiceNumber: string | null = null
+      let mode: ProcessResult["mode"] = "prepared"
 
-      // 2. ステータスを「準備中」に更新
-      const { error: se } = await supabase
-        .from("orders")
-        .update({ status: "準備中" })
-        .eq("id", order.id)
-      if (se) throw new Error("ステータス更新失敗: " + se.message)
+      if (allInStock && sellMode) {
+        // ── 売上モード（全在庫あり）: 納品済み + 請求書作成 ──────
+        const invoiceId = await createInvoiceForOrder(order, its)
 
-      // 3. 不足分を発注プールへ
+        // 請求書番号を取得
+        const { data: invData } = await supabase
+          .from("invoices").select("invoice_number").eq("id", invoiceId).single()
+        invoiceNumber = invData?.invoice_number || null
+
+        // 注文を「納品済み」に更新し invoice_id を紐付け
+        const { error: ue } = await supabase.from("orders").update({
+          status:       "納品済み",
+          delivered_at: new Date().toISOString(),
+          invoice_id:   invoiceId,
+        }).eq("id", order.id)
+        if (ue) throw new Error("ステータス更新失敗: " + ue.message)
+        mode = "sold"
+      } else {
+        // ── 準備モード: 準備中 + 在庫不足分を発注プール ──────────
+        const { error: se } = await supabase.from("orders").update({ status: "準備中" }).eq("id", order.id)
+        if (se) throw new Error("ステータス更新失敗: " + se.message)
+      }
+
+      // 在庫不足分を発注プールへ（準備モードの時のみ）
       let poolAdded: { supplier_name: string; added_items: number }[] = []
       let skippedNoSupplier = 0
       if (summary.short > 0) {
@@ -153,31 +171,21 @@ export default function OrderProcessPage() {
         skippedNoSupplier = r.skippedNoSupplier
       }
 
-      const result: ProcessResult = {
-        orderId: order.id,
-        clinicName,
-        inStockCount: summary.inStock,
-        shortCount: summary.short,
-        poolAdded,
-        skippedNoSupplier,
-        error: null,
-      }
-      setResults(prev => [...prev, result])
+      setResults(prev => [...prev, {
+        orderId: order.id, clinicName,
+        inStockCount: summary.inStock, shortCount: summary.short,
+        invoiceNumber, poolAdded, skippedNoSupplier, mode, error: null,
+      }])
       setShowResult(true)
-
-      // 一覧から除外（再フェッチ）
       setOrders(prev => prev.filter(o => o.id !== order.id))
     } catch (e) {
-      const result: ProcessResult = {
+      setResults(prev => [...prev, {
         orderId: order.id,
         clinicName: clinicById.get(order.clinic_id)?.name || "(不明)",
-        inStockCount: 0,
-        shortCount: 0,
-        poolAdded: [],
-        skippedNoSupplier: 0,
-        error: (e as Error).message,
-      }
-      setResults(prev => [...prev, result])
+        inStockCount: 0, shortCount: 0,
+        invoiceNumber: null, poolAdded: [], skippedNoSupplier: 0,
+        mode: "prepared", error: (e as Error).message,
+      }])
       setShowResult(true)
     } finally {
       setProcessing(prev => { const n = new Set(prev); n.delete(order.id); return n })
@@ -187,22 +195,25 @@ export default function OrderProcessPage() {
   // 全件一括処理
   async function processAll() {
     if (orders.length === 0) return
-    if (!confirm(`新着注文 ${orders.length}件 をまとめて処理します。\n在庫あり→出荷準備、在庫なし→発注プールへ自動振り分けされます。\nよろしいですか？`)) return
+    const allInStockCount = orders.filter(o => orderStockSummary(o.id).short === 0).length
+    const hasShortCount   = orders.filter(o => orderStockSummary(o.id).short > 0).length
+    const msg = sellMode
+      ? `新着注文 ${orders.length}件 をまとめて処理します。\n\n`
+        + (allInStockCount > 0 ? `✅ 全在庫あり ${allInStockCount}件 → 納品済み＋請求書作成\n` : "")
+        + (hasShortCount > 0   ? `⚠️ 在庫不足あり ${hasShortCount}件 → 準備中＋発注プール\n` : "")
+        + "\nよろしいですか？"
+      : `新着注文 ${orders.length}件 をまとめて「準備中」にします。\n在庫不足分は発注プールへ追加されます。\nよろしいですか？`
+    if (!confirm(msg)) return
     setProcessingAll(true)
-    for (const order of orders) {
-      await processOrder(order)
-    }
+    for (const order of [...orders]) { await processOrder(order) }
     setProcessingAll(false)
   }
 
-  // 医院名表示
+  // 医院名
   function clinicLabel(clinicId: string) {
     const c = clinicById.get(clinicId)
-    if (!c) return "(医院不明)"
-    return c.corporate_name ? `${c.corporate_name} ${c.name}` : c.name
+    return c?.corporate_name ? `${c.corporate_name} ${c.name}` : (c?.name || "(医院不明)")
   }
-
-  // 日時フォーマット
   function fmtDateTime(iso: string) {
     const d = new Date(iso)
     return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`
@@ -210,67 +221,97 @@ export default function OrderProcessPage() {
 
   if (loading) return (
     <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>
-      <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
-      <div>読み込み中…</div>
+      <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>読み込み中…
     </div>
   )
 
   return (
     <div style={{ maxWidth: 860 }}>
 
-      {/* ─── ヘッダー ──────────────────────────────────────── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+      {/* ─── ヘッダー ──────────────────────────────── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
-            📥 受注処理
-          </h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>📥 受注処理</h1>
           <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
-            新着注文を確認し、在庫振り分け・発注プール追加を一括で行います
+            新着注文の在庫確認・売上処理・発注プール追加を一括で行います
           </p>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Link href="/admin/orders">
-            <button style={btnGray}>注文一覧</button>
-          </Link>
-          <Link href="/admin/shipping">
-            <button style={btnBlue}>🚚 出荷準備へ</button>
-          </Link>
-          <Link href="/admin/purchase-orders/pool">
-            <button style={btnOrange}>📦 発注プールへ</button>
-          </Link>
+          <Link href="/admin/orders"><button style={btnGray}>注文一覧</button></Link>
+          <Link href="/admin/shipping"><button style={btnBlue}>🚚 出荷準備へ</button></Link>
+          <Link href="/admin/invoices"><button style={btnPurple}>🧾 請求書一覧</button></Link>
+          <Link href="/admin/purchase-orders/pool"><button style={btnOrange}>📦 発注プールへ</button></Link>
         </div>
       </div>
 
-      {/* ─── 件数バナー ──────────────────────────────────────── */}
+      {/* ─── 売上モード切替 ─────────────────────────── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 14,
+        background: sellMode ? "#fdf4ff" : "#f9fafb",
+        border: `2px solid ${sellMode ? "#d8b4fe" : "#e5e7eb"}`,
+        borderRadius: 12, padding: "12px 18px", marginBottom: 18,
+        flexWrap: "wrap",
+      }}>
+        <div style={{ fontSize: 22 }}>{sellMode ? "💰" : "📋"}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>
+            {sellMode ? "売上処理モード（ON）" : "出荷準備モード"}
+          </div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+            {sellMode
+              ? "全商品が在庫あり → 納品済み＋請求書を即時作成します"
+              : "すべての注文を「準備中」にします（請求書は後で作成）"}
+          </div>
+        </div>
+        {/* トグルスイッチ */}
+        <button
+          onClick={() => setSellMode(v => !v)}
+          style={{
+            position: "relative", width: 52, height: 28,
+            borderRadius: 14, border: "none", cursor: "pointer",
+            background: sellMode ? "#9333ea" : "#d1d5db",
+            transition: "background 0.2s",
+            flexShrink: 0,
+          }}>
+          <span style={{
+            position: "absolute", top: 3,
+            left: sellMode ? 26 : 4,
+            width: 22, height: 22, borderRadius: "50%",
+            background: "#fff", transition: "left 0.2s",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+          }} />
+        </button>
+        <div style={{ fontSize: 12, color: sellMode ? "#7c3aed" : "#6b7280", fontWeight: 600 }}>
+          {sellMode ? "ON" : "OFF"}
+        </div>
+      </div>
+
+      {/* ─── 件数バナー ────────────────────────────── */}
       {orders.length > 0 ? (
         <div style={{
           display: "flex", alignItems: "center", gap: 16,
           background: "#fff7ed", border: "2px solid #fdba74",
-          borderRadius: 12, padding: "14px 20px", marginBottom: 20,
+          borderRadius: 12, padding: "14px 20px", marginBottom: 20, flexWrap: "wrap",
         }}>
-          <div style={{ fontSize: 32 }}>📋</div>
+          <div style={{ fontSize: 28 }}>📋</div>
           <div>
             <div style={{ fontSize: 18, fontWeight: 800, color: "#9a3412" }}>
               新着注文 {orders.length}件
             </div>
             <div style={{ fontSize: 12, color: "#c2410c" }}>
-              {orders.length}件の注文が処理待ちです
+              {orders.filter(o => orderStockSummary(o.id).short === 0).length}件が全在庫あり
+              {" / "}{orders.filter(o => orderStockSummary(o.id).short > 0).length}件に在庫不足
             </div>
           </div>
           <button
             onClick={processAll}
             disabled={processingAll}
             style={{
-              marginLeft: "auto",
-              padding: "10px 20px",
-              borderRadius: 10,
-              border: "none",
+              marginLeft: "auto", padding: "10px 20px",
+              borderRadius: 10, border: "none",
               background: processingAll ? "#d1d5db" : "#ea580c",
-              color: "#fff",
-              fontSize: 14,
-              fontWeight: 700,
-              cursor: processingAll ? "not-allowed" : "pointer",
-              whiteSpace: "nowrap",
+              color: "#fff", fontSize: 14, fontWeight: 700,
+              cursor: processingAll ? "not-allowed" : "pointer", whiteSpace: "nowrap",
             }}>
             {processingAll ? "処理中…" : `⚡ ${orders.length}件まとめて処理`}
           </button>
@@ -285,40 +326,44 @@ export default function OrderProcessPage() {
           <div style={{ fontSize: 16, fontWeight: 700, color: "#15803d" }}>新着注文はありません</div>
           <div style={{ fontSize: 12, color: "#16a34a", marginTop: 4 }}>すべての受注が処理済みです</div>
           <div style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/admin/shipping">
-              <button style={btnBlue}>🚚 出荷準備を確認</button>
-            </Link>
-            <Link href="/admin/purchase-orders/pool">
-              <button style={btnOrange}>📦 発注プールを確認</button>
-            </Link>
+            <Link href="/admin/shipping"><button style={btnBlue}>🚚 出荷準備を確認</button></Link>
+            <Link href="/admin/invoices"><button style={btnPurple}>🧾 請求書一覧</button></Link>
+            <Link href="/admin/purchase-orders/pool"><button style={btnOrange}>📦 発注プールを確認</button></Link>
           </div>
         </div>
       )}
 
-      {/* ─── 注文カード ──────────────────────────────────────── */}
+      {/* ─── 注文カード ────────────────────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {orders.map(order => {
-          const its  = itemsByOrder.get(order.id) || []
+          const its     = itemsByOrder.get(order.id) || []
           const summary = orderStockSummary(order.id)
-          const isProcessing = processing.has(order.id)
+          const allIn   = summary.short === 0 && summary.total > 0
+          const isProc  = processing.has(order.id)
+          // このカードで売上モードが発動するか
+          const willSell = allIn && sellMode
 
           return (
             <div key={order.id} style={{
               background: "#fff",
-              border: "1px solid #e5e7eb",
-              borderRadius: 14,
-              overflow: "hidden",
-              opacity: isProcessing ? 0.7 : 1,
-              transition: "opacity 0.2s",
+              border: `2px solid ${willSell ? "#d8b4fe" : "#e5e7eb"}`,
+              borderRadius: 14, overflow: "hidden",
+              opacity: isProc ? 0.6 : 1, transition: "opacity 0.2s",
             }}>
               {/* カードヘッダー */}
               <div style={{
                 display: "flex", alignItems: "center", gap: 10,
                 padding: "12px 16px",
-                background: "#f9fafb",
-                borderBottom: "1px solid #e5e7eb",
+                background: willSell ? "#faf5ff" : "#f9fafb",
+                borderBottom: `1px solid ${willSell ? "#e9d5ff" : "#f3f4f6"}`,
                 flexWrap: "wrap",
               }}>
+                {/* 売上予告バッジ */}
+                {willSell && (
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.purple }}>
+                    💰 売上処理
+                  </span>
+                )}
                 {/* 経路バッジ */}
                 <span style={{
                   fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
@@ -326,18 +371,12 @@ export default function OrderProcessPage() {
                 }}>
                   {order.source === "admin" ? "📞 電話/口頭" : "🏥 Web注文"}
                 </span>
-
                 {/* 医院名 */}
                 <span style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>
                   {clinicLabel(order.clinic_id)}
                 </span>
-
-                {/* 日時 */}
-                <span style={{ fontSize: 12, color: "#9ca3af" }}>
-                  {fmtDateTime(order.created_at)}
-                </span>
-
-                {/* 在庫サマリバッジ */}
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>{fmtDateTime(order.created_at)}</span>
+                {/* 在庫サマリ */}
                 <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                   {summary.inStock > 0 && (
                     <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.green }}>
@@ -357,10 +396,10 @@ export default function OrderProcessPage() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid #f3f4f6" }}>
-                      <th style={{ textAlign: "left", padding: "4px 6px", fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>商品名</th>
-                      <th style={{ textAlign: "right", padding: "4px 6px", fontSize: 11, color: "#9ca3af", fontWeight: 600, width: 50 }}>数量</th>
-                      <th style={{ textAlign: "right", padding: "4px 6px", fontSize: 11, color: "#9ca3af", fontWeight: 600, width: 70 }}>単価</th>
-                      <th style={{ textAlign: "center", padding: "4px 6px", fontSize: 11, color: "#9ca3af", fontWeight: 600, width: 110 }}>在庫状況</th>
+                      <th style={thStyle}>商品名</th>
+                      <th style={{ ...thStyle, textAlign: "right", width: 50 }}>数量</th>
+                      <th style={{ ...thStyle, textAlign: "right", width: 70 }}>単価</th>
+                      <th style={{ ...thStyle, textAlign: "center", width: 110 }}>在庫状況</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -368,86 +407,60 @@ export default function OrderProcessPage() {
                       const st = stockStatus(it)
                       return (
                         <tr key={it.id} style={{ borderBottom: "1px solid #f9fafb" }}>
-                          <td style={{ padding: "6px 6px", color: "#111827" }}>
-                            {it.product_name || "(商品名なし)"}
-                          </td>
-                          <td style={{ padding: "6px 6px", textAlign: "right", color: "#374151", fontWeight: 600 }}>
-                            {it.quantity}
-                          </td>
+                          <td style={{ padding: "6px 6px", color: "#111827" }}>{it.product_name || "(商品名なし)"}</td>
+                          <td style={{ padding: "6px 6px", textAlign: "right", fontWeight: 600 }}>{it.quantity}</td>
                           <td style={{ padding: "6px 6px", textAlign: "right", color: "#6b7280" }}>
                             {it.price > 0 ? fmtYen(it.price) : "—"}
                           </td>
                           <td style={{ padding: "6px 6px", textAlign: "center" }}>
-                            {st.ok ? (
-                              <span style={{
-                                fontSize: 11, fontWeight: 700, padding: "2px 8px",
-                                borderRadius: 999, ...C.green,
-                              }}>
-                                ✅ 在庫{st.stock}
-                              </span>
-                            ) : (
-                              <span style={{
-                                fontSize: 11, fontWeight: 700, padding: "2px 8px",
-                                borderRadius: 999, ...C.red,
-                              }}>
-                                ❌ {st.short}個不足
-                              </span>
-                            )}
+                            {st.ok
+                              ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.green }}>✅ 在庫{st.stock}</span>
+                              : <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.red }}>❌ {st.short}個不足</span>
+                            }
                           </td>
                         </tr>
                       )
                     })}
                     {its.length === 0 && (
-                      <tr>
-                        <td colSpan={4} style={{ padding: "12px 6px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>
-                          明細なし
-                        </td>
-                      </tr>
+                      <tr><td colSpan={4} style={{ padding: "12px 6px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>明細なし</td></tr>
                     )}
                   </tbody>
                 </table>
-
-                {/* 備考 */}
                 {order.note && (
-                  <div style={{
-                    marginTop: 8, padding: "6px 10px",
-                    background: "#fefce8", border: "1px solid #fde68a",
-                    borderRadius: 6, fontSize: 12, color: "#92400e",
-                  }}>
+                  <div style={{ marginTop: 8, padding: "6px 10px", background: "#fefce8", border: "1px solid #fde68a", borderRadius: 6, fontSize: 12, color: "#92400e" }}>
                     💬 {order.note}
                   </div>
                 )}
               </div>
 
-              {/* カードフッター（アクション） */}
+              {/* カードフッター */}
               <div style={{
                 display: "flex", alignItems: "center", gap: 10,
                 padding: "10px 16px",
-                background: "#fafafa",
-                borderTop: "1px solid #f3f4f6",
+                background: willSell ? "#faf5ff" : "#fafafa",
+                borderTop: `1px solid ${willSell ? "#e9d5ff" : "#f3f4f6"}`,
                 flexWrap: "wrap",
               }}>
                 <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  {summary.inStock > 0 && summary.short > 0
-                    ? `在庫あり${summary.inStock}品→出荷準備  在庫なし${summary.short}品→発注プール`
+                  {willSell
+                    ? "全商品在庫あり → 納品済み＋請求書を即時作成"
+                    : summary.inStock > 0 && summary.short > 0
+                    ? `在庫あり${summary.inStock}品→出荷準備 / 在庫なし${summary.short}品→発注プール`
                     : summary.short === 0
-                    ? `全${summary.total}品：在庫あり→出荷準備`
-                    : `全${summary.total}品：在庫不足→発注プール`}
+                    ? `全${summary.total}品が在庫あり → 出荷準備`
+                    : `全${summary.total}品が在庫不足 → 発注プール`}
                 </div>
                 <button
                   onClick={() => processOrder(order)}
-                  disabled={isProcessing}
+                  disabled={isProc}
                   style={{
-                    marginLeft: "auto",
-                    padding: "8px 18px",
+                    marginLeft: "auto", padding: "8px 18px",
                     borderRadius: 8, border: "none",
-                    background: isProcessing ? "#d1d5db" : "#059669",
-                    color: "#fff",
-                    fontSize: 13, fontWeight: 700,
-                    cursor: isProcessing ? "not-allowed" : "pointer",
-                    whiteSpace: "nowrap",
+                    background: isProc ? "#d1d5db" : willSell ? "#9333ea" : "#059669",
+                    color: "#fff", fontSize: 13, fontWeight: 700,
+                    cursor: isProc ? "not-allowed" : "pointer", whiteSpace: "nowrap",
                   }}>
-                  {isProcessing ? "処理中…" : "この注文を処理する →"}
+                  {isProc ? "処理中…" : willSell ? "💰 売上処理する →" : "この注文を処理する →"}
                 </button>
               </div>
             </div>
@@ -455,64 +468,64 @@ export default function OrderProcessPage() {
         })}
       </div>
 
-      {/* ─── 処理結果モーダル ────────────────────────────────── */}
+      {/* ─── 処理結果モーダル ───────────────────────── */}
       {showResult && results.length > 0 && (
         <div style={{
-          position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.45)",
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
           display: "flex", alignItems: "center", justifyContent: "center",
           zIndex: 9999, padding: 16,
         }}>
           <div style={{
             background: "#fff", borderRadius: 16,
-            maxWidth: 520, width: "100%",
-            maxHeight: "80vh", overflowY: "auto",
+            maxWidth: 540, width: "100%", maxHeight: "80vh", overflowY: "auto",
             boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
           }}>
-            {/* モーダルヘッダー */}
             <div style={{
-              padding: "16px 20px 12px",
-              borderBottom: "1px solid #e5e7eb",
+              padding: "16px 20px 12px", borderBottom: "1px solid #e5e7eb",
               display: "flex", alignItems: "center", gap: 10,
             }}>
               <span style={{ fontSize: 20 }}>✅</span>
-              <span style={{ fontSize: 16, fontWeight: 800, color: "#111827" }}>
-                処理完了 {results.length}件
-              </span>
+              <span style={{ fontSize: 16, fontWeight: 800 }}>処理完了 {results.length}件</span>
             </div>
 
-            {/* 結果一覧 */}
             <div style={{ padding: "12px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
               {results.map((r, i) => (
                 <div key={i} style={{
                   padding: "12px 14px",
-                  background: r.error ? "#fff5f5" : "#f0fdf4",
-                  border: `1px solid ${r.error ? "#fca5a5" : "#86efac"}`,
+                  background: r.error ? "#fff5f5" : r.mode === "sold" ? "#faf5ff" : "#f0fdf4",
+                  border: `1px solid ${r.error ? "#fca5a5" : r.mode === "sold" ? "#d8b4fe" : "#86efac"}`,
                   borderRadius: 10,
                 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: "#111827", marginBottom: 6 }}>
-                    {r.error ? "❌" : "✅"} {r.clinicName}
+                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
+                    {r.error ? "❌" : r.mode === "sold" ? "💰" : "🚚"} {r.clinicName}
                   </div>
                   {r.error ? (
                     <div style={{ fontSize: 12, color: "#dc2626" }}>エラー: {r.error}</div>
                   ) : (
-                    <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.8 }}>
-                      {r.inStockCount > 0 && (
-                        <div>🚚 在庫あり <strong>{r.inStockCount}品</strong> → 出荷準備リストへ追加</div>
-                      )}
-                      {r.shortCount > 0 && r.poolAdded.length > 0 && (
-                        <div>📦 在庫不足 <strong>{r.shortCount}品</strong> → 発注プールへ追加
-                          {r.poolAdded.map((p, j) => (
-                            <span key={j} style={{ marginLeft: 6, padding: "1px 6px", background: "#fff7ed", borderRadius: 4, fontSize: 11, color: "#9a3412" }}>
-                              {p.supplier_name} {p.added_items}品
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {r.skippedNoSupplier > 0 && (
-                        <div style={{ color: "#b45309" }}>
-                          ⚠️ 仕入先未設定 <strong>{r.skippedNoSupplier}品</strong>（手動で発注先を設定してください）
-                        </div>
+                    <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.9 }}>
+                      {r.mode === "sold" ? (
+                        <>
+                          <div>✅ 全{r.inStockCount}品 在庫あり → <strong>納品済み</strong>に更新</div>
+                          {r.invoiceNumber && (
+                            <div>🧾 請求書を作成しました：<strong style={{ color: "#7c3aed" }}>{r.invoiceNumber}</strong></div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {r.inStockCount > 0 && <div>🚚 在庫あり <strong>{r.inStockCount}品</strong> → 出荷準備へ</div>}
+                          {r.shortCount > 0 && r.poolAdded.length > 0 && (
+                            <div>📦 在庫不足 <strong>{r.shortCount}品</strong> → 発注プールへ
+                              {r.poolAdded.map((p, j) => (
+                                <span key={j} style={{ marginLeft: 6, padding: "1px 6px", background: "#fff7ed", borderRadius: 4, fontSize: 11, color: "#9a3412" }}>
+                                  {p.supplier_name} {p.added_items}品
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {r.skippedNoSupplier > 0 && (
+                            <div style={{ color: "#b45309" }}>⚠️ 仕入先未設定 {r.skippedNoSupplier}品（手動設定してください）</div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -520,22 +533,25 @@ export default function OrderProcessPage() {
               ))}
             </div>
 
-            {/* モーダルフッター */}
             <div style={{
-              padding: "12px 20px 16px",
-              borderTop: "1px solid #e5e7eb",
+              padding: "12px 20px 16px", borderTop: "1px solid #e5e7eb",
               display: "flex", gap: 10, flexWrap: "wrap",
             }}>
-              <Link href="/admin/shipping">
-                <button style={{ ...btnBlue, padding: "9px 18px" }}>
-                  🚚 出荷準備へ
-                </button>
-              </Link>
-              <Link href="/admin/purchase-orders/pool">
-                <button style={{ ...btnOrange, padding: "9px 18px" }}>
-                  📦 発注プールへ
-                </button>
-              </Link>
+              {results.some(r => r.mode === "sold") && (
+                <Link href="/admin/invoices">
+                  <button style={{ ...btnPurple, padding: "9px 18px" }}>🧾 請求書一覧へ</button>
+                </Link>
+              )}
+              {results.some(r => r.mode === "prepared" && r.inStockCount > 0) && (
+                <Link href="/admin/shipping">
+                  <button style={{ ...btnBlue, padding: "9px 18px" }}>🚚 出荷準備へ</button>
+                </Link>
+              )}
+              {results.some(r => r.poolAdded.length > 0) && (
+                <Link href="/admin/purchase-orders/pool">
+                  <button style={{ ...btnOrange, padding: "9px 18px" }}>📦 発注プールへ</button>
+                </Link>
+              )}
               <button
                 onClick={() => { setShowResult(false); setResults([]) }}
                 style={{ ...btnGray, marginLeft: "auto", padding: "9px 18px" }}>
@@ -549,19 +565,24 @@ export default function OrderProcessPage() {
   )
 }
 
-// ─── スタイル定数 ─────────────────────────────────────────
+// ─── スタイル ─────────────────────────────────────────────
+const thStyle: React.CSSProperties = {
+  textAlign: "left", padding: "4px 6px",
+  fontSize: 11, color: "#9ca3af", fontWeight: 600,
+}
 const btnGray: React.CSSProperties = {
-  padding: "7px 14px", borderRadius: 8,
-  border: "1px solid #d1d5db", background: "#fff",
-  fontSize: 12, color: "#374151", cursor: "pointer", fontWeight: 600,
+  padding: "7px 14px", borderRadius: 8, border: "1px solid #d1d5db",
+  background: "#fff", fontSize: 12, color: "#374151", cursor: "pointer", fontWeight: 600,
 }
 const btnBlue: React.CSSProperties = {
-  padding: "7px 14px", borderRadius: 8,
-  border: "1px solid #93c5fd", background: "#eff6ff",
-  fontSize: 12, color: "#1e40af", cursor: "pointer", fontWeight: 700,
+  padding: "7px 14px", borderRadius: 8, border: "1px solid #93c5fd",
+  background: "#eff6ff", fontSize: 12, color: "#1e40af", cursor: "pointer", fontWeight: 700,
 }
 const btnOrange: React.CSSProperties = {
-  padding: "7px 14px", borderRadius: 8,
-  border: "1px solid #fdba74", background: "#fff7ed",
-  fontSize: 12, color: "#9a3412", cursor: "pointer", fontWeight: 700,
+  padding: "7px 14px", borderRadius: 8, border: "1px solid #fdba74",
+  background: "#fff7ed", fontSize: 12, color: "#9a3412", cursor: "pointer", fontWeight: 700,
+}
+const btnPurple: React.CSSProperties = {
+  padding: "7px 14px", borderRadius: 8, border: "1px solid #d8b4fe",
+  background: "#faf5ff", fontSize: 12, color: "#7c3aed", cursor: "pointer", fontWeight: 700,
 }
