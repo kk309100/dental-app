@@ -1,10 +1,11 @@
 "use client"
 
-// 受注処理ページ（売上処理対応版）
-// 新着注文（注文受付/確認中）を1クリックで処理：
-//   全商品在庫あり + 売上モードON → 納品済み + 請求書即時作成
-//   全商品在庫あり + 売上モードOFF → 準備中（出荷準備へ）
-//   在庫不足あり → 準備中 + 不足分を発注プール自動追加
+// 受注処理ページ（分割納品対応版）
+// ・全商品在庫あり + 売上モードON → 納品済み + 請求書 + 在庫減算
+// ・一部在庫あり  + 売上モードON → 注文を分割:
+//     在庫あり分 → 新規注文（納品済み）+ 請求書 + 在庫減算 + 納品書印刷可
+//     在庫不足分 → 元注文（準備中）+ 発注プール
+// ・全在庫不足 or 売上モードOFF → 準備中 + 発注プール
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
@@ -28,10 +29,11 @@ type Clinic   = { id: string; name: string; corporate_name: string | null }
 type ProcessResult = {
   orderId: string; clinicName: string
   inStockCount: number; shortCount: number
-  invoiceNumber: string | null    // 売上モード時に作成した請求書番号
+  invoiceNumber: string | null
+  newOrderId: string | null
   poolAdded: { supplier_name: string; added_items: number }[]
   skippedNoSupplier: number
-  mode: "sold" | "prepared"      // sold=売上完了 / prepared=準備中
+  mode: "sold" | "split" | "prepared"
   error: string | null
 }
 
@@ -43,6 +45,7 @@ const C = {
   blue:   { bg: "#dbeafe", color: "#1e40af", border: "#93c5fd" },
   orange: { bg: "#fff7ed", color: "#9a3412", border: "#fdba74" },
   purple: { bg: "#f5f3ff", color: "#6d28d9", border: "#c4b5fd" },
+  teal:   { bg: "#f0fdfa", color: "#0f766e", border: "#5eead4" },
 }
 
 export default function OrderProcessPage() {
@@ -55,7 +58,6 @@ export default function OrderProcessPage() {
   const [results, setResults]       = useState<ProcessResult[]>([])
   const [showResult, setShowResult] = useState(false)
   const [processingAll, setProcessingAll] = useState(false)
-  // 売上モード: ON=全在庫あり注文を即座に「納品済み+請求書作成」、OFF=「準備中」のみ
   const [sellMode, setSellMode]     = useState(true)
 
   useEffect(() => { fetchData() }, [])
@@ -79,7 +81,6 @@ export default function OrderProcessPage() {
     setLoading(false)
   }
 
-  // ルックアップ
   const productById  = useMemo(() => new Map(products.map(p => [p.id, p])), [products])
   const clinicById   = useMemo(() => new Map(clinics.map(c => [c.id, c])), [clinics])
   const itemsByOrder = useMemo(() => {
@@ -91,7 +92,6 @@ export default function OrderProcessPage() {
     return m
   }, [items])
 
-  // 在庫状態
   function stockStatus(item: OrderItem) {
     const p = item.product_id ? productById.get(item.product_id) : null
     const stock = Number(p?.stock || 0)
@@ -105,8 +105,21 @@ export default function OrderProcessPage() {
     return { inStock, short, total: its.length }
   }
 
-  // ─── 請求書を作成して invoice_id を返す ────────────────────
-  async function createInvoiceForOrder(order: Order, its: OrderItem[]): Promise<string> {
+  // ─── 在庫減算 ─────────────────────────────────────────
+  async function deductStock(orderItems: OrderItem[]) {
+    for (const it of orderItems) {
+      if (!it.product_id) continue
+      const prod = productById.get(it.product_id)
+      const newStock = Number(prod?.stock || 0) - Number(it.quantity)
+      await supabase.from("products").update({ stock: newStock }).eq("id", it.product_id)
+    }
+  }
+
+  // ─── 請求書作成 ────────────────────────────────────────
+  async function createInvoiceForOrder(
+    order: { id: string; clinic_id: string; delivery_number: string | null },
+    its: OrderItem[]
+  ): Promise<{ invoiceId: string; invoiceNumber: string }> {
     const subtotal = its.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 0), 0)
     const tax      = calcTax(subtotal)
     const total    = subtotal + tax
@@ -122,7 +135,64 @@ export default function OrderProcessPage() {
       notes:         `注文 ${order.delivery_number || order.id.slice(0, 8)} より自動作成`,
     }).select().single()
     if (ie || !inv) throw new Error("請求書作成失敗: " + (ie?.message || ""))
-    return inv.id as string
+    return { invoiceId: inv.id as string, invoiceNumber: invoice_number }
+  }
+
+  // ─── 分割納品 ──────────────────────────────────────────
+  // 在庫あり品 → 新規注文（納品済み）＋請求書＋在庫減算
+  // 在庫不足品 → 元注文（準備中）＋発注プール
+  async function splitAndDeliver(
+    order: Order,
+    its: OrderItem[]
+  ): Promise<{ invoiceNumber: string; newOrderId: string; poolAdded: ProcessResult["poolAdded"]; skippedNoSupplier: number }> {
+    const inStockItems = its.filter(it => stockStatus(it).ok)
+    const shortItems   = its.filter(it => !stockStatus(it).ok)
+
+    // 1. 在庫あり品用の新規注文を作成
+    const inStockSubtotal = inStockItems.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 0), 0)
+    const now = new Date()
+    const { data: newOrder, error: noe } = await supabase.from("orders").insert({
+      clinic_id:       order.clinic_id,
+      status:          "納品済み",
+      total_price:     inStockSubtotal,
+      delivery_number: (order.delivery_number || order.id.slice(0, 8)) + "-A",
+      source:          order.source,
+      note:            `${order.note ? order.note + " " : ""}（分割納品：在庫あり分）`,
+      delivered_at:    now.toISOString(),
+    }).select().single()
+    if (noe || !newOrder) throw new Error("分割注文作成失敗: " + noe?.message)
+
+    // 2. 在庫あり品の order_items を新注文へ移動
+    const { error: mve } = await supabase.from("order_items")
+      .update({ order_id: newOrder.id })
+      .in("id", inStockItems.map(it => it.id))
+    if (mve) throw new Error("明細移動失敗: " + mve.message)
+
+    // 3. 請求書を作成して新注文に紐付け
+    const { invoiceId, invoiceNumber } = await createInvoiceForOrder(newOrder, inStockItems)
+    await supabase.from("orders").update({ invoice_id: invoiceId }).eq("id", newOrder.id)
+
+    // 4. 在庫を減算
+    await deductStock(inStockItems)
+
+    // 5. 元注文を在庫不足品のみ「準備中」に更新
+    const shortSubtotal = shortItems.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 0), 0)
+    await supabase.from("orders").update({
+      status:      "準備中",
+      total_price: shortSubtotal,
+      note:        `${order.note ? order.note + " " : ""}（分割納品：発注待ち分）`,
+    }).eq("id", order.id)
+
+    // 6. 在庫不足分を発注プールへ
+    let poolAdded: ProcessResult["poolAdded"] = []
+    let skippedNoSupplier = 0
+    if (shortItems.length > 0) {
+      const r = await poolFromOrders([order.id])
+      poolAdded = r.pos.map(p => ({ supplier_name: p.supplier_name, added_items: p.added_items }))
+      skippedNoSupplier = r.skippedNoSupplier
+    }
+
+    return { invoiceNumber, newOrderId: newOrder.id, poolAdded, skippedNoSupplier }
   }
 
   // ─── 1件処理 ────────────────────────────────────────────
@@ -135,55 +205,61 @@ export default function OrderProcessPage() {
       const summary    = orderStockSummary(order.id)
       const its        = itemsByOrder.get(order.id) || []
       const allInStock = summary.short === 0 && summary.total > 0
+      const hasInStock = summary.inStock > 0
+      const hasShort   = summary.short > 0
 
       let invoiceNumber: string | null = null
+      let newOrderId: string | null = null
+      let poolAdded: ProcessResult["poolAdded"] = []
+      let skippedNoSupplier = 0
       let mode: ProcessResult["mode"] = "prepared"
 
-      if (allInStock && sellMode) {
-        // ── 売上モード（全在庫あり）: 納品済み + 請求書作成 ──────
-        const invoiceId = await createInvoiceForOrder(order, its)
-
-        // 請求書番号を取得
-        const { data: invData } = await supabase
-          .from("invoices").select("invoice_number").eq("id", invoiceId).single()
-        invoiceNumber = invData?.invoice_number || null
-
-        // 注文を「納品済み」に更新し invoice_id を紐付け
-        const { error: ue } = await supabase.from("orders").update({
+      if (sellMode && allInStock) {
+        // ── 全在庫あり → 納品済み + 請求書 + 在庫減算 ──
+        const res = await createInvoiceForOrder(order, its)
+        invoiceNumber = res.invoiceNumber
+        await supabase.from("orders").update({
           status:       "納品済み",
           delivered_at: new Date().toISOString(),
-          invoice_id:   invoiceId,
+          invoice_id:   res.invoiceId,
         }).eq("id", order.id)
-        if (ue) throw new Error("ステータス更新失敗: " + ue.message)
+        await deductStock(its)
         mode = "sold"
-      } else {
-        // ── 準備モード: 準備中 + 在庫不足分を発注プール ──────────
-        const { error: se } = await supabase.from("orders").update({ status: "準備中" }).eq("id", order.id)
-        if (se) throw new Error("ステータス更新失敗: " + se.message)
-      }
 
-      // 在庫不足分を発注プールへ（準備モードの時のみ）
-      let poolAdded: { supplier_name: string; added_items: number }[] = []
-      let skippedNoSupplier = 0
-      if (summary.short > 0) {
-        const r = await poolFromOrders([order.id])
-        poolAdded = r.pos.map(p => ({ supplier_name: p.supplier_name, added_items: p.added_items }))
-        skippedNoSupplier = r.skippedNoSupplier
+      } else if (sellMode && hasInStock && hasShort) {
+        // ── 一部在庫あり → 分割納品 ─────────────────
+        const res = await splitAndDeliver(order, its)
+        invoiceNumber     = res.invoiceNumber
+        newOrderId        = res.newOrderId
+        poolAdded         = res.poolAdded
+        skippedNoSupplier = res.skippedNoSupplier
+        mode = "split"
+
+      } else {
+        // ── 準備中 + 発注プール ───────────────────────
+        await supabase.from("orders").update({ status: "準備中" }).eq("id", order.id)
+        if (hasShort) {
+          const r = await poolFromOrders([order.id])
+          poolAdded = r.pos.map(p => ({ supplier_name: p.supplier_name, added_items: p.added_items }))
+          skippedNoSupplier = r.skippedNoSupplier
+        }
+        mode = "prepared"
       }
 
       setResults(prev => [...prev, {
         orderId: order.id, clinicName,
         inStockCount: summary.inStock, shortCount: summary.short,
-        invoiceNumber, poolAdded, skippedNoSupplier, mode, error: null,
+        invoiceNumber, newOrderId, poolAdded, skippedNoSupplier, mode, error: null,
       }])
       setShowResult(true)
       setOrders(prev => prev.filter(o => o.id !== order.id))
+
     } catch (e) {
       setResults(prev => [...prev, {
         orderId: order.id,
         clinicName: clinicById.get(order.clinic_id)?.name || "(不明)",
         inStockCount: 0, shortCount: 0,
-        invoiceNumber: null, poolAdded: [], skippedNoSupplier: 0,
+        invoiceNumber: null, newOrderId: null, poolAdded: [], skippedNoSupplier: 0,
         mode: "prepared", error: (e as Error).message,
       }])
       setShowResult(true)
@@ -192,24 +268,24 @@ export default function OrderProcessPage() {
     }
   }
 
-  // 全件一括処理
   async function processAll() {
     if (orders.length === 0) return
-    const allInStockCount = orders.filter(o => orderStockSummary(o.id).short === 0).length
-    const hasShortCount   = orders.filter(o => orderStockSummary(o.id).short > 0).length
+    const allInCount   = orders.filter(o => { const s = orderStockSummary(o.id); return s.short === 0 }).length
+    const partialCount = orders.filter(o => { const s = orderStockSummary(o.id); return s.inStock > 0 && s.short > 0 }).length
+    const shortOnlyCount = orders.filter(o => { const s = orderStockSummary(o.id); return s.inStock === 0 }).length
     const msg = sellMode
       ? `新着注文 ${orders.length}件 をまとめて処理します。\n\n`
-        + (allInStockCount > 0 ? `✅ 全在庫あり ${allInStockCount}件 → 納品済み＋請求書作成\n` : "")
-        + (hasShortCount > 0   ? `⚠️ 在庫不足あり ${hasShortCount}件 → 準備中＋発注プール\n` : "")
+        + (allInCount > 0      ? `💰 全在庫あり ${allInCount}件 → 納品済み＋請求書\n` : "")
+        + (partialCount > 0    ? `📦 一部在庫あり ${partialCount}件 → 分割（在庫あり分を即納品）\n` : "")
+        + (shortOnlyCount > 0  ? `⚠️ 全在庫なし ${shortOnlyCount}件 → 準備中＋発注プール\n` : "")
         + "\nよろしいですか？"
-      : `新着注文 ${orders.length}件 をまとめて「準備中」にします。\n在庫不足分は発注プールへ追加されます。\nよろしいですか？`
+      : `新着注文 ${orders.length}件 をまとめて「準備中」にします。\nよろしいですか？`
     if (!confirm(msg)) return
     setProcessingAll(true)
     for (const order of [...orders]) { await processOrder(order) }
     setProcessingAll(false)
   }
 
-  // 医院名
   function clinicLabel(clinicId: string) {
     const c = clinicById.get(clinicId)
     return c?.corporate_name ? `${c.corporate_name} ${c.name}` : (c?.name || "(医院不明)")
@@ -233,14 +309,15 @@ export default function OrderProcessPage() {
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>📥 受注処理</h1>
           <p style={{ fontSize: 12, color: "#6b7280", margin: "2px 0 0" }}>
-            新着注文の在庫確認・売上処理・発注プール追加を一括で行います
+            在庫あり分は即座に納品書作成、不足分は発注後に後納品
           </p>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link href="/admin/orders"><button style={btnGray}>注文一覧</button></Link>
-          <Link href="/admin/shipping"><button style={btnBlue}>🚚 出荷準備へ</button></Link>
+          <Link href="/admin/deliveries"><button style={btnGray}>📋 納品書一覧</button></Link>
+          <Link href="/admin/shipping"><button style={btnBlue}>🚚 出荷準備</button></Link>
           <Link href="/admin/invoices"><button style={btnPurple}>🧾 請求書一覧</button></Link>
-          <Link href="/admin/purchase-orders/pool"><button style={btnOrange}>📦 発注プールへ</button></Link>
+          <Link href="/admin/purchase-orders/pool"><button style={btnOrange}>📦 発注プール</button></Link>
         </div>
       </div>
 
@@ -249,8 +326,7 @@ export default function OrderProcessPage() {
         display: "flex", alignItems: "center", gap: 14,
         background: sellMode ? "#fdf4ff" : "#f9fafb",
         border: `2px solid ${sellMode ? "#d8b4fe" : "#e5e7eb"}`,
-        borderRadius: 12, padding: "12px 18px", marginBottom: 18,
-        flexWrap: "wrap",
+        borderRadius: 12, padding: "12px 18px", marginBottom: 18, flexWrap: "wrap",
       }}>
         <div style={{ fontSize: 22 }}>{sellMode ? "💰" : "📋"}</div>
         <div style={{ flex: 1 }}>
@@ -259,19 +335,17 @@ export default function OrderProcessPage() {
           </div>
           <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
             {sellMode
-              ? "全商品が在庫あり → 納品済み＋請求書を即時作成します"
-              : "すべての注文を「準備中」にします（請求書は後で作成）"}
+              ? "在庫あり品 → 即座に納品書＋請求書作成。一部在庫不足の注文も在庫あり分だけ先に納品"
+              : "すべての注文を「準備中」にします（請求書・納品書は後で作成）"}
           </div>
         </div>
-        {/* トグルスイッチ */}
         <button
           onClick={() => setSellMode(v => !v)}
           style={{
             position: "relative", width: 52, height: 28,
             borderRadius: 14, border: "none", cursor: "pointer",
             background: sellMode ? "#9333ea" : "#d1d5db",
-            transition: "background 0.2s",
-            flexShrink: 0,
+            transition: "background 0.2s", flexShrink: 0,
           }}>
           <span style={{
             position: "absolute", top: 3,
@@ -298,9 +372,12 @@ export default function OrderProcessPage() {
             <div style={{ fontSize: 18, fontWeight: 800, color: "#9a3412" }}>
               新着注文 {orders.length}件
             </div>
-            <div style={{ fontSize: 12, color: "#c2410c" }}>
-              {orders.filter(o => orderStockSummary(o.id).short === 0).length}件が全在庫あり
-              {" / "}{orders.filter(o => orderStockSummary(o.id).short > 0).length}件に在庫不足
+            <div style={{ fontSize: 12, color: "#c2410c", marginTop: 2 }}>
+              {orders.filter(o => { const s = orderStockSummary(o.id); return s.short === 0 }).length}件：全在庫あり
+              {" ／ "}
+              {orders.filter(o => { const s = orderStockSummary(o.id); return s.inStock > 0 && s.short > 0 }).length}件：一部在庫不足（分割納品可）
+              {" ／ "}
+              {orders.filter(o => { const s = orderStockSummary(o.id); return s.inStock === 0 }).length}件：全在庫不足
             </div>
           </div>
           <button
@@ -326,6 +403,7 @@ export default function OrderProcessPage() {
           <div style={{ fontSize: 16, fontWeight: 700, color: "#15803d" }}>新着注文はありません</div>
           <div style={{ fontSize: 12, color: "#16a34a", marginTop: 4 }}>すべての受注が処理済みです</div>
           <div style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <Link href="/admin/deliveries"><button style={btnGray}>📋 納品書一覧</button></Link>
             <Link href="/admin/shipping"><button style={btnBlue}>🚚 出荷準備を確認</button></Link>
             <Link href="/admin/invoices"><button style={btnPurple}>🧾 請求書一覧</button></Link>
             <Link href="/admin/purchase-orders/pool"><button style={btnOrange}>📦 発注プールを確認</button></Link>
@@ -339,44 +417,53 @@ export default function OrderProcessPage() {
           const its     = itemsByOrder.get(order.id) || []
           const summary = orderStockSummary(order.id)
           const allIn   = summary.short === 0 && summary.total > 0
+          const partial = summary.inStock > 0 && summary.short > 0
           const isProc  = processing.has(order.id)
-          // このカードで売上モードが発動するか
-          const willSell = allIn && sellMode
+
+          const predictMode = sellMode
+            ? allIn ? "sold" : partial ? "split" : "prepared"
+            : "prepared"
+
+          const modeStyle = {
+            sold:     { bg: "#faf5ff", border: "#d8b4fe", btnBg: "#9333ea",
+                        badge: "💰 全品即納品", badgeC: "#7c3aed", badgeBg: "#e9d5ff" },
+            split:    { bg: "#f0fdfa", border: "#5eead4", btnBg: "#0d9488",
+                        badge: "📦 在庫あり分のみ先納品", badgeC: "#0f766e", badgeBg: "#ccfbf1" },
+            prepared: { bg: "#f9fafb", border: "#e5e7eb", btnBg: "#059669",
+                        badge: "", badgeC: "", badgeBg: "" },
+          }[predictMode]
 
           return (
             <div key={order.id} style={{
               background: "#fff",
-              border: `2px solid ${willSell ? "#d8b4fe" : "#e5e7eb"}`,
+              border: `2px solid ${modeStyle.border}`,
               borderRadius: 14, overflow: "hidden",
-              opacity: isProc ? 0.6 : 1, transition: "opacity 0.2s",
+              opacity: isProc ? 0.6 : 1,
             }}>
               {/* カードヘッダー */}
               <div style={{
                 display: "flex", alignItems: "center", gap: 10,
-                padding: "12px 16px",
-                background: willSell ? "#faf5ff" : "#f9fafb",
-                borderBottom: `1px solid ${willSell ? "#e9d5ff" : "#f3f4f6"}`,
-                flexWrap: "wrap",
+                padding: "12px 16px", background: modeStyle.bg,
+                borderBottom: `1px solid ${modeStyle.border}`, flexWrap: "wrap",
               }}>
-                {/* 売上予告バッジ */}
-                {willSell && (
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.purple }}>
-                    💰 売上処理
+                {modeStyle.badge && (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                    background: modeStyle.badgeBg, color: modeStyle.badgeC,
+                  }}>
+                    {modeStyle.badge}
                   </span>
                 )}
-                {/* 経路バッジ */}
                 <span style={{
                   fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
                   ...(order.source === "admin" ? C.yellow : C.blue),
                 }}>
                   {order.source === "admin" ? "📞 電話/口頭" : "🏥 Web注文"}
                 </span>
-                {/* 医院名 */}
                 <span style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>
                   {clinicLabel(order.clinic_id)}
                 </span>
                 <span style={{ fontSize: 12, color: "#9ca3af" }}>{fmtDateTime(order.created_at)}</span>
-                {/* 在庫サマリ */}
                 <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
                   {summary.inStock > 0 && (
                     <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.green }}>
@@ -399,14 +486,22 @@ export default function OrderProcessPage() {
                       <th style={thStyle}>商品名</th>
                       <th style={{ ...thStyle, textAlign: "right", width: 50 }}>数量</th>
                       <th style={{ ...thStyle, textAlign: "right", width: 70 }}>単価</th>
-                      <th style={{ ...thStyle, textAlign: "center", width: 110 }}>在庫状況</th>
+                      <th style={{ ...thStyle, textAlign: "center", width: 120 }}>在庫状況</th>
+                      {predictMode === "split" && (
+                        <th style={{ ...thStyle, textAlign: "center", width: 70 }}>今回の処理</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {its.map(it => {
                       const st = stockStatus(it)
                       return (
-                        <tr key={it.id} style={{ borderBottom: "1px solid #f9fafb" }}>
+                        <tr key={it.id} style={{
+                          borderBottom: "1px solid #f9fafb",
+                          background: predictMode === "split"
+                            ? (st.ok ? "#f0fdf4" : "#fff5f5")
+                            : "transparent",
+                        }}>
                           <td style={{ padding: "6px 6px", color: "#111827" }}>{it.product_name || "(商品名なし)"}</td>
                           <td style={{ padding: "6px 6px", textAlign: "right", fontWeight: 600 }}>{it.quantity}</td>
                           <td style={{ padding: "6px 6px", textAlign: "right", color: "#6b7280" }}>
@@ -418,11 +513,19 @@ export default function OrderProcessPage() {
                               : <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.red }}>❌ {st.short}個不足</span>
                             }
                           </td>
+                          {predictMode === "split" && (
+                            <td style={{ padding: "6px 6px", textAlign: "center" }}>
+                              {st.ok
+                                ? <span style={{ fontSize: 11, fontWeight: 700, color: "#0f766e" }}>今回納品 →</span>
+                                : <span style={{ fontSize: 11, fontWeight: 700, color: "#b91c1c" }}>発注後に納品</span>
+                              }
+                            </td>
+                          )}
                         </tr>
                       )
                     })}
                     {its.length === 0 && (
-                      <tr><td colSpan={4} style={{ padding: "12px 6px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>明細なし</td></tr>
+                      <tr><td colSpan={5} style={{ padding: "12px 6px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>明細なし</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -436,19 +539,15 @@ export default function OrderProcessPage() {
               {/* カードフッター */}
               <div style={{
                 display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 16px",
-                background: willSell ? "#faf5ff" : "#fafafa",
-                borderTop: `1px solid ${willSell ? "#e9d5ff" : "#f3f4f6"}`,
-                flexWrap: "wrap",
+                padding: "10px 16px", background: modeStyle.bg,
+                borderTop: `1px solid ${modeStyle.border}`, flexWrap: "wrap",
               }}>
                 <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  {willSell
-                    ? "全商品在庫あり → 納品済み＋請求書を即時作成"
-                    : summary.inStock > 0 && summary.short > 0
-                    ? `在庫あり${summary.inStock}品→出荷準備 / 在庫なし${summary.short}品→発注プール`
-                    : summary.short === 0
-                    ? `全${summary.total}品が在庫あり → 出荷準備`
-                    : `全${summary.total}品が在庫不足 → 発注プール`}
+                  {predictMode === "sold"
+                    ? "全商品が在庫あり → 納品済み・請求書・在庫減算を自動処理"
+                    : predictMode === "split"
+                    ? `在庫あり${summary.inStock}品を先に納品（納品書＋請求書作成）、在庫不足${summary.short}品は発注後に改めて納品`
+                    : "「準備中」に変更・在庫不足分は発注プールへ"}
                 </div>
                 <button
                   onClick={() => processOrder(order)}
@@ -456,11 +555,14 @@ export default function OrderProcessPage() {
                   style={{
                     marginLeft: "auto", padding: "8px 18px",
                     borderRadius: 8, border: "none",
-                    background: isProc ? "#d1d5db" : willSell ? "#9333ea" : "#059669",
+                    background: isProc ? "#d1d5db" : modeStyle.btnBg,
                     color: "#fff", fontSize: 13, fontWeight: 700,
                     cursor: isProc ? "not-allowed" : "pointer", whiteSpace: "nowrap",
                   }}>
-                  {isProc ? "処理中…" : willSell ? "💰 売上処理する →" : "この注文を処理する →"}
+                  {isProc ? "処理中…"
+                    : predictMode === "sold"    ? "💰 売上処理する →"
+                    : predictMode === "split"   ? "📦 分割して納品する →"
+                    : "この注文を処理する →"}
                 </button>
               </div>
             </div>
@@ -477,7 +579,7 @@ export default function OrderProcessPage() {
         }}>
           <div style={{
             background: "#fff", borderRadius: 16,
-            maxWidth: 540, width: "100%", maxHeight: "80vh", overflowY: "auto",
+            maxWidth: 560, width: "100%", maxHeight: "80vh", overflowY: "auto",
             boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
           }}>
             <div style={{
@@ -492,28 +594,46 @@ export default function OrderProcessPage() {
               {results.map((r, i) => (
                 <div key={i} style={{
                   padding: "12px 14px",
-                  background: r.error ? "#fff5f5" : r.mode === "sold" ? "#faf5ff" : "#f0fdf4",
-                  border: `1px solid ${r.error ? "#fca5a5" : r.mode === "sold" ? "#d8b4fe" : "#86efac"}`,
+                  background: r.error ? "#fff5f5" : r.mode === "sold" ? "#faf5ff" : r.mode === "split" ? "#f0fdfa" : "#f9fafb",
+                  border: `1px solid ${r.error ? "#fca5a5" : r.mode === "sold" ? "#d8b4fe" : r.mode === "split" ? "#5eead4" : "#e5e7eb"}`,
                   borderRadius: 10,
                 }}>
                   <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
-                    {r.error ? "❌" : r.mode === "sold" ? "💰" : "🚚"} {r.clinicName}
+                    {r.error ? "❌" : r.mode === "sold" ? "💰" : r.mode === "split" ? "📦" : "🚚"} {r.clinicName}
                   </div>
                   {r.error ? (
                     <div style={{ fontSize: 12, color: "#dc2626" }}>エラー: {r.error}</div>
                   ) : (
-                    <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.9 }}>
-                      {r.mode === "sold" ? (
+                    <div style={{ fontSize: 12, color: "#374151", lineHeight: 2 }}>
+                      {r.mode === "sold" && (
                         <>
-                          <div>✅ 全{r.inStockCount}品 在庫あり → <strong>納品済み</strong>に更新</div>
+                          <div>✅ 全{r.inStockCount}品 → <strong>納品済み</strong>（在庫減算・納品書作成済）</div>
                           {r.invoiceNumber && (
-                            <div>🧾 請求書を作成しました：<strong style={{ color: "#7c3aed" }}>{r.invoiceNumber}</strong></div>
+                            <div>🧾 請求書：<strong style={{ color: "#7c3aed" }}>{r.invoiceNumber}</strong></div>
                           )}
                         </>
-                      ) : (
+                      )}
+                      {r.mode === "split" && (
+                        <>
+                          <div>✅ 在庫あり <strong>{r.inStockCount}品</strong> → 新規注文（納品済み）に分割・在庫減算済</div>
+                          {r.invoiceNumber && (
+                            <div>🧾 請求書：<strong style={{ color: "#0f766e" }}>{r.invoiceNumber}</strong></div>
+                          )}
+                          <div>⚠️ 在庫不足 <strong>{r.shortCount}品</strong> → 元注文（準備中）に残し発注プールへ</div>
+                          {r.poolAdded.map((p, j) => (
+                            <span key={j} style={{ marginRight: 6, padding: "1px 6px", background: "#fff7ed", borderRadius: 4, fontSize: 11, color: "#9a3412" }}>
+                              {p.supplier_name} {p.added_items}品
+                            </span>
+                          ))}
+                          {r.skippedNoSupplier > 0 && (
+                            <div style={{ color: "#b45309", marginTop: 2 }}>⚠️ 仕入先未設定 {r.skippedNoSupplier}品（商品マスタで設定を）</div>
+                          )}
+                        </>
+                      )}
+                      {r.mode === "prepared" && (
                         <>
                           {r.inStockCount > 0 && <div>🚚 在庫あり <strong>{r.inStockCount}品</strong> → 出荷準備へ</div>}
-                          {r.shortCount > 0 && r.poolAdded.length > 0 && (
+                          {r.shortCount > 0 && (
                             <div>📦 在庫不足 <strong>{r.shortCount}品</strong> → 発注プールへ
                               {r.poolAdded.map((p, j) => (
                                 <span key={j} style={{ marginLeft: 6, padding: "1px 6px", background: "#fff7ed", borderRadius: 4, fontSize: 11, color: "#9a3412" }}>
@@ -523,7 +643,7 @@ export default function OrderProcessPage() {
                             </div>
                           )}
                           {r.skippedNoSupplier > 0 && (
-                            <div style={{ color: "#b45309" }}>⚠️ 仕入先未設定 {r.skippedNoSupplier}品（手動設定してください）</div>
+                            <div style={{ color: "#b45309" }}>⚠️ 仕入先未設定 {r.skippedNoSupplier}品</div>
                           )}
                         </>
                       )}
@@ -537,7 +657,12 @@ export default function OrderProcessPage() {
               padding: "12px 20px 16px", borderTop: "1px solid #e5e7eb",
               display: "flex", gap: 10, flexWrap: "wrap",
             }}>
-              {results.some(r => r.mode === "sold") && (
+              {(results.some(r => r.mode === "sold" || r.mode === "split")) && (
+                <Link href="/admin/deliveries">
+                  <button style={{ ...btnGray, padding: "9px 18px" }}>📋 納品書一覧へ</button>
+                </Link>
+              )}
+              {(results.some(r => r.mode === "sold" || r.mode === "split")) && (
                 <Link href="/admin/invoices">
                   <button style={{ ...btnPurple, padding: "9px 18px" }}>🧾 請求書一覧へ</button>
                 </Link>
