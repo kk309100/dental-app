@@ -47,6 +47,8 @@ export default function ReceivingFromPoPage() {
   const [checked, setChecked] = useState<Set<string>>(new Set())
   // 今回入荷数量オーバーライド: poItemId → qty
   const [qtyOverride, setQtyOverride] = useState<Map<string, number>>(new Map())
+  // 単価オーバーライド: poItemId → price（デフォルト = 発注書の unit_price）
+  const [priceOverride, setPriceOverride] = useState<Map<string, number>>(new Map())
   // 展開状態: poId → open/close（デフォルト全展開）
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
@@ -102,6 +104,9 @@ export default function ReceivingFromPoPage() {
   }
   function receiveQty(item: POItem): number {
     return qtyOverride.has(item.id) ? qtyOverride.get(item.id)! : remaining(item)
+  }
+  function receivePrice(item: POItem): number {
+    return priceOverride.has(item.id) ? priceOverride.get(item.id)! : Number(item.unit_price || 0)
   }
 
   // チェック操作
@@ -173,7 +178,7 @@ export default function ReceivingFromPoPage() {
       return
     }
     const supplierName = po.supplier_id ? (supplierById.get(po.supplier_id)?.name || "不明") : "仕入先未設定"
-    const totalAmt = targetIts.reduce((s, it) => s + receiveQty(it) * Number(it.unit_price || 0), 0)
+    const totalAmt = targetIts.reduce((s, it) => s + receiveQty(it) * receivePrice(it), 0)
 
     setReceiving(prev => new Set([...prev, po.id]))
     const receivedProductIds: string[] = []
@@ -188,11 +193,15 @@ export default function ReceivingFromPoPage() {
           .update({ received_quantity: newReceived })
           .eq("id", it.id)
 
-        // 2. 在庫加算
+        // 2. 在庫加算 + 原価更新
         if (it.product_id && qty > 0) {
+          const price  = receivePrice(it)
           const before = Number(stockById.get(it.product_id) || 0)
           const after  = before + qty
-          await supabase.from("products").update({ stock: after }).eq("id", it.product_id)
+          // 在庫加算・原価更新（実際の仕入価格が発注時と異なる場合に備えて上書き）
+          const prodUpdate: Record<string, unknown> = { stock: after }
+          if (price > 0) prodUpdate.cost = price
+          await supabase.from("products").update(prodUpdate).eq("id", it.product_id)
           try {
             await supabase.from("stock_movements").insert({
               product_id:    it.product_id,
@@ -210,12 +219,12 @@ export default function ReceivingFromPoPage() {
               product_id:  it.product_id,
               quantity:    qty,
               supplier_id: po.supplier_id,
-              unit_price:  it.unit_price || null,
+              unit_price:  price > 0 ? price : null,
               memo:        `発注書 ${po.po_number || po.id.slice(0, 8)}`,
             })
           } catch { /* スキップ */ }
           receivedProductIds.push(it.product_id)
-          stockById.set(it.product_id, before + qty)
+          stockById.set(it.product_id, after)
         }
       }
 
@@ -370,7 +379,7 @@ export default function ReceivingFromPoPage() {
             const isReceiving  = receiving.has(po.id)
             const isCollapsed  = collapsed.has(po.id)
             const isPartial    = po.status === "部分入荷"
-            const checkedTotal = checkedIts.reduce((s, it) => s + receiveQty(it) * Number(it.unit_price || 0), 0)
+            const checkedTotal = checkedIts.reduce((s, it) => s + receiveQty(it) * receivePrice(it), 0)
             const allChecked   = pendingIts.length > 0 && pendingIts.every(it => checked.has(it.id))
 
             return (
@@ -558,16 +567,35 @@ export default function ReceivingFromPoPage() {
                             </div>
 
                             {/* 単価・小計 */}
-                            {it.unit_price > 0 && (
-                              <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
-                                <div style={{ fontSize: 11, color: "#9ca3af" }}>
-                                  {fmtYen(it.unit_price)}/個
+                            <div style={{ textAlign: "right", flexShrink: 0, minWidth: 90 }}>
+                              <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 3 }}>単価</div>
+                              {isChk && !isDone ? (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={receivePrice(it)}
+                                  onChange={e => {
+                                    const v = Math.max(0, Number(e.target.value) || 0)
+                                    setPriceOverride(prev => new Map(prev).set(it.id, v))
+                                  }}
+                                  style={{
+                                    width: 80, textAlign: "right", padding: "4px 6px",
+                                    border: "2px solid #3b82f6", borderRadius: 8,
+                                    fontSize: 13, fontWeight: 700, color: "#1e40af",
+                                    background: "#eff6ff", boxSizing: "border-box",
+                                  }}
+                                />
+                              ) : (
+                                <div style={{ fontSize: 13, color: isDone ? "#9ca3af" : "#d1d5db" }}>
+                                  {Number(it.unit_price) > 0 ? fmtYen(it.unit_price) : "—"}
                                 </div>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: isChk ? "#374151" : "#d1d5db" }}>
-                                  {isChk && !isDone ? fmtYen(recvQty * Number(it.unit_price)) : "—"}
-                                </div>
+                              )}
+                              <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginTop: 3 }}>
+                                {isChk && !isDone && receivePrice(it) > 0
+                                  ? fmtYen(recvQty * receivePrice(it))
+                                  : ""}
                               </div>
-                            )}
+                            </div>
                           </div>
                         )
                       })}
