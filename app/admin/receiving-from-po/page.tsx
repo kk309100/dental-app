@@ -1,8 +1,8 @@
 "use client"
 
 // 発注書から入荷処理ページ
-// 発注済みの発注書を選んで「全量入荷」ボタンを押すだけ。
-// 商品名の手入力・PDF読取不要。在庫加算・入荷履歴・POステータス更新をすべて自動化。
+// 発注書の商品一覧を表示し、今回届いた商品だけチェックして入荷処理。
+// 商品名の手入力・PDF読取不要。分割入荷・部分入荷に完全対応。
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
@@ -31,20 +31,24 @@ type ReceiveResult = {
 }
 
 export default function ReceivingFromPoPage() {
-  const [pos, setPos]           = useState<PO[]>([])
-  const [poItems, setPoItems]   = useState<POItem[]>([])
+  const [pos, setPos]             = useState<PO[]>([])
+  const [poItems, setPoItems]     = useState<POItem[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [products, setProducts] = useState<{ id: string; stock: number | null }[]>([])
-  const [clinics, setClinics]   = useState<Clinic[]>([])
-  const [orders, setOrders]     = useState<Order[]>([])
+  const [products, setProducts]   = useState<{ id: string; stock: number | null }[]>([])
+  const [clinics, setClinics]     = useState<Clinic[]>([])
+  const [orders, setOrders]       = useState<Order[]>([])
   const [orderItems, setOrderItems] = useState<{ order_id: string; product_id: string | null; quantity: number }[]>([])
 
-  const [loading, setLoading]   = useState(true)
+  const [loading, setLoading]     = useState(true)
   const [receiving, setReceiving] = useState<Set<string>>(new Set())
-  const [results, setResults]   = useState<ReceiveResult[]>([])
-  const [expandedPos, setExpandedPos] = useState<Set<string>>(new Set())
-  // 行ごとの受入数量オーバーライド（デフォルト = 発注残数）
+  const [results, setResults]     = useState<ReceiveResult[]>([])
+
+  // 選択チェック: poItemId → checked
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+  // 今回入荷数量オーバーライド: poItemId → qty
   const [qtyOverride, setQtyOverride] = useState<Map<string, number>>(new Map())
+  // 展開状態: poId → open/close（デフォルト全展開）
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchData() }, [])
 
@@ -65,13 +69,19 @@ export default function ReceivingFromPoPage() {
       supabase.from("order_items").select("order_id,product_id,quantity").limit(50000),
       supabase.from("clinics").select("id,name").limit(1000),
     ])
+    const fetchedItems = (pi.data as POItem[]) || []
     setPos((p.data as PO[]) || [])
-    setPoItems((pi.data as POItem[]) || [])
+    setPoItems(fetchedItems)
     setSuppliers((s.data as Supplier[]) || [])
     setProducts((pr.data as { id: string; stock: number | null }[]) || [])
     setOrders((o.data as Order[]) || [])
     setOrderItems((oi.data as { order_id: string; product_id: string | null; quantity: number }[]) || [])
     setClinics((cl.data as Clinic[]) || [])
+    // 初期チェック: 未入荷残数がある商品を全選択
+    const initChecked = new Set(
+      fetchedItems.filter(it => remaining(it) > 0).map(it => it.id)
+    )
+    setChecked(initChecked)
     setLoading(false)
   }
 
@@ -87,42 +97,53 @@ export default function ReceivingFromPoPage() {
     return m
   }, [poItems])
 
-  // 発注残数（＝今回入荷すべき数量）
   function remaining(item: POItem) {
     return Math.max(0, Number(item.quantity) - Number(item.received_quantity || 0))
   }
-
-  // 今回受け取る数量（オーバーライドがあればそれ、なければ残数）
   function receiveQty(item: POItem): number {
     return qtyOverride.has(item.id) ? qtyOverride.get(item.id)! : remaining(item)
   }
 
-  // 入荷後に出荷可能になる注文を検索
+  // チェック操作
+  function toggleItem(itemId: string) {
+    setChecked(prev => {
+      const n = new Set(prev); n.has(itemId) ? n.delete(itemId) : n.add(itemId); return n
+    })
+  }
+  function checkAll(poId: string) {
+    const its = (itemsByPo.get(poId) || []).filter(it => remaining(it) > 0)
+    setChecked(prev => { const n = new Set(prev); its.forEach(it => n.add(it.id)); return n })
+  }
+  function uncheckAll(poId: string) {
+    const its = itemsByPo.get(poId) || []
+    setChecked(prev => { const n = new Set(prev); its.forEach(it => n.delete(it.id)); return n })
+  }
+
+  // 折りたたみ
+  function toggleCollapse(poId: string) {
+    setCollapsed(prev => { const n = new Set(prev); n.has(poId) ? n.delete(poId) : n.add(poId); return n })
+  }
+
+  // 出荷可能注文の検索
   async function findNowShippable(receivedProductIds: string[]): Promise<{
     nowShippable: ReceiveResult["nowShippable"]; partiallyImpacted: number
   }> {
     if (receivedProductIds.length === 0) return { nowShippable: [], partiallyImpacted: 0 }
-    // 最新在庫を再取得
     const { data: latestStocks } = await supabase.from("products").select("id,stock").in("id", receivedProductIds)
     const freshStock = new Map((latestStocks || []).map((p: any) => [p.id, Number(p.stock || 0)]))
+    const allStockMap = new Map(stockById)
+    freshStock.forEach((v, k) => allStockMap.set(k, v))
 
     const pendingOrders = orders.filter(o => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status))
     const pendingOrderIds = new Set(pendingOrders.map(o => o.id))
-
-    // 入庫商品を含む注文に絞り込み
     const affectedOrderIds = new Set(
       orderItems
         .filter(oi => pendingOrderIds.has(oi.order_id) && oi.product_id && receivedProductIds.includes(oi.product_id))
         .map(oi => oi.order_id)
     )
 
-    // 全商品の最新在庫（既存 stockById + 今回更新分をマージ）
-    const allStockMap = new Map(stockById)
-    freshStock.forEach((v, k) => allStockMap.set(k, v))
-
     const nowShippable: ReceiveResult["nowShippable"] = []
     let partiallyImpacted = 0
-
     for (const oid of affectedOrderIds) {
       const itsForOrder = orderItems.filter(oi => oi.order_id === oid)
       const allOk = itsForOrder.every(oi =>
@@ -137,35 +158,30 @@ export default function ReceivingFromPoPage() {
           deliveryNumber: ord.delivery_number || oid.slice(0, 8),
           totalPrice: Number(ord.total_price || 0),
         })
-      } else {
-        partiallyImpacted++
-      }
+      } else { partiallyImpacted++ }
     }
     return { nowShippable, partiallyImpacted }
   }
 
-  // ─── 1件の発注書を入荷処理 ──────────────────────────────
-  async function receiveAll(po: PO) {
+  // ─── 入荷処理（チェックされた商品のみ）────────────────────
+  async function receiveChecked(po: PO) {
     if (receiving.has(po.id)) return
-    const its  = (itemsByPo.get(po.id) || []).filter(it => receiveQty(it) > 0)
-    if (its.length === 0) { alert("入荷する商品がありません（すべて受入済または数量0）"); return }
-
-    const totalAmt = its.reduce((s, it) => s + receiveQty(it) * Number(it.unit_price || 0), 0)
+    const allIts    = itemsByPo.get(po.id) || []
+    const targetIts = allIts.filter(it => checked.has(it.id) && receiveQty(it) > 0)
+    if (targetIts.length === 0) {
+      alert("入荷する商品が選択されていません。\n届いた商品にチェックを入れてください。")
+      return
+    }
     const supplierName = po.supplier_id ? (supplierById.get(po.supplier_id)?.name || "不明") : "仕入先未設定"
-    if (!confirm(
-      `【${supplierName}】${po.po_number || po.id.slice(0, 8)}\n\n`
-      + its.map(it => `  ${it.product_name}  ×${receiveQty(it)}`).join("\n")
-      + `\n\n合計 ${fmtYen(totalAmt)} を入荷処理します。よろしいですか？`
-    )) return
+    const totalAmt = targetIts.reduce((s, it) => s + receiveQty(it) * Number(it.unit_price || 0), 0)
 
     setReceiving(prev => new Set([...prev, po.id]))
     const receivedProductIds: string[] = []
 
     try {
-      for (const it of its) {
-        const qty  = receiveQty(it)
-        const diff = qty   // receiveQty はすでに残数ベース
-        const newReceived = Number(it.received_quantity || 0) + diff
+      for (const it of targetIts) {
+        const qty         = receiveQty(it)
+        const newReceived = Number(it.received_quantity || 0) + qty
 
         // 1. received_quantity 更新
         await supabase.from("purchase_order_items")
@@ -173,69 +189,58 @@ export default function ReceivingFromPoPage() {
           .eq("id", it.id)
 
         // 2. 在庫加算
-        if (it.product_id && diff > 0) {
+        if (it.product_id && qty > 0) {
           const before = Number(stockById.get(it.product_id) || 0)
-          const after  = before + diff
+          const after  = before + qty
           await supabase.from("products").update({ stock: after }).eq("id", it.product_id)
           try {
             await supabase.from("stock_movements").insert({
               product_id:    it.product_id,
               movement_type: "入庫",
-              quantity:      diff,
+              quantity:      qty,
               before_stock:  before,
               after_stock:   after,
               ref_type:      "purchase_order_item",
               ref_id:        it.id,
               reason:        `発注書 ${po.po_number || po.id.slice(0, 8)} 入荷`,
             })
-          } catch { /* テーブル未作成はスキップ */ }
-          // stock_receipts にも記録
+          } catch { /* スキップ */ }
           try {
             await supabase.from("stock_receipts").insert({
-              product_id: it.product_id,
-              quantity:   diff,
+              product_id:  it.product_id,
+              quantity:    qty,
               supplier_id: po.supplier_id,
-              unit_price: it.unit_price || null,
-              memo:       `発注書 ${po.po_number || po.id.slice(0, 8)}`,
+              unit_price:  it.unit_price || null,
+              memo:        `発注書 ${po.po_number || po.id.slice(0, 8)}`,
             })
-          } catch { /* テーブル未作成はスキップ */ }
+          } catch { /* スキップ */ }
           receivedProductIds.push(it.product_id)
-          // ローカル在庫マップも更新（findNowShippable で使う）
-          stockById.set(it.product_id, Number(stockById.get(it.product_id) || 0) + diff)
+          stockById.set(it.product_id, before + qty)
         }
       }
 
-      // 3. PO ステータス更新
-      const allItems = itemsByPo.get(po.id) || []
-      const updatedItems = allItems.map(i => ({
-        ...i,
-        received_quantity: its.find(x => x.id === i.id)
-          ? Number(i.received_quantity || 0) + receiveQty(i)
-          : Number(i.received_quantity || 0),
-      }))
-      const allDone = updatedItems.every(i => Number(i.received_quantity) >= Number(i.quantity))
-      await supabase.from("purchase_orders")
-        .update({ status: allDone ? "入荷済" : "部分入荷" })
-        .eq("id", po.id)
+      // 3. PO ステータス更新（最新DB値で判定）
+      const { data: latestItems } = await supabase
+        .from("purchase_order_items")
+        .select("quantity,received_quantity")
+        .eq("purchase_order_id", po.id)
+      if (latestItems) {
+        const allDone = latestItems.every(i => Number(i.received_quantity || 0) >= Number(i.quantity))
+        const someDone = latestItems.some(i => Number(i.received_quantity || 0) > 0)
+        const newStatus = allDone ? "入荷済" : someDone ? "部分入荷" : po.status
+        await supabase.from("purchase_orders").update({ status: newStatus }).eq("id", po.id)
+        if (allDone) setPos(prev => prev.filter(p => p.id !== po.id))
+      }
 
       // 4. 出荷可能注文を検索
       const { nowShippable, partiallyImpacted } = await findNowShippable(receivedProductIds)
 
       setResults(prev => [{
         poId: po.id, poNumber: po.po_number || po.id.slice(0, 8), supplierName,
-        receivedItems: its.length, totalAmount: totalAmt,
+        receivedItems: targetIts.length, totalAmount: totalAmt,
         nowShippable, partiallyImpacted, error: null,
       }, ...prev])
 
-      // PO をリストから除去（入荷済になった場合）
-      if (allDone) setPos(prev => prev.filter(p => p.id !== po.id))
-      else {
-        // 部分入荷 → poItems の received_quantity を更新
-        setPoItems(prev => prev.map(i => {
-          const hit = its.find(x => x.id === i.id)
-          return hit ? { ...i, received_quantity: Number(i.received_quantity || 0) + receiveQty(i) } : i
-        }))
-      }
     } catch (e) {
       setResults(prev => [{
         poId: po.id, poNumber: po.po_number || po.id.slice(0, 8), supplierName,
@@ -248,12 +253,6 @@ export default function ReceivingFromPoPage() {
     }
   }
 
-  function toggleExpand(poId: string) {
-    setExpandedPos(prev => {
-      const n = new Set(prev); n.has(poId) ? n.delete(poId) : n.add(poId); return n
-    })
-  }
-
   if (loading) return (
     <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>
       <div style={{ fontSize: 32 }}>⏳</div>読み込み中…
@@ -261,7 +260,7 @@ export default function ReceivingFromPoPage() {
   )
 
   return (
-    <div style={{ maxWidth: 820 }}>
+    <div style={{ maxWidth: 860 }}>
 
       {/* ─── ヘッダー ───────────────────────────────────── */}
       <div style={{ marginBottom: 20 }}>
@@ -271,27 +270,23 @@ export default function ReceivingFromPoPage() {
               📦 発注書から入荷処理
             </h1>
             <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0" }}>
-              発注書の商品が届いたら「全量入荷」を押すだけ — 手入力・PDF読取不要
+              届いた商品にチェックを入れて「入荷処理」 — 手入力不要、分割入荷OK
             </p>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Link href="/admin/receiving"><button style={btnGray}>✏️ 手動入力・PDF読取</button></Link>
+            <Link href="/admin/receiving"><button style={btnGray}>✏️ 手動入力・PDF</button></Link>
             <Link href="/admin/purchase-orders"><button style={btnGray}>📋 発注書一覧</button></Link>
             <Link href="/admin/shipping"><button style={btnBlue}>🚚 出荷準備</button></Link>
           </div>
         </div>
 
-        {/* 使い方バナー */}
         <div style={{
-          marginTop: 16, padding: "12px 16px",
-          background: "#eff6ff", border: "2px solid #93c5fd", borderRadius: 12,
-          fontSize: 13, color: "#1e40af", lineHeight: 1.8,
+          marginTop: 14, padding: "10px 16px",
+          background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10,
+          fontSize: 13, color: "#1e40af",
         }}>
-          <strong>💡 使い方：</strong>
-          発注済みの発注書が一覧表示されます。
-          商品が届いたら発注書を選んで <strong>「全量入荷」</strong> を押すだけ。
-          在庫が自動で増え、出荷可能になった注文が即座に通知されます。<br />
-          数量が少ない・多い場合は ▼ を押して行ごとに調整できます。
+          💡 <strong>今日届いた商品だけチェック</strong>して「入荷処理」を押してください。
+          まだ届いていない商品はチェックを外せばOK。数量が違う場合は数字を変えられます。
         </div>
       </div>
 
@@ -307,12 +302,10 @@ export default function ReceivingFromPoPage() {
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 18 }}>{r.error ? "❌" : "✅"}</span>
-                <span style={{ fontSize: 14, fontWeight: 700 }}>
-                  {r.supplierName} / {r.poNumber}
-                </span>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>{r.supplierName} / {r.poNumber}</span>
                 {!r.error && (
                   <span style={{ fontSize: 12, color: "#15803d" }}>
-                    {r.receivedItems}品を入荷 — {fmtYen(r.totalAmount)}
+                    {r.receivedItems}品を入荷処理 — {fmtYen(r.totalAmount)}
                   </span>
                 )}
                 <button onClick={() => setResults(prev => prev.filter((_, j) => j !== i))}
@@ -322,30 +315,23 @@ export default function ReceivingFromPoPage() {
               {!r.error && r.nowShippable.length > 0 && (
                 <div style={{ marginTop: 10 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#15803d", marginBottom: 6 }}>
-                    🚚 これで出荷可能になった注文 {r.nowShippable.length}件
+                    🚚 出荷できるようになった注文 {r.nowShippable.length}件
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {r.nowShippable.map((o, j) => (
-                      <div key={j} style={{
-                        display: "flex", alignItems: "center", gap: 10,
-                        padding: "6px 10px", background: "#fff", borderRadius: 8,
-                        border: "1px solid #d1fae5", fontSize: 13,
-                      }}>
-                        <span style={{ fontWeight: 700 }}>{o.clinicName}</span>
-                        <span style={{ color: "#6b7280", fontSize: 12 }}>{o.deliveryNumber}</span>
-                        <span style={{ marginLeft: "auto", fontWeight: 700 }}>{fmtYen(o.totalPrice)}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {r.nowShippable.map((o, j) => (
+                    <div key={j} style={{
+                      display: "flex", alignItems: "center", gap: 10, padding: "6px 10px",
+                      background: "#fff", borderRadius: 8, border: "1px solid #d1fae5",
+                      fontSize: 13, marginBottom: 4,
+                    }}>
+                      <span style={{ fontWeight: 700 }}>{o.clinicName}</span>
+                      <span style={{ color: "#6b7280", fontSize: 12 }}>{o.deliveryNumber}</span>
+                      <span style={{ marginLeft: "auto", fontWeight: 700 }}>{fmtYen(o.totalPrice)}</span>
+                    </div>
+                  ))}
+                  <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <Link href={`/admin/shipping?orders=${r.nowShippable.map(o => o.orderId).join(",")}`}>
                       <button style={{ ...btnBlue, padding: "8px 16px", fontSize: 13 }}>
                         🚚 出荷準備へ（{r.nowShippable.length}件）
-                      </button>
-                    </Link>
-                    <Link href="/admin/orders/process">
-                      <button style={{ ...btnGray, padding: "8px 16px", fontSize: 13 }}>
-                        📥 受注処理へ
                       </button>
                     </Link>
                   </div>
@@ -353,7 +339,7 @@ export default function ReceivingFromPoPage() {
               )}
               {!r.error && r.partiallyImpacted > 0 && (
                 <div style={{ fontSize: 12, color: "#b45309", marginTop: 6 }}>
-                  ⚠ まだ他の品が不足している注文: {r.partiallyImpacted}件（追加入荷待ち）
+                  ⚠ まだ一部の商品が不足している注文が {r.partiallyImpacted}件あります（追加入荷待ち）
                 </div>
               )}
             </div>
@@ -369,22 +355,23 @@ export default function ReceivingFromPoPage() {
         }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#15803d" }}>入荷待ちの発注書はありません</div>
-          <div style={{ fontSize: 12, color: "#16a34a", marginTop: 4 }}>すべての発注書が入荷済みです</div>
           <div style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "center" }}>
             <Link href="/admin/purchase-orders"><button style={btnGray}>📋 発注書一覧</button></Link>
             <Link href="/admin/purchase-orders/pool"><button style={btnOrange}>📦 発注プール</button></Link>
           </div>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {pos.map(po => {
-            const its         = itemsByPo.get(po.id) || []
-            const hasRemaining = its.some(it => remaining(it) > 0)
-            const totalRemAmt  = its.reduce((s, it) => s + receiveQty(it) * Number(it.unit_price || 0), 0)
+            const allIts      = itemsByPo.get(po.id) || []
+            const pendingIts  = allIts.filter(it => remaining(it) > 0)
+            const checkedIts  = pendingIts.filter(it => checked.has(it.id))
             const supplierName = po.supplier_id ? (supplierById.get(po.supplier_id)?.name || "仕入先不明") : "仕入先未設定"
             const isReceiving  = receiving.has(po.id)
-            const expanded     = expandedPos.has(po.id)
+            const isCollapsed  = collapsed.has(po.id)
             const isPartial    = po.status === "部分入荷"
+            const checkedTotal = checkedIts.reduce((s, it) => s + receiveQty(it) * Number(it.unit_price || 0), 0)
+            const allChecked   = pendingIts.length > 0 && pendingIts.every(it => checked.has(it.id))
 
             return (
               <div key={po.id} style={{
@@ -394,10 +381,9 @@ export default function ReceivingFromPoPage() {
               }}>
                 {/* カードヘッダー */}
                 <div style={{
-                  display: "flex", alignItems: "center", gap: 12,
-                  padding: "14px 18px",
+                  display: "flex", alignItems: "center", gap: 12, padding: "14px 18px",
                   background: isPartial ? "#fefce8" : "#f9fafb",
-                  borderBottom: expanded ? `1px solid ${isPartial ? "#fde68a" : "#e5e7eb"}` : "none",
+                  borderBottom: `1px solid ${isPartial ? "#fde68a" : "#e5e7eb"}`,
                   flexWrap: "wrap",
                 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -407,144 +393,218 @@ export default function ReceivingFromPoPage() {
                         background: isPartial ? "#fde68a" : "#dbeafe",
                         color: isPartial ? "#92400e" : "#1e40af",
                       }}>
-                        {isPartial ? "⚠ 部分入荷" : "📬 入荷待ち"}
+                        {isPartial ? "⚠ 部分入荷中" : "📬 入荷待ち"}
                       </span>
-                      <span style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>{supplierName}</span>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: "#111827" }}>{supplierName}</span>
                       <span style={{ fontSize: 12, color: "#9ca3af" }}>
                         {po.po_number || po.id.slice(0, 8)}
                         {po.ordered_at && ` — 発注日 ${new Date(po.ordered_at).toLocaleDateString("ja-JP")}`}
                       </span>
                     </div>
                     <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-                      {its.length}品
-                      {isPartial && ` — うち未入荷 ${its.filter(it => remaining(it) > 0).length}品`}
-                      {totalRemAmt > 0 && ` — 仕入額 ${fmtYen(totalRemAmt)}`}
+                      全{allIts.length}品中 未入荷{pendingIts.length}品
+                      {checkedIts.length > 0 && (
+                        <span style={{ marginLeft: 8, fontWeight: 700, color: "#059669" }}>
+                          → 今回チェック {checkedIts.length}品 {checkedTotal > 0 ? `/ ${fmtYen(checkedTotal)}` : ""}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8, flexShrink: 0, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
                     <button
-                      onClick={() => toggleExpand(po.id)}
+                      onClick={() => toggleCollapse(po.id)}
                       style={{ ...btnGray, fontSize: 12, padding: "6px 12px" }}>
-                      {expanded ? "▲ 閉じる" : "▼ 明細確認"}
+                      {isCollapsed ? "▼ 開く" : "▲ 閉じる"}
                     </button>
-                    {hasRemaining && (
-                      <button
-                        onClick={() => receiveAll(po)}
-                        disabled={isReceiving}
-                        style={{
-                          padding: "10px 20px", borderRadius: 10, border: "none",
-                          background: isReceiving ? "#d1d5db" : "#059669",
-                          color: "#fff", fontSize: 14, fontWeight: 800,
-                          cursor: isReceiving ? "not-allowed" : "pointer", whiteSpace: "nowrap",
-                        }}>
-                        {isReceiving ? "処理中…" : `✅ 全量入荷 (${its.filter(it => receiveQty(it) > 0).length}品)`}
-                      </button>
-                    )}
-                    {!hasRemaining && (
-                      <span style={{ fontSize: 12, color: "#15803d", fontWeight: 700 }}>✅ 全量入荷済み</span>
-                    )}
+                    <button
+                      onClick={() => receiveChecked(po)}
+                      disabled={isReceiving || checkedIts.length === 0}
+                      style={{
+                        padding: "10px 20px", borderRadius: 10, border: "none",
+                        background: isReceiving ? "#d1d5db"
+                          : checkedIts.length === 0 ? "#d1d5db"
+                          : "#059669",
+                        color: "#fff", fontSize: 14, fontWeight: 800,
+                        cursor: (isReceiving || checkedIts.length === 0) ? "not-allowed" : "pointer",
+                        whiteSpace: "nowrap",
+                      }}>
+                      {isReceiving ? "処理中…"
+                        : checkedIts.length === 0 ? "商品を選択してください"
+                        : `✅ ${checkedIts.length}品を入荷処理`}
+                    </button>
                   </div>
                 </div>
 
-                {/* 明細テーブル（展開時のみ） */}
-                {expanded && (
-                  <div style={{ padding: "12px 18px" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                      <thead>
-                        <tr style={{ borderBottom: "2px solid #f3f4f6" }}>
-                          <th style={thStyle}>商品名</th>
-                          <th style={{ ...thStyle, textAlign: "right", width: 70 }}>発注数</th>
-                          <th style={{ ...thStyle, textAlign: "right", width: 70 }}>入荷済</th>
-                          <th style={{ ...thStyle, textAlign: "right", width: 70 }}>残数</th>
-                          <th style={{ ...thStyle, textAlign: "right", width: 80 }}>今回入荷数</th>
-                          <th style={{ ...thStyle, textAlign: "right", width: 80 }}>単価</th>
-                          <th style={{ ...thStyle, textAlign: "right", width: 90 }}>小計</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {its.map(it => {
-                          const rem     = remaining(it)
-                          const recvQty = receiveQty(it)
-                          const done    = rem === 0
-                          return (
-                            <tr key={it.id} style={{
-                              borderBottom: "1px solid #f9fafb",
-                              background: done ? "#f0fdf4" : rem > 0 ? "transparent" : "#fff5f5",
-                            }}>
-                              <td style={{ padding: "7px 6px", color: done ? "#6b7280" : "#111827" }}>
-                                {it.product_name || "(商品名なし)"}
-                                {it.note && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 6 }}>{it.note}</span>}
-                              </td>
-                              <td style={{ padding: "7px 6px", textAlign: "right", color: "#374151" }}>{it.quantity}</td>
-                              <td style={{ padding: "7px 6px", textAlign: "right", color: "#6b7280" }}>
-                                {Number(it.received_quantity || 0) > 0 ? Number(it.received_quantity) : "—"}
-                              </td>
-                              <td style={{
-                                padding: "7px 6px", textAlign: "right", fontWeight: 700,
-                                color: rem > 0 ? "#b91c1c" : "#15803d",
-                              }}>
-                                {rem > 0 ? rem : "✅"}
-                              </td>
-                              <td style={{ padding: "7px 6px", textAlign: "right" }}>
-                                {rem > 0 ? (
-                                  <input
-                                    type="number"
-                                    value={recvQty}
-                                    min={0}
-                                    max={rem}
-                                    onChange={e => {
-                                      const v = Math.min(rem, Math.max(0, Number(e.target.value)))
-                                      setQtyOverride(prev => new Map(prev).set(it.id, v))
-                                    }}
-                                    style={{
-                                      width: 64, textAlign: "right", padding: "4px 6px",
-                                      border: "2px solid #059669", borderRadius: 6,
-                                      fontSize: 13, fontWeight: 700, color: "#065f46",
-                                    }}
-                                  />
-                                ) : (
-                                  <span style={{ color: "#9ca3af" }}>—</span>
-                                )}
-                              </td>
-                              <td style={{ padding: "7px 6px", textAlign: "right", color: "#6b7280" }}>
-                                {it.unit_price > 0 ? fmtYen(it.unit_price) : "—"}
-                              </td>
-                              <td style={{ padding: "7px 6px", textAlign: "right", fontWeight: 600 }}>
-                                {recvQty > 0 && it.unit_price > 0 ? fmtYen(recvQty * Number(it.unit_price)) : "—"}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                      {its.length > 0 && (
-                        <tfoot>
-                          <tr style={{ borderTop: "2px solid #e5e7eb", background: "#f9fafb" }}>
-                            <td colSpan={6} style={{ padding: "8px 6px", textAlign: "right", fontSize: 13, color: "#374151", fontWeight: 700 }}>今回入荷合計</td>
-                            <td style={{ padding: "8px 6px", textAlign: "right", fontSize: 14, fontWeight: 800, color: "#111827" }}>
-                              {fmtYen(totalRemAmt)}
-                            </td>
-                          </tr>
-                        </tfoot>
-                      )}
-                    </table>
-                    {po.note && (
-                      <div style={{ marginTop: 8, padding: "6px 10px", background: "#fefce8", border: "1px solid #fde68a", borderRadius: 6, fontSize: 12, color: "#92400e" }}>
-                        備考: {po.note}
-                      </div>
-                    )}
-                    {hasRemaining && (
-                      <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
-                        <button
-                          onClick={() => receiveAll(po)}
-                          disabled={isReceiving}
-                          style={{
-                            padding: "9px 24px", borderRadius: 10, border: "none",
-                            background: isReceiving ? "#d1d5db" : "#059669",
-                            color: "#fff", fontSize: 14, fontWeight: 800,
-                            cursor: isReceiving ? "not-allowed" : "pointer",
+                {/* 商品チェックリスト */}
+                {!isCollapsed && (
+                  <div>
+                    {/* 全選択/解除 ヘッダー行 */}
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "8px 18px", background: "#fafafa",
+                      borderBottom: "1px solid #f0f0f0", fontSize: 12, color: "#6b7280",
+                    }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={allChecked}
+                          onChange={() => allChecked ? uncheckAll(po.id) : checkAll(po.id)}
+                          style={{ width: 16, height: 16, cursor: "pointer" }}
+                        />
+                        <span style={{ fontWeight: 600, color: "#374151" }}>
+                          {allChecked ? "すべて解除" : "すべて選択"}
+                        </span>
+                      </label>
+                      <span style={{ marginLeft: "auto" }}>
+                        未入荷 {pendingIts.length}品 / チェック済 {checkedIts.length}品
+                      </span>
+                    </div>
+
+                    {/* 商品行 */}
+                    <div style={{ padding: "4px 0" }}>
+                      {allIts.map(it => {
+                        const rem     = remaining(it)
+                        const isDone  = rem === 0
+                        const isChk   = checked.has(it.id)
+                        const recvQty = receiveQty(it)
+
+                        return (
+                          <div key={it.id} style={{
+                            display: "flex", alignItems: "center", gap: 12,
+                            padding: "10px 18px",
+                            borderBottom: "1px solid #f3f4f6",
+                            background: isDone ? "#f0fdf4"
+                              : isChk ? "#f0fdf9"
+                              : "transparent",
                           }}>
-                          {isReceiving ? "処理中…" : `✅ 上記の数量で入荷処理する`}
-                        </button>
+                            {/* チェックボックス */}
+                            <label style={{
+                              display: "flex", alignItems: "center",
+                              cursor: isDone ? "default" : "pointer",
+                              flexShrink: 0,
+                            }}>
+                              <input
+                                type="checkbox"
+                                checked={isDone || isChk}
+                                disabled={isDone}
+                                onChange={() => !isDone && toggleItem(it.id)}
+                                style={{ width: 18, height: 18, cursor: isDone ? "default" : "pointer" }}
+                              />
+                            </label>
+
+                            {/* 商品名 */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{
+                                fontSize: 14, fontWeight: isDone ? 400 : 600,
+                                color: isDone ? "#9ca3af" : "#111827",
+                              }}>
+                                {it.product_name || "(商品名なし)"}
+                              </div>
+                              {it.note && (
+                                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>{it.note}</div>
+                              )}
+                            </div>
+
+                            {/* 発注数 */}
+                            <div style={{ textAlign: "center", flexShrink: 0, minWidth: 60 }}>
+                              <div style={{ fontSize: 11, color: "#9ca3af" }}>発注数</div>
+                              <div style={{ fontSize: 14, fontWeight: 600 }}>{it.quantity}</div>
+                            </div>
+
+                            {/* 入荷済 */}
+                            <div style={{ textAlign: "center", flexShrink: 0, minWidth: 60 }}>
+                              <div style={{ fontSize: 11, color: "#9ca3af" }}>入荷済</div>
+                              <div style={{ fontSize: 14, color: "#6b7280" }}>
+                                {Number(it.received_quantity || 0) > 0 ? Number(it.received_quantity) : "—"}
+                              </div>
+                            </div>
+
+                            {/* 残数 */}
+                            <div style={{ textAlign: "center", flexShrink: 0, minWidth: 60 }}>
+                              <div style={{ fontSize: 11, color: "#9ca3af" }}>残数</div>
+                              <div style={{
+                                fontSize: 14, fontWeight: 700,
+                                color: isDone ? "#15803d" : "#b91c1c",
+                              }}>
+                                {isDone ? "✅" : rem}
+                              </div>
+                            </div>
+
+                            {/* 今回入荷数（チェック時のみ編集可） */}
+                            <div style={{ textAlign: "center", flexShrink: 0, minWidth: 90 }}>
+                              <div style={{ fontSize: 11, color: "#9ca3af" }}>今回入荷数</div>
+                              {isDone ? (
+                                <div style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>入荷済</div>
+                              ) : isChk ? (
+                                <input
+                                  type="number"
+                                  value={recvQty}
+                                  min={1}
+                                  max={rem}
+                                  onChange={e => {
+                                    const v = Math.min(rem, Math.max(1, Number(e.target.value) || 1))
+                                    setQtyOverride(prev => new Map(prev).set(it.id, v))
+                                  }}
+                                  style={{
+                                    width: 70, textAlign: "center", padding: "5px 6px",
+                                    border: "2px solid #059669", borderRadius: 8,
+                                    fontSize: 15, fontWeight: 700, color: "#065f46",
+                                    background: "#f0fdf4",
+                                  }}
+                                />
+                              ) : (
+                                <div style={{ fontSize: 13, color: "#d1d5db" }}>—</div>
+                              )}
+                            </div>
+
+                            {/* 単価・小計 */}
+                            {it.unit_price > 0 && (
+                              <div style={{ textAlign: "right", flexShrink: 0, minWidth: 80 }}>
+                                <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                                  {fmtYen(it.unit_price)}/個
+                                </div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: isChk ? "#374151" : "#d1d5db" }}>
+                                  {isChk && !isDone ? fmtYen(recvQty * Number(it.unit_price)) : "—"}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* フッター: 合計 + 入荷ボタン */}
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: "12px 18px",
+                      background: "#f9fafb", borderTop: "1px solid #e5e7eb",
+                      flexWrap: "wrap",
+                    }}>
+                      <div style={{ fontSize: 13, color: "#6b7280" }}>
+                        {checkedIts.length > 0
+                          ? <><strong style={{ color: "#059669" }}>{checkedIts.length}品</strong>を選択中
+                            {checkedTotal > 0 && <> / 仕入合計 <strong style={{ color: "#111827" }}>{fmtYen(checkedTotal)}</strong></>}
+                          </>
+                          : "届いた商品にチェックを入れてください"}
+                      </div>
+                      <button
+                        onClick={() => receiveChecked(po)}
+                        disabled={isReceiving || checkedIts.length === 0}
+                        style={{
+                          marginLeft: "auto", padding: "9px 24px", borderRadius: 10, border: "none",
+                          background: (isReceiving || checkedIts.length === 0) ? "#d1d5db" : "#059669",
+                          color: "#fff", fontSize: 14, fontWeight: 800,
+                          cursor: (isReceiving || checkedIts.length === 0) ? "not-allowed" : "pointer",
+                        }}>
+                        {isReceiving ? "処理中…" : checkedIts.length === 0 ? "商品を選択" : `✅ ${checkedIts.length}品を入荷処理する`}
+                      </button>
+                    </div>
+
+                    {po.note && (
+                      <div style={{ padding: "8px 18px 12px" }}>
+                        <div style={{ padding: "6px 10px", background: "#fefce8", border: "1px solid #fde68a", borderRadius: 6, fontSize: 12, color: "#92400e" }}>
+                          備考: {po.note}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -559,10 +619,6 @@ export default function ReceivingFromPoPage() {
 }
 
 // ─── スタイル ─────────────────────────────────────────────
-const thStyle: React.CSSProperties = {
-  textAlign: "left", padding: "4px 6px",
-  fontSize: 11, color: "#9ca3af", fontWeight: 600,
-}
 const btnGray: React.CSSProperties = {
   padding: "7px 14px", borderRadius: 8, border: "1px solid #d1d5db",
   background: "#fff", fontSize: 12, color: "#374151", cursor: "pointer", fontWeight: 600,
