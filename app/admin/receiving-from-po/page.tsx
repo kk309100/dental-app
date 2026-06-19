@@ -34,7 +34,7 @@ export default function ReceivingFromPoPage() {
   const [pos, setPos]             = useState<PO[]>([])
   const [poItems, setPoItems]     = useState<POItem[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [products, setProducts]   = useState<{ id: string; stock: number | null }[]>([])
+  const [products, setProducts]   = useState<{ id: string; stock: number | null; price: number | null }[]>([])
   const [clinics, setClinics]     = useState<Clinic[]>([])
   const [orders, setOrders]       = useState<Order[]>([])
   const [orderItems, setOrderItems] = useState<{ order_id: string; product_id: string | null; quantity: number }[]>([])
@@ -66,7 +66,7 @@ export default function ReceivingFromPoPage() {
         .select("id,purchase_order_id,product_id,product_name,quantity,unit_price,received_quantity,note")
         .limit(50000),
       supabase.from("suppliers").select("id,name").limit(1000),
-      supabase.from("products").select("id,stock").limit(50000),
+      supabase.from("products").select("id,stock,price").limit(50000),
       supabase.from("orders").select("id,clinic_id,status,total_price,delivery_number").limit(50000),
       supabase.from("order_items").select("order_id,product_id,quantity").limit(50000),
       supabase.from("clinics").select("id,name").limit(1000),
@@ -75,7 +75,7 @@ export default function ReceivingFromPoPage() {
     setPos((p.data as PO[]) || [])
     setPoItems(fetchedItems)
     setSuppliers((s.data as Supplier[]) || [])
-    setProducts((pr.data as { id: string; stock: number | null }[]) || [])
+    setProducts((pr.data as { id: string; stock: number | null; price: number | null }[]) || [])
     setOrders((o.data as Order[]) || [])
     setOrderItems((oi.data as { order_id: string; product_id: string | null; quantity: number }[]) || [])
     setClinics((cl.data as Clinic[]) || [])
@@ -90,6 +90,7 @@ export default function ReceivingFromPoPage() {
   const supplierById = useMemo(() => new Map(suppliers.map(s => [s.id, s])), [suppliers])
   const clinicById   = useMemo(() => new Map(clinics.map(c => [c.id, c])), [clinics])
   const stockById    = useMemo(() => new Map(products.map(p => [p.id, Number(p.stock || 0)])), [products])
+  const listPriceById = useMemo(() => new Map(products.map(p => [p.id, p.price])), [products])
   const itemsByPo    = useMemo(() => {
     const m = new Map<string, POItem[]>()
     for (const it of poItems) {
@@ -566,9 +567,19 @@ export default function ReceivingFromPoPage() {
                               )}
                             </div>
 
-                            {/* 単価・小計 */}
+                            {/* 定価・仕入単価・小計 */}
                             <div style={{ textAlign: "right", flexShrink: 0, minWidth: 90 }}>
-                              <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 3 }}>単価</div>
+                              {/* 定価（売価） */}
+                              {(() => {
+                                const listPrice = it.product_id ? listPriceById.get(it.product_id) : null
+                                return listPrice ? (
+                                  <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 2 }}>
+                                    定価 {fmtYen(listPrice)}
+                                  </div>
+                                ) : null
+                              })()}
+                              {/* 仕入単価（チェック時は編集可） */}
+                              <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 3 }}>仕入単価</div>
                               {isChk && !isDone ? (
                                 <input
                                   type="number"
@@ -590,6 +601,7 @@ export default function ReceivingFromPoPage() {
                                   {Number(it.unit_price) > 0 ? fmtYen(it.unit_price) : "—"}
                                 </div>
                               )}
+                              {/* 仕入小計 */}
                               <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginTop: 3 }}>
                                 {isChk && !isDone && receivePrice(it) > 0
                                   ? fmtYen(recvQty * receivePrice(it))
