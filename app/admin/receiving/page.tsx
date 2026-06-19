@@ -439,6 +439,11 @@ export default function ReceivingPage() {
           📦 仕入納品（仕入先からの入荷登録）
           <span className="ml-2 text-xs font-normal text-gray-400">手打ち or PDF読込 ・ 商品マスタは自動更新</span>
         </h1>
+        <a href="/admin/receiving-from-po"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 transition-colors"
+          title="発注書の商品が届いたら1クリックで入荷処理">
+          ⚡ 発注書から入荷（簡単）
+        </a>
         <a href="/admin/receivings"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors"
           title="過去の入荷履歴を一覧表示">
