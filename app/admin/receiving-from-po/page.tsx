@@ -49,6 +49,8 @@ export default function ReceivingFromPoPage() {
   const [qtyOverride, setQtyOverride] = useState<Map<string, number>>(new Map())
   // 単価オーバーライド: poItemId → price（デフォルト = 発注書の unit_price）
   const [priceOverride, setPriceOverride] = useState<Map<string, number>>(new Map())
+  // 定価オーバーライド: product_id → price（デフォルト = products.price）
+  const [listPriceOverride, setListPriceOverride] = useState<Map<string, number>>(new Map())
   // 展開状態: poId → open/close（デフォルト全展開）
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
@@ -108,6 +110,11 @@ export default function ReceivingFromPoPage() {
   }
   function receivePrice(item: POItem): number {
     return priceOverride.has(item.id) ? priceOverride.get(item.id)! : Number(item.unit_price || 0)
+  }
+  function receiveListPrice(productId: string): number | null {
+    if (listPriceOverride.has(productId)) return listPriceOverride.get(productId)!
+    const lp = listPriceById.get(productId)
+    return lp != null ? Number(lp) : null
   }
 
   // チェック操作
@@ -199,9 +206,11 @@ export default function ReceivingFromPoPage() {
           const price  = receivePrice(it)
           const before = Number(stockById.get(it.product_id) || 0)
           const after  = before + qty
-          // 在庫加算・原価更新（実際の仕入価格が発注時と異なる場合に備えて上書き）
+          // 在庫加算・原価更新・定価更新
           const prodUpdate: Record<string, unknown> = { stock: after }
           if (price > 0) prodUpdate.cost = price
+          const lp = receiveListPrice(it.product_id)
+          if (lp != null && lp > 0) prodUpdate.price = lp
           await supabase.from("products").update(prodUpdate).eq("id", it.product_id)
           try {
             await supabase.from("stock_movements").insert({
@@ -569,15 +578,33 @@ export default function ReceivingFromPoPage() {
 
                             {/* 定価・仕入単価・小計 */}
                             <div style={{ textAlign: "right", flexShrink: 0, minWidth: 90 }}>
-                              {/* 定価（売価） */}
-                              {(() => {
-                                const listPrice = it.product_id ? listPriceById.get(it.product_id) : null
-                                return listPrice ? (
-                                  <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 2 }}>
-                                    定価 {fmtYen(listPrice)}
-                                  </div>
-                                ) : null
-                              })()}
+                              {/* 定価（チェック時は編集可） */}
+                              {it.product_id && (isChk || receiveListPrice(it.product_id) != null) && (
+                                <div style={{ marginBottom: 4 }}>
+                                  <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 2 }}>定価</div>
+                                  {isChk && !isDone ? (
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={receiveListPrice(it.product_id) ?? ""}
+                                      onChange={e => {
+                                        const v = Math.max(0, Number(e.target.value) || 0)
+                                        setListPriceOverride(prev => new Map(prev).set(it.product_id!, v))
+                                      }}
+                                      style={{
+                                        width: 80, textAlign: "right", padding: "4px 6px",
+                                        border: "2px solid #f59e0b", borderRadius: 8,
+                                        fontSize: 13, fontWeight: 700, color: "#92400e",
+                                        background: "#fffbeb", boxSizing: "border-box",
+                                      }}
+                                    />
+                                  ) : (
+                                    <div style={{ fontSize: 13, color: isDone ? "#9ca3af" : "#d1d5db" }}>
+                                      {receiveListPrice(it.product_id) != null ? fmtYen(receiveListPrice(it.product_id)!) : "—"}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               {/* 仕入単価（チェック時は編集可） */}
                               <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 3 }}>仕入単価</div>
                               {isChk && !isDone ? (
