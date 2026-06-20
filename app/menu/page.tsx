@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import {
   ShoppingCart, ClipboardList, Package, ScanLine,
-  ChevronRight, LogOut, RefreshCw, Heart,
+  ChevronRight, LogOut, RefreshCw, Heart, ClipboardCheck,
 } from "lucide-react"
 
 const MENUS = [
@@ -44,6 +44,15 @@ const MENUS = [
     color: "#7c3aed",
     bg: "#f5f3ff",
     border: "#ddd6fe",
+  },
+  {
+    href: "/stocktake",
+    Icon: ClipboardCheck,
+    label: "年次棚卸し",
+    desc: "注文履歴から自動リスト生成・報告書印刷",
+    color: "#0891b2",
+    bg: "#ecfeff",
+    border: "#a5f3fc",
   },
 ]
 

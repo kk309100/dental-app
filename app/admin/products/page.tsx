@@ -21,6 +21,7 @@ type Product = {
   purchase_maker?: string | null
   default_supplier_id?: string | null
   image_url?: string | null
+  stocktake_exclude?: boolean | null
 }
 
 type Supplier = { id: string; name: string; short_name: string | null }
@@ -55,7 +56,7 @@ export default function AdminProductsPage() {
     setLoading(true)
     const data = await fetchAll(
       "products",
-      "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id,image_url",
+      "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id,image_url,stocktake_exclude",
       (q) => q.order("name", { ascending: true })
     )
     setProducts((data as Product[]) || [])
@@ -90,6 +91,7 @@ export default function AdminProductsPage() {
       purchase_maker: editForm.purchase_maker || null,
       default_supplier_id: editForm.default_supplier_id || null,
       active: editForm.active !== false,
+      stocktake_exclude: editForm.stocktake_exclude === true,
       image_url: editForm.image_url !== undefined ? (editForm.image_url || null) : editProduct.image_url,
     }
     const { error } = await supabase.from("products").update(payload).eq("id", editProduct.id)
@@ -714,6 +716,32 @@ export default function AdminProductsPage() {
                       </div>
                       <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>
                         {editForm.active !== false ? "医院の注文画面に表示されます" : "注文画面から非表示になります"}
+                      </div>
+                    </div>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 0", borderTop: "1px solid #f3f4f6", marginTop: 4 }}>
+                    <div style={{
+                      width: 44, height: 24, borderRadius: 12,
+                      background: editForm.stocktake_exclude ? "#f59e0b" : "#d1d5db",
+                      position: "relative", transition: "background 0.2s", flexShrink: 0,
+                    }}>
+                      <div style={{
+                        position: "absolute", top: 3,
+                        left: editForm.stocktake_exclude ? 23 : 3,
+                        width: 18, height: 18, borderRadius: "50%",
+                        background: "#fff", transition: "left 0.2s",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                      }} />
+                      <input type="checkbox" checked={!!editForm.stocktake_exclude}
+                        onChange={e => setEditForm({ ...editForm, stocktake_exclude: e.target.checked })}
+                        style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", cursor: "pointer", margin: 0 }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: editForm.stocktake_exclude ? "#b45309" : "#6b7280" }}>
+                        {editForm.stocktake_exclude ? "棚卸し対象外" : "棚卸し対象"}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>
+                        {editForm.stocktake_exclude ? "注文してもすぐ使う消耗品。棚卸しリストに含まれません" : "年次棚卸しリストに表示されます"}
                       </div>
                     </div>
                   </label>
