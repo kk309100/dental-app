@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { Html5Qrcode } from "html5-qrcode"
 import { playBeep } from "@/lib/beep"
 import { useRouter } from "next/navigation"
+import { parseCSV, downloadCSV, toCSV } from "@/lib/csv"
 
 const C = {
   primary: "#22a648",
@@ -73,6 +74,11 @@ export default function ClinicInventoryPage() {
   const [addModal, setAddModal]   = useState(false)
   const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "" })
   const [addSaving, setAddSaving] = useState(false)
+
+  const [importModal, setImportModal] = useState(false)
+  const [importRows, setImportRows]   = useState<Record<string, string>[]>([])
+  const [importing, setImporting]     = useState(false)
+  const csvInputRef = useRef<HTMLInputElement>(null)
 
   const [historyFilter, setHistoryFilter] = useState<"today" | "week" | "all">("today")
   const [staffFilter, setStaffFilter]     = useState("すべて")
@@ -193,6 +199,49 @@ export default function ClinicInventoryPage() {
     await supabase.from("clinic_inventory_items").delete().eq("id", id)
     setItems(prev => prev.filter(i => i.id !== id))
     showToast("✓ 削除しました")
+  }
+
+  function downloadTemplate() {
+    const csv = toCSV([
+      { 商品名: "グローブM", メーカー: "ニチバン", バーコード: "", 初期在庫数: 10, 最低在庫数: 3, 場所: "処置室", 棚番号: "A-1" },
+      { 商品名: "マスク", メーカー: "", バーコード: "", 初期在庫数: 50, 最低在庫数: 10, 場所: "処置室", 棚番号: "" },
+    ], ["商品名", "メーカー", "バーコード", "初期在庫数", "最低在庫数", "場所", "棚番号"])
+    downloadCSV("在庫インポートテンプレート.csv", csv)
+  }
+
+  function handleCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string
+      const rows = parseCSV(text).filter(r => r["商品名"]?.trim())
+      setImportRows(rows)
+      setImportModal(true)
+    }
+    reader.readAsText(file, "UTF-8")
+    e.target.value = ""
+  }
+
+  async function importItems() {
+    if (importing || importRows.length === 0) return
+    setImporting(true)
+    const records = importRows.map(r => ({
+      product_name:   r["商品名"]?.trim() || "",
+      maker:          r["メーカー"]?.trim() || null,
+      barcode:        r["バーコード"]?.trim() || null,
+      stock_quantity: parseInt(r["初期在庫数"] || "0", 10) || 0,
+      min_stock:      r["最低在庫数"]?.trim() ? (parseInt(r["最低在庫数"], 10) || null) : null,
+      location:       r["場所"]?.trim() || null,
+      shelf_no:       r["棚番号"]?.trim() || null,
+    }))
+    const { error } = await supabase.from("clinic_inventory_items").insert(records)
+    if (error) { alert("エラー: " + error.message); setImporting(false); return }
+    setImportModal(false)
+    setImportRows([])
+    await fetchAll(clinicId)
+    showToast(`✓ ${records.length}件をインポートしました`)
+    setImporting(false)
   }
 
   async function startScan() {
@@ -342,10 +391,17 @@ export default function ClinicInventoryPage() {
             </span>
           )}
           {tab === "record" && (
-            <button onClick={() => setAddModal(true)} style={{
-              background: C.primary, color: "#fff", border: "none",
-              borderRadius: 8, padding: "6px 14px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
-            }}>＋ 追加</button>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => csvInputRef.current?.click()} style={{
+                background: "#fff", color: C.blue, border: `1.5px solid ${C.blue}`,
+                borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
+              }}>📥 CSV</button>
+              <button onClick={() => setAddModal(true)} style={{
+                background: C.primary, color: "#fff", border: "none",
+                borderRadius: 8, padding: "6px 14px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
+              }}>＋ 追加</button>
+              <input ref={csvInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleCsvFile} />
+            </div>
           )}
         </div>
 
@@ -601,6 +657,64 @@ export default function ClinicInventoryPage() {
             <button onClick={addItem} disabled={addSaving}
               style={{ width: "100%", marginTop: 20, padding: 14, borderRadius: 12, border: "none", background: addSaving ? "#d1d5db" : C.primary, color: "#fff", fontWeight: "bold", fontSize: 16, cursor: addSaving ? "default" : "pointer" }}>
               {addSaving ? "保存中…" : "追加する"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CSVインポートモーダル */}
+      {importModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setImportModal(false) }}>
+          <div style={{ background: C.card, borderRadius: "20px 20px 0 0", padding: "22px 20px 36px", width: "100%", maxWidth: 520, boxShadow: "0 -4px 24px rgba(0,0,0,0.15)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: "bold", color: C.text }}>📥 CSVインポート</h2>
+              <button onClick={() => setImportModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.sub }}>✕</button>
+            </div>
+
+            <button onClick={downloadTemplate} style={{
+              width: "100%", padding: "9px 0", borderRadius: 9, border: `1.5px solid ${C.border}`,
+              background: "#f9fafb", color: C.sub, fontSize: 13, cursor: "pointer", marginBottom: 16,
+            }}>⬇ テンプレートCSVをダウンロード</button>
+
+            <p style={{ fontSize: 13, color: C.sub, marginBottom: 10 }}>
+              読み込んだデータ：<strong style={{ color: C.text }}>{importRows.length}件</strong>
+            </p>
+
+            <div style={{ overflowX: "auto", marginBottom: 16 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f3f4f6" }}>
+                    {["商品名", "メーカー", "初期在庫", "場所", "棚番号"].map(h => (
+                      <th key={h} style={{ padding: "6px 8px", textAlign: "left", color: C.sub, fontWeight: "bold", borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {importRows.slice(0, 8).map((r, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: "6px 8px", color: C.text, fontWeight: "bold" }}>{r["商品名"]}</td>
+                      <td style={{ padding: "6px 8px", color: C.sub }}>{r["メーカー"] || "—"}</td>
+                      <td style={{ padding: "6px 8px", color: C.sub }}>{r["初期在庫数"] || "0"}</td>
+                      <td style={{ padding: "6px 8px", color: C.sub }}>{r["場所"] || "—"}</td>
+                      <td style={{ padding: "6px 8px", color: C.sub }}>{r["棚番号"] || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {importRows.length > 8 && (
+                <p style={{ textAlign: "center", fontSize: 12, color: C.sub, marginTop: 6 }}>…他 {importRows.length - 8} 件</p>
+              )}
+            </div>
+
+            <button onClick={importItems} disabled={importing || importRows.length === 0}
+              style={{
+                width: "100%", padding: 14, borderRadius: 12, border: "none",
+                background: importing || importRows.length === 0 ? "#d1d5db" : C.blue,
+                color: "#fff", fontWeight: "bold", fontSize: 16,
+                cursor: importing || importRows.length === 0 ? "default" : "pointer",
+              }}>
+              {importing ? "インポート中…" : `${importRows.length}件をインポートする`}
             </button>
           </div>
         </div>
