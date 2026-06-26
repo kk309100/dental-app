@@ -56,6 +56,7 @@ const SUB = [
   { href: "/admin/products/dedup",       label: "商品重複管理" },
   { href: "/admin/product-images",        label: "🖼 商品画像管理" },
   { href: "/admin/feedback",              label: "📋 修正依頼一覧" },
+  { href: "/admin/clinic-reset",          label: "🗑 医院データリセット" },
 ]
 
 // アクセントカラー
