@@ -238,7 +238,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <div style={{
                   position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 100,
                   background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-                  border: "1px solid #e5e7eb", minWidth: 200, padding: "6px 0", overflow: "hidden",
+                  border: "1px solid #e5e7eb", minWidth: 200, padding: "6px 0",
+                  maxHeight: "calc(100vh - 80px)", overflowY: "auto",
                 }}>
                   {SUB.map(item => (
                     <Link key={item.href} href={item.href}
