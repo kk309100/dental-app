@@ -70,6 +70,10 @@ export default function ClinicInventoryPage() {
   const [editStockId, setEditStockId]     = useState<string | null>(null)
   const [editStockValue, setEditStockValue] = useState("")
 
+  const [addModal, setAddModal]   = useState(false)
+  const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "" })
+  const [addSaving, setAddSaving] = useState(false)
+
   const [historyFilter, setHistoryFilter] = useState<"today" | "week" | "all">("today")
   const [staffFilter, setStaffFilter]     = useState("すべて")
 
@@ -162,6 +166,33 @@ export default function ClinicInventoryPage() {
     const delta = newQty - item.stock_quantity
     await updateStock(item, delta, "棚卸調整")
     showToast(`✓ 在庫を ${item.stock_quantity} → ${newQty} に修正しました`)
+  }
+
+  async function addItem() {
+    if (!addForm.product_name.trim()) { alert("商品名を入力してください"); return }
+    setAddSaving(true)
+    const { error } = await supabase.from("clinic_inventory_items").insert({
+      product_name:   addForm.product_name.trim(),
+      maker:          addForm.maker.trim() || null,
+      barcode:        addForm.barcode.trim() || null,
+      stock_quantity: parseInt(addForm.stock_quantity, 10) || 0,
+      min_stock:      addForm.min_stock !== "" ? (parseInt(addForm.min_stock, 10) || null) : null,
+      location:       addForm.location.trim() || null,
+      shelf_no:       addForm.shelf_no.trim() || null,
+    })
+    if (error) { alert("エラー: " + error.message); setAddSaving(false); return }
+    setAddModal(false)
+    setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "" })
+    await fetchAll(clinicId)
+    showToast("✓ 商品を追加しました")
+    setAddSaving(false)
+  }
+
+  async function deleteItem(id: string, name: string) {
+    if (!confirm(`「${name}」を在庫リストから削除しますか？`)) return
+    await supabase.from("clinic_inventory_items").delete().eq("id", id)
+    setItems(prev => prev.filter(i => i.id !== id))
+    showToast("✓ 削除しました")
   }
 
   async function startScan() {
@@ -260,6 +291,7 @@ export default function ClinicInventoryPage() {
     setEditStockValue,
     onConfirmEdit: confirmEditStock,
     onCancelEdit: () => setEditStockId(null),
+    onDelete: deleteItem,
     processing: processingId === item.id,
     flash: flashId === item.id,
     setRef: (el: HTMLDivElement | null) => { itemRefs.current[item.id] = el },
@@ -308,6 +340,12 @@ export default function ClinicInventoryPage() {
             <span style={{ background: "#fee2e2", color: "#b91c1c", padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: "bold" }}>
               発注必要 {needsReorder.length}件
             </span>
+          )}
+          {tab === "record" && (
+            <button onClick={() => setAddModal(true)} style={{
+              background: C.primary, color: "#fff", border: "none",
+              borderRadius: 8, padding: "6px 14px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
+            }}>＋ 追加</button>
           )}
         </div>
 
@@ -521,6 +559,53 @@ export default function ClinicInventoryPage() {
         </div>
       )}
 
+      {/* 商品追加モーダル */}
+      {addModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setAddModal(false) }}>
+          <div style={{ background: C.card, borderRadius: "20px 20px 0 0", padding: "22px 20px 36px", width: "100%", maxWidth: 520, boxShadow: "0 -4px 24px rgba(0,0,0,0.15)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: "bold", color: C.text }}>＋ 商品を追加</h2>
+              <button onClick={() => setAddModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.sub }}>✕</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[
+                { key: "product_name", label: "商品名", required: true, placeholder: "例）グローブM" },
+                { key: "maker",        label: "メーカー",  placeholder: "例）ニチバン" },
+                { key: "barcode",      label: "バーコード", placeholder: "" },
+                { key: "location",     label: "置き場所",  placeholder: "例）処置室・棚A" },
+                { key: "shelf_no",     label: "棚番号",    placeholder: "例）A-1" },
+              ].map(({ key, label, required, placeholder }) => (
+                <div key={key}>
+                  <label style={{ fontSize: 12, color: C.sub }}>{label}{required && <span style={{ color: "#ef4444" }}> *</span>}</label>
+                  <input value={(addForm as any)[key]} placeholder={placeholder}
+                    onChange={e => setAddForm(f => ({ ...f, [key]: e.target.value }))}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
+                </div>
+              ))}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: C.sub }}>初期在庫数</label>
+                  <input type="number" min={0} value={addForm.stock_quantity}
+                    onChange={e => setAddForm(f => ({ ...f, stock_quantity: e.target.value }))}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: C.sub }}>最低在庫数</label>
+                  <input type="number" min={0} value={addForm.min_stock} placeholder="なし"
+                    onChange={e => setAddForm(f => ({ ...f, min_stock: e.target.value }))}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
+                </div>
+              </div>
+            </div>
+            <button onClick={addItem} disabled={addSaving}
+              style={{ width: "100%", marginTop: 20, padding: 14, borderRadius: 12, border: "none", background: addSaving ? "#d1d5db" : C.primary, color: "#fff", fontWeight: "bold", fontSize: 16, cursor: addSaving ? "default" : "pointer" }}>
+              {addSaving ? "保存中…" : "追加する"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 下部タブバー */}
       <nav style={{
         position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
@@ -547,7 +632,7 @@ export default function ClinicInventoryPage() {
 }
 
 // ── 商品カード ──
-function ItemCard({ item, onQuick, onOpenModal, onEditStock, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, processing, flash, setRef }: {
+function ItemCard({ item, onQuick, onOpenModal, onEditStock, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onDelete, processing, flash, setRef }: {
   item: Item
   onQuick: (item: Item, delta: number) => void
   onOpenModal: (item: Item, type: "use" | "restock") => void
@@ -557,6 +642,7 @@ function ItemCard({ item, onQuick, onOpenModal, onEditStock, editStockId, editSt
   setEditStockValue: (v: string) => void
   onConfirmEdit: (item: Item) => void
   onCancelEdit: () => void
+  onDelete: (id: string, name: string) => void
   processing: boolean
   flash: boolean
   setRef: (el: HTMLDivElement | null) => void
@@ -623,6 +709,12 @@ function ItemCard({ item, onQuick, onOpenModal, onEditStock, editStockId, editSt
           disabled={processing}
           style={{ padding: "8px 10px", borderRadius: 8, border: `1.5px solid #e5e7eb`, background: "#fff", color: "#6b7280", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
           ···
+        </button>
+        <button className="inv-btn" onClick={() => onDelete(item.id, item.product_name)}
+          disabled={processing}
+          style={{ padding: "8px 10px", borderRadius: 8, border: `1.5px solid #fee2e2`, background: "#fff", color: "#ef4444", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}
+          title="削除">
+          🗑
         </button>
       </div>
     </div>
