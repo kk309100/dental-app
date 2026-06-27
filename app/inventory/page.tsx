@@ -29,6 +29,7 @@ type Item = {
   category: string | null
   shelf_no: string | null
   location: string | null
+  supplier: string | null
 }
 
 type Log = {
@@ -72,7 +73,7 @@ export default function ClinicInventoryPage() {
   const [editStockValue, setEditStockValue] = useState("")
 
   const [addModal, setAddModal]   = useState(false)
-  const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "" })
+  const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "" })
   const [addSaving, setAddSaving] = useState(false)
 
   const [importModal, setImportModal] = useState(false)
@@ -106,7 +107,7 @@ export default function ClinicInventoryPage() {
   async function fetchAll(cid?: string) {
     const [{ data: itemsData }, { data: logsData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
-        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location")
+        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier")
         .order("product_name"),
       supabase.from("inventory_logs")
         .select("*").order("occurred_at", { ascending: false }).limit(500),
@@ -188,10 +189,11 @@ export default function ClinicInventoryPage() {
       min_stock:      addForm.min_stock !== "" ? (parseInt(addForm.min_stock, 10) || null) : null,
       location:       addForm.location.trim() || null,
       shelf_no:       addForm.shelf_no.trim() || null,
+      supplier:       addForm.supplier.trim() || null,
     })
     if (error) { alert("エラー: " + error.message); setAddSaving(false); return }
     setAddModal(false)
-    setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "" })
+    setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "" })
     setProductSuggestions([])
     setShowSuggestions(false)
     await fetchAll(clinicId)
@@ -224,9 +226,9 @@ export default function ClinicInventoryPage() {
 
   function downloadTemplate() {
     const csv = toCSV([
-      { 商品名: "グローブM", メーカー: "ニチバン", バーコード: "", 初期在庫数: 10, 最低在庫数: 3, 場所: "処置室", 棚番号: "A-1" },
-      { 商品名: "マスク", メーカー: "", バーコード: "", 初期在庫数: 50, 最低在庫数: 10, 場所: "処置室", 棚番号: "" },
-    ], ["商品名", "メーカー", "バーコード", "初期在庫数", "最低在庫数", "場所", "棚番号"])
+      { 商品名: "グローブM", メーカー: "ニチバン", 注文先: "モリタ", バーコード: "", 初期在庫数: 10, 最低在庫数: 3, 場所: "処置室", 棚番号: "A-1" },
+      { 商品名: "マスク", メーカー: "", 注文先: "", バーコード: "", 初期在庫数: 50, 最低在庫数: 10, 場所: "処置室", 棚番号: "" },
+    ], ["商品名", "メーカー", "注文先", "バーコード", "初期在庫数", "最低在庫数", "場所", "棚番号"])
     downloadCSV("在庫インポートテンプレート.csv", csv)
   }
 
@@ -250,6 +252,7 @@ export default function ClinicInventoryPage() {
     const records = importRows.map(r => ({
       product_name:   r["商品名"]?.trim() || "",
       maker:          r["メーカー"]?.trim() || null,
+      supplier:       r["注文先"]?.trim() || null,
       barcode:        r["バーコード"]?.trim() || null,
       stock_quantity: parseInt(r["初期在庫数"] || "0", 10) || 0,
       min_stock:      r["最低在庫数"]?.trim() ? (parseInt(r["最低在庫数"], 10) || null) : null,
@@ -683,6 +686,7 @@ export default function ClinicInventoryPage() {
               {/* その他フィールド */}
               {[
                 { key: "maker",    label: "メーカー",  placeholder: "例）ニチバン" },
+                { key: "supplier", label: "注文先",    placeholder: "例）モリタ、GC" },
                 { key: "barcode",  label: "バーコード", placeholder: "" },
                 { key: "location", label: "置き場所",  placeholder: "例）処置室・棚A" },
                 { key: "shelf_no", label: "棚番号",    placeholder: "例）A-1" },
@@ -820,6 +824,7 @@ function ItemCard({ item, onQuick, onOpenModal, onEditStock, editStockId, editSt
   const isEditing = editStockId === item.id
   const meta = [
     item.maker,
+    item.supplier ? `注文先：${item.supplier}` : null,
     item.shelf_no ? `棚：${item.shelf_no}` : null,
     item.barcode ? `# ${item.barcode}` : null,
   ].filter(Boolean)
