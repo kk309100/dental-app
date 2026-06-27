@@ -80,6 +80,9 @@ export default function ClinicInventoryPage() {
   const [importing, setImporting]     = useState(false)
   const csvInputRef = useRef<HTMLInputElement>(null)
 
+  const [productSuggestions, setProductSuggestions] = useState<{ id: string; name: string; manufacturer: string | null }[]>([])
+  const [showSuggestions, setShowSuggestions]       = useState(false)
+
   const [historyFilter, setHistoryFilter] = useState<"today" | "week" | "all">("today")
   const [staffFilter, setStaffFilter]     = useState("すべて")
 
@@ -189,6 +192,8 @@ export default function ClinicInventoryPage() {
     if (error) { alert("エラー: " + error.message); setAddSaving(false); return }
     setAddModal(false)
     setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "" })
+    setProductSuggestions([])
+    setShowSuggestions(false)
     await fetchAll(clinicId)
     showToast("✓ 商品を追加しました")
     setAddSaving(false)
@@ -199,6 +204,22 @@ export default function ClinicInventoryPage() {
     await supabase.from("clinic_inventory_items").delete().eq("id", id)
     setItems(prev => prev.filter(i => i.id !== id))
     showToast("✓ 削除しました")
+  }
+
+  async function searchProducts(q: string) {
+    if (!q.trim() || q.length < 1) { setProductSuggestions([]); setShowSuggestions(false); return }
+    const { data } = await supabase.from("products")
+      .select("id,name,manufacturer")
+      .ilike("name", `%${q}%`)
+      .limit(8)
+    setProductSuggestions((data as any[]) || [])
+    setShowSuggestions(true)
+  }
+
+  function selectProduct(p: { id: string; name: string; manufacturer: string | null }) {
+    setAddForm(f => ({ ...f, product_name: p.name, maker: p.manufacturer || "" }))
+    setShowSuggestions(false)
+    setProductSuggestions([])
   }
 
   function downloadTemplate() {
@@ -625,15 +646,45 @@ export default function ClinicInventoryPage() {
               <button onClick={() => setAddModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.sub }}>✕</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {/* 商品名（サジェスト付き） */}
+              <div style={{ position: "relative" }}>
+                <label style={{ fontSize: 12, color: C.sub }}>商品名<span style={{ color: "#ef4444" }}> *</span></label>
+                <input
+                  value={addForm.product_name}
+                  placeholder="例）グローブM（マスタから検索）"
+                  onChange={e => { setAddForm(f => ({ ...f, product_name: e.target.value })); searchProducts(e.target.value) }}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  onFocus={() => { if (productSuggestions.length > 0) setShowSuggestions(true) }}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.blue}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }}
+                />
+                {showSuggestions && productSuggestions.length > 0 && (
+                  <div style={{
+                    position: "absolute", top: "100%", left: 0, right: 0, zIndex: 200,
+                    background: "#fff", border: `1.5px solid ${C.blue}`, borderRadius: 9,
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.12)", overflow: "hidden",
+                  }}>
+                    {productSuggestions.map(p => (
+                      <div key={p.id} onMouseDown={() => selectProduct(p)}
+                        style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${C.border}` }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "#f0f9ff")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "#fff")}>
+                        <div style={{ fontSize: 14, fontWeight: "bold", color: C.text }}>{p.name}</div>
+                        {p.manufacturer && <div style={{ fontSize: 12, color: C.sub }}>{p.manufacturer}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* その他フィールド */}
               {[
-                { key: "product_name", label: "商品名", required: true, placeholder: "例）グローブM" },
-                { key: "maker",        label: "メーカー",  placeholder: "例）ニチバン" },
-                { key: "barcode",      label: "バーコード", placeholder: "" },
-                { key: "location",     label: "置き場所",  placeholder: "例）処置室・棚A" },
-                { key: "shelf_no",     label: "棚番号",    placeholder: "例）A-1" },
-              ].map(({ key, label, required, placeholder }) => (
+                { key: "maker",    label: "メーカー",  placeholder: "例）ニチバン" },
+                { key: "barcode",  label: "バーコード", placeholder: "" },
+                { key: "location", label: "置き場所",  placeholder: "例）処置室・棚A" },
+                { key: "shelf_no", label: "棚番号",    placeholder: "例）A-1" },
+              ].map(({ key, label, placeholder }) => (
                 <div key={key}>
-                  <label style={{ fontSize: 12, color: C.sub }}>{label}{required && <span style={{ color: "#ef4444" }}> *</span>}</label>
+                  <label style={{ fontSize: 12, color: C.sub }}>{label}</label>
                   <input value={(addForm as any)[key]} placeholder={placeholder}
                     onChange={e => setAddForm(f => ({ ...f, [key]: e.target.value }))}
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
