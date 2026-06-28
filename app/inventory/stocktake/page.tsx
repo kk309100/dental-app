@@ -185,6 +185,10 @@ export default function StocktakePage() {
           <h1 style={{ margin: 0, fontSize: 17, fontWeight: "bold", color: C.text, flex: 1 }}>
             📋 棚卸しモード
           </h1>
+          <button onClick={() => router.push("/inventory/stocktake/report")} style={{
+            background: "#eff6ff", color: C.blue, border: "1.5px solid #bfdbfe",
+            borderRadius: 7, padding: "5px 11px", fontSize: 12, fontWeight: "bold", cursor: "pointer",
+          }}>📄 報告書</button>
           {changedItems.length > 0 && (
             <span style={{ background: C.orange, color: "#fff", borderRadius: 999, padding: "2px 10px", fontSize: 12, fontWeight: "bold" }}>
               {changedItems.length}件変更
