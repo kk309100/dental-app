@@ -331,7 +331,11 @@ export default function ClinicInventoryPage() {
     } catch { setScanning(false) }
   }
 
-  const norm = (v: any) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s+/g, "")
+  const norm = (v: any) => String(v || "")
+    .toLowerCase()
+    .normalize("NFKC")                                                          // 全角英数→半角、半角カタカナ→全角カタカナ
+    .replace(/[ァ-ヶ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0x60)) // カタカナ→ひらがな
+    .replace(/\s+/g, "")
 
   // 場所一覧
   const locations = useMemo(() => {
