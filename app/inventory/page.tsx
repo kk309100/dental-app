@@ -106,12 +106,16 @@ export default function ClinicInventoryPage() {
   }
 
   async function fetchAll(cid?: string) {
+    const clinicIdToUse = cid || clinicId
+    const logsQuery = supabase.from("inventory_logs")
+      .select("*").order("occurred_at", { ascending: false }).limit(500)
+    if (clinicIdToUse) logsQuery.eq("clinic_id", clinicIdToUse)
+
     const [{ data: itemsData }, { data: logsData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
         .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier")
         .order("product_name"),
-      supabase.from("inventory_logs")
-        .select("*").order("occurred_at", { ascending: false }).limit(500),
+      logsQuery,
     ])
     setItems((itemsData as Item[]) || [])
     setLogs((logsData as Log[]) || [])
@@ -138,6 +142,7 @@ export default function ClinicInventoryPage() {
       stock_before: item.stock_quantity,
       stock_after: newQty,
       staff_name: staffName || null,
+      occurred_at: new Date().toISOString(),
     }])
 
     setItems((prev) => prev.map((i) => i.id === item.id ? { ...i, stock_quantity: newQty } : i))
@@ -145,8 +150,10 @@ export default function ClinicInventoryPage() {
     setFlashId(item.id)
     setTimeout(() => setFlashId(null), 600)
 
-    const { data: logsData } = await supabase.from("inventory_logs")
+    const logsQuery = supabase.from("inventory_logs")
       .select("*").order("occurred_at", { ascending: false }).limit(500)
+    if (clinicId) logsQuery.eq("clinic_id", clinicId)
+    const { data: logsData } = await logsQuery
     setLogs((logsData as Log[]) || [])
     setProcessingId(null)
   }
