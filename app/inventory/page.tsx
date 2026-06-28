@@ -416,6 +416,10 @@ export default function ClinicInventoryPage() {
           )}
           {tab === "record" && (
             <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => router.push("/inventory/stocktake")} style={{
+                background: "#fff", color: C.orange, border: `1.5px solid ${C.orange}`,
+                borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
+              }}>📋 棚卸し</button>
               <button onClick={() => router.push("/inventory/labels")} style={{
                 background: "#fff", color: "#7c3aed", border: "1.5px solid #7c3aed",
                 borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
