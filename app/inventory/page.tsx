@@ -66,6 +66,11 @@ export default function ClinicInventoryPage() {
   const [locationFilter, setLocationFilter] = useState("すべて")
   const [categoryFilter, setCategoryFilter] = useState("すべて")
 
+  const [masterCategories, setMasterCategories] = useState<string[]>([])
+  const [catMgmtModal, setCatMgmtModal]         = useState(false)
+  const [newCatName, setNewCatName]             = useState("")
+  const [catSaving, setCatSaving]               = useState(false)
+
   const [toast, setToast]         = useState<string | null>(null)
   const [flashId, setFlashId]     = useState<string | null>(null)
 
@@ -109,8 +114,38 @@ export default function ClinicInventoryPage() {
     if (profile.role === "admin") { router.push("/admin"); return }
     setClinicId(profile.clinic_id)
     setStaffName(profile.login_code || "")
-    await fetchAll(profile.clinic_id)
+    await Promise.all([fetchAll(profile.clinic_id), fetchCategories(profile.clinic_id)])
     setLoading(false)
+  }
+
+  async function fetchCategories(cid?: string) {
+    const clinicIdToUse = cid || clinicId
+    const { data } = await supabase.from("inventory_categories")
+      .select("name").eq("clinic_id", clinicIdToUse).order("sort_order")
+    setMasterCategories((data || []).map((r: any) => r.name))
+  }
+
+  async function addCategory() {
+    const name = newCatName.trim()
+    if (!name) return
+    setCatSaving(true)
+    const { error } = await supabase.from("inventory_categories").insert({
+      clinic_id: clinicId,
+      name,
+      sort_order: masterCategories.length,
+    })
+    if (!error) {
+      setMasterCategories(prev => [...prev, name])
+      setNewCatName("")
+    }
+    setCatSaving(false)
+  }
+
+  async function deleteCategory(name: string) {
+    if (!confirm(`「${name}」を削除しますか？\n※このカテゴリが設定された商品のカテゴリは空欄になります`)) return
+    await supabase.from("inventory_categories").delete().eq("clinic_id", clinicId).eq("name", name)
+    setMasterCategories(prev => prev.filter(c => c !== name))
+    if (categoryFilter === name) setCategoryFilter("すべて")
   }
 
   async function fetchAll(cid?: string) {
@@ -404,11 +439,12 @@ export default function ClinicInventoryPage() {
     .replace(/[ァ-ヶ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0x60)) // カタカナ→ひらがな
     .replace(/\s+/g, "")
 
-  // カテゴリ一覧
+  // カテゴリ一覧（マスター＋未登録分をマージ）
   const categories = useMemo(() => {
-    const cats = items.map((i) => i.category).filter(Boolean) as string[]
-    return ["すべて", ...Array.from(new Set(cats)).sort()]
-  }, [items])
+    const fromItems = items.map((i) => i.category).filter(Boolean) as string[]
+    const merged = Array.from(new Set([...masterCategories, ...fromItems]))
+    return ["すべて", ...merged]
+  }, [masterCategories, items])
 
   // 場所一覧
   const locations = useMemo(() => {
@@ -577,18 +613,20 @@ export default function ClinicInventoryPage() {
               placeholder="🔍 商品名・バーコードで検索"
               style={{ width: "100%", padding: "9px 13px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 14, boxSizing: "border-box", outline: "none", color: C.text, marginBottom: 8 }} />
             {/* カテゴリフィルター */}
-            {categories.length > 2 && (
-              <div className="cat-pills" style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 4 }}>
-                {categories.map((cat) => (
-                  <button key={cat} onClick={() => setCategoryFilter(cat)} style={{
-                    whiteSpace: "nowrap", padding: "5px 12px", borderRadius: 999, fontSize: 12,
-                    cursor: "pointer", border: "none", fontWeight: categoryFilter === cat ? "bold" : "normal",
-                    background: categoryFilter === cat ? "#7c3aed" : "#f3f4f6",
-                    color: categoryFilter === cat ? "#fff" : C.sub,
-                  }}>{cat === "すべて" ? "🏷 全カテゴリ" : `🏷 ${cat}`}</button>
-                ))}
-              </div>
-            )}
+            <div className="cat-pills" style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 4, alignItems: "center" }}>
+              {categories.map((cat) => (
+                <button key={cat} onClick={() => setCategoryFilter(cat)} style={{
+                  whiteSpace: "nowrap", padding: "5px 12px", borderRadius: 999, fontSize: 12,
+                  cursor: "pointer", border: "none", fontWeight: categoryFilter === cat ? "bold" : "normal",
+                  background: categoryFilter === cat ? "#7c3aed" : "#f3f4f6",
+                  color: categoryFilter === cat ? "#fff" : C.sub,
+                }}>{cat === "すべて" ? "🏷 すべて" : cat}</button>
+              ))}
+              <button onClick={() => setCatMgmtModal(true)} style={{
+                whiteSpace: "nowrap", padding: "5px 10px", borderRadius: 999, fontSize: 12,
+                cursor: "pointer", border: "1.5px dashed #d1d5db", background: "#fff", color: C.sub, flexShrink: 0,
+              }}>＋ 管理</button>
+            </div>
             {/* 場所フィルター */}
             {locations.length > 2 && (
               <div className="cat-pills" style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 2 }}>
@@ -733,6 +771,50 @@ export default function ClinicInventoryPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* カテゴリ管理モーダル */}
+      {catMgmtModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setCatMgmtModal(false) }}>
+          <div style={{ background: C.card, borderRadius: "20px 20px 0 0", padding: "22px 20px 36px", width: "100%", maxWidth: 520, boxShadow: "0 -4px 24px rgba(0,0,0,0.15)", maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: "bold", color: C.text }}>🏷 カテゴリ管理</h2>
+              <button onClick={() => setCatMgmtModal(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.sub }}>✕</button>
+            </div>
+            {/* 追加フォーム */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <input value={newCatName} onChange={e => setNewCatName(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") addCategory() }}
+                placeholder="新しいカテゴリ名（例：消耗品）"
+                style={{ flex: 1, padding: "10px 12px", borderRadius: 9, border: `1.5px solid #7c3aed`, fontSize: 14, outline: "none", color: C.text }} />
+              <button onClick={addCategory} disabled={catSaving || !newCatName.trim()} style={{
+                padding: "10px 16px", borderRadius: 9, border: "none", fontWeight: "bold", fontSize: 14,
+                background: !newCatName.trim() ? "#d1d5db" : "#7c3aed", color: "#fff",
+                cursor: !newCatName.trim() ? "default" : "pointer",
+              }}>追加</button>
+            </div>
+            {/* カテゴリ一覧 */}
+            {masterCategories.length === 0 ? (
+              <p style={{ textAlign: "center", color: C.sub, fontSize: 14, padding: "20px 0" }}>カテゴリがまだありません</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {masterCategories.map((cat) => {
+                  const count = items.filter(i => i.category === cat).length
+                  return (
+                    <div key={cat} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: "#f9fafb" }}>
+                      <span style={{ flex: 1, fontSize: 14, fontWeight: "bold", color: C.text }}>{cat}</span>
+                      <span style={{ fontSize: 12, color: C.sub }}>{count}品</span>
+                      <button onClick={() => deleteCategory(cat)} style={{
+                        background: "none", border: "none", color: "#ef4444", fontSize: 18, cursor: "pointer", padding: "0 4px",
+                      }}>🗑</button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
