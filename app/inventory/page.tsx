@@ -79,6 +79,9 @@ export default function ClinicInventoryPage() {
   const [editStockId, setEditStockId]     = useState<string | null>(null)
   const [editStockValue, setEditStockValue] = useState("")
 
+  const [editMinId, setEditMinId]     = useState<string | null>(null)
+  const [editMinValue, setEditMinValue] = useState("")
+
   const [addModal, setAddModal]   = useState(false)
   const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "" })
   const [addSaving, setAddSaving] = useState(false)
@@ -217,8 +220,25 @@ export default function ClinicInventoryPage() {
   }
 
   function startEditStock(item: Item) {
+    setEditMinId(null)
     setEditStockId(item.id)
     setEditStockValue(String(item.stock_quantity))
+  }
+
+  function startEditMin(item: Item) {
+    setEditStockId(null)
+    setEditMinId(item.id)
+    setEditMinValue(item.min_stock != null ? String(item.min_stock) : "")
+  }
+
+  async function confirmEditMin(item: Item) {
+    const newMin = editMinValue.trim() === "" ? null : parseInt(editMinValue, 10)
+    setEditMinId(null)
+    if (newMin === item.min_stock || (newMin === null && item.min_stock === null)) return
+    if (newMin !== null && isNaN(newMin)) return
+    await supabase.from("clinic_inventory_items").update({ min_stock: newMin }).eq("id", item.id)
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, min_stock: newMin } : i))
+    showToast(`✓ 最低在庫数を ${newMin ?? "なし"} に更新しました`)
   }
   async function confirmEditStock(item: Item) {
     const newQty = parseInt(editStockValue, 10)
@@ -526,6 +546,12 @@ export default function ClinicInventoryPage() {
     setEditStockValue,
     onConfirmEdit: confirmEditStock,
     onCancelEdit: () => setEditStockId(null),
+    onEditMin: startEditMin,
+    editMinId,
+    editMinValue,
+    setEditMinValue,
+    onConfirmEditMin: confirmEditMin,
+    onCancelEditMin: () => setEditMinId(null),
     onDelete: deleteItem,
     processing: processingId === item.id,
     flash: flashId === item.id,
@@ -1158,7 +1184,7 @@ export default function ClinicInventoryPage() {
 }
 
 // ── 商品カード ──
-function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onDelete, processing, flash, setRef }: {
+function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, processing, flash, setRef }: {
   item: Item
   onQuick: (item: Item, delta: number) => void
   onOpenModal: (item: Item, type: "use" | "restock") => void
@@ -1169,6 +1195,12 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
   setEditStockValue: (v: string) => void
   onConfirmEdit: (item: Item) => void
   onCancelEdit: () => void
+  onEditMin: (item: Item) => void
+  editMinId: string | null
+  editMinValue: string
+  setEditMinValue: (v: string) => void
+  onConfirmEditMin: (item: Item) => void
+  onCancelEditMin: () => void
   onDelete: (id: string, name: string) => void
   processing: boolean
   flash: boolean
@@ -1176,6 +1208,7 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
 }) {
   const needsReorder = item.min_stock !== null && item.stock_quantity <= item.min_stock
   const isEditing = editStockId === item.id
+  const isEditingMin = editMinId === item.id
   const meta = [
     item.location ? `📍 ${item.location}${item.shelf_no ? ` / ${item.shelf_no}` : ""}` : (item.shelf_no ? `棚：${item.shelf_no}` : null),
     item.maker,
@@ -1197,23 +1230,46 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
           <span style={{ fontWeight: "bold", fontSize: 14, color: "#1a1a1a" }}>{item.product_name}</span>
         </div>
 
-        {isEditing ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-            <input type="number" value={editStockValue} onChange={(e) => setEditStockValue(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") onConfirmEdit(item); if (e.key === "Escape") onCancelEdit() }}
-              style={{ width: 56, height: 32, textAlign: "center", borderRadius: 8, border: "2px solid #2563eb", fontSize: 18, fontWeight: "bold", outline: "none" }} />
-            <button onClick={() => onConfirmEdit(item)} style={{ background: "#22a648", color: "#fff", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 13, cursor: "pointer" }}>✓</button>
-            <button onClick={onCancelEdit} style={{ background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 13, cursor: "pointer" }}>✕</button>
-          </div>
-        ) : (
-          <div className={flash ? "flash-anim" : ""} onClick={() => onEditStock(item)}
-            style={{ textAlign: "right", flexShrink: 0, cursor: "pointer", borderRadius: 6, padding: "2px 4px" }}
-            title="タップで在庫数を直接編集">
-            <span style={{ fontSize: 22, fontWeight: "bold", color: needsReorder ? "#ef4444" : "#1a1a1a", lineHeight: 1 }}>{item.stock_quantity}</span>
-            {item.min_stock !== null && <span style={{ fontSize: 11, color: "#9ca3af" }}> / {item.min_stock}</span>}
-          </div>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {/* 在庫数インライン編集 */}
+          {isEditing ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <input type="number" value={editStockValue} onChange={(e) => setEditStockValue(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") onConfirmEdit(item); if (e.key === "Escape") onCancelEdit() }}
+                style={{ width: 56, height: 32, textAlign: "center", borderRadius: 8, border: "2px solid #2563eb", fontSize: 18, fontWeight: "bold", outline: "none" }} />
+              <button onClick={() => onConfirmEdit(item)} style={{ background: "#22a648", color: "#fff", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 13, cursor: "pointer" }}>✓</button>
+              <button onClick={onCancelEdit} style={{ background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 13, cursor: "pointer" }}>✕</button>
+            </div>
+          ) : (
+            <div className={flash ? "flash-anim" : ""} onClick={() => onEditStock(item)}
+              style={{ cursor: "pointer", borderRadius: 6, padding: "2px 4px" }}
+              title="タップで在庫数を編集">
+              <span style={{ fontSize: 22, fontWeight: "bold", color: needsReorder ? "#ef4444" : "#1a1a1a", lineHeight: 1 }}>{item.stock_quantity}</span>
+            </div>
+          )}
+
+          {/* 最低在庫数インライン編集 */}
+          {isEditingMin ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: 11, color: "#9ca3af" }}>/</span>
+              <input type="number" value={editMinValue} onChange={(e) => setEditMinValue(e.target.value)}
+                autoFocus placeholder="なし"
+                onKeyDown={(e) => { if (e.key === "Enter") onConfirmEditMin(item); if (e.key === "Escape") onCancelEditMin() }}
+                style={{ width: 48, height: 28, textAlign: "center", borderRadius: 7, border: "2px solid #f08c00", fontSize: 14, fontWeight: "bold", outline: "none" }} />
+              <button onClick={() => onConfirmEditMin(item)} style={{ background: "#f08c00", color: "#fff", border: "none", borderRadius: 6, padding: "3px 7px", fontSize: 12, cursor: "pointer" }}>✓</button>
+              <button onClick={onCancelEditMin} style={{ background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 6, padding: "3px 7px", fontSize: 12, cursor: "pointer" }}>✕</button>
+            </div>
+          ) : (
+            <div onClick={() => onEditMin(item)}
+              style={{ cursor: "pointer", borderRadius: 6, padding: "2px 4px" }}
+              title="タップで最低在庫数を編集">
+              <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                / {item.min_stock != null ? item.min_stock : <span style={{ color: "#d1d5db" }}>設定</span>}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {meta.length > 0 && (
