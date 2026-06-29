@@ -97,8 +97,8 @@ function ScanReceive() {
           if (code === lastScanRef.current.code && now - lastScanRef.current.time < 2000) return
           lastScanRef.current = { code, time: now }
 
-          // O(1) Map検索
-          const found = barcodeMap.get(code)
+          // O(1) Map検索（バーコード → 商品名フォールバック）
+          const found = barcodeMap.get(code) ?? products.find(p => p.name === code)
           if (!found) {
             // 音・触覚フィードバック（エラー）
             playBeep("error")
@@ -151,8 +151,8 @@ function ScanReceive() {
     setInput("")
     if (!code) return
 
-    // O(1) Map検索
-    const found = barcodeMap.get(code)
+    // O(1) Map検索（バーコード → 商品名フォールバック）
+    const found = barcodeMap.get(code) ?? products.find(p => p.name === code)
     if (!found) {
       setMsg(`⚠ 「${code}」に一致する商品が見つかりません`)
       setTimeout(() => setMsg(""), 2000)
