@@ -203,14 +203,16 @@ export default function ProductImagesPage() {
   async function loadEditProducts(q: string) {
     setEditLoading(true)
     setEditId(null)
-    // 画像の有無に関わらず全商品を検索対象にする
     let query = supabase
       .from("products")
       .select("id, name, manufacturer, image_url")
       .order("manufacturer", { ascending: true })
       .order("name", { ascending: true })
-      .limit(60)
-    if (q.trim()) query = query.ilike("name", `%${q.trim()}%`)
+    if (q.trim()) {
+      query = query.ilike("name", `%${q.trim()}%`)
+    } else {
+      query = query.limit(200)
+    }
     const { data } = await query
     setEditProducts(data ?? [])
     setEditLoading(false)
@@ -572,7 +574,7 @@ export default function ProductImagesPage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                {editProducts.length}件表示（最大60件）— 商品名で絞り込めます
+                {editProducts.length}件表示{editSearch ? "" : "（初期表示は最大200件）"}— 商品名で絞り込むと全件検索
               </div>
               {editProducts.map(p => (
                 <div key={p.id} style={{
