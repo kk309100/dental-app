@@ -217,7 +217,7 @@ export default function ClinicInventoryPage() {
 
   async function quickUpdate(item: Item, delta: number) {
     await updateStock(item, delta)
-    showToast(delta < 0 ? `✓ 使用 -1 記録しました` : `✓ 補充 +1 記録しました`)
+    showToast(delta < 0 ? `✓ 使用 -${Math.abs(delta)} 記録しました` : `✓ 補充 +${delta} 記録しました`)
   }
 
   function startEditStock(item: Item) {
@@ -1291,10 +1291,10 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
           style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #2563eb`, background: "#fff", color: "#2563eb", fontWeight: "bold", fontSize: 13, cursor: processing || item.stock_quantity <= 0 ? "not-allowed" : "pointer", opacity: processing || item.stock_quantity <= 0 ? 0.4 : 1 }}>
           使用 -1
         </button>
-        <button className="inv-btn" onClick={() => onQuick(item, +1)}
+        <button className="inv-btn" onClick={() => onQuick(item, item.units_per_package ?? 1)}
           disabled={processing}
           style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #22a648`, background: "#fff", color: "#22a648", fontWeight: "bold", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
-          補充 +1
+          {item.units_per_package ? `補充 +1箱(${item.units_per_package}本)` : "補充 +1"}
         </button>
         <button className="inv-btn" onClick={() => onOpenOptions(item)}
           disabled={processing}
