@@ -91,22 +91,39 @@ function ScanReceive() {
             useBarCodeDetectorIfSupported: true,      // ブラウザ内蔵APIを優先使用
           },
         },
-        (code) => {
+        async (code) => {
           const now = Date.now()
           // デバウンス：同じバーコードを2秒以内に2回登録しない
           if (code === lastScanRef.current.code && now - lastScanRef.current.time < 2000) return
           lastScanRef.current = { code, time: now }
 
-          // O(1) Map検索（バーコード → 商品名フォールバック）
-          const found = barcodeMap.get(code) ?? products.find(p => p.name === code)
+          // 在庫ラベルQR（inv:item_id）→ clinic_inventory_items 経由で商品を逆引き
+          let found: Product | undefined
+          if (code.startsWith("inv:")) {
+            const itemId = code.slice(4)
+            const { data: invItem } = await supabase
+              .from("clinic_inventory_items")
+              .select("product_id, barcode, product_name")
+              .eq("id", itemId)
+              .single()
+            if (invItem?.product_id) {
+              found = products.find(p => p.id === invItem.product_id)
+            } else if (invItem?.barcode) {
+              found = barcodeMap.get(invItem.barcode)
+            } else if (invItem?.product_name) {
+              found = products.find(p => p.name === invItem.product_name)
+            }
+          } else {
+            found = barcodeMap.get(code) ?? products.find(p => p.name === code)
+          }
+
           if (!found) {
-            // 音・触覚フィードバック（エラー）
             playBeep("error")
             if (typeof navigator.vibrate === "function") navigator.vibrate([80, 50, 80])
             if (flashTimerRef.current) clearTimeout(flashTimerRef.current)
-            setScanFlash({ name: `「${code}」は未登録`, ok: false })
+            setScanFlash({ name: `「${code}」は注文システム未登録`, ok: false })
             flashTimerRef.current = setTimeout(() => setScanFlash(null), 1800)
-            setMsg(`⚠ 「${code}」に一致する商品が見つかりません`)
+            setMsg(`⚠ 注文システムに一致する商品が見つかりません`)
             setTimeout(() => setMsg(""), 2000)
             return
           }
@@ -122,9 +139,9 @@ function ScanReceive() {
 
           // カメラは止めずに連続スキャン継続
           setCart(prev => {
-            const existing = prev.find(i => i.product.id === found.id)
-            if (existing) return prev.map(i => i.product.id === found.id ? { ...i, qty: i.qty + 1 } : i)
-            return [...prev, { product: found, qty: 1 }]
+            const existing = prev.find(i => i.product.id === found!.id)
+            if (existing) return prev.map(i => i.product.id === found!.id ? { ...i, qty: i.qty + 1 } : i)
+            return [...prev, { product: found!, qty: 1 }]
           })
           setMsg(`✅ ${found.name}`)
           setTimeout(() => setMsg(""), 1500)
@@ -145,25 +162,42 @@ function ScanReceive() {
     setCameraScanning(false)
   }
 
-  function handleScan(e: React.FormEvent) {
+  async function handleScan(e: React.FormEvent) {
     e.preventDefault()
     const code = input.trim()
     setInput("")
     if (!code) return
 
-    // O(1) Map検索（バーコード → 商品名フォールバック）
-    const found = barcodeMap.get(code) ?? products.find(p => p.name === code)
+    let found: Product | undefined
+    if (code.startsWith("inv:")) {
+      const itemId = code.slice(4)
+      const { data: invItem } = await supabase
+        .from("clinic_inventory_items")
+        .select("product_id, barcode, product_name")
+        .eq("id", itemId)
+        .single()
+      if (invItem?.product_id) {
+        found = products.find(p => p.id === invItem.product_id)
+      } else if (invItem?.barcode) {
+        found = barcodeMap.get(invItem.barcode)
+      } else if (invItem?.product_name) {
+        found = products.find(p => p.name === invItem.product_name)
+      }
+    } else {
+      found = barcodeMap.get(code) ?? products.find(p => p.name === code)
+    }
+
     if (!found) {
-      setMsg(`⚠ 「${code}」に一致する商品が見つかりません`)
+      setMsg(`⚠ 注文システムに一致する商品が見つかりません`)
       setTimeout(() => setMsg(""), 2000)
       return
     }
 
     if (typeof navigator.vibrate === "function") navigator.vibrate(60)
     setCart(prev => {
-      const existing = prev.find(i => i.product.id === found.id)
-      if (existing) return prev.map(i => i.product.id === found.id ? { ...i, qty: i.qty + 1 } : i)
-      return [...prev, { product: found, qty: 1 }]
+      const existing = prev.find(i => i.product.id === found!.id)
+      if (existing) return prev.map(i => i.product.id === found!.id ? { ...i, qty: i.qty + 1 } : i)
+      return [...prev, { product: found!, qty: 1 }]
     })
     setMsg(`✅ ${found.name}`)
     setTimeout(() => setMsg(""), 1500)

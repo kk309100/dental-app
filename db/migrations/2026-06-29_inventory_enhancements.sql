@@ -2,6 +2,10 @@
 ALTER TABLE clinic_inventory_items
   ADD COLUMN IF NOT EXISTS units_per_package integer;
 
+-- 商品マスターとの紐づけ用カラム
+ALTER TABLE clinic_inventory_items
+  ADD COLUMN IF NOT EXISTS product_id uuid REFERENCES products(id) ON DELETE SET NULL;
+
 -- カテゴリマスターテーブル（医院ごとにカテゴリを事前登録）
 CREATE TABLE IF NOT EXISTS inventory_categories (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -31,6 +31,7 @@ type Item = {
   location: string | null
   supplier: string | null
   units_per_package: number | null
+  product_id: string | null
 }
 
 type Log = {
@@ -83,7 +84,7 @@ export default function ClinicInventoryPage() {
   const [editMinValue, setEditMinValue] = useState("")
 
   const [addModal, setAddModal]   = useState(false)
-  const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "" })
+  const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "" })
   const [addSaving, setAddSaving] = useState(false)
 
   const [editItemModal, setEditItemModal] = useState<Item | null>(null)
@@ -159,7 +160,7 @@ export default function ClinicInventoryPage() {
 
     const [{ data: itemsData }, { data: logsData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
-        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package")
+        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id")
         .order("product_name"),
       logsQuery,
     ])
@@ -263,10 +264,11 @@ export default function ClinicInventoryPage() {
       supplier:          addForm.supplier.trim() || null,
       category:          addForm.category.trim() || null,
       units_per_package: addForm.units_per_package !== "" ? (parseInt(addForm.units_per_package, 10) || null) : null,
+      product_id:        addForm.product_id || null,
     })
     if (error) { alert("エラー: " + error.message); setAddSaving(false); return }
     setAddModal(false)
-    setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "" })
+    setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "" })
     setProductSuggestions([])
     setShowSuggestions(false)
     await fetchAll(clinicId)
@@ -341,7 +343,7 @@ export default function ClinicInventoryPage() {
   }
 
   function selectProduct(p: { id: string; name: string; manufacturer: string | null }) {
-    setAddForm(f => ({ ...f, product_name: p.name, maker: p.manufacturer || "" }))
+    setAddForm(f => ({ ...f, product_name: p.name, maker: p.manufacturer || "", product_id: p.id }))
     setShowSuggestions(false)
     setProductSuggestions([])
   }
@@ -443,8 +445,13 @@ export default function ClinicInventoryPage() {
         async (code) => {
           await scanner.stop()
           setScanning(false)
-          const found = items.find((i) => String(i.barcode || "") === code)
-            || items.find((i) => i.product_name === code)
+          let found: Item | undefined
+          if (code.startsWith("inv:")) {
+            found = items.find((i) => i.id === code.slice(4))
+          } else {
+            found = items.find((i) => String(i.barcode || "") === code)
+              || items.find((i) => i.product_name === code)
+          }
           if (!found) { playBeep("error"); alert("商品が見つかりません"); return }
           playBeep("success")
           setActionModal({ item: found, type: "use", qty: 1 })

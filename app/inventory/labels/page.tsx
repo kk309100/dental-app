@@ -38,7 +38,7 @@ const SIZES: Record<LabelSize, { label: string; desc: string; qr: number; cols: 
 }
 
 function codeValue(item: Item) {
-  return item.barcode?.trim() || item.product_name
+  return `inv:${item.id}`
 }
 
 function isNumericBarcode(item: Item) {
