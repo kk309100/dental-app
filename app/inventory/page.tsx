@@ -903,7 +903,7 @@ export default function ClinicInventoryPage() {
                 { key: "supplier",     label: "注文先",    required: false, placeholder: "" },
                 { key: "barcode",      label: "バーコード",required: false, placeholder: "" },
                 { key: "location",     label: "置き場所",  required: false, placeholder: "例）処置室・棚A" },
-                { key: "shelf_no",     label: "棚番号",    required: false, placeholder: "例）A-1" },
+                { key: "shelf_no",     label: "在庫場所",  required: false, placeholder: "例）A-1" },
               ].map(({ key, label, required, placeholder }) => (
                 <div key={key}>
                   <label style={{ fontSize: 12, color: C.sub }}>{label}{required && <span style={{ color: "#ef4444" }}> *</span>}</label>
@@ -1068,7 +1068,7 @@ export default function ClinicInventoryPage() {
                 { key: "supplier", label: "注文先",    placeholder: "例）モリタ、GC" },
                 { key: "barcode",  label: "バーコード", placeholder: "" },
                 { key: "location", label: "置き場所",  placeholder: "例）処置室・棚A" },
-                { key: "shelf_no", label: "棚番号",    placeholder: "例）A-1" },
+                { key: "shelf_no", label: "在庫場所",  placeholder: "例）A-1" },
               ].map(({ key, label, placeholder }) => (
                 <div key={key}>
                   <label style={{ fontSize: 12, color: C.sub }}>{label}</label>
