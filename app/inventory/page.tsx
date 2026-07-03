@@ -1292,11 +1292,13 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
             <div className={flash ? "flash-anim" : ""} onClick={() => onEditStock(item)}
               style={{ cursor: "pointer", borderRadius: 6, padding: "2px 4px" }}
               title="タップで在庫数を編集">
-              <span style={{ fontSize: 22, fontWeight: "bold", color: needsReorder ? "#ef4444" : "#1a1a1a", lineHeight: 1 }}>{item.stock_quantity}</span>
-              {item.units_per_package && (
-                <span style={{ fontSize: 10, color: "#9ca3af", marginLeft: 2 }}>
-                  箱/{effectiveStock}{item.unit || ""}
+              {item.units_per_package ? (
+                <span style={{ lineHeight: 1 }}>
+                  <span style={{ fontSize: 22, fontWeight: "bold", color: needsReorder ? "#ef4444" : "#1a1a1a" }}>{item.stock_quantity}</span>
+                  <span style={{ fontSize: 13, color: "#9ca3af", fontWeight: "normal" }}> / {item.units_per_package}{item.unit || ""}</span>
                 </span>
+              ) : (
+                <span style={{ fontSize: 22, fontWeight: "bold", color: needsReorder ? "#ef4444" : "#1a1a1a", lineHeight: 1 }}>{item.stock_quantity}</span>
               )}
             </div>
           )}
