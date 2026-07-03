@@ -47,6 +47,7 @@ export default function OrderPage() {
   const [search, setSearch]                   = useState("")
   const [category, setCategory]               = useState("すべて")
   const [loading, setLoading]                 = useState(true)
+  const [zoomedImage, setZoomedImage]         = useState<string | null>(null)
   const [scanning, setScanning]               = useState(false)
   const [showCart, setShowCart]               = useState(false)
   const [showConfirm, setShowConfirm]         = useState(false)
@@ -613,7 +614,7 @@ export default function OrderPage() {
                     <div className="hscroll">
                       {favoriteProducts.map((p) => (
                         <div key={p.id} className="mini-card">
-                          <MiniCard product={p} onAdd={addToCart} isFav={true} onFav={toggleFavorite} />
+                          <MiniCard product={p} onAdd={addToCart} isFav={true} onFav={toggleFavorite} onZoom={setZoomedImage} />
                         </div>
                       ))}
                     </div>
@@ -633,7 +634,7 @@ export default function OrderPage() {
                     <div className="hscroll">
                       {quickProducts.map((p: any) => (
                         <div key={p.id} className="mini-card">
-                          <MiniCard product={p} onAdd={addToCart} isFav={favorites.includes(p.id)} onFav={toggleFavorite} />
+                          <MiniCard product={p} onAdd={addToCart} isFav={favorites.includes(p.id)} onFav={toggleFavorite} onZoom={setZoomedImage} />
                         </div>
                       ))}
                     </div>
@@ -673,7 +674,8 @@ export default function OrderPage() {
                   <div style={{ position: "relative" }}>
                     {product.image_url
                       ? <img src={product.image_url} alt={product.name} loading="lazy"
-                          style={{ width: "100%", height: 120, objectFit: "cover", display: "block" }} />
+                          onClick={() => setZoomedImage(product.image_url)}
+                          style={{ width: "100%", height: 120, objectFit: "cover", display: "block", cursor: "zoom-in" }} />
                       : <div style={{
                           height: 80, background: "#f8fafc",
                           display: "flex", flexDirection: "column",
@@ -928,18 +930,32 @@ export default function OrderPage() {
           </div>
         </div>
       )}
+
+      {/* 画像ズームオーバーレイ */}
+      {zoomedImage && (
+        <div onClick={() => setZoomedImage(null)} style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)",
+          zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "zoom-out",
+        }}>
+          <img src={zoomedImage} alt="" style={{
+            maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain", borderRadius: 8,
+          }} />
+        </div>
+      )}
     </main>
   )
 }
 
 // ── ミニカード ──────────────────────────────────────────────
-function MiniCard({ product, onAdd, isFav, onFav }: any) {
+function MiniCard({ product, onAdd, isFav, onFav, onZoom }: any) {
   return (
     <>
       <div style={{ position: "relative" }}>
         {product.image_url
           ? <img src={product.image_url} alt={product.name} loading="lazy"
-              style={{ width: "100%", height: 80, objectFit: "cover", display: "block" }} />
+              onClick={() => onZoom?.(product.image_url)}
+              style={{ width: "100%", height: 80, objectFit: "cover", display: "block", cursor: "zoom-in" }} />
           : <div style={{
               height: 68, background: "#f8fafc",
               display: "flex", flexDirection: "column",
