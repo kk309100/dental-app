@@ -6,6 +6,10 @@ ALTER TABLE clinic_inventory_items
 ALTER TABLE clinic_inventory_items
   ADD COLUMN IF NOT EXISTS product_id uuid REFERENCES products(id) ON DELETE SET NULL;
 
+-- 個数単位（本・個・枚 など）
+ALTER TABLE clinic_inventory_items
+  ADD COLUMN IF NOT EXISTS unit text;
+
 -- カテゴリマスターテーブル（医院ごとにカテゴリを事前登録）
 CREATE TABLE IF NOT EXISTS inventory_categories (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -32,6 +32,7 @@ type Item = {
   supplier: string | null
   units_per_package: number | null
   product_id: string | null
+  unit: string | null
 }
 
 type Log = {
@@ -84,11 +85,11 @@ export default function ClinicInventoryPage() {
   const [editMinValue, setEditMinValue] = useState("")
 
   const [addModal, setAddModal]   = useState(false)
-  const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "" })
+  const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "", unit: "" })
   const [addSaving, setAddSaving] = useState(false)
 
   const [editItemModal, setEditItemModal] = useState<Item | null>(null)
-  const [editItemForm, setEditItemForm]   = useState({ product_name: "", maker: "", barcode: "", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "" })
+  const [editItemForm, setEditItemForm]   = useState({ product_name: "", maker: "", barcode: "", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", unit: "" })
   const [editItemSaving, setEditItemSaving] = useState(false)
 
   const [optionsMenu, setOptionsMenu] = useState<Item | null>(null)
@@ -160,7 +161,7 @@ export default function ClinicInventoryPage() {
 
     const [{ data: itemsData }, { data: logsData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
-        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id")
+        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit")
         .order("product_name"),
       logsQuery,
     ])
@@ -265,10 +266,11 @@ export default function ClinicInventoryPage() {
       category:          addForm.category.trim() || null,
       units_per_package: addForm.units_per_package !== "" ? (parseInt(addForm.units_per_package, 10) || null) : null,
       product_id:        addForm.product_id || null,
+      unit:              addForm.unit.trim() || null,
     })
     if (error) { alert("エラー: " + error.message); setAddSaving(false); return }
     setAddModal(false)
-    setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "" })
+    setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "", unit: "" })
     setProductSuggestions([])
     setShowSuggestions(false)
     await fetchAll(clinicId)
@@ -288,6 +290,7 @@ export default function ClinicInventoryPage() {
       supplier:          item.supplier || "",
       category:          item.category || "",
       units_per_package: item.units_per_package != null ? String(item.units_per_package) : "",
+      unit:              item.unit || "",
     })
     setEditItemModal(item)
   }
@@ -306,6 +309,7 @@ export default function ClinicInventoryPage() {
       supplier:          editItemForm.supplier.trim() || null,
       category:          editItemForm.category.trim() || null,
       units_per_package: editItemForm.units_per_package !== "" ? (parseInt(editItemForm.units_per_package, 10) || null) : null,
+      unit:              editItemForm.unit.trim() || null,
     }).eq("id", editItemModal.id)
     if (error) { alert("エラー: " + error.message); setEditItemSaving(false); return }
     setItems(prev => prev.map(i => i.id === editItemModal.id ? {
@@ -319,6 +323,7 @@ export default function ClinicInventoryPage() {
       supplier:          editItemForm.supplier.trim() || null,
       category:          editItemForm.category.trim() || null,
       units_per_package: editItemForm.units_per_package !== "" ? (parseInt(editItemForm.units_per_package, 10) || null) : null,
+      unit:              editItemForm.unit.trim() || null,
     } : i))
     setEditItemModal(null)
     showToast("✓ 商品情報を更新しました")
@@ -902,7 +907,7 @@ export default function ClinicInventoryPage() {
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
                 </div>
               ))}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={{ fontSize: 12, color: C.sub }}>最低在庫数</label>
                   <input type="number" min={0} value={editItemForm.min_stock} placeholder="なし"
@@ -910,9 +915,15 @@ export default function ClinicInventoryPage() {
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, color: C.sub }}>入数（1箱あたり）</label>
+                  <label style={{ fontSize: 12, color: C.sub }}>入数（1箱）</label>
                   <input type="number" min={1} value={editItemForm.units_per_package} placeholder="なし"
                     onChange={e => setEditItemForm(f => ({ ...f, units_per_package: e.target.value }))}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: C.sub }}>単位</label>
+                  <input value={editItemForm.unit} placeholder="本・個・枚"
+                    onChange={e => setEditItemForm(f => ({ ...f, unit: e.target.value }))}
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
                 </div>
               </div>
@@ -1059,12 +1070,19 @@ export default function ClinicInventoryPage() {
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
                 </div>
               </div>
-              <div>
-                <label style={{ fontSize: 12, color: C.sub }}>入数（1箱あたり）</label>
-                <input type="number" min={1} value={addForm.units_per_package} placeholder="例）5（1箱5本入りの場合）"
-                  onChange={e => setAddForm(f => ({ ...f, units_per_package: e.target.value }))}
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
-                <p style={{ fontSize: 11, color: C.sub, margin: "4px 0 0" }}>設定すると補充時に「1箱＝X本」ボタンが表示されます</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: C.sub }}>入数（1箱あたり）</label>
+                  <input type="number" min={1} value={addForm.units_per_package} placeholder="例）5"
+                    onChange={e => setAddForm(f => ({ ...f, units_per_package: e.target.value }))}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: C.sub }}>単位</label>
+                  <input value={addForm.unit} placeholder="本・個・枚"
+                    onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
+                </div>
               </div>
             </div>
             <button onClick={addItem} disabled={addSaving}
