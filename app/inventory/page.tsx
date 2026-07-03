@@ -500,11 +500,16 @@ export default function ClinicInventoryPage() {
     })
   }, [items, search, locationFilter, categoryFilter])
 
+  // units_per_package が設定されている場合、stock_quantity×units_per_package で本数換算して比較
+  function effectiveStock(i: Item) {
+    return i.units_per_package ? i.stock_quantity * i.units_per_package : i.stock_quantity
+  }
+
   const needsReorder = useMemo(() =>
-    filtered.filter((i) => i.min_stock !== null && i.stock_quantity <= i.min_stock), [filtered])
+    filtered.filter((i) => i.min_stock !== null && effectiveStock(i) <= i.min_stock), [filtered])
 
   const normalItems = useMemo(() =>
-    filtered.filter((i) => !(i.min_stock !== null && i.stock_quantity <= i.min_stock)), [filtered])
+    filtered.filter((i) => !(i.min_stock !== null && effectiveStock(i) <= i.min_stock)), [filtered])
 
   // 場所別グループ（すべて表示時のみ）
   const locationGroups = useMemo(() => {
@@ -907,24 +912,35 @@ export default function ClinicInventoryPage() {
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
                 </div>
               ))}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <label style={{ fontSize: 12, color: C.sub }}>最低在庫数</label>
-                  <input type="number" min={0} value={editItemForm.min_stock} placeholder="なし"
-                    onChange={e => setEditItemForm(f => ({ ...f, min_stock: e.target.value }))}
-                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, color: C.sub }}>入数（1箱）</label>
-                  <input type="number" min={1} value={editItemForm.units_per_package} placeholder="なし"
-                    onChange={e => setEditItemForm(f => ({ ...f, units_per_package: e.target.value }))}
-                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12, color: C.sub }}>単位</label>
+                  <label style={{ fontSize: 12, color: C.sub }}>単位（本・個・枚など）</label>
                   <input value={editItemForm.unit} placeholder="本・個・枚"
                     onChange={e => setEditItemForm(f => ({ ...f, unit: e.target.value }))}
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: C.sub }}>入数（1箱あたり）</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                    <input type="number" min={1} value={editItemForm.units_per_package} placeholder="なし"
+                      onChange={e => setEditItemForm(f => ({ ...f, units_per_package: e.target.value }))}
+                      style={{ flex: 1, padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, boxSizing: "border-box", outline: "none", color: C.text }} />
+                    {editItemForm.unit && <span style={{ fontSize: 13, color: C.sub, whiteSpace: "nowrap" }}>{editItemForm.unit}</span>}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: C.sub }}>
+                  最低在庫数
+                  {editItemForm.units_per_package
+                    ? <span style={{ color: C.orange, marginLeft: 6 }}>※ {editItemForm.unit || "本"}換算（在庫数×入数 ≤ この値で発注アラート）</span>
+                    : null}
+                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                  <input type="number" min={0} value={editItemForm.min_stock} placeholder="なし"
+                    onChange={e => setEditItemForm(f => ({ ...f, min_stock: e.target.value }))}
+                    style={{ flex: 1, padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, boxSizing: "border-box", outline: "none", color: C.text }} />
+                  {editItemForm.unit && <span style={{ fontSize: 13, color: C.sub, whiteSpace: "nowrap" }}>{editItemForm.unit}</span>}
                 </div>
               </div>
             </div>
@@ -951,7 +967,12 @@ export default function ClinicInventoryPage() {
 
             <p style={{ fontSize: 13, color: C.sub, marginBottom: 14 }}>
               現在在庫：<strong style={{ fontSize: 20, color: C.text }}>{actionModal.item.stock_quantity}</strong>
-              {actionModal.item.min_stock !== null && <span style={{ fontSize: 12, color: "#9ca3af" }}> / 最低 {actionModal.item.min_stock}</span>}
+              {actionModal.item.units_per_package && (
+                <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: 4 }}>
+                  箱 / {actionModal.item.stock_quantity * actionModal.item.units_per_package}{actionModal.item.unit || ""}
+                </span>
+              )}
+              {actionModal.item.min_stock !== null && <span style={{ fontSize: 12, color: "#9ca3af" }}> （最低 {actionModal.item.min_stock}{actionModal.item.unit || ""}）</span>}
             </p>
 
             <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
@@ -1231,7 +1252,8 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
   flash: boolean
   setRef: (el: HTMLDivElement | null) => void
 }) {
-  const needsReorder = item.min_stock !== null && item.stock_quantity <= item.min_stock
+  const effectiveStock = item.units_per_package ? item.stock_quantity * item.units_per_package : item.stock_quantity
+  const needsReorder = item.min_stock !== null && effectiveStock <= item.min_stock
   const isEditing = editStockId === item.id
   const isEditingMin = editMinId === item.id
   const meta = [
@@ -1271,6 +1293,11 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
               style={{ cursor: "pointer", borderRadius: 6, padding: "2px 4px" }}
               title="タップで在庫数を編集">
               <span style={{ fontSize: 22, fontWeight: "bold", color: needsReorder ? "#ef4444" : "#1a1a1a", lineHeight: 1 }}>{item.stock_quantity}</span>
+              {item.units_per_package && (
+                <span style={{ fontSize: 10, color: "#9ca3af", marginLeft: 2 }}>
+                  箱/{effectiveStock}{item.unit || ""}
+                </span>
+              )}
             </div>
           )}
 
@@ -1290,7 +1317,9 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
               style={{ cursor: "pointer", borderRadius: 6, padding: "2px 4px" }}
               title="タップで最低在庫数を編集">
               <span style={{ fontSize: 11, color: "#9ca3af" }}>
-                / {item.min_stock != null ? item.min_stock : <span style={{ color: "#d1d5db" }}>設定</span>}
+                / {item.min_stock != null
+                  ? <>{item.min_stock}{item.unit || ""}</>
+                  : <span style={{ color: "#d1d5db" }}>設定</span>}
               </span>
             </div>
           )}
@@ -1312,7 +1341,7 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
         <button className="inv-btn" onClick={() => onQuick(item, item.units_per_package ?? 1)}
           disabled={processing}
           style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #22a648`, background: "#fff", color: "#22a648", fontWeight: "bold", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
-          {item.units_per_package ? `補充 +1箱(${item.units_per_package}本)` : "補充 +1"}
+          {item.units_per_package ? `補充 +1箱(${item.units_per_package}${item.unit || "本"})` : "補充 +1"}
         </button>
         <button className="inv-btn" onClick={() => onOpenOptions(item)}
           disabled={processing}
