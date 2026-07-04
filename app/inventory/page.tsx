@@ -592,6 +592,17 @@ export default function ClinicInventoryPage() {
         @keyframes flash { 0%,100%{background:transparent} 40%{background:#bbf7d0} }
         .flash-anim { animation: flash 0.6s ease; }
         .cat-pills::-webkit-scrollbar { display: none; }
+        .cat-pills { -ms-overflow-style: none; scrollbar-width: none; }
+        .cat-pills-wrap { position: relative; }
+        .cat-pills-wrap::after {
+          content: "";
+          position: absolute;
+          top: 0; right: 0; bottom: 0;
+          width: 40px;
+          background: linear-gradient(to right, transparent, #f8f9fa);
+          pointer-events: none;
+          border-radius: 0 8px 8px 0;
+        }
       `}</style>
 
       {toast && (
@@ -660,6 +671,7 @@ export default function ClinicInventoryPage() {
               placeholder="🔍 商品名・バーコードで検索"
               style={{ width: "100%", padding: "9px 13px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 14, boxSizing: "border-box", outline: "none", color: C.text, marginBottom: 8 }} />
             {/* カテゴリフィルター */}
+            <div className="cat-pills-wrap" style={{ marginBottom: 4 }}>
             <div className="cat-pills" style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 4, alignItems: "center" }}>
               {categories.map((cat) => (
                 <button key={cat} onClick={() => setCategoryFilter(cat)} style={{
@@ -674,8 +686,10 @@ export default function ClinicInventoryPage() {
                 cursor: "pointer", border: "1.5px dashed #d1d5db", background: "#fff", color: C.sub, flexShrink: 0,
               }}>＋ 管理</button>
             </div>
+            </div>
             {/* 場所フィルター */}
             {locations.length > 2 && (
+              <div className="cat-pills-wrap" style={{ marginBottom: 2 }}>
               <div className="cat-pills" style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 2 }}>
                 {locations.map((loc) => (
                   <button key={loc} onClick={() => setLocationFilter(loc)} style={{
@@ -685,6 +699,7 @@ export default function ClinicInventoryPage() {
                     color: locationFilter === loc ? "#fff" : C.sub,
                   }}>{loc === "すべて" ? "📍 すべての場所" : `📍 ${loc}`}</button>
                 ))}
+              </div>
               </div>
             )}
           </>
