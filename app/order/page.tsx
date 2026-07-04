@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode"
 import { playBeep } from "@/lib/beep"
 
@@ -37,6 +37,7 @@ type Notice = { id: string; title: string; body: string | null }
 
 export default function OrderPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const [products, setProducts]               = useState<any[]>([])
   const [orders, setOrders]                   = useState<any[]>([])
@@ -193,6 +194,24 @@ export default function OrderPage() {
       ...recentProducts.filter((p: any) => !freqIds.has(p.id)),
     ].slice(0, 10)
   }, [frequentProducts, recentProducts])
+
+  // 在庫画面からの発注リンク（?order_product_id=xxx&order_qty=1）を処理
+  useEffect(() => {
+    if (loading || products.length === 0) return
+    const pid = searchParams.get("order_product_id")
+    const qty = parseInt(searchParams.get("order_qty") || "1", 10)
+    if (!pid) return
+    const product = products.find((p) => p.id === pid)
+    if (!product) return
+    setCart((prev) => {
+      const ex = prev.find((i) => i.id === product.id)
+      if (ex) return prev.map((i) => i.id === product.id ? { ...i, quantity: i.quantity + qty } : i)
+      return [...prev, { ...product, quantity: qty }]
+    })
+    setShowCart(true)
+    // パラメータをURLから除去（戻るときに再追加されないよう）
+    router.replace("/order")
+  }, [loading, products, searchParams])
 
   function addToCart(product: any) {
     setCart((prev) => {

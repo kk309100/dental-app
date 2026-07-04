@@ -557,6 +557,10 @@ export default function ClinicInventoryPage() {
     onQuick: quickUpdate,
     onOpenModal: (item: Item, type: "use" | "restock") => setActionModal({ item, type, qty: 1 }),
     onOpenOptions: (item: Item) => setOptionsMenu(item),
+    onOrder: (item: Item) => {
+      const qty = item.units_per_package ?? 1
+      router.push(`/order?order_product_id=${item.product_id}&order_qty=${qty}`)
+    },
     onEditStock: startEditStock,
     editStockId,
     editStockValue,
@@ -1230,11 +1234,12 @@ export default function ClinicInventoryPage() {
 }
 
 // ── 商品カード ──
-function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, processing, flash, setRef }: {
+function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, processing, flash, setRef }: {
   item: Item
   onQuick: (item: Item, delta: number) => void
   onOpenModal: (item: Item, type: "use" | "restock") => void
   onOpenOptions: (item: Item) => void
+  onOrder: (item: Item) => void
   onEditStock: (item: Item) => void
   editStockId: string | null
   editStockValue: string
@@ -1345,6 +1350,13 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
           style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #22a648`, background: "#fff", color: "#22a648", fontWeight: "bold", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
           {item.units_per_package ? `補充 +1箱(${item.units_per_package}${item.unit || "本"})` : "補充 +1"}
         </button>
+        {item.product_id && (
+          <button className="inv-btn" onClick={() => onOrder(item)}
+            disabled={processing}
+            style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #f08c00`, background: needsReorder ? "#fff7ed" : "#fff", color: "#f08c00", fontWeight: "bold", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
+            📦 発注
+          </button>
+        )}
         <button className="inv-btn" onClick={() => onOpenOptions(item)}
           disabled={processing}
           style={{ padding: "8px 10px", borderRadius: 8, border: `1.5px solid #e5e7eb`, background: "#fff", color: "#6b7280", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
