@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode"
@@ -36,6 +36,14 @@ const C = {
 type Notice = { id: string; title: string; body: string | null }
 
 export default function OrderPage() {
+  return (
+    <Suspense>
+      <OrderPageInner />
+    </Suspense>
+  )
+}
+
+function OrderPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
