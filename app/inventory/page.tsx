@@ -109,6 +109,7 @@ export default function ClinicInventoryPage() {
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scannerRef = useRef<any>(null)
+  const itemsRef = useRef<Item[]>([])
 
   // 連続スキャンカート
   const [scanCart, setScanCart] = useState<{ item: Item; qty: number }[]>([])
@@ -116,6 +117,7 @@ export default function ClinicInventoryPage() {
   const [batchProcessing, setBatchProcessing] = useState(false)
 
   useEffect(() => { init() }, [])
+  useEffect(() => { itemsRef.current = items }, [items])
 
   async function init() {
     const { data: userData } = await supabase.auth.getUser()
@@ -474,39 +476,50 @@ export default function ClinicInventoryPage() {
   // 連続スキャンモード
   async function startBatchScan() {
     setScanning(true)
+    // div#inv-reader はDOMに常に存在するので即座にインスタンス化できる
     const scanner = new Html5Qrcode("inv-reader")
     scannerRef.current = scanner
     const lastScan = { code: "", time: 0 }
     try {
       await scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 220 },
-        async (code) => {
+        (code) => {
           const now = Date.now()
-          // 同じコードを1秒以内に連続読みしない
           if (code === lastScan.code && now - lastScan.time < 1500) return
           lastScan.code = code
           lastScan.time = now
 
+          // itemsRef で常に最新のitemsを参照
+          const currentItems = itemsRef.current
           let found: Item | undefined
           if (code.startsWith("inv:")) {
-            found = items.find((i) => i.id === code.slice(4))
+            found = currentItems.find((i) => i.id === code.slice(4))
           } else {
-            found = items.find((i) => String(i.barcode || "") === code)
-              || items.find((i) => i.product_name === code)
+            found = currentItems.find((i) => String(i.barcode || "") === code)
+              || currentItems.find((i) => i.product_name === code)
           }
-          if (!found) { playBeep("error"); return }
+          if (!found) { playBeep("error"); showToast("❌ 商品が見つかりません"); return }
           playBeep("success")
           setScanCart((prev) => {
             const ex = prev.find((e) => e.item.id === found!.id)
-            if (ex) return prev.map((e) => e.item.id === found!.id ? { ...e, qty: e.qty + 1 } : e)
+            if (ex) {
+              showToast(`📦 ${found!.product_name}（合計 ${ex.qty + 1}点）`)
+              return prev.map((e) => e.item.id === found!.id ? { ...e, qty: e.qty + 1 } : e)
+            }
+            showToast(`✅ ${found!.product_name} をカートに追加`)
             return [...prev, { item: found!, qty: 1 }]
           })
           setScanCartOpen(true)
         }, () => {})
-    } catch { setScanning(false) }
+    } catch (e) { setScanning(false) }
   }
 
   async function stopBatchScan() {
-    try { await scannerRef.current?.stop() } catch {}
+    try {
+      if (scannerRef.current) {
+        await scannerRef.current.stop()
+        await scannerRef.current.clear()
+      }
+    } catch {}
     scannerRef.current = null
     setScanning(false)
   }
@@ -799,7 +812,8 @@ export default function ClinicInventoryPage() {
         )}
       </div>
 
-      {scanning && <div id="inv-reader" style={{ width: "100%" }} />}
+      {/* inv-reader は常にDOMに存在させる（scannerがstart前に要素を必要とするため） */}
+      <div id="inv-reader" style={{ width: "100%", display: scanning ? "block" : "none" }} />
 
       {/* ── 記録タブ ── */}
       {tab === "record" && (
