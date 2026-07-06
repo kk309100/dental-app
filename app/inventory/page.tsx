@@ -115,9 +115,46 @@ export default function ClinicInventoryPage() {
   const [scanCart, setScanCart] = useState<{ item: Item; qty: number }[]>([])
   const [scanCartOpen, setScanCartOpen] = useState(false)
   const [batchProcessing, setBatchProcessing] = useState(false)
+  const [scannerReady, setScannerReady] = useState(false) // re-render後にスキャナー起動するフラグ
 
   useEffect(() => { init() }, [])
   useEffect(() => { itemsRef.current = items }, [items])
+
+  // scannerReady が true になった（＝divがDOMに表示された）後にスキャナーを起動
+  useEffect(() => {
+    if (!scannerReady) return
+    setScannerReady(false)
+    const scanner = new Html5Qrcode("inv-reader")
+    scannerRef.current = scanner
+    const lastScan = { code: "", time: 0 }
+    scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 280, height: 280 } },
+      (code) => {
+        const now = Date.now()
+        if (code === lastScan.code && now - lastScan.time < 1500) return
+        lastScan.code = code; lastScan.time = now
+        const currentItems = itemsRef.current
+        let found: Item | undefined
+        if (code.startsWith("inv:")) {
+          found = currentItems.find((i) => i.id === code.slice(4))
+        } else {
+          found = currentItems.find((i) => String(i.barcode || "") === code)
+            || currentItems.find((i) => i.product_name === code)
+        }
+        if (!found) { playBeep("error"); showToast("❌ 商品が見つかりません"); return }
+        playBeep("success")
+        setScanCart((prev) => {
+          const ex = prev.find((e) => e.item.id === found!.id)
+          if (ex) {
+            showToast(`📦 ${found!.product_name}（合計 ${ex.qty + 1}点）`)
+            return prev.map((e) => e.item.id === found!.id ? { ...e, qty: e.qty + 1 } : e)
+          }
+          showToast(`✅ ${found!.product_name} をカートに追加`)
+          return [...prev, { item: found!, qty: 1 }]
+        })
+        setScanCartOpen(true)
+      }, () => {}
+    ).catch(() => setScanning(false))
+  }, [scannerReady])
 
   async function init() {
     const { data: userData } = await supabase.auth.getUser()
@@ -473,44 +510,10 @@ export default function ClinicInventoryPage() {
     } catch { setScanning(false) }
   }
 
-  // 連続スキャンモード
-  async function startBatchScan() {
+  // 連続スキャンモード：setScanning→再レンダー後にuseEffectでスキャナー起動
+  function startBatchScan() {
     setScanning(true)
-    // div#inv-reader はDOMに常に存在するので即座にインスタンス化できる
-    const scanner = new Html5Qrcode("inv-reader")
-    scannerRef.current = scanner
-    const lastScan = { code: "", time: 0 }
-    try {
-      await scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 220 },
-        (code) => {
-          const now = Date.now()
-          if (code === lastScan.code && now - lastScan.time < 1500) return
-          lastScan.code = code
-          lastScan.time = now
-
-          // itemsRef で常に最新のitemsを参照
-          const currentItems = itemsRef.current
-          let found: Item | undefined
-          if (code.startsWith("inv:")) {
-            found = currentItems.find((i) => i.id === code.slice(4))
-          } else {
-            found = currentItems.find((i) => String(i.barcode || "") === code)
-              || currentItems.find((i) => i.product_name === code)
-          }
-          if (!found) { playBeep("error"); showToast("❌ 商品が見つかりません"); return }
-          playBeep("success")
-          setScanCart((prev) => {
-            const ex = prev.find((e) => e.item.id === found!.id)
-            if (ex) {
-              showToast(`📦 ${found!.product_name}（合計 ${ex.qty + 1}点）`)
-              return prev.map((e) => e.item.id === found!.id ? { ...e, qty: e.qty + 1 } : e)
-            }
-            showToast(`✅ ${found!.product_name} をカートに追加`)
-            return [...prev, { item: found!, qty: 1 }]
-          })
-          setScanCartOpen(true)
-        }, () => {})
-    } catch (e) { setScanning(false) }
+    setScannerReady(true) // useEffectがdiv表示後に起動する
   }
 
   async function stopBatchScan() {
@@ -814,24 +817,28 @@ export default function ClinicInventoryPage() {
         )}
       </div>
 
-      {/* カメラ：スキャン中はフルスクリーンオーバーレイで表示 */}
+      {/* inv-reader: 1つだけDOMに存在。scanning時はfixed fullscreen */}
+      <div id="inv-reader" style={{
+        display: scanning ? "block" : "none",
+        position: "fixed", inset: 0, zIndex: 500, background: "#000",
+        width: "100%", height: "100%",
+      }} />
+
+      {/* カメラ操作UI（inv-readerの上にオーバーレイ） */}
       {scanning && (
-        <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 500, display: "flex", flexDirection: "column" }}>
-          {/* 停止ボタン */}
-          <div style={{ position: "absolute", top: 12, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
+        <>
+          <div style={{ position: "fixed", top: 16, left: 0, right: 0, zIndex: 510, display: "flex", justifyContent: "center" }}>
             <button onClick={stopBatchScan} style={{
               background: "rgba(220,38,38,0.92)", color: "#fff", border: "none",
               borderRadius: 999, padding: "10px 28px", fontSize: 15, fontWeight: "bold", cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
             }}>⏹ スキャン停止</button>
           </div>
-          {/* カメラ本体 */}
-          <div id="inv-reader" style={{ width: "100%", flex: 1 }} />
-          {/* スキャン済みカウント */}
           {scanCart.length > 0 && (
             <div style={{
-              position: "absolute", bottom: 0, left: 0, right: 0,
+              position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 510,
               background: "rgba(124,58,237,0.92)", color: "#fff",
-              padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
             }}>
               <span style={{ fontWeight: "bold", fontSize: 14 }}>
                 🛒 {scanCart.length}品目・計{scanCart.reduce((s, e) => s + e.qty, 0)}点 スキャン済み
@@ -839,10 +846,8 @@ export default function ClinicInventoryPage() {
               <span style={{ fontSize: 12, opacity: 0.85 }}>停止後に確認・使用</span>
             </div>
           )}
-        </div>
+        </>
       )}
-      {/* inv-readerはDOMに常に必要（scanning=falseでも要素が必要） */}
-      {!scanning && <div id="inv-reader" style={{ display: "none" }} />}
 
       {/* ── 記録タブ ── */}
       {tab === "record" && (
