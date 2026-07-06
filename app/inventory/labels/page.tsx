@@ -65,7 +65,7 @@ export default function LabelsPage() {
     if (profile.role === "admin") { router.push("/admin"); return }
     const { data } = await supabase.from("clinic_inventory_items")
       .select("id,product_name,maker,barcode,location,shelf_no,supplier")
-      .or(`clinic_id.eq.${profile.clinic_id},clinic_id.is.null`)
+      .eq("clinic_id", profile.clinic_id)
       .order("product_name")
     setItems((data as Item[]) || [])
     setLoading(false)
