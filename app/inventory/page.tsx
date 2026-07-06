@@ -724,6 +724,10 @@ export default function ClinicInventoryPage() {
                 background: "#fff", color: "#7c3aed", border: "1.5px solid #7c3aed",
                 borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
               }}>🏷 ラベル</button>
+              <button onClick={() => router.push("/inventory/import")} style={{
+                background: "#fff", color: "#0891b2", border: "1.5px solid #0891b2",
+                borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
+              }}>📦 一括登録</button>
               <button onClick={exportCSV} style={{
                 background: "#fff", color: C.sub, border: `1.5px solid ${C.border}`,
                 borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
