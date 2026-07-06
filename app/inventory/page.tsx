@@ -700,7 +700,7 @@ export default function ClinicInventoryPage() {
         background: C.card, padding: "12px 14px 10px",
         borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 20,
       }}>
-        {!searchFocused && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button onClick={() => router.push("/menu")} style={{
               background: "#e8f5ec", color: C.primary, border: "1px solid #b2dfbd",
@@ -744,11 +744,11 @@ export default function ClinicInventoryPage() {
               <input ref={csvInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleCsvFile} />
             </div>
           )}
-        </div>}
+        </div>
 
         {tab === "record" && (
           <>
-            {!scanning && !searchFocused && (
+            {!scanning && (
               <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
                 <button className="inv-btn" onClick={startScan} style={{
                   flex: 1, padding: "11px 0", borderRadius: 9, background: C.blue, color: "#fff",
@@ -761,19 +761,10 @@ export default function ClinicInventoryPage() {
                 }}>🔄 連続スキャン</button>
               </div>
             )}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-              <input value={search} onChange={(e) => setSearch(e.target.value)}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => { if (!search) setSearchFocused(false) }}
-                placeholder="🔍 商品名・バーコードで検索"
-                style={{ flex: 1, padding: "9px 13px", borderRadius: 8, border: `1.5px solid ${searchFocused ? C.primary : C.border}`, fontSize: 14, boxSizing: "border-box", outline: "none", color: C.text }} />
-              {searchFocused && (
-                <button onMouseDown={(e) => { e.preventDefault(); setSearch(""); setSearchFocused(false); (e.currentTarget.previousSibling as HTMLInputElement)?.blur() }}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "none", background: "#f3f4f6", color: C.sub, fontSize: 13, fontWeight: "bold", cursor: "pointer", whiteSpace: "nowrap" }}>
-                  ✕ キャンセル
-                </button>
-              )}
-            </div>
+            <button onClick={() => setSearchFocused(true)}
+              style={{ width: "100%", padding: "10px 13px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 14, background: "#f9fafb", color: search ? C.text : C.sub, textAlign: "left", cursor: "pointer", marginBottom: 8, boxSizing: "border-box" }}>
+              🔍 {search || "商品名・バーコードで検索"}
+            </button>
             {/* カテゴリフィルター */}
             <div className="cat-pills-wrap" style={{ marginBottom: 4 }}>
             <div className="cat-pills" style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 4, alignItems: "center" }}>
@@ -1101,6 +1092,53 @@ export default function ClinicInventoryPage() {
               style={{ width: "100%", marginTop: 20, padding: 14, borderRadius: 12, border: "none", background: editItemSaving ? "#d1d5db" : C.blue, color: "#fff", fontWeight: "bold", fontSize: 16, cursor: editItemSaving ? "default" : "pointer" }}>
               {editItemSaving ? "保存中…" : "保存する"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 全画面検索オーバーレイ */}
+      {searchFocused && (
+        <div style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 200, display: "flex", flexDirection: "column" }}>
+          {/* 検索バー */}
+          <div style={{ padding: "10px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="商品名・バーコードで検索"
+              style={{ flex: 1, padding: "11px 14px", borderRadius: 10, border: `2px solid ${C.primary}`, fontSize: 16, outline: "none", color: C.text, boxSizing: "border-box" }}
+            />
+            <button onClick={() => { setSearch(""); setSearchFocused(false) }}
+              style={{ padding: "10px 14px", borderRadius: 10, border: "none", background: "#f3f4f6", color: C.sub, fontSize: 14, fontWeight: "bold", cursor: "pointer", whiteSpace: "nowrap" }}>
+              キャンセル
+            </button>
+          </div>
+          {/* 結果リスト */}
+          <div style={{ overflowY: "auto", flex: 1, padding: "8px 10px" }}>
+            {(search
+              ? items.filter(i =>
+                  i.product_name.toLowerCase().includes(search.toLowerCase()) ||
+                  (i.barcode || "").toLowerCase().includes(search.toLowerCase())
+                )
+              : []
+            ).map(item => (
+              <button key={item.id} onMouseDown={() => { setSearchFocused(false); document.getElementById(`inv-item-${item.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" }) }}
+                style={{ width: "100%", textAlign: "left", padding: "12px 14px", borderRadius: 10, border: `1px solid ${C.border}`, background: "#fff", marginBottom: 6, cursor: "pointer", display: "block" }}>
+                <div style={{ fontWeight: "bold", fontSize: 15, color: C.text }}>{item.product_name}</div>
+                <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>
+                  {[item.maker, item.location, item.barcode ? `# ${item.barcode}` : null].filter(Boolean).join("  ·  ")}
+                </div>
+              </button>
+            ))}
+            {search && items.filter(i =>
+              i.product_name.toLowerCase().includes(search.toLowerCase()) ||
+              (i.barcode || "").toLowerCase().includes(search.toLowerCase())
+            ).length === 0 && (
+              <p style={{ textAlign: "center", color: C.sub, padding: "40px 0" }}>該当する商品がありません</p>
+            )}
+            {!search && (
+              <p style={{ textAlign: "center", color: C.sub, padding: "40px 0", fontSize: 14 }}>商品名を入力してください</p>
+            )}
           </div>
         </div>
       )}
