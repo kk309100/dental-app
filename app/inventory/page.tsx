@@ -60,6 +60,7 @@ export default function ClinicInventoryPage() {
   const [logs, setLogs]           = useState<Log[]>([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState("")
+  const [searchFocused, setSearchFocused] = useState(false)
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [scanning, setScanning]   = useState(false)
   const [clinicId, setClinicId]   = useState("")
@@ -699,7 +700,7 @@ export default function ClinicInventoryPage() {
         background: C.card, padding: "12px 14px 10px",
         borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 20,
       }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        {!searchFocused && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button onClick={() => router.push("/menu")} style={{
               background: "#e8f5ec", color: C.primary, border: "1px solid #b2dfbd",
@@ -743,11 +744,11 @@ export default function ClinicInventoryPage() {
               <input ref={csvInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleCsvFile} />
             </div>
           )}
-        </div>
+        </div>}
 
         {tab === "record" && (
           <>
-            {!scanning && (
+            {!scanning && !searchFocused && (
               <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
                 <button className="inv-btn" onClick={startScan} style={{
                   flex: 1, padding: "11px 0", borderRadius: 9, background: C.blue, color: "#fff",
@@ -760,9 +761,19 @@ export default function ClinicInventoryPage() {
                 }}>🔄 連続スキャン</button>
               </div>
             )}
-            <input value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="🔍 商品名・バーコードで検索"
-              style={{ width: "100%", padding: "9px 13px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 14, boxSizing: "border-box", outline: "none", color: C.text, marginBottom: 8 }} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+              <input value={search} onChange={(e) => setSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => { if (!search) setSearchFocused(false) }}
+                placeholder="🔍 商品名・バーコードで検索"
+                style={{ flex: 1, padding: "9px 13px", borderRadius: 8, border: `1.5px solid ${searchFocused ? C.primary : C.border}`, fontSize: 14, boxSizing: "border-box", outline: "none", color: C.text }} />
+              {searchFocused && (
+                <button onMouseDown={(e) => { e.preventDefault(); setSearch(""); setSearchFocused(false); (e.currentTarget.previousSibling as HTMLInputElement)?.blur() }}
+                  style={{ padding: "8px 12px", borderRadius: 8, border: "none", background: "#f3f4f6", color: C.sub, fontSize: 13, fontWeight: "bold", cursor: "pointer", whiteSpace: "nowrap" }}>
+                  ✕ キャンセル
+                </button>
+              )}
+            </div>
             {/* カテゴリフィルター */}
             <div className="cat-pills-wrap" style={{ marginBottom: 4 }}>
             <div className="cat-pills" style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 4, alignItems: "center" }}>
