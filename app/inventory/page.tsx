@@ -1240,21 +1240,29 @@ export default function ClinicInventoryPage() {
                 ))}
               </div>
 
+              {/* 1箱ボタン（入数設定ありの場合のみ、大きく目立つ） */}
+              {item.units_per_package && (
+                <button onClick={() => commitQty(item.units_per_package!)} style={{
+                  width: "100%", padding: "16px 0", borderRadius: 12, marginBottom: 10,
+                  border: "2px solid #7c3aed", background: "#7c3aed", color: "#fff",
+                  fontSize: 18, fontWeight: "bold", cursor: "pointer", letterSpacing: 1,
+                }}>
+                  📦 1箱 補充（{item.units_per_package}{item.unit || "本"}）
+                </button>
+              )}
+
               {/* プリセット（即確定） */}
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                {presets.map((qty, i) => {
-                  const isBox = item.units_per_package && qty === item.units_per_package
-                  return (
-                    <button key={i} onClick={() => commitQty(qty)} style={{
-                      flex: 1, padding: "14px 0", borderRadius: 10,
-                      border: `1.5px solid ${accentColor}`,
-                      background: accentLight, color: accentColor,
-                      fontSize: isBox ? 12 : 20, fontWeight: "bold", cursor: "pointer",
-                    }}>
-                      {isBox ? `1箱\n${qty}${item.unit || "本"}` : qty}
-                    </button>
-                  )
-                })}
+                {[1, 2, 3, 5].map((qty) => (
+                  <button key={qty} onClick={() => commitQty(qty)} style={{
+                    flex: 1, padding: "14px 0", borderRadius: 10,
+                    border: `1.5px solid ${accentColor}`,
+                    background: accentLight, color: accentColor,
+                    fontSize: 20, fontWeight: "bold", cursor: "pointer",
+                  }}>
+                    {qty}
+                  </button>
+                ))}
               </div>
 
               {/* 数値入力＋確定（キーボード直上） */}
