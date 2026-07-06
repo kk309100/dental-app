@@ -75,6 +75,7 @@ export default function ClinicInventoryPage() {
   const [catSaving, setCatSaving]               = useState(false)
 
   const [toast, setToast]         = useState<string | null>(null)
+  const [undoAction, setUndoAction] = useState<(() => void) | null>(null)
   const [flashId, setFlashId]     = useState<string | null>(null)
 
   const [actionModal, setActionModal] = useState<ActionModal | null>(null)
@@ -217,10 +218,11 @@ export default function ClinicInventoryPage() {
     setLogs((logsData as Log[]) || [])
   }
 
-  function showToast(msg: string) {
+  function showToast(msg: string, undo?: () => void) {
     setToast(msg)
+    setUndoAction(undo ? () => undo : null)
     if (toastTimer.current) clearTimeout(toastTimer.current)
-    toastTimer.current = setTimeout(() => setToast(null), 2200)
+    toastTimer.current = setTimeout(() => { setToast(null); setUndoAction(null) }, 4000)
   }
 
   async function updateStock(item: Item, delta: number, type?: string) {
@@ -261,12 +263,18 @@ export default function ClinicInventoryPage() {
     setActionModal(null)
     const delta = type === "use" ? -qty : qty
     await updateStock(item, delta)
-    showToast(type === "use" ? `✓ 使用 -${qty} 記録しました` : `✓ 補充 +${qty} 記録しました`)
+    showToast(
+      type === "use" ? `✓ 使用 -${qty} 記録しました` : `✓ 補充 +${qty} 記録しました`,
+      async () => { await updateStock(item, -delta, "取り消し"); showToast("↩ 取り消しました") }
+    )
   }
 
   async function quickUpdate(item: Item, delta: number) {
     await updateStock(item, delta)
-    showToast(delta < 0 ? `✓ 使用 -${Math.abs(delta)} 記録しました` : `✓ 補充 +${delta} 記録しました`)
+    showToast(
+      delta < 0 ? `✓ 使用 -${Math.abs(delta)} 記録しました` : `✓ 補充 +${delta} 記録しました`,
+      async () => { await updateStock(item, -delta, "取り消し"); showToast("↩ 取り消しました") }
+    )
   }
 
   function startEditStock(item: Item) {
@@ -719,10 +727,18 @@ export default function ClinicInventoryPage() {
       {toast && (
         <div style={{
           position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)",
-          background: "#1a1a1a", color: "#fff", padding: "10px 20px", borderRadius: 999,
+          background: "#1a1a1a", color: "#fff", padding: "10px 16px", borderRadius: 999,
           fontSize: 13, fontWeight: "bold", zIndex: 999, whiteSpace: "nowrap",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
-        }}>{toast}</div>
+          boxShadow: "0 4px 16px rgba(0,0,0,0.2)", display: "flex", alignItems: "center", gap: 12,
+        }}>
+          <span>{toast}</span>
+          {undoAction && (
+            <button onClick={() => { setToast(null); setUndoAction(null); if (toastTimer.current) clearTimeout(toastTimer.current); undoAction() }}
+              style={{ background: "#fff", color: "#1a1a1a", border: "none", borderRadius: 999, padding: "4px 12px", fontSize: 13, fontWeight: "bold", cursor: "pointer" }}>
+              取り消し
+            </button>
+          )}
+        </div>
       )}
 
       {/* ヘッダー */}
@@ -1228,7 +1244,10 @@ export default function ClinicInventoryPage() {
                       setFocusModal(null)
                       const delta = type === "use" ? -qty : qty
                       await updateStock(item, delta, type === "use" ? "使用" : "補充")
-                      showToast(type === "use" ? `✓ 使用 -${qty} 記録しました` : `✓ 補充 +${qty} 記録しました`)
+                      showToast(
+                        type === "use" ? `✓ 使用 -${qty} 記録しました` : `✓ 補充 +${qty} 記録しました`,
+                        async () => { await updateStock(item, -delta, "取り消し"); showToast("↩ 取り消しました") }
+                      )
                     }} style={{
                       padding: "18px 0", borderRadius: 12, border: `1.5px solid ${type === "use" ? "#bfdbfe" : "#bbf7d0"}`,
                       background: type === "use" ? "#eff6ff" : "#f0fdf4",
