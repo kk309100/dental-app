@@ -106,7 +106,7 @@ export default function StocktakeReportPage() {
   function toBoxQty(item: Item): number {
     if (item.stock_quantity <= 0) return 0
     if (!item.units_per_package) return item.stock_quantity
-    return Math.max(1, Math.floor(item.stock_quantity / item.units_per_package))
+    return Math.floor(item.stock_quantity / item.units_per_package)
   }
 
   const displayItems = useMemo(() =>
