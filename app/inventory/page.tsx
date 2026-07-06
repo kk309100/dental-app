@@ -78,6 +78,7 @@ export default function ClinicInventoryPage() {
   const [flashId, setFlashId]     = useState<string | null>(null)
 
   const [actionModal, setActionModal] = useState<ActionModal | null>(null)
+  const [focusModal, setFocusModal]   = useState<{ item: Item; type: "use" | "restock" } | null>(null)
 
   const [editStockId, setEditStockId]     = useState<string | null>(null)
   const [editStockValue, setEditStockValue] = useState("")
@@ -665,6 +666,7 @@ export default function ClinicInventoryPage() {
     item,
     onQuick: quickUpdate,
     onOpenModal: (item: Item, type: "use" | "restock") => setActionModal({ item, type, qty: type === "restock" ? (item.units_per_package ?? 1) : 1 }),
+    onFocusModal: (item: Item, type: "use" | "restock") => setFocusModal({ item, type }),
     onOpenOptions: (item: Item) => setOptionsMenu(item),
     onOrder: (item: Item) => {
       const qty = item.units_per_package ?? 1
@@ -1171,6 +1173,78 @@ export default function ClinicInventoryPage() {
         </div>
       )}
 
+      {/* フォーカスモーダル（在庫数タップ） */}
+      {focusModal && (() => {
+        const { item, type } = focusModal
+        const presets = item.units_per_package
+          ? [1, 2, 3, 5, item.units_per_package]
+          : [1, 2, 3, 5, 10]
+        const needsReorder = item.min_stock != null && item.stock_quantity <= item.min_stock
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 0 }}
+            onClick={(e) => { if (e.target === e.currentTarget) setFocusModal(null) }}>
+            <div style={{ background: "#fff", width: "100%", maxWidth: 520, borderRadius: "0 0 20px 20px", padding: "16px 16px 28px", boxShadow: "0 4px 24px rgba(0,0,0,0.15)" }}>
+
+              {/* 商品情報 */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: "bold", fontSize: 15, color: "#1a1a1a", marginBottom: 2 }}>{item.product_name}</div>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>
+                    {[item.location, item.shelf_no, item.maker].filter(Boolean).join("  ·  ")}
+                  </div>
+                </div>
+                <button onClick={() => setFocusModal(null)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9ca3af", flexShrink: 0 }}>✕</button>
+              </div>
+
+              {/* 現在在庫 */}
+              <div style={{ textAlign: "center", marginBottom: 14, padding: "10px 0", background: "#f9fafb", borderRadius: 10 }}>
+                <span style={{ fontSize: 13, color: "#6b7280" }}>現在在庫　</span>
+                <span style={{ fontSize: 28, fontWeight: "bold", color: needsReorder ? "#ef4444" : "#1a1a1a" }}>{item.stock_quantity}</span>
+                {item.units_per_package && (
+                  <span style={{ fontSize: 13, color: "#9ca3af" }}> 箱 / {item.stock_quantity * item.units_per_package}{item.unit || "本"}</span>
+                )}
+                {item.min_stock != null && <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: 8 }}>（最低 {item.min_stock}）</span>}
+              </div>
+
+              {/* 使用/補充 切り替え */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                {(["use", "restock"] as const).map(t => (
+                  <button key={t} onClick={() => setFocusModal({ item, type: t })} style={{
+                    flex: 1, padding: "11px 0", borderRadius: 9, fontWeight: "bold", fontSize: 15, cursor: "pointer",
+                    border: `2px solid ${t === "use" ? "#2563eb" : "#22a648"}`,
+                    background: type === t ? (t === "use" ? "#2563eb" : "#22a648") : "#fff",
+                    color: type === t ? "#fff" : (t === "use" ? "#2563eb" : "#22a648"),
+                  }}>{t === "use" ? "使用" : "補充"}</button>
+                ))}
+              </div>
+
+              {/* プリセットボタン（タップで即確定） */}
+              <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>数量を選択（タップで即確定）</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+                {presets.map((qty, i) => {
+                  const isBox = item.units_per_package && qty === item.units_per_package
+                  return (
+                    <button key={i} onClick={async () => {
+                      setFocusModal(null)
+                      const delta = type === "use" ? -qty : qty
+                      await updateStock(item, delta, type === "use" ? "使用" : "補充")
+                      showToast(type === "use" ? `✓ 使用 -${qty} 記録しました` : `✓ 補充 +${qty} 記録しました`)
+                    }} style={{
+                      padding: "18px 0", borderRadius: 12, border: `1.5px solid ${type === "use" ? "#bfdbfe" : "#bbf7d0"}`,
+                      background: type === "use" ? "#eff6ff" : "#f0fdf4",
+                      color: type === "use" ? "#1d4ed8" : "#166534",
+                      fontSize: isBox ? 16 : 24, fontWeight: "bold", cursor: "pointer",
+                    }}>
+                      {isBox ? `1箱 (${qty}${item.unit || "本"})` : qty}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* アクションモーダル */}
       {actionModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
@@ -1530,13 +1604,14 @@ export default function ClinicInventoryPage() {
 }
 
 // ── 商品カード ──
-function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, processing, flash, setRef }: {
+function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFocusModal, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, processing, flash, setRef }: {
   item: Item
   onQuick: (item: Item, delta: number) => void
   onOpenModal: (item: Item, type: "use" | "restock") => void
   onOpenOptions: (item: Item) => void
   onOrder: (item: Item) => void
   onEditStock: (item: Item) => void
+  onFocusModal: (item: Item, type: "use" | "restock") => void
   editStockId: string | null
   editStockValue: string
   setEditStockValue: (v: string) => void
@@ -1590,9 +1665,9 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
               <button onClick={onCancelEdit} style={{ background: "#f3f4f6", color: "#6b7280", border: "none", borderRadius: 6, padding: "4px 8px", fontSize: 13, cursor: "pointer" }}>✕</button>
             </div>
           ) : (
-            <div className={flash ? "flash-anim" : ""} onClick={() => onEditStock(item)}
+            <div className={flash ? "flash-anim" : ""} onClick={() => onFocusModal(item, "use")}
               style={{ cursor: "pointer", borderRadius: 6, padding: "2px 4px" }}
-              title="タップで在庫数を編集">
+              title="タップで使用/補充">
               {item.units_per_package ? (
                 <span style={{ lineHeight: 1 }}>
                   <span style={{ fontSize: 22, fontWeight: "bold", color: needsReorder ? "#ef4444" : "#1a1a1a" }}>{item.stock_quantity}</span>
