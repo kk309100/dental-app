@@ -735,17 +735,19 @@ export default function ClinicInventoryPage() {
 
         {tab === "record" && (
           <>
-            <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
-              <button className="inv-btn" onClick={startScan} style={{
-                flex: 1, padding: "11px 0", borderRadius: 9, background: C.blue, color: "#fff",
-                border: "none", fontWeight: "bold", fontSize: 14, cursor: "pointer",
-              }}>📷 スキャン</button>
-              <button className="inv-btn" onClick={scanning ? stopBatchScan : startBatchScan} style={{
-                flex: 2, padding: "11px 0", borderRadius: 9,
-                background: scanning ? "#dc2626" : "#7c3aed", color: "#fff",
-                border: "none", fontWeight: "bold", fontSize: 14, cursor: "pointer",
-              }}>{scanning ? "⏹ スキャン停止" : "🔄 連続スキャン"}</button>
-            </div>
+            {!scanning && (
+              <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
+                <button className="inv-btn" onClick={startScan} style={{
+                  flex: 1, padding: "11px 0", borderRadius: 9, background: C.blue, color: "#fff",
+                  border: "none", fontWeight: "bold", fontSize: 14, cursor: "pointer",
+                }}>📷 スキャン</button>
+                <button className="inv-btn" onClick={startBatchScan} style={{
+                  flex: 2, padding: "11px 0", borderRadius: 9,
+                  background: "#7c3aed", color: "#fff",
+                  border: "none", fontWeight: "bold", fontSize: 14, cursor: "pointer",
+                }}>🔄 連続スキャン</button>
+              </div>
+            )}
             <input value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="🔍 商品名・バーコードで検索"
               style={{ width: "100%", padding: "9px 13px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 14, boxSizing: "border-box", outline: "none", color: C.text, marginBottom: 8 }} />
@@ -812,8 +814,35 @@ export default function ClinicInventoryPage() {
         )}
       </div>
 
-      {/* inv-reader は常にDOMに存在させる（scannerがstart前に要素を必要とするため） */}
-      <div id="inv-reader" style={{ width: "100%", display: scanning ? "block" : "none" }} />
+      {/* カメラ：スキャン中はフルスクリーンオーバーレイで表示 */}
+      {scanning && (
+        <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 500, display: "flex", flexDirection: "column" }}>
+          {/* 停止ボタン */}
+          <div style={{ position: "absolute", top: 12, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
+            <button onClick={stopBatchScan} style={{
+              background: "rgba(220,38,38,0.92)", color: "#fff", border: "none",
+              borderRadius: 999, padding: "10px 28px", fontSize: 15, fontWeight: "bold", cursor: "pointer",
+            }}>⏹ スキャン停止</button>
+          </div>
+          {/* カメラ本体 */}
+          <div id="inv-reader" style={{ width: "100%", flex: 1 }} />
+          {/* スキャン済みカウント */}
+          {scanCart.length > 0 && (
+            <div style={{
+              position: "absolute", bottom: 0, left: 0, right: 0,
+              background: "rgba(124,58,237,0.92)", color: "#fff",
+              padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <span style={{ fontWeight: "bold", fontSize: 14 }}>
+                🛒 {scanCart.length}品目・計{scanCart.reduce((s, e) => s + e.qty, 0)}点 スキャン済み
+              </span>
+              <span style={{ fontSize: 12, opacity: 0.85 }}>停止後に確認・使用</span>
+            </div>
+          )}
+        </div>
+      )}
+      {/* inv-readerはDOMに常に必要（scanning=falseでも要素が必要） */}
+      {!scanning && <div id="inv-reader" style={{ display: "none" }} />}
 
       {/* ── 記録タブ ── */}
       {tab === "record" && (
