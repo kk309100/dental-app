@@ -635,7 +635,7 @@ export default function ClinicInventoryPage() {
   const itemCardProps = (item: Item) => ({
     item,
     onQuick: quickUpdate,
-    onOpenModal: (item: Item, type: "use" | "restock") => setActionModal({ item, type, qty: 1 }),
+    onOpenModal: (item: Item, type: "use" | "restock") => setActionModal({ item, type, qty: type === "restock" ? (item.units_per_package ?? 1) : 1 }),
     onOpenOptions: (item: Item) => setOptionsMenu(item),
     onOrder: (item: Item) => {
       const qty = item.units_per_package ?? 1
@@ -1142,14 +1142,14 @@ export default function ClinicInventoryPage() {
                 </button>
               </div>
             )}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 20 }}>
               <button onClick={() => setActionModal({ ...actionModal, qty: Math.max(1, actionModal.qty - 1) })}
-                style={{ width: 44, height: 44, borderRadius: 12, border: `1.5px solid ${C.border}`, background: "#f9fafb", fontSize: 22, cursor: "pointer", color: C.text }}>−</button>
+                style={{ width: 60, height: 60, borderRadius: 14, border: `1.5px solid ${C.border}`, background: "#f9fafb", fontSize: 28, cursor: "pointer", color: C.text, fontWeight: "bold" }}>−</button>
               <input type="number" min="1" value={actionModal.qty}
                 onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v) && v >= 1) setActionModal({ ...actionModal, qty: v }) }}
-                style={{ width: 72, height: 44, textAlign: "center", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 22, fontWeight: "bold", color: C.text, outline: "none" }} />
+                style={{ width: 80, height: 60, textAlign: "center", borderRadius: 12, border: `2px solid ${C.border}`, fontSize: 28, fontWeight: "bold", color: C.text, outline: "none" }} />
               <button onClick={() => setActionModal({ ...actionModal, qty: actionModal.qty + 1 })}
-                style={{ width: 44, height: 44, borderRadius: 12, border: `1.5px solid ${C.border}`, background: "#f9fafb", fontSize: 22, cursor: "pointer", color: C.text }}>＋</button>
+                style={{ width: 60, height: 60, borderRadius: 14, border: `1.5px solid ${C.border}`, background: "#f9fafb", fontSize: 28, cursor: "pointer", color: C.text, fontWeight: "bold" }}>＋</button>
             </div>
 
             <button onClick={confirmAction} style={{
@@ -1559,15 +1559,15 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, edit
       )}
 
       <div style={{ display: "flex", gap: 6 }}>
-        <button className="inv-btn" onClick={() => onQuick(item, -1)}
+        <button className="inv-btn" onClick={() => onOpenModal(item, "use")}
           disabled={processing || item.stock_quantity <= 0}
           style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #2563eb`, background: "#fff", color: "#2563eb", fontWeight: "bold", fontSize: 13, cursor: processing || item.stock_quantity <= 0 ? "not-allowed" : "pointer", opacity: processing || item.stock_quantity <= 0 ? 0.4 : 1 }}>
-          使用 -1
+          使用
         </button>
-        <button className="inv-btn" onClick={() => onQuick(item, item.units_per_package ?? 1)}
+        <button className="inv-btn" onClick={() => onOpenModal(item, "restock")}
           disabled={processing}
-          style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #22a648`, background: "#fff", color: "#22a648", fontWeight: "bold", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
-          {item.units_per_package ? `補充 +1箱(${item.units_per_package}${item.unit || "本"})` : "補充 +1"}
+          style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #22a648`, background: "#22a648", color: "#fff", fontWeight: "bold", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
+          補充
         </button>
         {item.product_id && (
           <button className="inv-btn" onClick={() => onOrder(item)}
