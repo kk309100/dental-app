@@ -59,6 +59,7 @@ export default function StocktakeReportPage() {
       .from("clinic_inventory_items")
       .select("id,product_name,maker,barcode,stock_quantity,location,shelf_no,units_per_package,unit,sealed_boxes")
       .eq("clinic_id", profile.clinic_id)
+      .eq("in_stocktake", true)
       .order("location").order("product_name")
     const fetched = (invData as Item[]) || []
     setItems(fetched)

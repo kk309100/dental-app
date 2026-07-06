@@ -148,6 +148,7 @@ export default function ImportPage() {
         barcode:        p.barcode || null,
         stock_quantity: 0,
         min_stock:      0,
+        in_stocktake:   false,
       }))
 
     for (let i = 0; i < rows.length; i += BATCH) {
