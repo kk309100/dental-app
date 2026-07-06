@@ -385,12 +385,42 @@ export default function ClinicInventoryPage() {
     showToast("✓ 削除しました")
   }
 
+  function normalizeQuery(q: string): string[] {
+    // 半角カナ → 全角カナ
+    const toZenkaku = (s: string) => s.replace(/[･-ﾟ]/g, c => {
+      const map: Record<string, string> = {
+        'ｦ':'ヲ','ｧ':'ァ','ｨ':'ィ','ｩ':'ゥ','ｪ':'ェ','ｫ':'ォ','ｬ':'ャ','ｭ':'ュ','ｮ':'ョ','ｯ':'ッ','ｰ':'ー',
+        'ｱ':'ア','ｲ':'イ','ｳ':'ウ','ｴ':'エ','ｵ':'オ','ｶ':'カ','ｷ':'キ','ｸ':'ク','ｹ':'ケ','ｺ':'コ',
+        'ｻ':'サ','ｼ':'シ','ｽ':'ス','ｾ':'セ','ｿ':'ソ','ﾀ':'タ','ﾁ':'チ','ﾂ':'ツ','ﾃ':'テ','ﾄ':'ト',
+        'ﾅ':'ナ','ﾆ':'ニ','ﾇ':'ヌ','ﾈ':'ネ','ﾉ':'ノ','ﾊ':'ハ','ﾋ':'ヒ','ﾌ':'フ','ﾍ':'ヘ','ﾎ':'ホ',
+        'ﾏ':'マ','ﾐ':'ミ','ﾑ':'ム','ﾒ':'メ','ﾓ':'モ','ﾔ':'ヤ','ﾕ':'ユ','ﾖ':'ヨ',
+        'ﾗ':'ラ','ﾘ':'リ','ﾙ':'ル','ﾚ':'レ','ﾛ':'ロ','ﾜ':'ワ','ﾝ':'ン','ﾞ':'゛','ﾟ':'゜','･':'・','ｦ':'ヲ',
+      }
+      return map[c] || c
+    })
+    // ひらがな → カタカナ
+    const toKatakana = (s: string) => s.replace(/[ぁ-ゖ]/g, c =>
+      String.fromCharCode(c.charCodeAt(0) + 0x60)
+    )
+    // カタカナ → ひらがな
+    const toHiragana = (s: string) => s.replace(/[ァ-ヶ]/g, c =>
+      String.fromCharCode(c.charCodeAt(0) - 0x60)
+    )
+
+    const zenkaku   = toZenkaku(q)
+    const katakana  = toKatakana(zenkaku)
+    const hiragana  = toHiragana(zenkaku)
+    return Array.from(new Set([q, zenkaku, katakana, hiragana].filter(Boolean)))
+  }
+
   async function searchProducts(q: string) {
     if (!q.trim() || q.length < 1) { setProductSuggestions([]); setShowSuggestions(false); return }
+    const variants = normalizeQuery(q.trim())
+    const orFilter = variants.map(v => `name.ilike.%${v}%`).join(",")
     const { data } = await supabase.from("products")
       .select("id,name,manufacturer")
-      .ilike("name", `%${q}%`)
-      .limit(8)
+      .or(orFilter)
+      .limit(10)
     setProductSuggestions((data as any[]) || [])
     setShowSuggestions(true)
   }
