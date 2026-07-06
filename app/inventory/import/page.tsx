@@ -29,6 +29,7 @@ export default function ImportPage() {
   const [products, setProducts]       = useState<ParsedProduct[]>([])
   const [importing, setImporting]     = useState(false)
   const [result, setResult]           = useState<{ ok: number; skip: number } | null>(null)
+  const [skippedCount, setSkippedCount] = useState(0)
   const [search, setSearch]           = useState("")
   const [step, setStep]               = useState<"upload" | "select" | "done">("upload")
 
@@ -72,10 +73,25 @@ export default function ImportPage() {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = ev => {
+    reader.onload = async ev => {
       const text = ev.target?.result as string
       const parsed = parseCSV(text)
-      setProducts(parsed)
+
+      // 既存在庫のバーコード・商品名を取得して重複除外
+      const { data: existing } = await supabase
+        .from("clinic_inventory_items")
+        .select("barcode,product_name")
+        .eq("clinic_id", clinicId)
+      const existingBarcodes = new Set((existing || []).map((e: any) => e.barcode).filter(Boolean))
+      const existingNames    = new Set((existing || []).map((e: any) => e.product_name))
+
+      const deduped = parsed.filter(p =>
+        !existingBarcodes.has(p.barcode) && !existingNames.has(p.product_name)
+      )
+      const skipped = parsed.length - deduped.length
+
+      setProducts(deduped)
+      setSkippedCount(skipped)
       setStep("select")
       setResult(null)
     }
@@ -207,6 +223,11 @@ export default function ImportPage() {
         {/* Step 2: 商品選択 */}
         {step === "select" && (
           <>
+            {skippedCount > 0 && (
+              <div style={{ background: "#f0fdf4", border: "1.5px solid #86efac", borderRadius: 10, padding: "10px 14px", marginBottom: 10, fontSize: 13, color: "#166534" }}>
+                ✅ 既存の在庫リストと重複する <strong>{skippedCount}件</strong> を自動で除外しました
+              </div>
+            )}
             <div style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.border}`, padding: "12px 14px", marginBottom: 12 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
                 <input value={search} onChange={e => setSearch(e.target.value)}
