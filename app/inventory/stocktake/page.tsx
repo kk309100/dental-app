@@ -166,9 +166,30 @@ export default function StocktakePage() {
     </div>
   )
 
+  const today = new Date()
+  const dateStr = `${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日`
+
   return (
     <main style={{ maxWidth: 600, margin: "0 auto", background: C.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          @page { margin: 10mm; size: A4 portrait; }
+          body { font-size: 10pt; }
+          main { max-width: 100% !important; background: white !important; padding: 0 !important; }
+          .print-table { width: 100%; border-collapse: collapse; margin-top: 6mm; }
+          .print-table th { background: #f3f4f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border: 1px solid #999; padding: 4px 6px; font-size: 8.5pt; text-align: center; }
+          .print-table td { border: 1px solid #999; padding: 3px 6px; font-size: 8.5pt; }
+          .print-loc-row td { background: #e8f5ec !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: bold; }
+          .write-box { display: inline-block; border-bottom: 1.5px solid #333; width: 42px; height: 18px; }
+        }
+        @media screen {
+          .print-only { display: none !important; }
+          .print-table { display: none; }
+        }
+      `}</style>
+      <div className="no-print" style={{
         background: "#fff", padding: "10px 14px 8px",
         borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 20,
       }}>
@@ -180,6 +201,10 @@ export default function StocktakePage() {
           <h1 style={{ margin: 0, fontSize: 17, fontWeight: "bold", color: C.text, flex: 1 }}>
             📋 棚卸しモード
           </h1>
+          <button onClick={() => window.print()} style={{
+            background: "#fff7ed", color: "#c2410c", border: "1.5px solid #fed7aa",
+            borderRadius: 7, padding: "5px 11px", fontSize: 12, fontWeight: "bold", cursor: "pointer",
+          }}>🖨 用紙印刷</button>
           <button onClick={() => router.push("/inventory/stocktake/report")} style={{
             background: "#eff6ff", color: C.blue, border: "1.5px solid #bfdbfe",
             borderRadius: 7, padding: "5px 11px", fontSize: 12, fontWeight: "bold", cursor: "pointer",
@@ -212,8 +237,48 @@ export default function StocktakePage() {
 
       {scanning && <div id="st-reader" style={{ width: "100%" }} />}
 
+      {/* ── 印刷専用レイアウト（画面では非表示） ── */}
+      <div className="print-only" style={{ padding: "0 4mm" }}>
+        <div style={{ textAlign: "center", marginBottom: 4 }}>
+          <div style={{ fontSize: 15, fontWeight: "bold" }}>棚卸し記入用紙</div>
+          <div style={{ fontSize: 10, color: "#555" }}>{dateStr}　　担当者：_______________</div>
+        </div>
+        <table className="print-table">
+          <thead>
+            <tr>
+              <th style={{ width: "36%", textAlign: "left" }}>商品名</th>
+              <th style={{ width: "14%" }}>在庫場所</th>
+              <th style={{ width: "12%" }}>入数/箱</th>
+              <th style={{ width: "19%", textAlign: "center" }}>在庫数（本/個）</th>
+              <th style={{ width: "19%", textAlign: "center" }}>未開封箱数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map(({ loc, items: groupItems }) => (
+              <>
+                <tr key={`loc-${loc}`} className="print-loc-row">
+                  <td colSpan={5}>📍 {loc}</td>
+                </tr>
+                {groupItems.map(item => (
+                  <tr key={item.id}>
+                    <td>{item.product_name}{item.maker ? <span style={{ color: "#888", fontSize: "7.5pt" }}>　{item.maker}</span> : ""}</td>
+                    <td style={{ textAlign: "center" }}>{item.shelf_no || ""}</td>
+                    <td style={{ textAlign: "center" }}>{item.units_per_package ? `${item.units_per_package}${item.unit || "本"}` : "—"}</td>
+                    <td style={{ textAlign: "center" }}><span className="write-box" /></td>
+                    <td style={{ textAlign: "center" }}><span className="write-box" /></td>
+                  </tr>
+                ))}
+              </>
+            ))}
+          </tbody>
+        </table>
+        <p style={{ fontSize: 8, color: "#888", marginTop: 6 }}>
+          ※ 在庫数：本・個・枚など単品単位で記入　／　未開封箱数：封を開けていない箱の数を記入
+        </p>
+      </div>
+
       {savedCount !== null && (
-        <div style={{ margin: "12px 10px 0", background: "#f0fdf4", border: "2px solid #86efac", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="no-print" style={{ margin: "12px 10px 0", background: "#f0fdf4", border: "2px solid #86efac", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 20 }}>✅</span>
           <div>
             <div style={{ fontWeight: "bold", color: "#166534" }}>{savedCount}件の未開封箱数を保存しました</div>
@@ -224,11 +289,11 @@ export default function StocktakePage() {
       )}
 
       {/* 説明 */}
-      <div style={{ margin: "10px 10px 0", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#92400e" }}>
+      <div className="no-print" style={{ margin: "10px 10px 0", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#92400e" }}>
         📦 <strong>未開封箱数</strong>を入力してください。在庫数（日常管理）とは独立して保存されます。
       </div>
 
-      <div style={{ padding: "10px 10px 0" }}>
+      <div className="no-print" style={{ padding: "10px 10px 0" }}>
         {groups.map(({ loc, items: groupItems }) => (
           <section key={loc} style={{ marginBottom: 20 }}>
             <div style={{
@@ -318,7 +383,7 @@ export default function StocktakePage() {
         )}
       </div>
 
-      <div style={{
+      <div className="no-print" style={{
         position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
         width: "100%", maxWidth: 600,
         background: "#fff", borderTop: `1px solid ${C.border}`, padding: "12px 16px", zIndex: 30,
