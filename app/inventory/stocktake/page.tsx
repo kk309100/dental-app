@@ -53,7 +53,8 @@ export default function StocktakePage() {
 
     const { data } = await supabase.from("clinic_inventory_items")
       .select("id,product_name,maker,barcode,stock_quantity,location,shelf_no")
-      .order("location").then(r => r)
+      .eq("clinic_id", profile.clinic_id)
+      .order("location")
     const fetched = (data as Item[]) || []
     setItems(fetched)
     // 初期値 = 現在在庫（変更なしの場合はそのまま）

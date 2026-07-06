@@ -207,6 +207,7 @@ export default function ClinicInventoryPage() {
     const [{ data: itemsData }, { data: logsData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
         .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit")
+        .eq("clinic_id", clinicIdToUse)
         .order("product_name"),
       logsQuery,
     ])
