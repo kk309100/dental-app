@@ -18,34 +18,9 @@ type ParsedProduct = {
   product_name: string
   maker: string
   barcode: string
-  cost: number
-  price: number
-  category: string
   selected: boolean
 }
 
-const CATEGORY_MAP: Record<string, string> = {
-  "歯列矯正装置":         "矯正",
-  "根管治療、穿刺、穿削": "根管治療",
-  "予防":                 "予防",
-  "他、診療用器具":       "診療器具",
-  "歯科合着、接着材料":   "接着材料",
-  "他の診療室用機械装置": "機械装置",
-  "薬品":                 "薬品",
-  "他の研削材、研磨材":   "研削材",
-  "電気治療、診断用装置": "電気治療",
-  "印象材料":             "印象材料",
-  "ダイヤモンド研削材":   "研削材",
-  "他の歯科材料":         "歯科材料",
-  "サニタリー":           "サニタリー",
-  "他の鋼製器具":         "鋼製器具",
-  "技工用器具":           "技工",
-  "滅菌器、消毒器":       "滅菌・消毒",
-  "咬合・印象採得用器具": "印象",
-  "切断、切削器具":       "切削器具",
-  "X線装置、フィルム":    "X線",
-  "ユニフォーム":         "ユニフォーム",
-}
 
 export default function ImportPage() {
   const router = useRouter()
@@ -54,7 +29,6 @@ export default function ImportPage() {
   const [products, setProducts]       = useState<ParsedProduct[]>([])
   const [importing, setImporting]     = useState(false)
   const [result, setResult]           = useState<{ ok: number; skip: number } | null>(null)
-  const [catFilter, setCatFilter]     = useState("すべて")
   const [search, setSearch]           = useState("")
   const [step, setStep]               = useState<"upload" | "select" | "done">("upload")
 
@@ -80,7 +54,7 @@ export default function ImportPage() {
 
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(",").map(c => c.replace(/^"|"$/g, "").trim())
-      const barcode = cols[idx("商品コード")] || ""
+      const barcode = cols[idx("バーコード")] || ""
       const name    = cols[idx("商品名")] || ""
       if (!name || seen.has(barcode + name)) continue
       seen.add(barcode + name)
@@ -88,9 +62,6 @@ export default function ImportPage() {
         product_name: name,
         maker:    cols[idx("メーカー")] || "",
         barcode,
-        cost:     parseFloat(cols[idx("原価")] || "0") || 0,
-        price:    parseFloat(cols[idx("単価")] || "0") || 0,
-        category: cols[idx("カテゴリ")] || "",
         selected: true,
       })
     }
@@ -111,18 +82,12 @@ export default function ImportPage() {
     reader.readAsText(file, "utf-8")
   }
 
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(products.map(p => p.category))).sort()
-    return ["すべて", ...cats]
-  }, [products])
-
   const filtered = useMemo(() => {
     const k = search.toLowerCase()
     return products.filter(p =>
-      (catFilter === "すべて" || p.category === catFilter) &&
-      (!k || p.product_name.toLowerCase().includes(k) || p.maker.toLowerCase().includes(k))
+      !k || p.product_name.toLowerCase().includes(k) || p.maker.toLowerCase().includes(k)
     )
-  }, [products, catFilter, search])
+  }, [products, search])
 
   const selectedCount = products.filter(p => p.selected).length
 
@@ -138,10 +103,6 @@ export default function ImportPage() {
       }
       return next
     })
-  }
-
-  function toggleCategoryAll(cat: string, val: boolean) {
-    setProducts(prev => prev.map(p => p.category === cat ? { ...p, selected: val } : p))
   }
 
   async function doImport() {
@@ -165,13 +126,12 @@ export default function ImportPage() {
         return true
       })
       .map(p => ({
-        clinic_id:    clinicId,
-        product_name: p.product_name,
-        maker:        p.maker || null,
-        barcode:      p.barcode || null,
+        clinic_id:      clinicId,
+        product_name:   p.product_name,
+        maker:          p.maker || null,
+        barcode:        p.barcode || null,
         stock_quantity: 0,
-        min_stock:    0,
-        category:     CATEGORY_MAP[p.category] || p.category || null,
+        min_stock:      0,
       }))
 
     for (let i = 0; i < rows.length; i += BATCH) {
@@ -238,8 +198,8 @@ export default function ImportPage() {
               background: "#e8f5ec", color: C.primary, fontWeight: "bold", fontSize: 15, cursor: "pointer",
             }}>ファイルを選択</button>
             <div style={{ marginTop: 20, padding: "12px 16px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, fontSize: 12, color: "#92400e", textAlign: "left" }}>
-              <strong>準備：</strong> ダウンロードフォルダにある <code>inventory_import_cleaned.csv</code> を使用してください。
-              （得意先別売上日報から自動生成された729件の商品リスト）
+              <strong>準備：</strong> ダウンロードフォルダにある <code>inventory_import_cleaned2.csv</code> を使用してください。<br />
+              列名：商品名・メーカー・注文先・バーコード・初期在庫数・最低在庫数・場所・棚番号
             </div>
           </div>
         )}
@@ -258,37 +218,8 @@ export default function ImportPage() {
                 }}>{allFilteredSelected ? "全解除" : "全選択"}</button>
               </div>
 
-              {/* カテゴリフィルター */}
-              <div style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 2 }}>
-                {categories.map(cat => {
-                  const count = products.filter(p => cat === "すべて" || p.category === cat).length
-                  const selCount = products.filter(p => (cat === "すべて" || p.category === cat) && p.selected).length
-                  return (
-                    <button key={cat} onClick={() => setCatFilter(cat)} style={{
-                      whiteSpace: "nowrap", padding: "5px 12px", borderRadius: 999, fontSize: 12,
-                      cursor: "pointer", border: "none", flexShrink: 0,
-                      background: catFilter === cat ? C.blue : "#f3f4f6",
-                      color: catFilter === cat ? "#fff" : C.sub,
-                      fontWeight: catFilter === cat ? "bold" : "normal",
-                    }}>{cat} {selCount}/{count}</button>
-                  )
-                })}
-              </div>
             </div>
 
-            {/* カテゴリごとの一括ON/OFF（現在のカテゴリが「すべて」以外のとき） */}
-            {catFilter !== "すべて" && (
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <button onClick={() => toggleCategoryAll(catFilter, true)} style={{
-                  flex: 1, padding: "8px 0", borderRadius: 8, border: `1px solid ${C.primary}`,
-                  background: "#e8f5ec", color: C.primary, fontSize: 13, fontWeight: "bold", cursor: "pointer",
-                }}>「{catFilter}」を全て選択</button>
-                <button onClick={() => toggleCategoryAll(catFilter, false)} style={{
-                  flex: 1, padding: "8px 0", borderRadius: 8, border: `1px solid ${C.border}`,
-                  background: "#f9fafb", color: C.sub, fontSize: 13, cursor: "pointer",
-                }}>「{catFilter}」を全て解除</button>
-              </div>
-            )}
 
             {/* 商品リスト */}
             <div style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
@@ -307,14 +238,9 @@ export default function ImportPage() {
                         {p.product_name}
                       </div>
                       <div style={{ fontSize: 11, color: C.sub }}>
-                        {[p.maker, p.barcode ? `# ${p.barcode}` : null, p.category].filter(Boolean).join("  ·  ")}
+                        {[p.maker, p.barcode ? `# ${p.barcode}` : null].filter(Boolean).join("  ·  ")}
                       </div>
                     </div>
-                    {p.cost > 0 && (
-                      <div style={{ fontSize: 12, color: C.sub, flexShrink: 0 }}>
-                        ¥{p.cost.toLocaleString()}
-                      </div>
-                    )}
                   </label>
                 )
               })}
