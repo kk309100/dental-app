@@ -24,6 +24,7 @@ type Item = {
   shelf_no: string | null
   units_per_package: number | null
   unit: string | null
+  sealed_boxes: number | null
 }
 
 type PriceMap = Record<string, number> // product_name or barcode → cost
@@ -56,7 +57,7 @@ export default function StocktakeReportPage() {
     // 在庫品目取得
     const { data: invData } = await supabase
       .from("clinic_inventory_items")
-      .select("id,product_name,maker,barcode,stock_quantity,location,shelf_no,units_per_package,unit")
+      .select("id,product_name,maker,barcode,stock_quantity,location,shelf_no,units_per_package,unit,sealed_boxes")
       .eq("clinic_id", profile.clinic_id)
       .order("location").order("product_name")
     const fetched = (invData as Item[]) || []
@@ -102,9 +103,9 @@ export default function StocktakeReportPage() {
     setPrices(prev => ({ ...prev, [id]: isNaN(n) ? 0 : n }))
   }
 
-  // 箱数換算（切り捨て・在庫>0なら最小1箱）
+  // 未開封箱数：棚卸入力値を優先、未入力なら在庫数をそのまま表示
   function toBoxQty(item: Item): number {
-    if (item.stock_quantity <= 0) return 0
+    if (item.sealed_boxes != null) return item.sealed_boxes
     if (!item.units_per_package) return item.stock_quantity
     return Math.floor(item.stock_quantity / item.units_per_package)
   }
@@ -293,12 +294,12 @@ export default function StocktakeReportPage() {
                         <td style={{ color: C.sub, fontSize: 11 }}>{item.maker || "—"}</td>
                         <td style={{ color: C.sub, fontSize: 11 }}>{item.shelf_no || "—"}</td>
                         <td style={{ textAlign: "right", fontWeight: "bold" }}>
-                          {boxQty}
-                          {item.units_per_package && (
-                            <span style={{ fontSize: 10, color: C.sub, fontWeight: "normal", marginLeft: 2 }}>
-                              箱
-                            </span>
-                          )}
+                          <span style={{ color: item.sealed_boxes != null ? C.text : "#9ca3af" }}>
+                            {boxQty}
+                          </span>
+                          <span style={{ fontSize: 10, fontWeight: "normal", marginLeft: 2, color: item.sealed_boxes != null ? C.primary : "#9ca3af" }}>
+                            {item.sealed_boxes != null ? "箱✓" : "箱(推定)"}
+                          </span>
                         </td>
                         <td style={{ textAlign: "right" }}>
                           <input
