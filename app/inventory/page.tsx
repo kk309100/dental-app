@@ -108,6 +108,12 @@ export default function ClinicInventoryPage() {
 
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scannerRef = useRef<any>(null)
+
+  // 連続スキャンカート
+  const [scanCart, setScanCart] = useState<{ item: Item; qty: number }[]>([])
+  const [scanCartOpen, setScanCartOpen] = useState(false)
+  const [batchProcessing, setBatchProcessing] = useState(false)
 
   useEffect(() => { init() }, [])
 
@@ -465,6 +471,59 @@ export default function ClinicInventoryPage() {
     } catch { setScanning(false) }
   }
 
+  // 連続スキャンモード
+  async function startBatchScan() {
+    setScanning(true)
+    const scanner = new Html5Qrcode("inv-reader")
+    scannerRef.current = scanner
+    const lastScan = { code: "", time: 0 }
+    try {
+      await scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: 220 },
+        async (code) => {
+          const now = Date.now()
+          // 同じコードを1秒以内に連続読みしない
+          if (code === lastScan.code && now - lastScan.time < 1500) return
+          lastScan.code = code
+          lastScan.time = now
+
+          let found: Item | undefined
+          if (code.startsWith("inv:")) {
+            found = items.find((i) => i.id === code.slice(4))
+          } else {
+            found = items.find((i) => String(i.barcode || "") === code)
+              || items.find((i) => i.product_name === code)
+          }
+          if (!found) { playBeep("error"); return }
+          playBeep("success")
+          setScanCart((prev) => {
+            const ex = prev.find((e) => e.item.id === found!.id)
+            if (ex) return prev.map((e) => e.item.id === found!.id ? { ...e, qty: e.qty + 1 } : e)
+            return [...prev, { item: found!, qty: 1 }]
+          })
+          setScanCartOpen(true)
+        }, () => {})
+    } catch { setScanning(false) }
+  }
+
+  async function stopBatchScan() {
+    try { await scannerRef.current?.stop() } catch {}
+    scannerRef.current = null
+    setScanning(false)
+  }
+
+  async function commitScanCart() {
+    if (scanCart.length === 0) return
+    setBatchProcessing(true)
+    for (const { item, qty } of scanCart) {
+      await updateStock(item, -qty)
+    }
+    const total = scanCart.reduce((s, e) => s + e.qty, 0)
+    setScanCart([])
+    setScanCartOpen(false)
+    setBatchProcessing(false)
+    showToast(`✓ ${scanCart.length}品目・計${total}点の使用を記録しました`)
+  }
+
   const norm = (v: any) => String(v || "")
     .toLowerCase()
     .normalize("NFKC")                                                          // 全角英数→半角、半角カタカナ→全角カタカナ
@@ -663,10 +722,17 @@ export default function ClinicInventoryPage() {
 
         {tab === "record" && (
           <>
-            <button className="inv-btn" onClick={startScan} style={{
-              width: "100%", padding: "11px 0", borderRadius: 9, background: C.blue, color: "#fff",
-              border: "none", fontWeight: "bold", fontSize: 15, cursor: "pointer", marginBottom: 9,
-            }}>📷 スキャンして記録</button>
+            <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
+              <button className="inv-btn" onClick={startScan} style={{
+                flex: 1, padding: "11px 0", borderRadius: 9, background: C.blue, color: "#fff",
+                border: "none", fontWeight: "bold", fontSize: 14, cursor: "pointer",
+              }}>📷 スキャン</button>
+              <button className="inv-btn" onClick={scanning ? stopBatchScan : startBatchScan} style={{
+                flex: 2, padding: "11px 0", borderRadius: 9,
+                background: scanning ? "#dc2626" : "#7c3aed", color: "#fff",
+                border: "none", fontWeight: "bold", fontSize: 14, cursor: "pointer",
+              }}>{scanning ? "⏹ スキャン停止" : "🔄 連続スキャン"}</button>
+            </div>
             <input value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="🔍 商品名・バーコードで検索"
               style={{ width: "100%", padding: "9px 13px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 14, boxSizing: "border-box", outline: "none", color: C.text, marginBottom: 8 }} />
@@ -1244,6 +1310,64 @@ export default function ClinicInventoryPage() {
           </button>
         ))}
       </nav>
+
+      {/* ── 連続スキャンカート ── */}
+      {scanCart.length > 0 && (
+        <div style={{
+          position: "fixed", bottom: 56, left: "50%", transform: "translateX(-50%)",
+          width: "100%", maxWidth: 600, zIndex: 200,
+          background: "#fff", borderTop: "2px solid #7c3aed",
+          boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
+        }}>
+          {/* ヘッダー */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontWeight: "bold", fontSize: 14, color: "#7c3aed" }}>🛒 スキャンカート</span>
+              <span style={{ background: "#7c3aed", color: "#fff", borderRadius: 999, padding: "1px 8px", fontSize: 12, fontWeight: "bold" }}>
+                {scanCart.reduce((s, e) => s + e.qty, 0)}点
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => setScanCartOpen(v => !v)} style={{
+                background: "#f3f4f6", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: C.sub, cursor: "pointer",
+              }}>{scanCartOpen ? "▼ 閉じる" : "▲ 開く"}</button>
+              <button onClick={() => { setScanCart([]); setScanCartOpen(false) }} style={{
+                background: "#fee2e2", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: "#b91c1c", cursor: "pointer",
+              }}>クリア</button>
+            </div>
+          </div>
+
+          {/* 品目リスト */}
+          {scanCartOpen && (
+            <div style={{ maxHeight: 200, overflowY: "auto", borderTop: `1px solid ${C.border}` }}>
+              {scanCart.map(({ item, qty }) => (
+                <div key={item.id} style={{ display: "flex", alignItems: "center", padding: "7px 14px", borderBottom: `1px solid ${C.border}`, gap: 8 }}>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: "bold", color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.product_name}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    <button onClick={() => setScanCart(prev => prev.map(e => e.item.id === item.id ? { ...e, qty: Math.max(1, e.qty - 1) } : e))}
+                      style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${C.border}`, background: "#f9fafb", cursor: "pointer", fontWeight: "bold", fontSize: 14, color: C.sub }}>−</button>
+                    <span style={{ width: 28, textAlign: "center", fontWeight: "bold", fontSize: 15 }}>{qty}</span>
+                    <button onClick={() => setScanCart(prev => prev.map(e => e.item.id === item.id ? { ...e, qty: e.qty + 1 } : e))}
+                      style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${C.border}`, background: "#f9fafb", cursor: "pointer", fontWeight: "bold", fontSize: 14, color: C.sub }}>＋</button>
+                    <button onClick={() => setScanCart(prev => prev.filter(e => e.item.id !== item.id))}
+                      style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "#fee2e2", cursor: "pointer", fontSize: 13, color: "#b91c1c" }}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 一括使用ボタン */}
+          <div style={{ padding: "8px 14px" }}>
+            <button onClick={commitScanCart} disabled={batchProcessing}
+              style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
+                background: batchProcessing ? "#d1d5db" : "#7c3aed", color: "#fff",
+                fontWeight: "bold", fontSize: 15, cursor: batchProcessing ? "default" : "pointer" }}>
+              {batchProcessing ? "記録中…" : `✓ ${scanCart.length}品目・計${scanCart.reduce((s, e) => s + e.qty, 0)}点 まとめて使用`}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
