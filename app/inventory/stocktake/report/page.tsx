@@ -22,6 +22,8 @@ type Item = {
   stock_quantity: number
   location: string | null
   shelf_no: string | null
+  units_per_package: number | null
+  unit: string | null
 }
 
 type PriceMap = Record<string, number> // product_name or barcode → cost
@@ -54,7 +56,7 @@ export default function StocktakeReportPage() {
     // 在庫品目取得
     const { data: invData } = await supabase
       .from("clinic_inventory_items")
-      .select("id,product_name,maker,barcode,stock_quantity,location,shelf_no")
+      .select("id,product_name,maker,barcode,stock_quantity,location,shelf_no,units_per_package,unit")
       .order("location").order("product_name")
     const fetched = (invData as Item[]) || []
     setItems(fetched)
@@ -99,6 +101,13 @@ export default function StocktakeReportPage() {
     setPrices(prev => ({ ...prev, [id]: isNaN(n) ? 0 : n }))
   }
 
+  // 箱数換算（切り捨て・在庫>0なら最小1箱）
+  function toBoxQty(item: Item): number {
+    if (item.stock_quantity <= 0) return 0
+    if (!item.units_per_package) return item.stock_quantity
+    return Math.max(1, Math.floor(item.stock_quantity / item.units_per_package))
+  }
+
   const displayItems = useMemo(() =>
     includeZero ? items : items.filter(i => i.stock_quantity > 0),
     [items, includeZero])
@@ -116,7 +125,7 @@ export default function StocktakeReportPage() {
   }, [displayItems])
 
   const grandTotal = useMemo(() =>
-    displayItems.reduce((sum, i) => sum + i.stock_quantity * (prices[i.id] ?? 0), 0),
+    displayItems.reduce((sum, i) => sum + toBoxQty(i) * (prices[i.id] ?? 0), 0),
     [displayItems, prices])
 
   const matchedCount = useMemo(() =>
@@ -124,18 +133,24 @@ export default function StocktakeReportPage() {
     [displayItems, prices])
 
   function exportReport() {
-    const rows = displayItems.map(i => ({
-      場所:     i.location || "",
-      棚番号:   i.shelf_no || "",
-      商品名:   i.product_name,
-      メーカー: i.maker || "",
-      数量:     i.stock_quantity,
-      単価:     prices[i.id] ?? 0,
-      金額:     i.stock_quantity * (prices[i.id] ?? 0),
-    }))
+    const rows = displayItems.map(i => {
+      const boxQty = toBoxQty(i)
+      const price  = prices[i.id] ?? 0
+      return {
+        場所:     i.location || "",
+        在庫場所: i.shelf_no || "",
+        商品名:   i.product_name,
+        メーカー: i.maker || "",
+        数量_箱:  boxQty,
+        入数:     i.units_per_package ?? "",
+        単位:     i.unit || "",
+        単価:     price,
+        金額:     boxQty * price,
+      }
+    })
     const now = new Date()
     const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,"0")}${String(now.getDate()).padStart(2,"0")}`
-    downloadCSV(`棚卸し報告書_${stamp}.csv`, toCSV(rows, ["場所","棚番号","商品名","メーカー","数量","単価","金額"]))
+    downloadCSV(`棚卸し報告書_${stamp}.csv`, toCSV(rows, ["場所","在庫場所","商品名","メーカー","数量_箱","入数","単位","単価","金額"]))
   }
 
   const today = new Date()
@@ -252,23 +267,24 @@ export default function StocktakeReportPage() {
             <tr>
               <th style={{ width: "28%" }}>商品名</th>
               <th style={{ width: "12%" }}>メーカー</th>
-              <th style={{ width: "10%" }}>棚番号</th>
-              <th style={{ width: "8%", textAlign: "right" }}>数量</th>
+              <th style={{ width: "10%" }}>在庫場所</th>
+              <th style={{ width: "10%", textAlign: "right" }}>数量（箱）</th>
               <th style={{ width: "14%", textAlign: "right" }}>単価（円）</th>
               <th style={{ width: "14%", textAlign: "right" }}>金額（円）</th>
             </tr>
           </thead>
           <tbody>
             {groups.map(({ loc, items: groupItems }) => {
-              const locTotal = groupItems.reduce((s, i) => s + i.stock_quantity * (prices[i.id] ?? 0), 0)
+              const locTotal = groupItems.reduce((s, i) => toBoxQty(i) * (prices[i.id] ?? 0), 0)
               return (
                 <React.Fragment key={loc}>
                   <tr className="loc-header">
                     <td colSpan={6}>📍 {loc}</td>
                   </tr>
                   {groupItems.map(item => {
+                    const boxQty = toBoxQty(item)
                     const price  = prices[item.id] ?? 0
-                    const amount = item.stock_quantity * price
+                    const amount = boxQty * price
                     const unmatched = price === 0
                     return (
                       <tr key={item.id} className={unmatched ? "price-unmatched" : ""}>
@@ -276,7 +292,12 @@ export default function StocktakeReportPage() {
                         <td style={{ color: C.sub, fontSize: 11 }}>{item.maker || "—"}</td>
                         <td style={{ color: C.sub, fontSize: 11 }}>{item.shelf_no || "—"}</td>
                         <td style={{ textAlign: "right", fontWeight: "bold" }}>
-                          {item.stock_quantity}
+                          {boxQty}
+                          {item.units_per_package && (
+                            <span style={{ fontSize: 10, color: C.sub, fontWeight: "normal", marginLeft: 2 }}>
+                              箱
+                            </span>
+                          )}
                         </td>
                         <td style={{ textAlign: "right" }}>
                           <input

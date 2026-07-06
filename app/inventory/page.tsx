@@ -525,19 +525,22 @@ export default function ClinicInventoryPage() {
     } catch {}
     scannerRef.current = null
     setScanning(false)
+    // カートに商品があれば全画面カートを自動表示
+    setScanCartOpen(prev => prev || true)
   }
 
   async function commitScanCart() {
     if (scanCart.length === 0) return
     setBatchProcessing(true)
-    for (const { item, qty } of scanCart) {
+    const snapshot = [...scanCart]
+    for (const { item, qty } of snapshot) {
       await updateStock(item, -qty)
     }
-    const total = scanCart.reduce((s, e) => s + e.qty, 0)
+    const total = snapshot.reduce((s, e) => s + e.qty, 0)
     setScanCart([])
     setScanCartOpen(false)
     setBatchProcessing(false)
-    showToast(`✓ ${scanCart.length}品目・計${total}点の使用を記録しました`)
+    showToast(`✓ ${snapshot.length}品目・計${total}点の使用を記録しました`)
   }
 
   const norm = (v: any) => String(v || "")
@@ -1359,61 +1362,84 @@ export default function ClinicInventoryPage() {
         ))}
       </nav>
 
-      {/* ── 連続スキャンカート ── */}
-      {scanCart.length > 0 && (
+      {/* ── 連続スキャンカート（全画面モーダル） ── */}
+      {scanCartOpen && scanCart.length > 0 && !scanning && (
         <div style={{
-          position: "fixed", bottom: 56, left: "50%", transform: "translateX(-50%)",
-          width: "100%", maxWidth: 600, zIndex: 200,
-          background: "#fff", borderTop: "2px solid #7c3aed",
-          boxShadow: "0 -4px 20px rgba(0,0,0,0.15)",
+          position: "fixed", inset: 0, zIndex: 600,
+          background: "#f8f9fa", display: "flex", flexDirection: "column",
         }}>
           {/* ヘッダー */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontWeight: "bold", fontSize: 14, color: "#7c3aed" }}>🛒 スキャンカート</span>
-              <span style={{ background: "#7c3aed", color: "#fff", borderRadius: 999, padding: "1px 8px", fontSize: 12, fontWeight: "bold" }}>
-                {scanCart.reduce((s, e) => s + e.qty, 0)}点
-              </span>
-            </div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => setScanCartOpen(v => !v)} style={{
-                background: "#f3f4f6", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: C.sub, cursor: "pointer",
-              }}>{scanCartOpen ? "▼ 閉じる" : "▲ 開く"}</button>
-              <button onClick={() => { setScanCart([]); setScanCartOpen(false) }} style={{
-                background: "#fee2e2", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: "#b91c1c", cursor: "pointer",
-              }}>クリア</button>
-            </div>
+          <div style={{
+            background: "#7c3aed", color: "#fff",
+            padding: "14px 16px", display: "flex", alignItems: "center", gap: 10,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+          }}>
+            <span style={{ fontWeight: "bold", fontSize: 17, flex: 1 }}>🛒 スキャンカート</span>
+            <span style={{ background: "rgba(255,255,255,0.25)", borderRadius: 999, padding: "2px 12px", fontSize: 14, fontWeight: "bold" }}>
+              {scanCart.length}品目・計{scanCart.reduce((s, e) => s + e.qty, 0)}点
+            </span>
+            <button onClick={() => { setScanCart([]); setScanCartOpen(false) }} style={{
+              background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8,
+              padding: "5px 10px", fontSize: 12, color: "#fff", cursor: "pointer",
+            }}>クリア</button>
           </div>
 
           {/* 品目リスト */}
-          {scanCartOpen && (
-            <div style={{ maxHeight: 200, overflowY: "auto", borderTop: `1px solid ${C.border}` }}>
-              {scanCart.map(({ item, qty }) => (
-                <div key={item.id} style={{ display: "flex", alignItems: "center", padding: "7px 14px", borderBottom: `1px solid ${C.border}`, gap: 8 }}>
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: "bold", color: C.text, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.product_name}</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                    <button onClick={() => setScanCart(prev => prev.map(e => e.item.id === item.id ? { ...e, qty: Math.max(1, e.qty - 1) } : e))}
-                      style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${C.border}`, background: "#f9fafb", cursor: "pointer", fontWeight: "bold", fontSize: 14, color: C.sub }}>−</button>
-                    <span style={{ width: 28, textAlign: "center", fontWeight: "bold", fontSize: 15 }}>{qty}</span>
-                    <button onClick={() => setScanCart(prev => prev.map(e => e.item.id === item.id ? { ...e, qty: e.qty + 1 } : e))}
-                      style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${C.border}`, background: "#f9fafb", cursor: "pointer", fontWeight: "bold", fontSize: 14, color: C.sub }}>＋</button>
-                    <button onClick={() => setScanCart(prev => prev.filter(e => e.item.id !== item.id))}
-                      style={{ width: 24, height: 24, borderRadius: 6, border: "none", background: "#fee2e2", cursor: "pointer", fontSize: 13, color: "#b91c1c" }}>✕</button>
+          <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px" }}>
+            {scanCart.map(({ item, qty }) => (
+              <div key={item.id} style={{
+                background: "#fff", borderRadius: 10, padding: "11px 14px", marginBottom: 8,
+                border: `1.5px solid ${C.border}`, display: "flex", alignItems: "center", gap: 10,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: "bold", fontSize: 14, color: C.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {item.product_name}
                   </div>
+                  {item.location && (
+                    <div style={{ fontSize: 11, color: C.sub }}>📍 {item.location}</div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => setScanCart(prev => prev.map(e => e.item.id === item.id ? { ...e, qty: Math.max(1, e.qty - 1) } : e))}
+                    style={{ width: 32, height: 32, borderRadius: 8, border: `1.5px solid ${C.border}`, background: "#f9fafb", cursor: "pointer", fontWeight: "bold", fontSize: 18, color: C.sub }}>−</button>
+                  <span style={{ width: 36, textAlign: "center", fontWeight: "bold", fontSize: 20 }}>{qty}</span>
+                  <button onClick={() => setScanCart(prev => prev.map(e => e.item.id === item.id ? { ...e, qty: e.qty + 1 } : e))}
+                    style={{ width: 32, height: 32, borderRadius: 8, border: `1.5px solid ${C.border}`, background: "#f9fafb", cursor: "pointer", fontWeight: "bold", fontSize: 18, color: C.sub }}>＋</button>
+                  <button onClick={() => setScanCart(prev => prev.filter(e => e.item.id !== item.id))}
+                    style={{ width: 32, height: 32, borderRadius: 8, border: "none", background: "#fee2e2", cursor: "pointer", fontSize: 16, color: "#b91c1c" }}>✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
 
-          {/* 一括使用ボタン */}
-          <div style={{ padding: "8px 14px" }}>
+          {/* フッターボタン */}
+          <div style={{ background: "#fff", borderTop: `1px solid ${C.border}`, padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
             <button onClick={commitScanCart} disabled={batchProcessing}
-              style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
+              style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none",
                 background: batchProcessing ? "#d1d5db" : "#7c3aed", color: "#fff",
-                fontWeight: "bold", fontSize: 15, cursor: batchProcessing ? "default" : "pointer" }}>
+                fontWeight: "bold", fontSize: 16, cursor: batchProcessing ? "default" : "pointer" }}>
               {batchProcessing ? "記録中…" : `✓ ${scanCart.length}品目・計${scanCart.reduce((s, e) => s + e.qty, 0)}点 まとめて使用`}
             </button>
+            <button onClick={() => { setScanCartOpen(false); startBatchScan() }} style={{
+              width: "100%", padding: "11px 0", borderRadius: 12, border: "none",
+              background: "#ede9fe", color: "#7c3aed", fontWeight: "bold", fontSize: 14, cursor: "pointer",
+            }}>🔄 スキャンを続ける</button>
           </div>
+        </div>
+      )}
+
+      {/* スキャン中のカートバッジ（スキャン中のみ小さく表示） */}
+      {scanning && scanCart.length > 0 && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 510,
+          background: "rgba(124,58,237,0.92)", color: "#fff",
+          padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <span style={{ fontWeight: "bold", fontSize: 14 }}>
+            🛒 {scanCart.length}品目・計{scanCart.reduce((s, e) => s + e.qty, 0)}点 スキャン済み
+          </span>
+          <span style={{ fontSize: 12, opacity: 0.85 }}>停止後に確認・使用</span>
         </div>
       )}
     </main>
