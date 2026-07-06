@@ -206,8 +206,8 @@ export default function ClinicInventoryPage() {
 
     const [{ data: itemsData }, { data: logsData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
-        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit")
-        .eq("clinic_id", clinicIdToUse)
+        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,clinic_id")
+        .or(`clinic_id.eq.${clinicIdToUse},clinic_id.is.null`)
         .order("product_name"),
       logsQuery,
     ])
@@ -301,6 +301,7 @@ export default function ClinicInventoryPage() {
     if (!addForm.product_name.trim()) { alert("商品名を入力してください"); return }
     setAddSaving(true)
     const { error } = await supabase.from("clinic_inventory_items").insert({
+      clinic_id:         clinicId,
       product_name:      addForm.product_name.trim(),
       maker:             addForm.maker.trim() || null,
       barcode:           addForm.barcode.trim() || null,

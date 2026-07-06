@@ -56,7 +56,7 @@ export default function StocktakePage() {
 
     const { data } = await supabase.from("clinic_inventory_items")
       .select("id,product_name,maker,barcode,stock_quantity,units_per_package,unit,location,shelf_no,sealed_boxes")
-      .eq("clinic_id", profile.clinic_id)
+      .or(`clinic_id.eq.${profile.clinic_id},clinic_id.is.null`)
       .order("location")
     const fetched = (data as Item[]) || []
     setItems(fetched)
