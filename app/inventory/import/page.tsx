@@ -215,7 +215,7 @@ export default function ImportPage() {
               background: "#e8f5ec", color: C.primary, fontWeight: "bold", fontSize: 15, cursor: "pointer",
             }}>ファイルを選択</button>
             <div style={{ marginTop: 20, padding: "12px 16px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10, fontSize: 12, color: "#92400e", textAlign: "left" }}>
-              <strong>準備：</strong> ダウンロードフォルダにある <code>inventory_import_cleaned3.csv</code> を使用してください。<br />
+              <strong>準備：</strong> ダウンロードフォルダにある <code>inventory_import_final.csv</code> を使用してください。<br />
               列名：商品名・メーカー・注文先・バーコード・初期在庫数・最低在庫数・場所・棚番号
             </div>
           </div>
