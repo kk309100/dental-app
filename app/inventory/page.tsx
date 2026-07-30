@@ -828,21 +828,7 @@ export default function ClinicInventoryPage() {
               }}>＋ 管理</button>
             </div>
             </div>
-            {/* 場所フィルター */}
-            {locations.length > 2 && (
-              <div className="cat-pills-wrap" style={{ marginBottom: 2 }}>
-              <div className="cat-pills" style={{ display: "flex", overflowX: "auto", gap: 6, paddingBottom: 2 }}>
-                {locations.map((loc) => (
-                  <button key={loc} onClick={() => setLocationFilter(loc)} style={{
-                    whiteSpace: "nowrap", padding: "5px 12px", borderRadius: 999, fontSize: 12,
-                    cursor: "pointer", border: "none", fontWeight: locationFilter === loc ? "bold" : "normal",
-                    background: locationFilter === loc ? C.primary : "#f3f4f6",
-                    color: locationFilter === loc ? "#fff" : C.sub,
-                  }}>{loc === "すべて" ? "📍 すべての場所" : `📍 ${loc}`}</button>
-                ))}
-              </div>
-              </div>
-            )}
+            {/* 場所フィルター：非表示 */}
           </>
         )}
 
