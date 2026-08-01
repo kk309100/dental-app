@@ -33,6 +33,7 @@ type Item = {
   units_per_package: number | null
   product_id: string | null
   unit: string | null
+  created_at: string | null
 }
 
 type Log = {
@@ -209,7 +210,7 @@ export default function ClinicInventoryPage() {
 
     const [{ data: itemsData }, { data: logsData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
-        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,clinic_id")
+        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,clinic_id,created_at")
         .eq("clinic_id", clinicIdToUse)
         .order("product_name"),
       logsQuery,
@@ -1665,6 +1666,9 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
   const effectiveStock = item.units_per_package ? item.stock_quantity * item.units_per_package : item.stock_quantity
   const needsReorder = item.min_stock !== null && effectiveStock <= item.min_stock
   const isEditing = editStockId === item.id
+  const isNew = item.created_at
+    ? (Date.now() - new Date(item.created_at).getTime()) < 7 * 24 * 60 * 60 * 1000
+    : false
   const isEditingMin = editMinId === item.id
   const meta = [
     item.location ? `📍 ${item.location}${item.shelf_no ? ` / ${item.shelf_no}` : ""}` : (item.shelf_no ? `棚：${item.shelf_no}` : null),
@@ -1683,6 +1687,9 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
         <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
           {needsReorder && (
             <span style={{ fontSize: 10, fontWeight: "bold", background: "#fee2e2", color: "#b91c1c", padding: "1px 6px", borderRadius: 999, marginRight: 5 }}>発注必要</span>
+          )}
+          {isNew && (
+            <span style={{ fontSize: 10, fontWeight: "bold", background: "#dbeafe", color: "#1d4ed8", padding: "1px 6px", borderRadius: 999, marginRight: 5 }}>NEW</span>
           )}
           <span style={{ fontWeight: "bold", fontSize: 14, color: "#1a1a1a" }}>{item.product_name}</span>
         </div>
