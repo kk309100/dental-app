@@ -98,6 +98,10 @@ export default function ClinicInventoryPage() {
 
   const [optionsMenu, setOptionsMenu] = useState<Item | null>(null)
 
+  const [bulkDeleteMode, setBulkDeleteMode] = useState(false)
+  const [bulkSelected, setBulkSelected]     = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting]     = useState(false)
+
   const [importModal, setImportModal] = useState(false)
   const [importRows, setImportRows]   = useState<Record<string, string>[]>([])
   const [importing, setImporting]     = useState(false)
@@ -393,6 +397,36 @@ export default function ClinicInventoryPage() {
     await supabase.from("clinic_inventory_items").delete().eq("id", id)
     setItems(prev => prev.filter(i => i.id !== id))
     showToast("✓ 削除しました")
+  }
+
+  async function bulkDelete() {
+    if (bulkSelected.size === 0) return
+    if (!confirm(`選択した ${bulkSelected.size} 件を削除しますか？\nこの操作は取り消せません。`)) return
+    setBulkDeleting(true)
+    const ids = Array.from(bulkSelected)
+    const { error } = await supabase.from("clinic_inventory_items").delete().in("id", ids)
+    if (error) { alert("エラー: " + error.message); setBulkDeleting(false); return }
+    setItems(prev => prev.filter(i => !bulkSelected.has(i.id)))
+    setBulkSelected(new Set())
+    setBulkDeleteMode(false)
+    setBulkDeleting(false)
+    showToast(`✓ ${ids.length}件を削除しました`)
+  }
+
+  function toggleBulkSelect(id: string) {
+    setBulkSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleBulkSelectAll() {
+    if (bulkSelected.size === filtered.length) {
+      setBulkSelected(new Set())
+    } else {
+      setBulkSelected(new Set(filtered.map(i => i.id)))
+    }
   }
 
   function normalizeQuery(q: string): string[] {
@@ -697,6 +731,9 @@ export default function ClinicInventoryPage() {
     processing: processingId === item.id,
     flash: flashId === item.id,
     setRef: (el: HTMLDivElement | null) => { itemRefs.current[item.id] = el },
+    bulkDeleteMode,
+    bulkSelected: bulkSelected.has(item.id),
+    onBulkToggle: toggleBulkSelect,
   })
 
   if (loading) return (
@@ -784,6 +821,12 @@ export default function ClinicInventoryPage() {
                 background: "#fff", color: C.blue, border: `1.5px solid ${C.blue}`,
                 borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
               }}>📥 CSV</button>
+              <button onClick={() => { setBulkDeleteMode(m => !m); setBulkSelected(new Set()) }} style={{
+                background: bulkDeleteMode ? "#fee2e2" : "#fff",
+                color: bulkDeleteMode ? C.red : C.sub,
+                border: `1.5px solid ${bulkDeleteMode ? C.red : C.border}`,
+                borderRadius: 8, padding: "6px 12px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
+              }}>{bulkDeleteMode ? "✕ キャンセル" : "🗑 一括削除"}</button>
               <button onClick={() => setAddModal(true)} style={{
                 background: C.primary, color: "#fff", border: "none",
                 borderRadius: 8, padding: "6px 14px", fontSize: 13, fontWeight: "bold", cursor: "pointer",
@@ -896,6 +939,24 @@ export default function ClinicInventoryPage() {
       {/* ── 記録タブ ── */}
       {tab === "record" && (
         <div style={{ padding: "10px 10px 0" }}>
+
+          {/* 一括削除モード：全選択バー */}
+          {bulkDeleteMode && (
+            <div style={{
+              background: "#fff3cd", border: "1.5px solid #ffc107", borderRadius: 10,
+              padding: "10px 14px", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 14, fontWeight: "bold", color: "#856404" }}>
+                <input type="checkbox"
+                  checked={filtered.length > 0 && bulkSelected.size === filtered.length}
+                  onChange={toggleBulkSelectAll}
+                  style={{ width: 18, height: 18, cursor: "pointer" }} />
+                全選択（{filtered.length}件中 {bulkSelected.size}件選択中）
+              </label>
+              <span style={{ fontSize: 12, color: "#856404" }}>チェックして削除</span>
+            </div>
+          )}
+
           {/* 発注必要セクション */}
           {needsReorder.length > 0 && (
             <section style={{ marginBottom: 10 }}>
@@ -1532,6 +1593,23 @@ export default function ClinicInventoryPage() {
         </div>
       )}
 
+      {/* 一括削除フッター */}
+      {bulkDeleteMode && (
+        <div style={{
+          position: "fixed", bottom: 56, left: 0, right: 0, zIndex: 40,
+          background: "#fff", borderTop: "1.5px solid #fca5a5", padding: "10px 14px",
+        }}>
+          <button onClick={bulkDelete} disabled={bulkSelected.size === 0 || bulkDeleting} style={{
+            width: "100%", padding: "13px 0", borderRadius: 10, border: "none",
+            background: bulkSelected.size === 0 ? "#d1d5db" : C.red,
+            color: "#fff", fontWeight: "bold", fontSize: 16,
+            cursor: bulkSelected.size === 0 ? "default" : "pointer",
+          }}>
+            {bulkDeleting ? "削除中…" : bulkSelected.size === 0 ? "商品を選択してください" : `🗑 ${bulkSelected.size}件を削除する`}
+          </button>
+        </div>
+      )}
+
       {/* 下部タブバー */}
       <nav style={{
         position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
@@ -1639,7 +1717,7 @@ export default function ClinicInventoryPage() {
 }
 
 // ── 商品カード ──
-function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFocusModal, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, processing, flash, setRef }: {
+function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFocusModal, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, processing, flash, setRef, bulkDeleteMode, bulkSelected, onBulkToggle }: {
   item: Item
   onQuick: (item: Item, delta: number) => void
   onOpenModal: (item: Item, type: "use" | "restock") => void
@@ -1662,6 +1740,9 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
   processing: boolean
   flash: boolean
   setRef: (el: HTMLDivElement | null) => void
+  bulkDeleteMode: boolean
+  bulkSelected: boolean
+  onBulkToggle: (id: string) => void
 }) {
   const effectiveStock = item.units_per_package ? item.stock_quantity * item.units_per_package : item.stock_quantity
   const needsReorder = item.min_stock !== null && effectiveStock <= item.min_stock
@@ -1679,11 +1760,16 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
 
   return (
     <div ref={setRef} style={{
-      background: "#fff", borderRadius: 11, padding: "10px 12px 9px", marginBottom: 7,
-      border: `1.5px solid ${needsReorder ? "#fca5a5" : "#e5e7eb"}`,
+      background: bulkSelected ? "#fff5f5" : "#fff", borderRadius: 11, padding: "10px 12px 9px", marginBottom: 7,
+      border: `1.5px solid ${bulkSelected ? "#fca5a5" : needsReorder ? "#fca5a5" : "#e5e7eb"}`,
       boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-    }}>
+    }} onClick={bulkDeleteMode ? () => onBulkToggle(item.id) : undefined}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 3 }}>
+        {bulkDeleteMode && (
+          <input type="checkbox" checked={bulkSelected} onChange={() => onBulkToggle(item.id)}
+            onClick={e => e.stopPropagation()}
+            style={{ width: 20, height: 20, marginRight: 10, marginTop: 2, accentColor: "#ef4444", flexShrink: 0, cursor: "pointer" }} />
+        )}
         <div style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
           {needsReorder && (
             <span style={{ fontSize: 10, fontWeight: "bold", background: "#fee2e2", color: "#b91c1c", padding: "1px 6px", borderRadius: 999, marginRight: 5 }}>発注必要</span>
