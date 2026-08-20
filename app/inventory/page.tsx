@@ -1757,7 +1757,7 @@ export default function ClinicInventoryPage() {
 }
 
 // ── 商品カード ──
-function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFocusModal, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, processing, flash, setRef, bulkDeleteMode, bulkSelected, onBulkToggle }: {
+function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFocusModal, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, processing, flash, setRef, bulkDeleteMode, bulkSelected, onBulkToggle, onPhotoCapture, uploadingPhoto }: {
   item: Item
   onQuick: (item: Item, delta: number) => void
   onOpenModal: (item: Item, type: "use" | "restock") => void
