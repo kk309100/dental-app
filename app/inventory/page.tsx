@@ -1155,10 +1155,6 @@ export default function ClinicInventoryPage() {
                 padding: "14px 16px", borderRadius: 12, border: `1.5px solid ${C.blue}`,
                 background: "#eff6ff", color: C.blue, fontSize: 15, fontWeight: "bold", cursor: "pointer", textAlign: "left",
               }}>✏️ 商品情報を編集する</button>
-              <button onClick={() => openPhotoCapture(optionsMenu)} style={{
-                padding: "14px 16px", borderRadius: 12, border: "1.5px solid #7c3aed",
-                background: "#f5f3ff", color: "#7c3aed", fontSize: 15, fontWeight: "bold", cursor: "pointer", textAlign: "left",
-              }}>📷 {optionsMenu.item_image_url ? "写真を撮り直す" : "写真を撮る"}</button>
             </div>
           </div>
         </div>
@@ -1912,6 +1908,12 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
             📦 発注
           </button>
         )}
+        <button className="inv-btn" onClick={() => onPhotoCapture(item)}
+          disabled={processing || uploadingPhoto}
+          style={{ padding: "8px 10px", borderRadius: 8, border: `1.5px solid #e5e7eb`, background: item.item_image_url ? "#f0fdf4" : "#fff", color: item.item_image_url ? "#22a648" : "#6b7280", fontSize: 13, cursor: processing || uploadingPhoto ? "not-allowed" : "pointer", opacity: processing || uploadingPhoto ? 0.4 : 1 }}
+          title={item.item_image_url ? "写真を撮り直す" : "写真を撮る"}>
+          {uploadingPhoto ? "…" : "📷"}
+        </button>
         <button className="inv-btn" onClick={() => onOpenOptions(item)}
           disabled={processing}
           style={{ padding: "8px 10px", borderRadius: 8, border: `1.5px solid #e5e7eb`, background: "#fff", color: "#6b7280", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
