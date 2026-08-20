@@ -34,6 +34,7 @@ type Item = {
   product_id: string | null
   unit: string | null
   created_at: string | null
+  item_image_url: string | null
 }
 
 type Log = {
@@ -101,6 +102,10 @@ export default function ClinicInventoryPage() {
   const [bulkDeleteMode, setBulkDeleteMode] = useState(false)
   const [bulkSelected, setBulkSelected]     = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting]     = useState(false)
+
+  const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const photoTargetId = useRef<string | null>(null)
 
   const [importModal, setImportModal] = useState(false)
   const [importRows, setImportRows]   = useState<Record<string, string>[]>([])
@@ -214,7 +219,7 @@ export default function ClinicInventoryPage() {
 
     const [{ data: itemsData }, { data: logsData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
-        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,clinic_id,created_at")
+        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,clinic_id,created_at,item_image_url")
         .eq("clinic_id", clinicIdToUse)
         .order("product_name"),
       logsQuery,
@@ -397,6 +402,35 @@ export default function ClinicInventoryPage() {
     await supabase.from("clinic_inventory_items").delete().eq("id", id)
     setItems(prev => prev.filter(i => i.id !== id))
     showToast("✓ 削除しました")
+  }
+
+  function openPhotoCapture(item: Item) {
+    setOptionsMenu(null)
+    photoTargetId.current = item.id
+    photoInputRef.current?.click()
+  }
+
+  async function handlePhotoCapture(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !photoTargetId.current) return
+    const itemId = photoTargetId.current
+    setUploadingPhotoId(itemId)
+    const form = new FormData()
+    form.append("file", file)
+    form.append("itemId", itemId)
+    try {
+      const res = await fetch("/api/clinic/upload-item-image", { method: "POST", body: form })
+      const json = await res.json()
+      if (!res.ok) { alert("アップロード失敗: " + json.error); return }
+      setItems(prev => prev.map(i => i.id === itemId ? { ...i, item_image_url: json.publicUrl } : i))
+      showToast("✅ 写真を保存しました")
+    } catch {
+      alert("通信エラーが発生しました")
+    } finally {
+      setUploadingPhotoId(null)
+      photoTargetId.current = null
+      if (photoInputRef.current) photoInputRef.current.value = ""
+    }
   }
 
   async function bulkDelete() {
@@ -734,6 +768,8 @@ export default function ClinicInventoryPage() {
     bulkDeleteMode,
     bulkSelected: bulkSelected.has(item.id),
     onBulkToggle: toggleBulkSelect,
+    onPhotoCapture: openPhotoCapture,
+    uploadingPhoto: uploadingPhotoId === item.id,
   })
 
   if (loading) return (
@@ -1119,6 +1155,10 @@ export default function ClinicInventoryPage() {
                 padding: "14px 16px", borderRadius: 12, border: `1.5px solid ${C.blue}`,
                 background: "#eff6ff", color: C.blue, fontSize: 15, fontWeight: "bold", cursor: "pointer", textAlign: "left",
               }}>✏️ 商品情報を編集する</button>
+              <button onClick={() => openPhotoCapture(optionsMenu)} style={{
+                padding: "14px 16px", borderRadius: 12, border: "1.5px solid #7c3aed",
+                background: "#f5f3ff", color: "#7c3aed", fontSize: 15, fontWeight: "bold", cursor: "pointer", textAlign: "left",
+              }}>📷 {optionsMenu.item_image_url ? "写真を撮り直す" : "写真を撮る"}</button>
             </div>
           </div>
         </div>
@@ -1593,6 +1633,10 @@ export default function ClinicInventoryPage() {
         </div>
       )}
 
+      {/* 写真撮影用の隠しinput */}
+      <input ref={photoInputRef} type="file" accept="image/*" capture="environment"
+        style={{ display: "none" }} onChange={handlePhotoCapture} />
+
       {/* 一括削除フッター */}
       {bulkDeleteMode && (
         <div style={{
@@ -1743,6 +1787,8 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
   bulkDeleteMode: boolean
   bulkSelected: boolean
   onBulkToggle: (id: string) => void
+  onPhotoCapture: (item: Item) => void
+  uploadingPhoto: boolean
 }) {
   const effectiveStock = item.units_per_package ? item.stock_quantity * item.units_per_package : item.stock_quantity
   const needsReorder = item.min_stock !== null && effectiveStock <= item.min_stock
@@ -1834,6 +1880,17 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
       {meta.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "1px 8px", marginBottom: 8 }}>
           {meta.map((v, i) => <span key={i} style={{ fontSize: 11, color: "#6b7280" }}>{v}</span>)}
+        </div>
+      )}
+
+      {item.item_image_url && (
+        <div style={{ marginBottom: 8 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={item.item_image_url}
+            alt={item.product_name}
+            style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1.5px solid #e5e7eb", display: "block" }}
+          />
         </div>
       )}
 

@@ -100,13 +100,19 @@ async function main() {
   console.log(`📦 DB商品数: ${products.length} 件\n`)
 
   // 検索用インデックス作成（名前のみでマッチング）
-  const byName    = new Map()   // normalize(name) → product（完全一致）
-  const byPrefix  = new Map()   // normalize(name).slice(0,15) → product（前方一致）
+  const byName        = new Map()  // normalize(name) → product（完全一致）
+  const byPrefix      = new Map()  // normalize(name).slice(0,15) → product（前方一致）
+  const byNameNoSpace = new Map()  // スペース除去した名前 → product
+  const dbAllNames    = []         // [{key, p}] DB名の全リスト（前方一致探索用）
+
   for (const p of products) {
     const nk = normalize(p.name)
     if (!byName.has(nk)) byName.set(nk, p)
     const pk = nk.slice(0, 15)
     if (!byPrefix.has(pk)) byPrefix.set(pk, p)
+    const ns = nk.replace(/ /g, "")
+    if (!byNameNoSpace.has(ns)) byNameNoSpace.set(ns, p)
+    dbAllNames.push({ key: nk, ns, p })
   }
 
   let matched   = 0
@@ -125,13 +131,31 @@ async function main() {
       product = byName.get(excelName)
       matchBy = "完全一致"
     }
-    // 2) 一方の名前がもう一方の先頭と完全に一致（25文字以上）
+    // 2) スペース除去後の完全一致（ダイヤバーFG系など空白の有無が違うもの）
+    if (!product) {
+      const ns = excelName.replace(/ /g, "")
+      if (ns.length >= 8 && byNameNoSpace.has(ns)) {
+        product = byNameNoSpace.get(ns)
+        matchBy = "スペース除去一致"
+      }
+    }
+    // 3) DB名がExcel名で始まる（DB側が括弧・旧品番などで長い場合）
+    if (!product && excelName.length >= 15) {
+      const excelNs = excelName.replace(/ /g, "")
+      for (const { key, ns, p } of dbAllNames) {
+        if (key.startsWith(excelName) || ns.startsWith(excelNs)) {
+          product = p
+          matchBy = "DB拡張名一致"
+          break
+        }
+      }
+    }
+    // 4) Excel名がDB名で始まる（Excel側が長い場合）
     if (!product && excelName.length >= 25) {
       if (byPrefix.has(excelName.slice(0, 15))) {
         const candidate = byPrefix.get(excelName.slice(0, 15))
         const ck = normalize(candidate.name)
-        // Excel名がDB名のprefixか、DB名がExcel名のprefixのとき採用
-        if (excelName.startsWith(ck) || ck.startsWith(excelName)) {
+        if (excelName.startsWith(ck) && ck.length >= 15) {
           product = candidate
           matchBy = "前方一致"
         }
