@@ -1247,8 +1247,8 @@ export default function ClinicInventoryPage() {
           <div style={{ overflowY: "auto", flex: 1, padding: "8px 10px" }}>
             {(search
               ? items.filter(i =>
-                  i.product_name.toLowerCase().includes(search.toLowerCase()) ||
-                  (i.barcode || "").toLowerCase().includes(search.toLowerCase())
+                  norm(i.product_name).includes(norm(search)) ||
+                  norm(i.barcode || "").includes(norm(search))
                 )
               : []
             ).map(item => (
@@ -1261,8 +1261,8 @@ export default function ClinicInventoryPage() {
               </button>
             ))}
             {search && items.filter(i =>
-              i.product_name.toLowerCase().includes(search.toLowerCase()) ||
-              (i.barcode || "").toLowerCase().includes(search.toLowerCase())
+              norm(i.product_name).includes(norm(search)) ||
+              norm(i.barcode || "").includes(norm(search))
             ).length === 0 && (
               <p style={{ textAlign: "center", color: C.sub, padding: "40px 0" }}>該当する商品がありません</p>
             )}
