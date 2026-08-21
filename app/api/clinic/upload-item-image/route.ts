@@ -58,15 +58,18 @@ export async function POST(req: NextRequest) {
     .from("clinic-item-images")
     .getPublicUrl(path)
 
+  // キャッシュバスター付きURL（2枚目以降も確実に最新画像を表示するため）
+  const urlWithBust = `${publicUrl}?t=${Date.now()}`
+
   // clinic_inventory_items に URL を保存
   const { error: updateErr } = await supabaseAdmin
     .from("clinic_inventory_items")
-    .update({ item_image_url: publicUrl })
+    .update({ item_image_url: urlWithBust })
     .eq("id", itemId)
 
   if (updateErr) {
     return NextResponse.json({ error: `DB更新失敗: ${updateErr.message}` }, { status: 500 })
   }
 
-  return NextResponse.json({ publicUrl })
+  return NextResponse.json({ publicUrl: urlWithBust })
 }

@@ -434,6 +434,26 @@ export default function ClinicInventoryPage() {
     }
   }
 
+  async function deletePhoto(item: Item) {
+    if (!item.item_image_url) return
+    if (!confirm(`「${item.product_name}」の写真を削除しますか？`)) return
+    setUploadingPhotoId(item.id)
+    try {
+      const res = await fetch("/api/clinic/delete-item-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id }),
+      })
+      if (!res.ok) { const j = await res.json(); alert("削除失敗: " + j.error); return }
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, item_image_url: null } : i))
+      showToast("✓ 写真を削除しました")
+    } catch {
+      alert("通信エラーが発生しました")
+    } finally {
+      setUploadingPhotoId(null)
+    }
+  }
+
   async function bulkDelete() {
     if (bulkSelected.size === 0) return
     if (!confirm(`選択した ${bulkSelected.size} 件を削除しますか？\nこの操作は取り消せません。`)) return
@@ -770,6 +790,7 @@ export default function ClinicInventoryPage() {
     bulkSelected: bulkSelected.has(item.id),
     onBulkToggle: toggleBulkSelect,
     onPhotoCapture: openPhotoCapture,
+    onDeletePhoto: deletePhoto,
     uploadingPhoto: uploadingPhotoId === item.id,
   })
 
@@ -1758,7 +1779,7 @@ export default function ClinicInventoryPage() {
 }
 
 // ── 商品カード ──
-function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFocusModal, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, processing, flash, setRef, bulkDeleteMode, bulkSelected, onBulkToggle, onPhotoCapture, uploadingPhoto }: {
+function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFocusModal, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, processing, flash, setRef, bulkDeleteMode, bulkSelected, onBulkToggle, onPhotoCapture, onDeletePhoto, uploadingPhoto }: {
   item: Item
   onQuick: (item: Item, delta: number) => void
   onOpenModal: (item: Item, type: "use" | "restock") => void
@@ -1785,6 +1806,7 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
   bulkSelected: boolean
   onBulkToggle: (id: string) => void
   onPhotoCapture: (item: Item) => void
+  onDeletePhoto: (item: Item) => void
   uploadingPhoto: boolean
 }) {
   const effectiveStock = item.units_per_package ? item.stock_quantity * item.units_per_package : item.stock_quantity
@@ -1881,13 +1903,18 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
       )}
 
       {item.item_image_url && (
-        <div style={{ marginBottom: 8 }}>
+        <div style={{ marginBottom: 8, display: "inline-flex", position: "relative" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={item.item_image_url}
             alt={item.product_name}
             style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1.5px solid #e5e7eb", display: "block" }}
           />
+          <button
+            onClick={e => { e.stopPropagation(); onDeletePhoto(item) }}
+            disabled={uploadingPhoto}
+            style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#ef4444", border: "2px solid #fff", color: "#fff", fontSize: 11, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+            title="写真を削除">✕</button>
         </div>
       )}
 
