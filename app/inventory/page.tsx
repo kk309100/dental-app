@@ -320,7 +320,7 @@ export default function ClinicInventoryPage() {
   async function addItem() {
     if (!addForm.product_name.trim()) { alert("商品名を入力してください"); return }
     setAddSaving(true)
-    const { error } = await supabase.from("clinic_inventory_items").insert({
+    const { data: newItem, error } = await supabase.from("clinic_inventory_items").insert({
       clinic_id:         clinicId,
       product_name:      addForm.product_name.trim(),
       maker:             addForm.maker.trim() || null,
@@ -334,13 +334,14 @@ export default function ClinicInventoryPage() {
       units_per_package: addForm.units_per_package !== "" ? (parseInt(addForm.units_per_package, 10) || null) : null,
       product_id:        addForm.product_id || null,
       unit:              addForm.unit.trim() || null,
-    })
+    }).select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,clinic_id,created_at,item_image_url").single()
     if (error) { alert("エラー: " + error.message); setAddSaving(false); return }
+    // 全件再取得せず、挿入行を直接リストに追加（ソート維持）
+    setItems(prev => [...prev, newItem as Item].sort((a, b) => a.product_name.localeCompare(b.product_name, "ja")))
     setAddModal(false)
     setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "", unit: "" })
     setProductSuggestions([])
     setShowSuggestions(false)
-    await fetchAll(clinicId)
     showToast("✓ 商品を追加しました")
     setAddSaving(false)
   }
