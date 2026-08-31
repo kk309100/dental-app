@@ -33,6 +33,7 @@ type Item = {
   units_per_package: number | null
   product_id: string | null
   unit: string | null
+  stock_unit: string | null
   created_at: string | null
   item_image_url: string | null
 }
@@ -90,11 +91,11 @@ export default function ClinicInventoryPage() {
   const [editMinValue, setEditMinValue] = useState("")
 
   const [addModal, setAddModal]   = useState(false)
-  const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "", unit: "" })
+  const [addForm, setAddForm]     = useState({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "", unit: "", stock_unit: "" })
   const [addSaving, setAddSaving] = useState(false)
 
   const [editItemModal, setEditItemModal] = useState<Item | null>(null)
-  const [editItemForm, setEditItemForm]   = useState({ product_name: "", maker: "", barcode: "", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", unit: "" })
+  const [editItemForm, setEditItemForm]   = useState({ product_name: "", maker: "", barcode: "", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", unit: "", stock_unit: "" })
   const [editItemSaving, setEditItemSaving] = useState(false)
 
   const [optionsMenu, setOptionsMenu] = useState<Item | null>(null)
@@ -219,7 +220,7 @@ export default function ClinicInventoryPage() {
 
     const [{ data: itemsData }, { data: logsData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
-        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,clinic_id,created_at,item_image_url")
+        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,stock_unit,clinic_id,created_at,item_image_url")
         .eq("clinic_id", clinicIdToUse)
         .order("product_name"),
       logsQuery,
@@ -334,12 +335,13 @@ export default function ClinicInventoryPage() {
       units_per_package: addForm.units_per_package !== "" ? (parseInt(addForm.units_per_package, 10) || null) : null,
       product_id:        addForm.product_id || null,
       unit:              addForm.unit.trim() || null,
-    }).select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,clinic_id,created_at,item_image_url").single()
+      stock_unit:        addForm.stock_unit.trim() || null,
+    }).select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,stock_unit,clinic_id,created_at,item_image_url").single()
     if (error) { alert("エラー: " + error.message); setAddSaving(false); return }
     // 全件再取得せず、挿入行を直接リストに追加（ソート維持）
     setItems(prev => [...prev, newItem as Item].sort((a, b) => a.product_name.localeCompare(b.product_name, "ja")))
     setAddModal(false)
-    setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "", unit: "" })
+    setAddForm({ product_name: "", maker: "", barcode: "", stock_quantity: "0", min_stock: "", location: "", shelf_no: "", supplier: "", category: "", units_per_package: "", product_id: "", unit: "", stock_unit: "" })
     setProductSuggestions([])
     setShowSuggestions(false)
     showToast("✓ 商品を追加しました")
@@ -359,6 +361,7 @@ export default function ClinicInventoryPage() {
       category:          item.category || "",
       units_per_package: item.units_per_package != null ? String(item.units_per_package) : "",
       unit:              item.unit || "",
+      stock_unit:        item.stock_unit || "",
     })
     setEditItemModal(item)
   }
@@ -378,6 +381,7 @@ export default function ClinicInventoryPage() {
       category:          editItemForm.category.trim() || null,
       units_per_package: editItemForm.units_per_package !== "" ? (parseInt(editItemForm.units_per_package, 10) || null) : null,
       unit:              editItemForm.unit.trim() || null,
+      stock_unit:        editItemForm.stock_unit.trim() || null,
     }).eq("id", editItemModal.id)
     if (error) { alert("エラー: " + error.message); setEditItemSaving(false); return }
     setItems(prev => prev.map(i => i.id === editItemModal.id ? {
@@ -392,6 +396,7 @@ export default function ClinicInventoryPage() {
       category:          editItemForm.category.trim() || null,
       units_per_package: editItemForm.units_per_package !== "" ? (parseInt(editItemForm.units_per_package, 10) || null) : null,
       unit:              editItemForm.unit.trim() || null,
+      stock_unit:        editItemForm.stock_unit.trim() || null,
     } : i))
     setEditItemModal(null)
     showToast("✓ 商品情報を更新しました")
@@ -1210,19 +1215,25 @@ export default function ClinicInventoryPage() {
               ))}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <label style={{ fontSize: 12, color: C.sub }}>単位（本・個・枚など）</label>
+                  <label style={{ fontSize: 12, color: C.sub }}>在庫数の単位（箱・袋など）</label>
+                  <input value={editItemForm.stock_unit} placeholder="箱・袋・本"
+                    onChange={e => setEditItemForm(f => ({ ...f, stock_unit: e.target.value }))}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: C.sub }}>入り数の単位（本・個・枚など）</label>
                   <input value={editItemForm.unit} placeholder="本・個・枚"
                     onChange={e => setEditItemForm(f => ({ ...f, unit: e.target.value }))}
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
                 </div>
-                <div>
-                  <label style={{ fontSize: 12, color: C.sub }}>入数（1箱あたり）</label>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
-                    <input type="number" min={1} value={editItemForm.units_per_package} placeholder="なし"
-                      onChange={e => setEditItemForm(f => ({ ...f, units_per_package: e.target.value }))}
-                      style={{ flex: 1, padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, boxSizing: "border-box", outline: "none", color: C.text }} />
-                    {editItemForm.unit && <span style={{ fontSize: 13, color: C.sub, whiteSpace: "nowrap" }}>{editItemForm.unit}</span>}
-                  </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: C.sub }}>入数（1{editItemForm.stock_unit || "箱"}あたり）</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                  <input type="number" min={1} value={editItemForm.units_per_package} placeholder="なし"
+                    onChange={e => setEditItemForm(f => ({ ...f, units_per_package: e.target.value }))}
+                    style={{ flex: 1, padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, boxSizing: "border-box", outline: "none", color: C.text }} />
+                  {editItemForm.unit && <span style={{ fontSize: 13, color: C.sub, whiteSpace: "nowrap" }}>{editItemForm.unit}</span>}
                 </div>
               </div>
               <div>
@@ -1270,6 +1281,7 @@ export default function ClinicInventoryPage() {
             {(search
               ? items.filter(i =>
                   norm(i.product_name).includes(norm(search)) ||
+                  norm(i.maker || "").includes(norm(search)) ||
                   norm(i.barcode || "").includes(norm(search))
                 )
               : []
@@ -1284,6 +1296,7 @@ export default function ClinicInventoryPage() {
             ))}
             {search && items.filter(i =>
               norm(i.product_name).includes(norm(search)) ||
+              norm(i.maker || "").includes(norm(search)) ||
               norm(i.barcode || "").includes(norm(search))
             ).length === 0 && (
               <p style={{ textAlign: "center", color: C.sub, padding: "40px 0" }}>該当する商品がありません</p>
@@ -1327,7 +1340,7 @@ export default function ClinicInventoryPage() {
                   <div style={{ fontWeight: "bold", fontSize: 15, color: "#1a1a1a" }}>{item.product_name}</div>
                   <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
                     現在 <strong style={{ color: needsReorder ? "#ef4444" : "#1a1a1a", fontSize: 16 }}>{item.stock_quantity}</strong>
-                    {item.units_per_package && <span style={{ color: "#9ca3af" }}> 箱 / {item.stock_quantity * item.units_per_package}{item.unit || "本"}</span>}
+                    {item.units_per_package && <span style={{ color: "#9ca3af" }}> {item.stock_unit || "箱"} / {item.stock_quantity * item.units_per_package}{item.unit || "本"}</span>}
                     {item.min_stock != null && <span style={{ color: "#9ca3af" }}>　最低 {item.min_stock}</span>}
                   </div>
                 </div>
@@ -1353,7 +1366,7 @@ export default function ClinicInventoryPage() {
                   border: "2px solid #7c3aed", background: "#7c3aed", color: "#fff",
                   fontSize: 18, fontWeight: "bold", cursor: "pointer", letterSpacing: 1,
                 }}>
-                  📦 1箱 補充（{item.units_per_package}{item.unit || "本"}）
+                  📦 1{item.stock_unit || "箱"} 補充（{item.units_per_package}{item.unit || "本"}）
                 </button>
               )}
 
@@ -1416,7 +1429,7 @@ export default function ClinicInventoryPage() {
               現在在庫：<strong style={{ fontSize: 20, color: C.text }}>{actionModal.item.stock_quantity}</strong>
               {actionModal.item.units_per_package && (
                 <span style={{ fontSize: 12, color: "#9ca3af", marginLeft: 4 }}>
-                  箱 / {actionModal.item.stock_quantity * actionModal.item.units_per_package}{actionModal.item.unit || ""}
+                  {actionModal.item.stock_unit || "箱"} / {actionModal.item.stock_quantity * actionModal.item.units_per_package}{actionModal.item.unit || ""}
                 </span>
               )}
               {actionModal.item.min_stock !== null && <span style={{ fontSize: 12, color: "#9ca3af" }}> （最低 {actionModal.item.min_stock}{actionModal.item.unit || ""}）</span>}
@@ -1443,7 +1456,7 @@ export default function ClinicInventoryPage() {
                   padding: "7px 18px", borderRadius: 999, border: `1.5px solid #7c3aed`,
                   background: "#f5f3ff", color: "#7c3aed", fontSize: 13, fontWeight: "bold", cursor: "pointer",
                 }}>
-                  1箱 = {actionModal.item.units_per_package}本でセット
+                  1{actionModal.item.stock_unit || "箱"} = {actionModal.item.units_per_package}{actionModal.item.unit || "本"}でセット
                 </button>
               </div>
             )}
@@ -1540,17 +1553,23 @@ export default function ClinicInventoryPage() {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <label style={{ fontSize: 12, color: C.sub }}>入数（1箱あたり）</label>
-                  <input type="number" min={1} value={addForm.units_per_package} placeholder="例）5"
-                    onChange={e => setAddForm(f => ({ ...f, units_per_package: e.target.value }))}
+                  <label style={{ fontSize: 12, color: C.sub }}>在庫数の単位（箱・袋など）</label>
+                  <input value={addForm.stock_unit} placeholder="箱・袋・本"
+                    onChange={e => setAddForm(f => ({ ...f, stock_unit: e.target.value }))}
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
                 </div>
                 <div>
-                  <label style={{ fontSize: 12, color: C.sub }}>単位</label>
+                  <label style={{ fontSize: 12, color: C.sub }}>入り数の単位（本・個・枚など）</label>
                   <input value={addForm.unit} placeholder="本・個・枚"
                     onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))}
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
                 </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: C.sub }}>入数（1{addForm.stock_unit || "箱"}あたり）</label>
+                <input type="number" min={1} value={addForm.units_per_package} placeholder="例）5"
+                  onChange={e => setAddForm(f => ({ ...f, units_per_package: e.target.value }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
               </div>
             </div>
             <button onClick={addItem} disabled={addSaving}
