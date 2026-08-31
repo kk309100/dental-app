@@ -603,6 +603,7 @@ export default function ClinicInventoryPage() {
       showToast(`✓ ${updated}件を更新しました${notFound > 0 ? `（${notFound}件は商品名が一致せず）` : ""}`)
     } else {
       const records = importRows.map(r => ({
+        clinic_id:      clinicId,
         product_name:   r["商品名"]?.trim() || "",
         maker:          r["メーカー"]?.trim() || null,
         supplier:       r["注文先"]?.trim() || null,
