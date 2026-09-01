@@ -41,14 +41,19 @@ export default function AdminHomePage() {
     return { newOrders, pendingOrders, undeliveredCount, unbilled, unpaidInvoices, lowStock }
   }, [orders, invoices, products])
 
+  // 業務フロー順（医院からの注文 → 発注/納品 → 入荷 → 請求・売上）
+  const flow: ButtonItem[] = [
+    { href: "/admin/orders/process",     label: "① 受注処理",   desc: "新着注文の確認→在庫振り分け", icon: Ic.order,    color: "#ea580c", badge: badges.newOrders || undefined,     badgeLabel: "新着" },
+    { href: "/admin/purchase-orders",    label: "② 発注",       desc: "仕入先へ発注書を作成",         icon: Ic.truck,    color: "#0891b2" },
+    { href: "/admin/receiving-from-po",  label: "③ 入荷処理",   desc: "発注商品が届いたらチェック",   icon: Ic.purchase, color: "#7c3aed" },
+    { href: "/admin/deliveries",         label: "④ 医院納品",   desc: "医院へ出荷・納品書発行",       icon: Ic.doc,      color: "#059669", badge: badges.undeliveredCount || undefined, badgeLabel: "未納品" },
+    { href: "/admin/invoices",           label: "⑤ 請求",       desc: "請求書発行・入金管理",         icon: Ic.sales,    color: "#dc2626", badge: (badges.unbilled || badges.unpaidInvoices) || undefined, badgeLabel: badges.unbilled > 0 ? "未請求" : "未収" },
+    { href: "/admin/sales",              label: "⑥ 売上",       desc: "月次・医院・商品別に集計",     icon: Ic.sales,    color: "#059669" },
+  ]
+
   const buttons: ButtonItem[] = [
-    { href: "/admin/orders/process",  label: "📥 受注処理",  desc: "新着注文→在庫振り分け・発注",  icon: Ic.order,    color: "#ea580c", badge: badges.newOrders || undefined,  badgeLabel: "新着" },
-    { href: "/admin/orders",          label: "注文管理",   desc: "受注・ステータス確認",         icon: Ic.order,    color: "#2563eb", badge: badges.pendingOrders || undefined, badgeLabel: "未処理" },
-    { href: "/admin/purchase-orders", label: "発注管理",   desc: "発注書の作成・確認",           icon: Ic.truck,    color: "#0891b2" },
-    { href: "/admin/receiving",       label: "仕入納品",   desc: "仕入先からの納品処理",         icon: Ic.purchase, color: "#7c3aed" },
-    { href: "/admin/shipping",        label: "医院納品",   desc: "出荷・納品書発行",            icon: Ic.doc,      color: "#059669", badge: badges.undeliveredCount || undefined, badgeLabel: "未納品" },
-    { href: "/admin/invoices",        label: "請求管理",   desc: "請求書発行・入金管理",         icon: Ic.sales,    color: "#dc2626", badge: (badges.unbilled || badges.unpaidInvoices) || undefined, badgeLabel: badges.unbilled > 0 ? "未請求" : "未収" },
-    { href: "/admin/sales",           label: "売上分析",   desc: "月次・医院・商品別",           icon: Ic.sales,    color: "#059669" },
+    { href: "/admin/orders",          label: "注文一覧",   desc: "受注・ステータス確認",         icon: Ic.order,    color: "#2563eb", badge: badges.pendingOrders || undefined, badgeLabel: "未処理" },
+    { href: "/admin/receivings",      label: "仕入履歴",   desc: "入荷処理済みの一覧",           icon: Ic.purchase, color: "#7c3aed" },
     { href: "/admin/inventory",       label: "在庫管理",   desc: "在庫数・発注点の確認",         icon: Ic.product,  color: "#d97706", badge: badges.lowStock || undefined, badgeLabel: "在庫不足" },
     { href: "/admin/masters",         label: "マスター",   desc: "医院・仕入先・商品・設定",     icon: Ic.dash,     color: "#475569" },
   ]
@@ -70,12 +75,41 @@ export default function AdminHomePage() {
   return (
     <div>
       {/* ページタイトル */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111827", margin: 0 }}>管理ホーム</h1>
         <p style={{ fontSize: 13, color: "#6b7280", marginTop: 4 }}>業務メニューを選択してください</p>
       </div>
 
-      {/* メインボタングリッド */}
+      {/* 業務フロー：医院からの注文 → 発注 → 入荷 → 医院納品 → 請求 → 売上 */}
+      <div style={{ marginBottom: 32 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.06em", marginBottom: 10, textTransform: "uppercase" }}>
+          業務の流れ
+        </p>
+        <div style={{
+          display: "flex", alignItems: "stretch", gap: 6, overflowX: "auto",
+          paddingBottom: 6,
+        }} className="hide-scrollbar">
+          {flow.map((b, i) => (
+            <div key={b.href} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+              <div style={{ width: 168 }}>
+                <FlowCard {...b} loading={loading} />
+              </div>
+              {i < flow.length - 1 && (
+                <span style={{ margin: "0 4px", color: "#d1d5db", fontSize: 20, flexShrink: 0 }}>→</span>
+              )}
+            </div>
+          ))}
+        </div>
+        <style>{`
+          .hide-scrollbar { scrollbar-width: none; }
+          .hide-scrollbar::-webkit-scrollbar { display: none; }
+        `}</style>
+      </div>
+
+      {/* その他メニュー */}
+      <p style={{ fontSize: 12, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.06em", marginBottom: 10, textTransform: "uppercase" }}>
+        その他のメニュー
+      </p>
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(2, 1fr)",
@@ -112,6 +146,49 @@ export default function AdminHomePage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function FlowCard({ href, label, desc, icon, color, badge, badgeLabel, loading }: ButtonItem & { loading: boolean }) {
+  return (
+    <Link href={href}
+      style={{
+        display: "block", position: "relative", height: "100%",
+        background: "#fff", borderRadius: 14,
+        border: `1.5px solid ${color}33`,
+        padding: "14px 12px",
+        textDecoration: "none",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+        transition: "box-shadow 0.15s, transform 0.1s",
+      }}
+      className="flow-card">
+      <style>{`
+        .flow-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,0.1) !important; transform: translateY(-2px); }
+      `}</style>
+
+      {!loading && badge !== undefined && badge > 0 && (
+        <span style={{
+          position: "absolute", top: 8, right: 8,
+          fontSize: 11, fontWeight: 800,
+          background: color, color: "#fff",
+          borderRadius: 999, padding: "1px 7px",
+        }}>{badge}</span>
+      )}
+
+      <div style={{
+        display: "inline-flex", padding: 7, borderRadius: 9, marginBottom: 8,
+        background: color + "18", color,
+      }}>
+        <span style={{ display: "block", transform: "scale(1.1)" }}>{icon}</span>
+      </div>
+
+      <p style={{ fontSize: 13, fontWeight: 800, color: "#111827", margin: "0 0 3px" }}>
+        {label}
+      </p>
+      <p style={{ fontSize: 11, color: "#6b7280", margin: 0, lineHeight: 1.4 }}>
+        {desc}
+      </p>
+    </Link>
   )
 }
 

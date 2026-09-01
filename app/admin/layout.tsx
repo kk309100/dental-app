@@ -22,23 +22,32 @@ function saveFeedbacks(items: FeedbackItem[]) {
 }
 // ──────────────────────────────────────────────────────────────────
 
+// group: 業務フローに沿ったグループ分け（ナビ描画時に区切り線で表示）
 const NAV = [
-  { id: "home",           href: "/admin",                     label: "ホーム",     icon: Ic.dash,     exact: true },
-  { id: "orders",         href: "/admin/orders",              label: "注文",       icon: Ic.order },
-  { id: "order-process",  href: "/admin/orders/process",      label: "受注処理",   icon: Ic.order },
-  { id: "purchase-orders",href: "/admin/purchase-orders",     label: "発注",       icon: Ic.truck },
-  { id: "po-pool",        href: "/admin/purchase-orders/pool",label: "発注プール", icon: Ic.purchase },
-  { id: "receiving-from-po", href: "/admin/receiving-from-po", label: "入荷処理",   icon: Ic.purchase },
-  { id: "receivings",     href: "/admin/receivings",          label: "仕入履歴",   icon: Ic.purchase },
-  { id: "deliveries",     href: "/admin/deliveries",          label: "医院納品",   icon: Ic.doc },
-  { id: "quotes",         href: "/admin/quotes",              label: "見積",       icon: Ic.quote },
-  { id: "invoices",       href: "/admin/invoices",            label: "請求",       icon: Ic.sales },
-  { id: "inventory",      href: "/admin/inventory",           label: "在庫",       icon: Ic.product },
-  { id: "sales",          href: "/admin/sales",               label: "売上",       icon: Ic.sales },
-  { id: "masters",        href: "/admin/masters",             label: "マスター",   icon: Ic.dash },
-  { id: "repair-orders",  href: "/admin/repair-orders",        label: "修理依頼",   icon: Ic.wrench },
-  { id: "notices",        href: "/admin/notices",             label: "お知らせ",   icon: Ic.dash },
-  { id: "dashboard",      href: "/admin/dashboard",           label: "分析",       icon: Ic.dash },
+  { id: "home",           href: "/admin",                     label: "ホーム",     icon: Ic.dash,     exact: true, group: "" },
+
+  // ①受注
+  { id: "orders",         href: "/admin/orders",              label: "注文",       icon: Ic.order,     group: "受注" },
+  { id: "order-process",  href: "/admin/orders/process",      label: "受注処理",   icon: Ic.order,     group: "受注" },
+
+  // ②発注・入荷
+  { id: "purchase-orders",href: "/admin/purchase-orders",     label: "発注",       icon: Ic.truck,     group: "発注・入荷" },
+  { id: "po-pool",        href: "/admin/purchase-orders/pool",label: "発注プール", icon: Ic.purchase,  group: "発注・入荷" },
+  { id: "receiving-from-po", href: "/admin/receiving-from-po", label: "入荷処理",   icon: Ic.purchase,  group: "発注・入荷" },
+  { id: "receivings",     href: "/admin/receivings",          label: "仕入履歴",   icon: Ic.purchase,  group: "発注・入荷" },
+
+  // ③納品・請求・売上
+  { id: "deliveries",     href: "/admin/deliveries",          label: "医院納品",   icon: Ic.doc,       group: "納品・請求" },
+  { id: "quotes",         href: "/admin/quotes",              label: "見積",       icon: Ic.quote,     group: "納品・請求" },
+  { id: "invoices",       href: "/admin/invoices",            label: "請求",       icon: Ic.sales,     group: "納品・請求" },
+  { id: "sales",          href: "/admin/sales",               label: "売上",       icon: Ic.sales,     group: "納品・請求" },
+
+  // ④在庫・その他
+  { id: "inventory",      href: "/admin/inventory",           label: "在庫",       icon: Ic.product,   group: "在庫・その他" },
+  { id: "masters",        href: "/admin/masters",             label: "マスター",   icon: Ic.dash,      group: "在庫・その他" },
+  { id: "repair-orders",  href: "/admin/repair-orders",        label: "修理依頼",   icon: Ic.wrench,    group: "在庫・その他" },
+  { id: "notices",        href: "/admin/notices",             label: "お知らせ",   icon: Ic.dash,      group: "在庫・その他" },
+  { id: "dashboard",      href: "/admin/dashboard",           label: "分析",       icon: Ic.dash,      group: "在庫・その他" },
 ]
 
 const SUB = [
@@ -128,21 +137,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           {/* ドロワーナビ */}
           <nav style={{ flex: 1, padding: "10px 12px", overflowY: "auto" }}>
-            {NAV.map((item) => {
+            {NAV.map((item, idx) => {
               const active = isActive(item.href, item.exact)
+              const prevGroup = idx > 0 ? NAV[idx - 1].group : item.group
+              const showHeading = item.group && item.group !== prevGroup
               return (
-                <Link key={item.id} href={item.href} onClick={() => setMenuOpen(false)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10,
-                    padding: "11px 14px", borderRadius: 10, marginBottom: 2,
-                    fontSize: 15, fontWeight: active ? 700 : 500,
-                    color: active ? "#fff" : "#374151",
-                    background: active ? ACCENT : "transparent",
-                    textDecoration: "none",
-                  }}>
-                  {item.icon}
-                  <span>{item.label}</span>
-                </Link>
+                <div key={item.id}>
+                  {showHeading && (
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.06em", margin: "12px 14px 4px", textTransform: "uppercase" }}>
+                      {item.group}
+                    </p>
+                  )}
+                  <Link href={item.href} onClick={() => setMenuOpen(false)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "11px 14px", borderRadius: 10, marginBottom: 2,
+                      fontSize: 15, fontWeight: active ? 700 : 500,
+                      color: active ? "#fff" : "#374151",
+                      background: active ? ACCENT : "transparent",
+                      textDecoration: "none",
+                    }}>
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </Link>
+                </div>
               )
             })}
             <div style={{ borderTop: "1px solid #e5e7eb", marginTop: 12, paddingTop: 12 }}>
@@ -189,22 +207,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {/* PCナビ */}
           <nav style={{ flex: 1, display: "flex", alignItems: "center", gap: 1, overflowX: "auto", scrollbarWidth: "none" }}
             className="hide-scrollbar">
-            {NAV.map((item) => {
+            {NAV.map((item, idx) => {
               const active = isActive(item.href, item.exact)
+              const prevGroup = idx > 0 ? NAV[idx - 1].group : item.group
+              const showDivider = idx > 0 && item.group && item.group !== prevGroup
               return (
-                <Link key={item.id} href={item.href}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "6px 11px", borderRadius: 7,
-                    fontSize: 13, fontWeight: active ? 700 : 400,
-                    color: active ? "#fff" : "#bfdbfe",
-                    background: active ? "rgba(255,255,255,0.18)" : "transparent",
-                    textDecoration: "none", whiteSpace: "nowrap",
-                    transition: "all 0.15s",
-                  }}>
-                  {item.icon}
-                  <span>{item.label}</span>
-                </Link>
+                <div key={item.id} style={{ display: "flex", alignItems: "center" }}>
+                  {showDivider && (
+                    <span style={{ width: 1, height: 20, background: "rgba(255,255,255,0.18)", margin: "0 6px", flexShrink: 0 }} />
+                  )}
+                  <Link href={item.href}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "6px 11px", borderRadius: 7,
+                      fontSize: 13, fontWeight: active ? 700 : 400,
+                      color: active ? "#fff" : "#bfdbfe",
+                      background: active ? "rgba(255,255,255,0.18)" : "transparent",
+                      textDecoration: "none", whiteSpace: "nowrap",
+                      transition: "all 0.15s",
+                    }}>
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </Link>
+                </div>
               )
             })}
           </nav>
