@@ -221,6 +221,19 @@ function OrderPageInner() {
     router.replace("/order")
   }, [loading, products, searchParams])
 
+  // 在庫画面からの発注リンク（?manual_name=xxx&order_qty=1）を処理
+  // 商品マスタに存在しない手入力商品を、価格なしのメモとして発注リストへ追加する
+  useEffect(() => {
+    if (loading) return
+    const name = searchParams.get("manual_name")
+    const qty = parseInt(searchParams.get("order_qty") || "1", 10)
+    if (!name) return
+    const manualId = `manual-${Date.now()}`
+    setCart((prev) => [...prev, { id: manualId, name, price: 0, quantity: qty, manual: true }])
+    setShowCart(true)
+    router.replace("/order")
+  }, [loading, searchParams])
+
   function addToCart(product: any) {
     setCart((prev) => {
       const ex = prev.find((i) => i.id === product.id)
@@ -297,7 +310,7 @@ function OrderPageInner() {
       .insert([{ clinic_id: clinicId, status: "注文受付", total_price: total, delivery_number: dn, orderer_name: ordererName.trim(), note: orderNote.trim() || null }]).select().single()
     if (error) { alert("注文作成でエラー"); return }
     await supabase.from("order_items").insert(
-      cart.map((i) => ({ order_id: order.id, product_id: i.id, product_name: i.name, quantity: i.quantity, price: i.price }))
+      cart.map((i) => ({ order_id: order.id, product_id: i.manual ? null : i.id, product_name: i.name, quantity: i.quantity, price: i.price }))
     )
     setLastOrdererName(ordererName.trim())
     setLastOrderId(order.id)
@@ -1031,7 +1044,7 @@ function CartRow({ item, onMinus, onPlus, onRemove, onSet }: any) {
           {item.name}
         </p>
         <p style={{ margin: "2px 0 0", fontSize: 12, color: "#9ca3af" }}>
-          ¥{Number(item.price || 0).toLocaleString()} / 個
+          {item.manual ? "手入力商品（価格未設定）" : `¥${Number(item.price || 0).toLocaleString()} / 個`}
         </p>
       </div>
       <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>

@@ -774,7 +774,12 @@ export default function ClinicInventoryPage() {
     onOpenOptions: (item: Item) => setOptionsMenu(item),
     onOrder: (item: Item) => {
       const qty = item.units_per_package ?? 1
-      router.push(`/order?order_product_id=${item.product_id}&order_qty=${qty}`)
+      if (item.product_id) {
+        router.push(`/order?order_product_id=${item.product_id}&order_qty=${qty}`)
+      } else {
+        // 商品マスタと未紐付けの手入力商品 → 価格なしのメモとして発注リストへ追加
+        router.push(`/order?manual_name=${encodeURIComponent(item.product_name)}&order_qty=${qty}`)
+      }
     },
     onEditStock: startEditStock,
     editStockId,
@@ -1949,13 +1954,11 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
           style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #22a648`, background: "#22a648", color: "#fff", fontWeight: "bold", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
           補充
         </button>
-        {item.product_id && (
-          <button className="inv-btn" onClick={() => onOrder(item)}
-            disabled={processing}
-            style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #f08c00`, background: needsReorder ? "#fff7ed" : "#fff", color: "#f08c00", fontWeight: "bold", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
-            📦 発注
-          </button>
-        )}
+        <button className="inv-btn" onClick={() => onOrder(item)}
+          disabled={processing}
+          style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1.5px solid #f08c00`, background: needsReorder ? "#fff7ed" : "#fff", color: "#f08c00", fontWeight: "bold", fontSize: 13, cursor: processing ? "not-allowed" : "pointer", opacity: processing ? 0.4 : 1 }}>
+          📦 発注
+        </button>
         <button className="inv-btn" onClick={() => onPhotoCapture(item)}
           disabled={processing || uploadingPhoto}
           style={{ padding: "8px 10px", borderRadius: 8, border: `1.5px solid #e5e7eb`, background: item.item_image_url ? "#f0fdf4" : "#fff", color: item.item_image_url ? "#22a648" : "#6b7280", fontSize: 13, cursor: processing || uploadingPhoto ? "not-allowed" : "pointer", opacity: processing || uploadingPhoto ? 0.4 : 1 }}
