@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { Ic } from "./_lib/icons"
 import UserBadge from "@/app/components/UserBadge"
 import { supabase } from "@/lib/supabase"
+import OrderAlert from "./_components/OrderAlert"
 import "./admin-base.css"
 
 // ─── フィードバック localStorage キー ────────────────────────────
@@ -384,6 +385,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </button>
       </nav>
       <div style={{ display: "none" }} className="mobile-spacer"><div style={{ height: 64 }} /></div>
+
+      {/* ── 新着注文アラート ── */}
+      <OrderAlert />
 
       {/* ── フィードバックボタン（固定・印刷時非表示） ── */}
       <div className="no-print" style={{ position: "fixed", right: 16, bottom: 80, zIndex: 40 }}>
