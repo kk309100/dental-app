@@ -48,6 +48,7 @@ function NewOrderPage() {
   const [showRecent, setShowRecent] = useState(false)
   const [productSearch, setProductSearch] = useState("")
   const [showProductPicker, setShowProductPicker] = useState<number | null>(null)
+  const [inlineOpenIdx, setInlineOpenIdx] = useState<number | null>(null)
   const [showClinicPicker, setShowClinicPicker] = useState(false)
   const [clinicSearchInPicker, setClinicSearchInPicker] = useState("")
   // 医院別価格マスタ（pickProduct 時の単価自動補完に使う）
@@ -146,6 +147,37 @@ function NewOrderPage() {
 
   function updateRow(idx: number, patch: Partial<Row>) {
     setRows(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
+  }
+
+  function InlineProductSuggestions({ idx }: { idx: number }) {
+    if (inlineOpenIdx !== idx) return null
+    return (
+      <div
+        className="absolute left-0 right-0 z-30 bg-white border border-gray-200 rounded shadow-lg"
+        style={{ top: "100%", marginTop: 2, maxHeight: 260, overflowY: "auto" }}
+      >
+        {filteredProducts.length === 0 ? (
+          <div className="px-3 py-2 text-xs text-gray-400">該当商品なし（手入力として登録されます）</div>
+        ) : (
+          filteredProducts.map(p => (
+            <button
+              key={p.id}
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { pickProduct(idx, p); setInlineOpenIdx(null) }}
+              className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 border-b border-gray-50 last:border-b-0 block"
+            >
+              <div className="text-sm text-gray-900">{p.name}</div>
+              <div className="text-gray-400 mt-0.5">
+                {p.product_code && <span className="mr-2">#{p.product_code}</span>}
+                {p.manufacturer && <span className="mr-2">{p.manufacturer}</span>}
+                {p.category && <span>{p.category}</span>}
+              </div>
+            </button>
+          ))
+        )}
+      </div>
+    )
   }
 
   function pickProduct(idx: number, p: Product) {
@@ -361,12 +393,14 @@ function NewOrderPage() {
             {rows.map((r, idx) => (
               <tr key={idx} className="border-t border-gray-100">
                 <td className="px-2 py-1 text-xs text-gray-400">{idx + 1}</td>
-                <td className="px-2 py-1">
+                <td className="px-2 py-1" style={{ position: "relative" }}>
                   <div className="flex items-center gap-1">
                     <input
                       value={r.product_name}
-                      onChange={e => updateRow(idx, { product_name: e.target.value, product_id: null })}
-                      placeholder="商品名（手入力 or 🔍）"
+                      onChange={e => { updateRow(idx, { product_name: e.target.value, product_id: null }); setProductSearch(e.target.value); setInlineOpenIdx(idx) }}
+                      onFocus={() => { setProductSearch(r.product_name); setInlineOpenIdx(idx) }}
+                      onBlur={() => setTimeout(() => setInlineOpenIdx(o => (o === idx ? null : o)), 150)}
+                      placeholder="商品名・コード・メーカーで検索 or 手入力"
                       className="flex-1 px-2 py-1 border border-gray-200 rounded text-sm"
                     />
                     <button
@@ -375,6 +409,7 @@ function NewOrderPage() {
                       title="商品マスタから選択"
                     >🔍</button>
                   </div>
+                  <InlineProductSuggestions idx={idx} />
                 </td>
                 <td className="px-2 py-1">
                   <input type="number" value={r.quantity}
@@ -412,17 +447,20 @@ function NewOrderPage() {
                 <span className="text-xs text-gray-400 font-bold">商品 #{idx + 1}</span>
                 <button onClick={() => removeRow(idx)} className="text-xs text-red-500">削除</button>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1" style={{ position: "relative" }}>
                 <input
                   value={r.product_name}
-                  onChange={e => updateRow(idx, { product_name: e.target.value, product_id: null })}
-                  placeholder="商品名"
+                  onChange={e => { updateRow(idx, { product_name: e.target.value, product_id: null }); setProductSearch(e.target.value); setInlineOpenIdx(idx) }}
+                  onFocus={() => { setProductSearch(r.product_name); setInlineOpenIdx(idx) }}
+                  onBlur={() => setTimeout(() => setInlineOpenIdx(o => (o === idx ? null : o)), 150)}
+                  placeholder="商品名・コード・メーカーで検索"
                   className="flex-1 px-3 py-2 border border-gray-200 rounded text-base"
                 />
                 <button
                   onClick={() => { setShowProductPicker(idx); setProductSearch("") }}
                   className="px-3 py-2 text-base bg-gray-100 hover:bg-gray-200 rounded"
                 >🔍</button>
+                <InlineProductSuggestions idx={idx} />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
