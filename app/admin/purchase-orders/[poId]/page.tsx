@@ -18,6 +18,7 @@ type Item = {
   quantity: number; unit_price: number; received_quantity: number | null; note: string | null
 }
 type Supplier = { id: string; name: string; address: string | null; phone: string | null; fax: string | null; contact: string | null }
+type SupplierOption = { id: string; name: string }
 
 export default function POPage({ params }: { params: Promise<{ poId: string }> }) {
   const { poId } = use(params)
@@ -29,6 +30,9 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   const [err, setErr] = useState("")
   const [receivingIds, setReceivingIds] = useState<Set<string>>(new Set())  // 行ごとの入荷処理中ロック
   const [showPrices, setShowPrices] = useState(false)  // 価格表示トグル（デフォルトは非表示。仕入先に伝えない方針）
+  const [editMode, setEditMode] = useState(false)
+  const [allSuppliers, setAllSuppliers] = useState<SupplierOption[]>([])
+  const [savingField, setSavingField] = useState<string | null>(null)
 
   useEffect(() => { fetchData() }, [poId])
 
@@ -42,8 +46,61 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
     if (p.supplier_id) {
       const { data: s } = await supabase.from("suppliers").select("*").eq("id", p.supplier_id).single()
       setSupplier(s as Supplier | null)
+    } else {
+      setSupplier(null)
+    }
+    if (allSuppliers.length === 0) {
+      const { data: sups } = await supabase.from("suppliers").select("id,name").order("name").limit(1000)
+      setAllSuppliers((sups as SupplierOption[]) || [])
     }
     setLoading(false)
+  }
+
+  async function changeSupplier(supplierId: string) {
+    if (!po) return
+    setSavingField("supplier")
+    await supabase.from("purchase_orders").update({ supplier_id: supplierId || null }).eq("id", po.id)
+    await fetchData()
+    setSavingField(null)
+  }
+
+  async function updateItemField(itemId: string, patch: Partial<Item>) {
+    setSavingField(itemId)
+    await supabase.from("purchase_order_items").update(patch).eq("id", itemId)
+    await fetchData()
+    setSavingField(null)
+  }
+
+  async function deleteItem(itemId: string) {
+    if (!confirm("この明細を削除しますか？")) return
+    await supabase.from("purchase_order_items").delete().eq("id", itemId)
+    await fetchData()
+  }
+
+  async function addItem() {
+    if (!po) return
+    await supabase.from("purchase_order_items").insert({
+      purchase_order_id: po.id,
+      product_id: null,
+      product_name: "",
+      quantity: 1,
+      unit_price: 0,
+      received_quantity: 0,
+    })
+    await fetchData()
+  }
+
+  async function updateNote(note: string) {
+    if (!po) return
+    setSavingField("note")
+    await supabase.from("purchase_orders").update({ note: note || null }).eq("id", po.id)
+    setSavingField(null)
+  }
+
+  async function updateDates(patch: { ordered_at?: string; expected_at?: string }) {
+    if (!po) return
+    await supabase.from("purchase_orders").update(patch).eq("id", po.id)
+    await fetchData()
   }
 
   async function setStatus(status: string) {
@@ -194,6 +251,9 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
           {po.status !== "取消" && po.status !== "入荷済" && <button onClick={() => setStatus("取消")} className="text-xs px-3 py-1.5 bg-gray-200 text-gray-700 rounded">取消</button>}
           <button onClick={sendByEmail} className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded" title={supplier?.email ? `${supplier.email} 宛に送信` : "仕入先のメール未設定"}>✉ メール送付</button>
           <button onClick={() => window.print()} className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded">🖨 印刷</button>
+          <button onClick={() => setEditMode(v => !v)} className={"text-xs px-3 py-1.5 rounded font-bold " + (editMode ? "bg-amber-600 text-white" : "bg-white border border-gray-300 text-gray-700")}>
+            {editMode ? "✓ 編集を終了" : "✎ 編集する"}
+          </button>
           <button onClick={deletePO} className="text-xs px-3 py-1.5 text-red-600 hover:bg-red-50 rounded">削除</button>
         </div>
       </div>
@@ -207,9 +267,28 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
 
         <div style={{ display: "flex", gap: 20, marginTop: 24 }}>
           <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
-              {supplier?.name || "(仕入先未設定)"} 御中
-            </p>
+            {editMode ? (
+              <div className="no-print" style={{ marginBottom: 6 }}>
+                <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 4 }}>仕入先</label>
+                <select
+                  value={po.supplier_id || ""}
+                  onChange={e => changeSupplier(e.target.value)}
+                  disabled={savingField === "supplier"}
+                  style={{ fontSize: 15, fontWeight: 700, padding: "6px 8px", border: "1.5px solid #d1d5db", borderRadius: 6, width: "100%", maxWidth: 320 }}>
+                  <option value="">（仕入先未設定）</option>
+                  {allSuppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            ) : (
+              <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
+                {supplier?.name || "(仕入先未設定)"} 御中
+              </p>
+            )}
+            {editMode && (
+              <p className="print-only" style={{ display: "none", margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
+                {supplier?.name || "(仕入先未設定)"} 御中
+              </p>
+            )}
             {supplier?.address && <p style={{ margin: "6px 0 0", fontSize: 11, color: "#666" }}>{supplier.address}</p>}
             {supplier?.phone && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#666" }}>TEL {supplier.phone}{supplier.fax && ` / FAX ${supplier.fax}`}</p>}
             {supplier?.contact && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#666" }}>担当: {supplier.contact}</p>}
@@ -291,51 +370,89 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
           <thead>
             <tr style={{ background: "#f3f4f6" }}>
               <th style={th}>商品名</th>
-              <th style={{ ...th, textAlign: "right", width: 60 }}>数量</th>
-              {showPrices && (
+              <th style={{ ...th, textAlign: "right", width: editMode ? 70 : 60 }}>数量</th>
+              {(showPrices || editMode) && (
                 <>
-                  <th style={{ ...th, textAlign: "right", width: 80 }} className="no-print">単価</th>
+                  <th style={{ ...th, textAlign: "right", width: 90 }} className="no-print">単価</th>
                   <th style={{ ...th, textAlign: "right", width: 90 }} className="no-print">金額</th>
                 </>
               )}
-              <th style={{ ...th, textAlign: "right", width: 80 }} className="no-print">入荷</th>
+              {!editMode && <th style={{ ...th, textAlign: "right", width: 80 }} className="no-print">入荷</th>}
+              {editMode && <th style={{ ...th, width: 32 }} className="no-print"></th>}
             </tr>
           </thead>
           <tbody>
             {items.map((i) => (
               <tr key={i.id} style={{ borderBottom: "1px solid #eee" }}>
                 <td style={tdCell}>
-                  {i.product_name}
+                  {editMode ? (
+                    <>
+                      <input defaultValue={i.product_name || ""} placeholder="商品名"
+                        onBlur={e => { if (e.target.value !== i.product_name) updateItemField(i.id, { product_name: e.target.value }) }}
+                        disabled={savingField === i.id}
+                        className="no-print w-full px-1.5 py-1 border border-gray-200 rounded text-xs" />
+                      <span className="print-only" style={{ display: "none" }}>{i.product_name}</span>
+                    </>
+                  ) : i.product_name}
                   {i.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{i.note}</p>}
                 </td>
-                <td style={{ ...tdCell, textAlign: "right" }}>{i.quantity}</td>
-                {showPrices && (
+                <td style={{ ...tdCell, textAlign: "right" }}>
+                  {editMode ? (
+                    <>
+                      <input type="number" defaultValue={i.quantity} min={0}
+                        onBlur={e => { const v = Number(e.target.value); if (v !== i.quantity) updateItemField(i.id, { quantity: v }) }}
+                        disabled={savingField === i.id}
+                        className="no-print w-14 px-1 py-1 border border-gray-200 rounded text-xs text-right" />
+                      <span className="print-only" style={{ display: "none" }}>{i.quantity}</span>
+                    </>
+                  ) : i.quantity}
+                </td>
+                {(showPrices || editMode) && (
                   <>
-                    <td style={{ ...tdCell, textAlign: "right" }} className="no-print">{fmtYen(i.unit_price)}</td>
+                    <td style={{ ...tdCell, textAlign: "right" }} className="no-print">
+                      {editMode ? (
+                        <input type="number" defaultValue={i.unit_price} min={0}
+                          onBlur={e => { const v = Number(e.target.value); if (v !== i.unit_price) updateItemField(i.id, { unit_price: v }) }}
+                          disabled={savingField === i.id}
+                          className="w-20 px-1 py-1 border border-gray-200 rounded text-xs text-right" />
+                      ) : fmtYen(i.unit_price)}
+                    </td>
                     <td style={{ ...tdCell, textAlign: "right", fontWeight: 700 }} className="no-print">{fmtYen(Number(i.quantity) * Number(i.unit_price))}</td>
                   </>
                 )}
-                <td style={{ ...tdCell, textAlign: "right" }} className="no-print">
-                  <input type="number" defaultValue={i.received_quantity || 0}
-                    onBlur={(e) => updateReceived(i.id, Number(e.target.value))}
-                    disabled={receivingIds.has(i.id)}
-                    className={"w-16 px-1 py-0.5 border border-gray-200 rounded text-xs text-right " + (receivingIds.has(i.id) ? "opacity-50 bg-gray-100" : "")} />
-                </td>
+                {!editMode && (
+                  <td style={{ ...tdCell, textAlign: "right" }} className="no-print">
+                    <input type="number" defaultValue={i.received_quantity || 0}
+                      onBlur={(e) => updateReceived(i.id, Number(e.target.value))}
+                      disabled={receivingIds.has(i.id)}
+                      className={"w-16 px-1 py-0.5 border border-gray-200 rounded text-xs text-right " + (receivingIds.has(i.id) ? "opacity-50 bg-gray-100" : "")} />
+                  </td>
+                )}
+                {editMode && (
+                  <td style={{ ...tdCell, textAlign: "center" }} className="no-print">
+                    <button onClick={() => deleteItem(i.id)} className="text-red-500 text-sm">×</button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr style={{ background: "#f9fafb" }} className="no-print">
-              <td colSpan={showPrices ? 3 : 2} style={{ ...tdCell, textAlign: "right", fontWeight: 700 }}>
-                {showPrices ? "合計（社内管理用）" : "入荷進捗"}
+              <td colSpan={(showPrices || editMode) ? 3 : 2} style={{ ...tdCell, textAlign: "right", fontWeight: 700 }}>
+                {(showPrices || editMode) ? "合計（社内管理用）" : "入荷進捗"}
               </td>
-              {showPrices && (
+              {(showPrices || editMode) && (
                 <td style={{ ...tdCell, textAlign: "right", fontWeight: 700, fontSize: 14 }}>{fmtYen(total)}</td>
               )}
-              <td style={tdCell}>{receivedTotal} / {expectedTotal}</td>
+              <td style={tdCell}>{!editMode && `${receivedTotal} / ${expectedTotal}`}</td>
             </tr>
           </tfoot>
         </table>
+        {editMode && (
+          <div className="no-print" style={{ marginTop: 10 }}>
+            <button onClick={addItem} className="text-xs px-3 py-1.5 bg-white border border-gray-300 rounded hover:bg-gray-50">＋ 明細行を追加</button>
+          </div>
+        )}
 
         {po.note && (
           <div style={{ marginTop: 16, padding: 10, background: "#f9fafb", borderRadius: 4, fontSize: 11, color: "#555" }}>
@@ -347,6 +464,7 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
+          .print-only { display: inline !important; }
           .mobile-bottom-nav { display: none !important; }
           nav { display: none !important; }
           .print-area { box-shadow: none !important; border: none !important; max-width: none !important; }
