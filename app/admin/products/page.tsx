@@ -68,16 +68,30 @@ export default function AdminProductsPage() {
     setSuppliers((data as Supplier[]) || [])
   }
 
+  const NEW_PRODUCT: Product = {
+    id: "", name: "", product_code: null, manufacturer: null, category: null,
+    stock: 0, reorder_level: null, cost: null, price: null, active: true,
+    location: null, purchase_maker: null, default_supplier_id: null,
+    image_url: null, stocktake_exclude: false,
+  }
+
   function openEdit(p: Product) {
     setEditProduct(p)
     setEditForm({ ...p })
+  }
+
+  function openNew() {
+    setEditProduct(NEW_PRODUCT)
+    setEditForm({ ...NEW_PRODUCT })
   }
 
   function closeEdit() { setEditProduct(null); setEditForm({}) }
 
   async function saveEdit() {
     if (!editProduct) return
+    if (!editForm.name?.trim()) { alert("商品名を入力してください"); return }
     setSaving(true)
+    const isNew = !editProduct.id
     const payload: Record<string, unknown> = {
       name: editForm.name || editProduct.name,
       product_code: editForm.product_code || null,
@@ -85,16 +99,18 @@ export default function AdminProductsPage() {
       category: editForm.category || null,
       cost: editForm.cost != null ? Number(editForm.cost) || null : null,
       price: editForm.price != null ? Number(editForm.price) || null : null,
-      stock: editForm.stock != null ? Number(editForm.stock) : null,
+      stock: editForm.stock != null ? Number(editForm.stock) : (isNew ? 0 : null),
       reorder_level: editForm.reorder_level != null ? Number(editForm.reorder_level) || null : null,
       location: editForm.location || null,
       purchase_maker: editForm.purchase_maker || null,
       default_supplier_id: editForm.default_supplier_id || null,
       active: editForm.active !== false,
       stocktake_exclude: editForm.stocktake_exclude === true,
-      image_url: editForm.image_url !== undefined ? (editForm.image_url || null) : editProduct.image_url,
+      image_url: editForm.image_url || null,
     }
-    const { error } = await supabase.from("products").update(payload).eq("id", editProduct.id)
+    const { error } = isNew
+      ? await supabase.from("products").insert(payload)
+      : await supabase.from("products").update(payload).eq("id", editProduct.id)
     if (error) { alert("保存失敗: " + error.message); setSaving(false); return }
     setSaving(false)
     closeEdit()
@@ -103,6 +119,7 @@ export default function AdminProductsPage() {
 
   async function uploadProductImage(file: File) {
     if (!editProduct) return
+    if (!editProduct.id) { alert("先に「保存する」を押して商品を登録してから、画像を追加してください"); return }
     setImageUploading(true)
     try {
       // canvas でJPEG変換（HEIC・PNG・WebP対応）
@@ -362,6 +379,11 @@ export default function AdminProductsPage() {
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{products.length}件</span>
         </h1>
         <div className="flex items-center gap-2">
+          <button onClick={openNew}
+            className="text-sm px-3 py-1.5 rounded font-bold"
+            style={{ background: "#2563eb", color: "#fff", border: "1px solid #2563eb" }}>
+            ＋ 新規追加
+          </button>
           <button onClick={autoLinkSuppliers} disabled={linking}
             className="text-sm px-3 py-1.5 rounded font-bold"
             style={{ background: linking ? "#d1fae5" : "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0", cursor: linking ? "not-allowed" : "pointer" }}
@@ -536,11 +558,11 @@ export default function AdminProductsPage() {
                   display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15,
                 }}>✏️</div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>商品編集</div>
+                  <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 600 }}>{editProduct.id ? "商品編集" : "新規商品を追加"}</div>
                   <div style={{
                     fontSize: 14, fontWeight: 700, color: "#111827",
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 360,
-                  }}>{editProduct.name}</div>
+                  }}>{editProduct.name || "（商品名未入力）"}</div>
                 </div>
               </div>
               <button onClick={closeEdit} style={{
