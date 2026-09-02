@@ -60,6 +60,8 @@ function SuggestPOPage() {
   const [openHistoryProductId, setOpenHistoryProductId] = useState<string | null>(null)
   const [draftPOs, setDraftPOs] = useState<DraftPO[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])
+  const [assigningNoSupplier, setAssigningNoSupplier] = useState(false)
+  const [bulkSupplierId, setBulkSupplierId] = useState("")
 
   useEffect(() => { fetchData() }, [])
 
@@ -216,6 +218,18 @@ function SuggestPOPage() {
     return parts.join(" / ")
   }
 
+  // 「仕入先(未設定)」グループの選択中アイテムに、まとめて仕入先を割り当てる
+  function assignSupplierToNoSupplierGroup(supId: string) {
+    if (!supId) return
+    setSuggestions(prev => prev.map(s => {
+      const currentSid = s.supplierOverride || s.product.default_supplier_id || ""
+      if (s.selected && !currentSid) return { ...s, supplierOverride: supId }
+      return s
+    }))
+    setAssigningNoSupplier(false)
+    setBulkSupplierId("")
+  }
+
   async function createPOForSupplier(supId: string) {
     const target = suggestions.filter(s => s.selected && (s.supplierOverride || s.product.default_supplier_id || "") === supId && s.suggestQty > 0)
     if (target.length === 0) { alert("対象なし"); return }
@@ -311,14 +325,50 @@ function SuggestPOPage() {
           <div className="flex flex-wrap gap-2">
             {Array.from(summary.entries()).map(([sid, amt]) => {
               const draft = draftPOs.find(d => d.supplier_id === sid)
+              if (sid === "(未設定)") {
+                return (
+                  <div key={sid} className="flex items-center gap-1 text-sm px-3 py-1.5 border rounded bg-orange-50 border-orange-200">
+                    <span className="font-bold text-orange-900">仕入先未設定</span>
+                    <span className="ml-1 text-orange-700 tabular-nums">{fmtYen(amt)}</span>
+                    {!assigningNoSupplier ? (
+                      <button
+                        onClick={() => setAssigningNoSupplier(true)}
+                        className="ml-2 px-2 py-0.5 text-xs font-bold bg-orange-600 text-white rounded hover:bg-orange-700">
+                        仕入先を選んでプールへ →
+                      </button>
+                    ) : (
+                      <>
+                        <select
+                          autoFocus
+                          value={bulkSupplierId}
+                          onChange={e => setBulkSupplierId(e.target.value)}
+                          className="ml-2 px-1.5 py-0.5 border border-orange-300 rounded text-xs bg-white">
+                          <option value="">仕入先を選択…</option>
+                          {suppliers.map(sup => <option key={sup.id} value={sup.id}>{supplierOptionLabel(sup)}</option>)}
+                        </select>
+                        <button
+                          onClick={() => assignSupplierToNoSupplierGroup(bulkSupplierId)}
+                          disabled={!bulkSupplierId}
+                          className="px-2 py-0.5 text-xs font-bold bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-40">
+                          適用
+                        </button>
+                        <button
+                          onClick={() => { setAssigningNoSupplier(false); setBulkSupplierId("") }}
+                          className="text-xs text-gray-500 underline">
+                          キャンセル
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )
+              }
               return (
-                <button key={sid} onClick={() => sid !== "(未設定)" && createPOForSupplier(sid)}
-                  disabled={sid === "(未設定)"}
-                  className={"text-sm px-3 py-1.5 border rounded hover:bg-blue-100 disabled:opacity-50 " + (draft ? "bg-amber-50 border-amber-300" : "bg-white border-blue-200")}>
+                <button key={sid} onClick={() => createPOForSupplier(sid)}
+                  className={"text-sm px-3 py-1.5 border rounded hover:bg-blue-100 " + (draft ? "bg-amber-50 border-amber-300" : "bg-white border-blue-200")}>
                   <span className="font-bold">{supplierName(sid as string)}</span>
                   <span className="ml-2 text-blue-700 tabular-nums">{fmtYen(amt)}</span>
                   {draft && <span className="ml-2 text-[12px] px-1.5 py-0.5 bg-amber-200 text-amber-900 rounded font-bold">📝 下書きあり</span>}
-                  {sid !== "(未設定)" && <span className="ml-2 text-blue-500">→ 発注書{draft ? "に追加" : "作成"}</span>}
+                  <span className="ml-2 text-blue-500">→ 発注書{draft ? "に追加" : "作成"}</span>
                 </button>
               )
             })}
