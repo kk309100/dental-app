@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { fetchAllClinicPrices, makeClinicPriceMap, clinicPriceKey, bulkUpsertClinicPrices, type ClinicPrice } from "@/lib/pricing"
 
@@ -64,11 +64,11 @@ function NewOrderPage() {
     (async () => {
       const [c, p, cp] = await Promise.all([
         supabase.from("clinics").select("id,name,corporate_name").order("name").limit(50000),
-        supabase.from("products").select("id,name,product_code,price,stock,manufacturer,category").order("name").limit(50000),
+        fetchAll("products", "id,name,product_code,price,stock,manufacturer,category", (q) => q.order("name", { ascending: true })),
         fetchAllClinicPrices(),  // 医院別価格マスタ
       ])
       setClinics((c.data as Clinic[]) || [])
-      setProducts((p.data as Product[]) || [])
+      setProducts((p as Product[]) || [])
       setClinicPrices(cp)
 
       // 過去注文コピー処理
