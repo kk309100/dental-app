@@ -12,7 +12,7 @@ type Clinic = {
   corporate_name?: string | null
   contact?: string | null
   phone?: string | null
-  adress?: string | null   // 注: dental-order スキーマ側の typo（正は address）
+  address?: string | null
   email?: string | null
   sales_rep?: string | null
   closing_day?: string | null
@@ -26,7 +26,7 @@ type Form = {
   corporate_name: string
   contact: string
   phone: string
-  adress: string
+  address: string
   email: string
   sales_rep: string
   closing_day: string
@@ -39,7 +39,7 @@ const empty: Form = {
   corporate_name: "",
   contact: "",
   phone: "",
-  adress: "",
+  address: "",
   email: "",
   sales_rep: "",
   closing_day: "月末",
@@ -138,7 +138,7 @@ export default function AdminClinicsPage() {
       corporate_name: c.corporate_name || "",
       contact: c.contact || "",
       phone: c.phone || "",
-      adress: c.adress || "",
+      address: c.address || "",
       email: c.email || "",
       sales_rep: c.sales_rep || "",
       closing_day: c.closing_day || "月末",
@@ -278,7 +278,7 @@ export default function AdminClinicsPage() {
           email: pickKey(r, "メール", "メールアドレス", "email") || null,
           sales_rep: pickKey(r, "自社担当", "営業担当", "sales_rep") || null,
           closing_day: pickKey(r, "締日", "closing_day") || "月末",
-          adress: pickKey(r, "住所", "address", "adress") || null,
+          address: pickKey(r, "住所", "address") || null,
           clinic_type: pickKey(r, "種別", "clinic_type") || null,
         }
         const existing = existingByName.get(norm(name))
@@ -316,7 +316,7 @@ export default function AdminClinicsPage() {
         c.email || "",
         c.sales_rep || "",
         c.closing_day || "",
-        c.adress || "",
+        c.address || "",
         c.clinic_type || "",
       ]),
     ]
@@ -417,8 +417,8 @@ export default function AdminClinicsPage() {
                     </span>
                   ) : <span className="text-[12px] text-gray-400">—</span>}
                 </td>
-                <td className="px-2 py-1.5 text-[12px] text-gray-500" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.adress || ""}>
-                  {c.adress || "—"}
+                <td className="px-2 py-1.5 text-[12px] text-gray-500" style={{ maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.address || ""}>
+                  {c.address || "—"}
                 </td>
                 <td className="px-2 py-1.5 text-center whitespace-nowrap">
                   <button onClick={() => openEdit(c)} className="text-[12px] px-1.5 py-0.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 mr-1">編集</button>
@@ -504,7 +504,7 @@ export default function AdminClinicsPage() {
               <Field label="自社営業担当" value={form.sales_rep} onChange={(v) => setForm((f) => ({ ...f, sales_rep: v }))} />
               <Field label="電話番号" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />
               <Field label="メールアドレス" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} />
-              <Field label="住所" value={form.adress} onChange={(v) => setForm((f) => ({ ...f, adress: v }))} />
+              <Field label="住所" value={form.address} onChange={(v) => setForm((f) => ({ ...f, address: v }))} />
 
               <div style={fieldWrap}>
                 <label style={fieldLabel}>締日</label>
