@@ -9,7 +9,7 @@
 // 既存の purchase_orders.status="下書き" を「プール」として活用
 // 各明細の note に「[医院名] from 注文ID」を記録 → 医院納品先の追跡用
 
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 
 export type PoolItem = {
   product_id: string
@@ -138,10 +138,11 @@ export async function poolFromOrders(
   fallbackSupplierId?: string,
 ): Promise<PoolResult & { skippedNoSupplier: number; skippedNoShortage: number; productsNeedingSupplier: { product_id: string; product_name: string; quantity: number }[] }> {
   // 1. データ取得
-  const [oRes, oiRes, pRes, sRes, srRes, cRes] = await Promise.all([
+  // products は件数が多い（1万件超）ため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+  const [oRes, oiRes, products, sRes, srRes, cRes] = await Promise.all([
     supabase.from("orders").select("id,clinic_id").in("id", orderIds),
     supabase.from("order_items").select("order_id,product_id,quantity").in("order_id", orderIds).limit(50000),
-    supabase.from("products").select("id,name,stock,cost,default_supplier_id").limit(50000),
+    fetchAll("products", "id,name,stock,cost,default_supplier_id"),
     supabase.from("suppliers").select("id,name").limit(50000),
     // 過去仕入履歴（最新優先で仕入先決定）
     supabase.from("stock_receipts").select("product_id,supplier_id,unit_price,created_at").order("created_at", { ascending: false }).limit(50000),
@@ -150,7 +151,6 @@ export async function poolFromOrders(
 
   const orders = oRes.data || []
   const orderItems = oiRes.data || []
-  const products = pRes.data || []
   const suppliers = sRes.data || []
   const stockReceipts = srRes.data || []
   const clinics = cRes.data || []

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
 
@@ -67,8 +67,8 @@ function SuggestPOPage() {
 
   async function fetchData() {
     setLoading(true)
-    const [p, sups, oi, o, sr, dr, cl] = await Promise.all([
-      supabase.from("products").select("id,name,product_code,manufacturer,stock,reorder_level,cost,default_supplier_id").limit(50000),
+    const [pData, sups, oi, o, sr, dr, cl] = await Promise.all([
+      fetchAll("products", "id,name,product_code,manufacturer,stock,reorder_level,cost,default_supplier_id"),
       fetchSuppliersByUsage("id,name"),
       supabase.from("order_items").select("product_id,quantity,order_id").limit(50000),
       // 全件取得→クライアントで「納品済」「納品済み」「キャンセル」「取消」を除外
@@ -78,7 +78,7 @@ function SuggestPOPage() {
       supabase.from("purchase_orders").select("id,po_number,supplier_id,total_amount").eq("status", "下書き"),
       supabase.from("clinics").select("id,name").limit(50000),
     ])
-    const products = (p.data as Product[]) || []
+    const products = (pData as Product[]) || []
     setSuppliers(sups)
     setDraftPOs((dr.data as DraftPO[]) || [])
     setClinics((cl.data as Clinic[]) || [])
