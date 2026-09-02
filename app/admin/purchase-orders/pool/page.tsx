@@ -115,6 +115,68 @@ export default function POPoolPage() {
     fetchData()
   }
 
+  // 「仕入先未定」PO内の1明細だけを、選んだ仕入先の下書きPOへ移動する
+  async function assignItemSupplier(item: POItem, supplierId: string) {
+    if (!supplierId) return
+    setBusy(item.id)
+    try {
+      // 1. 移動先の下書きPOを探す（既存があれば流用、無ければ新規作成）
+      const { data: existing } = await supabase
+        .from("purchase_orders")
+        .select("id,total_amount")
+        .eq("supplier_id", supplierId)
+        .eq("status", "下書き")
+        .order("created_at", { ascending: false })
+        .limit(1)
+
+      let targetPoId: string
+      let targetExistingTotal = 0
+      if (existing && existing.length > 0) {
+        targetPoId = existing[0].id
+        targetExistingTotal = Number(existing[0].total_amount || 0)
+      } else {
+        const now = new Date()
+        const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`
+        const rand = Math.floor(Math.random() * 9000) + 1000
+        const { data: newPo, error } = await supabase
+          .from("purchase_orders")
+          .insert({
+            po_number: `POOL-${stamp}-${rand}`,
+            supplier_id: supplierId,
+            status: "下書き",
+            total_amount: 0,
+            note: "発注プール（医院注文から集約）",
+          })
+          .select()
+          .single()
+        if (error || !newPo) { alert("移動先の発注書作成に失敗: " + (error?.message || "")); return }
+        targetPoId = newPo.id
+      }
+
+      // 2. 明細を移動
+      const fromPoId = item.purchase_order_id
+      const { error: moveErr } = await supabase.from("purchase_order_items").update({ purchase_order_id: targetPoId }).eq("id", item.id)
+      if (moveErr) { alert("移動失敗: " + moveErr.message); return }
+
+      // 3. 移動元・移動先それぞれの合計金額を再計算
+      const itemTotal = Number(item.quantity) * Number(item.unit_price || 0)
+      await supabase.from("purchase_orders").update({ total_amount: targetExistingTotal + itemTotal }).eq("id", targetPoId)
+
+      const { data: remaining } = await supabase.from("purchase_order_items").select("quantity,unit_price").eq("purchase_order_id", fromPoId)
+      if (remaining && remaining.length > 0) {
+        const newFromTotal = remaining.reduce((s, r) => s + Number(r.quantity) * Number(r.unit_price || 0), 0)
+        await supabase.from("purchase_orders").update({ total_amount: newFromTotal }).eq("id", fromPoId)
+      } else {
+        // 明細が空になった「仕入先未定」POは片付ける
+        await supabase.from("purchase_orders").delete().eq("id", fromPoId)
+      }
+
+      fetchData()
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function updateItemQty(itemId: string, newQty: number) {
     if (newQty <= 0) return
     await supabase.from("purchase_order_items").update({ quantity: newQty }).eq("id", itemId)
@@ -221,12 +283,13 @@ export default function POPoolPage() {
                       <th className="px-2 py-1 text-right w-16">数量</th>
                       <th className="px-2 py-1 text-right w-24">単価</th>
                       <th className="px-2 py-1 text-right w-24">小計</th>
+                      {isUnassigned && <th className="px-2 py-1 text-left w-40">仕入先</th>}
                       <th className="px-2 py-1 w-8"></th>
                     </tr>
                   </thead>
                   <tbody>
                     {poItems.length === 0 ? (
-                      <tr><td colSpan={6} className="px-4 py-4 text-center text-gray-400">明細なし</td></tr>
+                      <tr><td colSpan={isUnassigned ? 7 : 6} className="px-4 py-4 text-center text-gray-400">明細なし</td></tr>
                     ) : poItems.map(it => (
                       <tr key={it.id} className="border-t border-gray-100">
                         <td className="px-2 py-1.5">{it.product_name || "(商品名なし)"}</td>
@@ -239,6 +302,18 @@ export default function POPoolPage() {
                         </td>
                         <td className="px-2 py-1.5 text-right tabular-nums">{fmtYen(it.unit_price || 0)}</td>
                         <td className="px-2 py-1.5 text-right tabular-nums font-bold">{fmtYen(Number(it.quantity) * Number(it.unit_price || 0))}</td>
+                        {isUnassigned && (
+                          <td className="px-2 py-1.5">
+                            <select
+                              defaultValue=""
+                              disabled={busy === it.id}
+                              onChange={e => assignItemSupplier(it, e.target.value)}
+                              className="w-full px-1.5 py-0.5 border border-orange-300 rounded text-[11px] bg-white">
+                              <option value="">この商品の仕入先…</option>
+                              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </td>
+                        )}
                         <td className="px-2 py-1.5 text-center">
                           <button onClick={() => deleteItem(it.id)} className="text-red-500 text-sm">×</button>
                         </td>
