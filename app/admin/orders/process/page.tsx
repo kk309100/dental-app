@@ -626,7 +626,7 @@ export default function OrderProcessPage() {
                             </span>
                           ))}
                           {r.skippedNoSupplier > 0 && (
-                            <div style={{ color: "#b45309", marginTop: 2 }}>⚠️ 仕入先未設定 {r.skippedNoSupplier}品（商品マスタで設定を）</div>
+                            <div style={{ color: "#b45309", marginTop: 2 }}>⚠️ うち仕入先未定 {r.skippedNoSupplier}品 →「仕入先未定」としてプールへ（発注プール画面で仕入先を設定してください）</div>
                           )}
                         </>
                       )}
@@ -643,7 +643,7 @@ export default function OrderProcessPage() {
                             </div>
                           )}
                           {r.skippedNoSupplier > 0 && (
-                            <div style={{ color: "#b45309" }}>⚠️ 仕入先未設定 {r.skippedNoSupplier}品</div>
+                            <div style={{ color: "#b45309" }}>⚠️ うち仕入先未定 {r.skippedNoSupplier}品 → プールで要設定</div>
                           )}
                         </>
                       )}

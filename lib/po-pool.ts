@@ -41,20 +41,23 @@ export async function addItemsToPool(
 
   for (const [supplierId, items] of itemsBySupplier.entries()) {
     if (items.length === 0) continue
+    // "" = 仕入先未定（あとで発注プール画面から割り当てる）
+    const isUnassigned = !supplierId
 
     try {
       // 1. その仕入先の「下書き」発注書を探す（既存があれば追記）
-      const { data: existing } = await supabase
+      let existingQuery = supabase
         .from("purchase_orders")
         .select("id,total_amount")
-        .eq("supplier_id", supplierId)
         .eq("status", "下書き")
         .order("created_at", { ascending: false })
         .limit(1)
+      existingQuery = isUnassigned ? existingQuery.is("supplier_id", null) : existingQuery.eq("supplier_id", supplierId)
+      const { data: existing } = await existingQuery
 
       let poId: string
       let existingTotal = 0
-      const supplierName = suppliersInfo.get(supplierId) || "(仕入先)"
+      const supplierName = isUnassigned ? "仕入先未定" : (suppliersInfo.get(supplierId) || "(仕入先)")
 
       if (existing && existing.length > 0) {
         poId = existing[0].id
@@ -70,10 +73,10 @@ export async function addItemsToPool(
           .from("purchase_orders")
           .insert({
             po_number: poNumber,
-            supplier_id: supplierId,
+            supplier_id: isUnassigned ? null : supplierId,
             status: "下書き",
             total_amount: 0,
-            note: "発注プール（医院注文から集約）",
+            note: isUnassigned ? "発注プール（仕入先未定・要設定）" : "発注プール（医院注文から集約）",
           })
           .select()
           .single()
@@ -182,8 +185,9 @@ export async function poolFromOrders(
     if (shortBy <= 0) { skippedNoShortage++; continue }
 
     // 仕入先決定: default_supplier_id > 過去履歴 > fallbackSupplierId
+    // 見つからない場合も "" (仕入先未定) バケットとしてプールへ入れる（あとでプール画面から割り当て可能）
     const last = lastSupplierByProduct.get(oi.product_id)
-    const supplierId = product.default_supplier_id || last?.supplierId || fallbackSupplierId
+    const supplierId = product.default_supplier_id || last?.supplierId || fallbackSupplierId || ""
 
     if (!supplierId) {
       skippedNoSupplier++
@@ -192,7 +196,6 @@ export async function poolFromOrders(
         product_name: product.name,
         quantity: shortBy,
       })
-      continue
     }
 
     const order = orderById.get(oi.order_id) as any

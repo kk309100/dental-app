@@ -95,16 +95,23 @@ export default function POPoolPage() {
   }
 
   async function handleConfirmAll() {
-    if (pos.length === 0) return
-    if (!confirm(`プール中の ${pos.length}社 すべての発注書を発行しますか？\n各仕入先には FAX で送付されます（後で個別に変更可能）。`)) return
+    const targets = pos.filter(p => p.supplier_id) // 仕入先未定は一括確定の対象外
+    if (targets.length === 0) return
+    if (!confirm(`プール中の ${targets.length}社 すべての発注書を発行しますか？\n各仕入先には FAX で送付されます（後で個別に変更可能）。\n※仕入先未定のものは対象外です。`)) return
     setBusy("all")
     let success = 0, fail = 0
-    for (const po of pos) {
+    for (const po of targets) {
       const r = await confirmPoolPO(po.id, "FAX")
       if (r.ok) success++; else fail++
     }
     setBusy(null)
     alert(`完了: ${success}社 発行 / 失敗 ${fail}社`)
+    fetchData()
+  }
+
+  async function assignSupplier(poId: string, supplierId: string) {
+    if (!supplierId) return
+    await supabase.from("purchase_orders").update({ supplier_id: supplierId }).eq("id", poId)
     fetchData()
   }
 
@@ -136,12 +143,12 @@ export default function POPoolPage() {
         </h1>
         <div className="flex items-center gap-2">
           <Link href="/admin/purchase-orders" className="text-xs text-gray-500 underline">← 発注書一覧</Link>
-          {pos.length > 0 && (
+          {pos.filter(p => p.supplier_id).length > 0 && (
             <button
               onClick={handleConfirmAll}
               disabled={busy === "all"}
               className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700 disabled:opacity-50">
-              {busy === "all" ? "処理中…" : `🚀 全部一括発注確定 (${pos.length}社)`}
+              {busy === "all" ? "処理中…" : `🚀 全部一括発注確定 (${pos.filter(p => p.supplier_id).length}社)`}
             </button>
           )}
         </div>
@@ -164,25 +171,38 @@ export default function POPoolPage() {
         <div className="space-y-3">
           {pos.map(po => {
             const supplier = po.supplier_id ? supplierById.get(po.supplier_id) : null
-            const supplierName = supplier?.name || "(削除済み仕入先)"
+            const isUnassigned = !po.supplier_id
+            const supplierName = isUnassigned ? "仕入先未定" : (supplier?.name || "(削除済み仕入先)")
             const poItems = itemsByPO.get(po.id) || []
             const total = poItems.reduce((s, it) => s + Number(it.quantity) * Number(it.unit_price || 0), 0)
             return (
-              <div key={po.id} className="bg-white rounded-lg overflow-hidden" style={{ border: "2px solid #e8eaed" }}>
+              <div key={po.id} className="bg-white rounded-lg overflow-hidden" style={{ border: isUnassigned ? "2px solid #fdba74" : "2px solid #e8eaed" }}>
                 {/* ヘッダ */}
-                <div className="px-3 py-2 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2">
+                <div className={"px-3 py-2 border-b border-gray-200 flex items-center justify-between flex-wrap gap-2 " + (isUnassigned ? "bg-orange-50" : "bg-gradient-to-r from-amber-50 to-yellow-50")}>
                   <div className="flex items-center gap-3">
-                    <span className="text-base font-bold text-gray-900">🏭 {supplierName}</span>
+                    <span className="text-base font-bold text-gray-900">{isUnassigned ? "⚠️" : "🏭"} {supplierName}</span>
                     <span className="text-[12px] text-gray-500 font-mono">{po.po_number}</span>
                     <span className="text-xs text-gray-600">{poItems.length}品 / {fmtYen(total)}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleConfirm(po.id, supplierName, total, "FAX")}
-                      disabled={busy === po.id || poItems.length === 0}
-                      className="px-3 py-1.5 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700 disabled:opacity-50">
-                      ✓ 発注確定 (FAX)
-                    </button>
+                    {isUnassigned ? (
+                      <>
+                        <select
+                          defaultValue=""
+                          onChange={e => assignSupplier(po.id, e.target.value)}
+                          className="px-2 py-1 border border-orange-300 rounded text-xs bg-white">
+                          <option value="">仕入先を選択…</option>
+                          {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleConfirm(po.id, supplierName, total, "FAX")}
+                        disabled={busy === po.id || poItems.length === 0}
+                        className="px-3 py-1.5 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700 disabled:opacity-50">
+                        ✓ 発注確定 (FAX)
+                      </button>
+                    )}
                     <Link href={`/admin/purchase-orders/${po.id}`} className="text-xs text-blue-600 underline">編集</Link>
                     <button
                       onClick={() => handleDiscard(po.id, supplierName)}
