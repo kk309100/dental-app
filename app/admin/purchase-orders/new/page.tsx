@@ -3,14 +3,18 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
 import { COMPANY } from "@/lib/company"
 import Seal from "@/app/components/Seal"
 import { fetchAllSupplierPrices, makeSupplierPriceMap, supplierPriceKey, bulkUpsertSupplierPrices, type SupplierPrice } from "@/lib/pricing"
-type Product = { id: string; name: string; product_code: string | null; cost: number | null; default_supplier_id?: string | null }
+type Product = { id: string; name: string; product_code: string | null; manufacturer: string | null; cost: number | null; default_supplier_id?: string | null }
 type Row = { product_id: string | null; product_name: string; quantity: number; unit_price: number; note?: string }
+
+function nfkc(s: string) { return String(s || "").normalize("NFKC").toLowerCase() }
+function kata(s: string) { return s.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60)) }
+function searchKey(s: string) { return kata(nfkc(s)) }
 
 export default function NewPOWrapper() {
   return (
@@ -57,30 +61,47 @@ function NewPOPage() {
     (async () => {
       const [sups, p, sp] = await Promise.all([
         fetchSuppliersByUsage("id,name"),
-        supabase.from("products").select("id,name,product_code,cost,default_supplier_id").order("name").limit(50000),
+        fetchAll("products", "id,name,product_code,manufacturer,cost,default_supplier_id", (q) => q.order("name", { ascending: true })),
         fetchAllSupplierPrices(),  // 仕入先別価格マスタ
       ])
       setSuppliers(sups)
-      setProducts((p.data as Product[]) || [])
+      setProducts((p as Product[]) || [])
       setSupplierPrices(sp)
     })()
   }, [])
 
-  const productByName = useMemo(() => new Map(products.map(p => [p.name, p])), [products])
+  const productById = useMemo(() => new Map(products.map(p => [p.id, p])), [products])
+
+  // 商品名・商品コード・メーカー名のいずれでも検索できるようにする
+  const [productQuery, setProductQuery] = useState<Record<number, string>>({})
+  const [openRowIdx, setOpenRowIdx] = useState<number | null>(null)
+
+  function filteredProductsFor(idx: number): Product[] {
+    const raw = productQuery[idx] ?? ""
+    const k = searchKey(raw)
+    if (!k) return products.slice(0, 30)
+    return products
+      .filter(p => searchKey([p.name, p.product_code, p.manufacturer].filter(Boolean).join(" ")).includes(k))
+      .slice(0, 30)
+  }
 
   function updateRow(idx: number, patch: Partial<Row>) {
     setRows(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
   }
-  function pickProduct(idx: number, name: string) {
-    const p = productByName.get(name)
-    if (p) {
-      // ★ 仕入先別単価マスタから優先取得 → 無ければ商品標準仕入価格 (cost)
-      const supplierPrice = supplierId ? supplierPriceMap.get(supplierPriceKey(supplierId, p.id)) : undefined
-      const finalPrice = supplierPrice !== undefined ? supplierPrice : Number(p.cost || 0)
-      updateRow(idx, { product_id: p.id, product_name: p.name, unit_price: finalPrice })
-    } else {
-      updateRow(idx, { product_id: null, product_name: name })
-    }
+  function pickProductById(idx: number, productId: string) {
+    const p = productById.get(productId)
+    if (!p) return
+    // ★ 仕入先別単価マスタから優先取得 → 無ければ商品標準仕入価格 (cost)
+    const supplierPrice = supplierId ? supplierPriceMap.get(supplierPriceKey(supplierId, p.id)) : undefined
+    const finalPrice = supplierPrice !== undefined ? supplierPrice : Number(p.cost || 0)
+    updateRow(idx, { product_id: p.id, product_name: p.name, unit_price: finalPrice })
+    setProductQuery(prev => ({ ...prev, [idx]: p.name }))
+    setOpenRowIdx(null)
+  }
+  function typeProductName(idx: number, name: string) {
+    setProductQuery(prev => ({ ...prev, [idx]: name }))
+    updateRow(idx, { product_id: null, product_name: name })
+    setOpenRowIdx(idx)
   }
   const addRow = () => setRows(prev => [...prev, { product_id: null, product_name: "", quantity: 1, unit_price: 0 }])
   const removeRow = (idx: number) => setRows(prev => prev.length === 1 ? [{ product_id: null, product_name: "", quantity: 1, unit_price: 0 }] : prev.filter((_, i) => i !== idx))
@@ -180,11 +201,38 @@ function NewPOPage() {
               return (
               <tr key={idx} className="border-t border-gray-100">
                 <td className="px-2 py-1 text-xs text-gray-400">{idx + 1}</td>
-                <td className="px-2 py-1">
-                  <input list="po-product-list" value={r.product_name}
-                    onChange={e => pickProduct(idx, e.target.value)}
-                    placeholder="商品名"
+                <td className="px-2 py-1" style={{ position: "relative" }}>
+                  <input value={productQuery[idx] ?? r.product_name}
+                    onChange={e => typeProductName(idx, e.target.value)}
+                    onFocus={() => setOpenRowIdx(idx)}
+                    onBlur={() => setTimeout(() => setOpenRowIdx(o => (o === idx ? null : o)), 150)}
+                    placeholder="商品名・商品コード・メーカー名で検索"
                     className="w-full px-2 py-1 border border-gray-200 rounded text-sm" />
+                  {openRowIdx === idx && (
+                    <div style={{
+                      position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
+                      background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
+                      boxShadow: "0 8px 20px rgba(0,0,0,0.12)", maxHeight: 260, overflowY: "auto", marginTop: 2,
+                    }}>
+                      {filteredProductsFor(idx).length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-gray-400">該当商品なし（新規商品名として入力されます）</div>
+                      ) : (
+                        filteredProductsFor(idx).map(p => (
+                          <button key={p.id} type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => pickProductById(idx, p.id)}
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 border-b border-gray-50 last:border-b-0"
+                            style={{ display: "block" }}>
+                            <div className="text-sm text-gray-900">{p.name}</div>
+                            <div className="text-gray-400 mt-0.5">
+                              {p.product_code && <span className="mr-2">品番: {p.product_code}</span>}
+                              {p.manufacturer && <span>{p.manufacturer}</span>}
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </td>
                 <td className="px-2 py-1">
                   <input type="number" value={r.quantity}
@@ -223,9 +271,6 @@ function NewPOPage() {
             </tr>
           </tfoot>
         </table>
-        <datalist id="po-product-list">
-          {products.map(p => <option key={p.id} value={p.name}>{p.product_code || ""}</option>)}
-        </datalist>
         <div className="p-2 border-t border-gray-100 bg-gray-50">
           <button onClick={addRow} className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded hover:bg-gray-100">＋ 行を追加</button>
         </div>
