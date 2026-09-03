@@ -8,6 +8,7 @@ import { parseCSV } from "@/lib/csv"
 type Supplier = {
   id: string
   name: string
+  supplier_code: string | null
   maker_name: string | null
   contact: string | null
   phone: string | null
@@ -19,6 +20,7 @@ type Supplier = {
 
 type Form = {
   name: string
+  supplier_code: string
   maker_name: string
   contact: string
   phone: string
@@ -27,7 +29,7 @@ type Form = {
   notes: string
 }
 
-const empty: Form = { name: "", maker_name: "", contact: "", phone: "", email: "", address: "", notes: "" }
+const empty: Form = { name: "", supplier_code: "", maker_name: "", contact: "", phone: "", email: "", address: "", notes: "" }
 
 export default function AdminSuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -56,7 +58,7 @@ export default function AdminSuppliersPage() {
     const k = norm(search)
     if (!k) return suppliers
     return suppliers.filter((s) => {
-      const target = norm(`${s.name} ${s.maker_name || ""} ${s.contact || ""}`)
+      const target = norm(`${s.name} ${s.supplier_code || ""} ${s.maker_name || ""} ${s.contact || ""}`)
       return target.includes(k)
     })
   }, [suppliers, search])
@@ -88,6 +90,7 @@ export default function AdminSuppliersPage() {
         if (!name) { skipped++; continue }
         const payload: Record<string, unknown> = {
           name,
+          supplier_code: pickKey(r, "仕入先コード", "supplier_code") || null,
           maker_name: pickKey(r, "メーカー名", "メーカー", "maker_name") || null,
           contact: pickKey(r, "担当者", "contact") || null,
           phone: pickKey(r, "電話", "電話番号", "phone") || null,
@@ -121,7 +124,7 @@ export default function AdminSuppliersPage() {
   function openAdd() { setForm(empty); setEditId(null); setErrMsg(""); setShowForm(true) }
   function openEdit(s: Supplier) {
     setForm({
-      name: s.name || "", maker_name: s.maker_name || "", contact: s.contact || "",
+      name: s.name || "", supplier_code: s.supplier_code || "", maker_name: s.maker_name || "", contact: s.contact || "",
       phone: s.phone || "", email: s.email || "", address: s.address || "", notes: s.notes || "",
     })
     setEditId(s.id); setErrMsg(""); setShowForm(true)
@@ -156,9 +159,9 @@ export default function AdminSuppliersPage() {
 
   function downloadCSV() {
     const rows: string[][] = [
-      ["仕入先名", "メーカー名", "担当者", "電話", "メール", "住所", "備考"],
+      ["仕入先コード", "仕入先名", "メーカー名", "担当者", "電話", "メール", "住所", "備考"],
       ...suppliers.map((s) => [
-        s.name || "", s.maker_name || "", s.contact || "", s.phone || "",
+        s.supplier_code || "", s.name || "", s.maker_name || "", s.contact || "", s.phone || "",
         s.email || "", s.address || "", s.notes || "",
       ]),
     ]
@@ -208,7 +211,7 @@ export default function AdminSuppliersPage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="仕入先名・メーカー・担当で検索（半角/全角OK）"
+          placeholder="仕入先名・仕入先コード・メーカー・担当で検索（半角/全角OK）"
           className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
         />
       </div>
@@ -220,6 +223,7 @@ export default function AdminSuppliersPage() {
         <table className="w-full" style={{ borderCollapse: "collapse", fontSize: 13 }}>
           <thead className="sticky top-0 bg-gray-100">
             <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-20">コード</th>
               <th className="px-2 py-1.5 text-left whitespace-nowrap">仕入先名</th>
               <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">メーカー</th>
               <th className="px-2 py-1.5 text-left whitespace-nowrap w-28">担当者</th>
@@ -237,6 +241,7 @@ export default function AdminSuppliersPage() {
               </td></tr>
             ) : filtered.map((s, i) => (
               <tr key={s.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                <td className="px-2 py-1.5 text-[12px] text-gray-500 whitespace-nowrap font-mono">{s.supplier_code || "—"}</td>
                 <td className="px-2 py-1.5 font-bold text-gray-900 whitespace-nowrap">{s.name}</td>
                 <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap">{s.maker_name || "—"}</td>
                 <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap">{s.contact || "—"}</td>
@@ -268,6 +273,7 @@ export default function AdminSuppliersPage() {
             <div style={{ padding: 20 }}>
               {errMsg && <div style={errBox}>{errMsg}</div>}
               <Field label="仕入先名 *" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} />
+              <Field label="仕入先コード" value={form.supplier_code} onChange={(v) => setForm((f) => ({ ...f, supplier_code: v }))} />
               <Field label="メーカー名" value={form.maker_name} onChange={(v) => setForm((f) => ({ ...f, maker_name: v }))} />
               <Field label="担当者" value={form.contact} onChange={(v) => setForm((f) => ({ ...f, contact: v }))} />
               <Field label="電話番号" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} />

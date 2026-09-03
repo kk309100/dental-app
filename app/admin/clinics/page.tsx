@@ -9,6 +9,7 @@ import { parseCSV } from "@/lib/csv"
 type Clinic = {
   id: string
   name: string
+  clinic_code?: string | null
   corporate_name?: string | null
   contact?: string | null
   phone?: string | null
@@ -23,6 +24,7 @@ type Clinic = {
 
 type Form = {
   name: string
+  clinic_code: string
   corporate_name: string
   contact: string
   phone: string
@@ -36,6 +38,7 @@ type Form = {
 
 const empty: Form = {
   name: "",
+  clinic_code: "",
   corporate_name: "",
   contact: "",
   phone: "",
@@ -100,7 +103,7 @@ export default function AdminClinicsPage() {
     const k = norm(search)
     if (!k) return clinics
     return clinics.filter((c) => {
-      const target = norm(`${c.name} ${c.corporate_name || ""} ${c.contact || ""} ${c.sales_rep || ""}`)
+      const target = norm(`${c.name} ${c.clinic_code || ""} ${c.corporate_name || ""} ${c.contact || ""} ${c.sales_rep || ""}`)
       return target.includes(k)
     })
   }, [clinics, search])
@@ -135,6 +138,7 @@ export default function AdminClinicsPage() {
   function openEdit(c: Clinic) {
     setForm({
       name: c.name || "",
+      clinic_code: c.clinic_code || "",
       corporate_name: c.corporate_name || "",
       contact: c.contact || "",
       phone: c.phone || "",
@@ -272,6 +276,7 @@ export default function AdminClinicsPage() {
         if (!name) { skipped++; continue }
         const payload: Record<string, string | null> = {
           name,
+          clinic_code: pickKey(r, "得意先コード", "医院コード", "clinic_code") || null,
           corporate_name: pickKey(r, "法人名", "corporate_name") || null,
           contact: pickKey(r, "先方担当", "contact") || null,
           phone: pickKey(r, "電話", "電話番号", "phone") || null,
@@ -307,8 +312,9 @@ export default function AdminClinicsPage() {
 
   function downloadCSV() {
     const rows: string[][] = [
-      ["医院名", "法人名", "先方担当", "電話", "メール", "自社担当", "締日", "住所", "種別"],
+      ["医院コード", "医院名", "法人名", "先方担当", "電話", "メール", "自社担当", "締日", "住所", "種別"],
       ...clinics.map((c) => [
+        c.clinic_code || "",
         c.name || "",
         c.corporate_name || "",
         c.contact || "",
@@ -370,7 +376,7 @@ export default function AdminClinicsPage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="医院名・法人名・担当で検索（半角/全角OK）"
+          placeholder="医院名・医院コード・法人名・担当で検索（半角/全角OK）"
           className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
         />
       </div>
@@ -382,6 +388,7 @@ export default function AdminClinicsPage() {
         <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
           <thead className="sticky top-0 bg-gray-100">
             <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-left whitespace-nowrap w-20">コード</th>
               <th className="px-2 py-1.5 text-left whitespace-nowrap">医院名</th>
               <th className="px-2 py-1.5 text-left whitespace-nowrap w-32">法人名</th>
               <th className="px-2 py-1.5 text-left whitespace-nowrap w-24">先方担当</th>
@@ -395,11 +402,12 @@ export default function AdminClinicsPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+              <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">
                 {search ? "該当なし" : "医院がまだ登録されていません"}
               </td></tr>
             ) : filtered.map((c, i) => (
               <tr key={c.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                <td className="px-2 py-1.5 text-[12px] text-gray-500 whitespace-nowrap font-mono">{c.clinic_code || "—"}</td>
                 <td className="px-2 py-1.5 font-bold text-gray-900 whitespace-nowrap">{c.name}</td>
                 <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap">{c.corporate_name || "—"}</td>
                 <td className="px-2 py-1.5 text-[12px] text-gray-600 whitespace-nowrap">{c.contact || "—"}</td>
@@ -499,6 +507,7 @@ export default function AdminClinicsPage() {
             <div style={{ padding: 20 }}>
               {errMsg && <div style={errBox}>{errMsg}</div>}
               <Field label="医院名 *" value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} />
+              <Field label="医院コード" value={form.clinic_code} onChange={(v) => setForm((f) => ({ ...f, clinic_code: v }))} />
               <Field label="法人名" value={form.corporate_name} onChange={(v) => setForm((f) => ({ ...f, corporate_name: v }))} />
               <Field label="先方担当者" value={form.contact} onChange={(v) => setForm((f) => ({ ...f, contact: v }))} />
               <Field label="自社営業担当" value={form.sales_rep} onChange={(v) => setForm((f) => ({ ...f, sales_rep: v }))} />
