@@ -758,7 +758,8 @@ function AdminOrdersPage() {
                               <tr key={o.id + "-d"} className="bg-yellow-50">
                                 <td colSpan={8} className="px-4 py-2">
                                   {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
-                                    <table className="w-full text-[11px]">
+                                    <div className="overflow-x-auto">
+                                    <table className="w-full text-[11px]" style={{ minWidth: 640 }}>
                                       <thead className="text-[12px] text-gray-500">
                                         <tr>
                                           <th className="text-left px-1 py-0.5 w-16">在庫</th>
@@ -792,7 +793,7 @@ function AdminOrdersPage() {
                                                   {enough ? "OK" : `0`}
                                                 </span>
                                               </td>
-                                              <td className="px-1 py-0.5">{it.product_name || "(不明)"}</td>
+                                              <td className="px-1 py-0.5 whitespace-nowrap">{it.product_name || "(不明)"}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums">{qty}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(cost)}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(listPrice)}</td>
@@ -805,6 +806,7 @@ function AdminOrdersPage() {
                                         })}
                                       </tbody>
                                     </table>
+                                    </div>
                                   )}
                                 </td>
                               </tr>
@@ -867,7 +869,7 @@ function AdminOrdersPage() {
                         {o.note?.includes("【医院修正】") && <ClinicEditBadge />}
                       </td>
                       <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
-                      <td className="px-2 py-1">{clinicById.get(o.clinic_id)?.name || "—"}</td>
+                      <td className="px-2 py-1 whitespace-nowrap">{clinicById.get(o.clinic_id)?.name || "—"}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                       <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
@@ -898,7 +900,8 @@ function AdminOrdersPage() {
                       <tr key={o.id + "-d"} className="bg-yellow-50">
                         <td colSpan={9} className="px-4 py-2">
                           {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
-                            <table className="w-full text-[11px]">
+                            <div className="overflow-x-auto">
+                            <table className="w-full text-[11px]" style={{ minWidth: 640 }}>
                               <thead className="text-[12px] text-gray-500">
                                 <tr>
                                   <th className="text-left px-1 py-0.5 w-16">在庫</th>
@@ -931,7 +934,7 @@ function AdminOrdersPage() {
                                         {enough ? "OK" : `0`}
                                       </span>
                                     </td>
-                                    <td className="px-1 py-0.5">{it.product_name || "(不明)"}</td>
+                                    <td className="px-1 py-0.5 whitespace-nowrap">{it.product_name || "(不明)"}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums">{qty}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(cost)}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(listPrice)}</td>
@@ -944,6 +947,7 @@ function AdminOrdersPage() {
                               })}
                               </tbody>
                             </table>
+                            </div>
                           )}
                         </td>
                       </tr>

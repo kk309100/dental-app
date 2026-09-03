@@ -443,10 +443,10 @@ export default function AdminProductsPage() {
 
       {/* テーブル */}
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 240px)" }}>
-        <table className="w-full" style={{ borderCollapse: "collapse", fontSize: 13 }}>
+        <table className="w-full" style={{ borderCollapse: "collapse", fontSize: 13, minWidth: 900 }}>
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-100 text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
-              <th className="px-2 py-1.5 text-left" style={td0}>商品名</th>
+              <th className="px-2 py-1.5 text-left" style={{ ...td0, minWidth: 160 }}>商品名</th>
               <th className="px-2 py-1.5 text-left w-24" style={td0}>コード</th>
               <th className="px-2 py-1.5 text-left w-28" style={td0}>メーカー</th>
               <th className="px-2 py-1.5 text-left w-24" style={td0}>カテゴリ</th>
@@ -805,7 +805,7 @@ export default function AdminProductsPage() {
   )
 }
 
-const td0: React.CSSProperties = { borderRight: "1px solid #f0f0f0" }
+const td0: React.CSSProperties = { borderRight: "1px solid #f0f0f0", whiteSpace: "nowrap" }
 
 // ── 編集モーダル用ヘルパー ─────────────────────────────────
 const fieldStyle: React.CSSProperties = {

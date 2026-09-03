@@ -275,7 +275,8 @@ export default function POPoolPage() {
                   </div>
                 </div>
                 {/* 明細 */}
-                <table className="w-full text-[13px]">
+                <div className="overflow-x-auto">
+                <table className="w-full text-[13px]" style={{ minWidth: 640 }}>
                   <thead className="bg-gray-50">
                     <tr className="text-[12px] text-gray-500">
                       <th className="px-2 py-1 text-left">商品名</th>
@@ -292,8 +293,8 @@ export default function POPoolPage() {
                       <tr><td colSpan={isUnassigned ? 7 : 6} className="px-4 py-4 text-center text-gray-400">明細なし</td></tr>
                     ) : poItems.map(it => (
                       <tr key={it.id} className="border-t border-gray-100">
-                        <td className="px-2 py-1.5">{it.product_name || "(商品名なし)"}</td>
-                        <td className="px-2 py-1.5 text-[12px] text-gray-500">{it.note || "—"}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">{it.product_name || "(商品名なし)"}</td>
+                        <td className="px-2 py-1.5 text-[12px] text-gray-500 whitespace-nowrap">{it.note || "—"}</td>
                         <td className="px-2 py-1.5 text-right">
                           <input type="number"
                             defaultValue={it.quantity}
@@ -321,6 +322,7 @@ export default function POPoolPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )
           })}
