@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 
 const C = {
   primary: "#22a648",
@@ -77,11 +77,8 @@ export default function ImportPage() {
       const text = ev.target?.result as string
       const parsed = parseCSV(text)
 
-      // 既存在庫のバーコード・商品名を取得して重複除外
-      const { data: existing } = await supabase
-        .from("clinic_inventory_items")
-        .select("barcode,product_name")
-        .eq("clinic_id", clinicId)
+      // 既存在庫のバーコード・商品名を取得して重複除外（1000件超対応でページング取得）
+      const existing = await fetchAll("clinic_inventory_items", "barcode,product_name", (q: any) => q.eq("clinic_id", clinicId))
       const existingBarcodes = new Set((existing || []).map((e: any) => e.barcode).filter(Boolean))
       const existingNames    = new Set((existing || []).map((e: any) => e.product_name))
 
@@ -127,11 +124,8 @@ export default function ImportPage() {
     if (!confirm(`${toImport.length}件を在庫リストに追加しますか？`)) return
     setImporting(true)
 
-    // 既存のbarcodeを取得して重複スキップ
-    const { data: existing } = await supabase
-      .from("clinic_inventory_items")
-      .select("barcode")
-      .eq("clinic_id", clinicId)
+    // 既存のbarcodeを取得して重複スキップ（1000件超対応でページング取得）
+    const existing = await fetchAll("clinic_inventory_items", "barcode", (q: any) => q.eq("clinic_id", clinicId))
     const existingBarcodes = new Set((existing || []).map((e: any) => e.barcode))
 
     let ok = 0, skip = 0

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll as fetchAllRows } from "@/lib/supabase"
 import { Html5Qrcode } from "html5-qrcode"
 import { playBeep } from "@/lib/beep"
 import { useRouter } from "next/navigation"
@@ -218,11 +218,13 @@ export default function ClinicInventoryPage() {
       .select("*").order("occurred_at", { ascending: false }).limit(500)
     if (clinicIdToUse) logsQuery.eq("clinic_id", clinicIdToUse)
 
-    const [{ data: itemsData }, { data: logsData }] = await Promise.all([
-      supabase.from("clinic_inventory_items")
-        .select("id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,stock_unit,clinic_id,created_at,item_image_url")
-        .eq("clinic_id", clinicIdToUse)
-        .order("product_name"),
+    // clinic_inventory_items は1000件を超える医院があるため、fetchAll でページング取得する
+    const [itemsData, { data: logsData }] = await Promise.all([
+      fetchAllRows(
+        "clinic_inventory_items",
+        "id,product_name,maker,barcode,stock_quantity,min_stock,category,shelf_no,location,supplier,units_per_package,product_id,unit,stock_unit,clinic_id,created_at,item_image_url",
+        (q: any) => q.eq("clinic_id", clinicIdToUse).order("product_name", { ascending: true })
+      ),
       logsQuery,
     ])
     setItems((itemsData as Item[]) || [])
