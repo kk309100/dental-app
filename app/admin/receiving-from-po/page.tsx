@@ -480,7 +480,7 @@ export default function ReceivingFromPoPage() {
                     </div>
 
                     {/* 商品行 */}
-                    <div style={{ padding: "4px 0" }}>
+                    <div style={{ padding: "4px 0", overflowX: "auto" }}>
                       {allIts.map(it => {
                         const rem     = remaining(it)
                         const isDone  = rem === 0
@@ -492,6 +492,7 @@ export default function ReceivingFromPoPage() {
                             display: "flex", alignItems: "center", gap: 12,
                             padding: "10px 18px",
                             borderBottom: "1px solid #f3f4f6",
+                            minWidth: 640,
                             background: isDone ? "#f0fdf4"
                               : isChk ? "#f0fdf9"
                               : "transparent",
@@ -516,11 +517,12 @@ export default function ReceivingFromPoPage() {
                               <div style={{
                                 fontSize: 14, fontWeight: isDone ? 400 : 600,
                                 color: isDone ? "#9ca3af" : "#111827",
-                              }}>
+                                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                              }} title={it.product_name || ""}>
                                 {it.product_name || "(商品名なし)"}
                               </div>
                               {it.note && (
-                                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>{it.note}</div>
+                                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.note}</div>
                               )}
                             </div>
 

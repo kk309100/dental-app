@@ -15,7 +15,7 @@ export default function NewOrderPageWrapper() {
   )
 }
 
-type Clinic = { id: string; name: string; corporate_name?: string | null }
+type Clinic = { id: string; name: string; corporate_name?: string | null; clinic_code?: string | null }
 type Product = { id: string; name: string; product_code: string | null; price: number | null; stock: number | null; manufacturer?: string | null; category?: string | null }
 type Row = { product_id: string | null; product_name: string; quantity: number; price: number; note?: string }
 type RecentOrder = { id: string; clinic_id: string; created_at: string; total_price: number; delivery_number: string | null }
@@ -64,7 +64,7 @@ function NewOrderPage() {
   useEffect(() => {
     (async () => {
       const [c, p, cp] = await Promise.all([
-        supabase.from("clinics").select("id,name,corporate_name").order("name").limit(50000),
+        supabase.from("clinics").select("id,name,corporate_name,clinic_code").order("name").limit(50000),
         fetchAll("products", "id,name,product_code,price,stock,manufacturer,category", (q) => q.order("name", { ascending: true })),
         fetchAllClinicPrices(),  // 医院別価格マスタ
       ])
@@ -525,7 +525,7 @@ function NewOrderPage() {
       {showClinicPicker && (() => {
         const k = searchKey(clinicSearchInPicker)
         const filteredClinics = !k ? clinics : clinics.filter(c => {
-          const target = searchKey(`${c.name} ${c.corporate_name || ""}`)
+          const target = searchKey(`${c.name} ${c.corporate_name || ""} ${c.clinic_code || ""}`)
           return target.includes(k)
         })
         return (
@@ -543,7 +543,7 @@ function NewOrderPage() {
                   autoFocus
                   value={clinicSearchInPicker}
                   onChange={e => setClinicSearchInPicker(e.target.value)}
-                  placeholder="医院名・法人名で検索（カナ/半角全角OK）"
+                  placeholder="医院名・医院コード・法人名で検索（カナ/半角全角OK）"
                   className="w-full px-3 py-2 border border-gray-200 rounded text-sm"
                 />
                 <p style={{ fontSize: 12 }} className="text-gray-500 mt-1">{filteredClinics.length}/{clinics.length}件</p>
@@ -564,7 +564,7 @@ function NewOrderPage() {
                       }}
                       className={"w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100 " + (clinicId === c.id ? "bg-blue-100" : "")}
                     >
-                      <p className="text-sm font-bold text-gray-900">{c.name}</p>
+                      <p className="text-sm font-bold text-gray-900">{c.name}{c.clinic_code && <span className="text-xs font-normal text-gray-400 ml-1">#{c.clinic_code}</span>}</p>
                       {c.corporate_name && <p className="text-xs text-gray-500">{c.corporate_name}</p>}
                     </button>
                   ))
