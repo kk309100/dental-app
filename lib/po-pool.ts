@@ -12,7 +12,7 @@
 import { supabase, fetchAll } from "@/lib/supabase"
 
 export type PoolItem = {
-  product_id: string
+  product_id: string | null
   product_name: string
   quantity: number
   unit_price: number
@@ -141,7 +141,7 @@ export async function poolFromOrders(
   // products は件数が多い（1万件超）ため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
   const [oRes, oiRes, products, sRes, srRes, cRes] = await Promise.all([
     supabase.from("orders").select("id,clinic_id").in("id", orderIds),
-    supabase.from("order_items").select("order_id,product_id,quantity").in("order_id", orderIds).limit(50000),
+    supabase.from("order_items").select("order_id,product_id,quantity,product_name,price").in("order_id", orderIds).limit(50000),
     fetchAll("products", "id,name,stock,cost,default_supplier_id"),
     supabase.from("suppliers").select("id,name").limit(50000),
     // 過去仕入履歴（最新優先で仕入先決定）
@@ -176,7 +176,36 @@ export async function poolFromOrders(
   const productsNeedingSupplier: { product_id: string; product_name: string; quantity: number }[] = []
 
   for (const oi of orderItems as any[]) {
-    if (!oi.product_id) continue
+    // 商品マスタと紐付いていない「手入力商品」（product_id が無い）は、
+    // 在庫チェックができない代わりに「注文数＝そのまま不足数」として仕入先未定プールへ入れる
+    if (!oi.product_id) {
+      const orderQty = Number(oi.quantity || 0)
+      if (orderQty <= 0) { skippedNoShortage++; continue }
+      const order = orderById.get(oi.order_id) as any
+      const clinicName = order?.clinic_id ? (clinicById.get(order.clinic_id) || "(医院)") : "(医院)"
+      const supplierId = fallbackSupplierId || ""
+      if (!supplierId) {
+        skippedNoSupplier++
+        productsNeedingSupplier.push({
+          product_id: "",
+          product_name: oi.product_name || "(商品名なし・手入力)",
+          quantity: orderQty,
+        })
+      }
+      const list = itemsBySupplier.get(supplierId) || []
+      list.push({
+        product_id: null,
+        product_name: oi.product_name || "(商品名なし・手入力)",
+        quantity: orderQty,
+        unit_price: Number(oi.price || 0),
+        source_order_id: oi.order_id,
+        source_clinic_name: clinicName,
+        source_clinic_id: order?.clinic_id || null,
+      })
+      itemsBySupplier.set(supplierId, list)
+      continue
+    }
+
     const product = productById.get(oi.product_id) as any
     if (!product) { skippedNoShortage++; continue }
     const stock = Number(product.stock || 0)
