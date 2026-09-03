@@ -112,7 +112,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     exact ? pathname === href : pathname.startsWith(href)
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f3f4f6", fontFamily: "'Noto Sans JP','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif" }}>
+    <div className="admin-shell" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#f3f4f6", fontFamily: "'Noto Sans JP','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif" }}>
 
       {/* ── モバイルドロワー ── */}
       {menuOpen && (
@@ -310,12 +310,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </header>
 
       {/* ── メインコンテンツ ── */}
-      <main style={{ flex: 1, overflowY: "auto" }}>
+      <main className="admin-main" style={{ flex: 1, overflowY: "auto" }}>
         <div style={{ padding: "20px 16px 32px", maxWidth: 1400, margin: "0 auto" }}
           className="main-inner">
           <style>{`
             @media (min-width: 768px) {
               .main-inner { padding: 24px 24px 40px !important; }
+            }
+            @media print {
+              .admin-shell { display: block !important; min-height: 0 !important; background: #fff !important; }
+              .admin-main { display: block !important; flex: none !important; height: auto !important; overflow: visible !important; }
+              .main-inner { max-width: none !important; padding: 0 !important; margin: 0 !important; }
+              .admin-layout-header { display: none !important; }
             }
           `}</style>
           {children}

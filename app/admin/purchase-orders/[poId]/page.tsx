@@ -33,6 +33,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   const [editMode, setEditMode] = useState(false)
   const [allSuppliers, setAllSuppliers] = useState<SupplierOption[]>([])
   const [savingField, setSavingField] = useState<string | null>(null)
+  const [clinicCodeByName, setClinicCodeByName] = useState<Map<string, string>>(new Map())
 
   useEffect(() => { fetchData() }, [poId])
 
@@ -53,6 +54,12 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
       const { data: sups } = await supabase.from("suppliers").select("id,name").order("name").limit(1000)
       setAllSuppliers((sups as SupplierOption[]) || [])
     }
+    if (clinicCodeByName.size === 0) {
+      const { data: cls } = await supabase.from("clinics").select("name,clinic_code").limit(50000)
+      const map = new Map<string, string>()
+      ;(cls || []).forEach((c: any) => { if (c.clinic_code) map.set(c.name, c.clinic_code) })
+      setClinicCodeByName(map)
+    }
     setLoading(false)
   }
 
@@ -69,6 +76,14 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
     await supabase.from("purchase_order_items").update(patch).eq("id", itemId)
     await fetchData()
     setSavingField(null)
+  }
+
+  // 明細のnote「[医院名] 注文 xxxxxxxx」の医院名部分を、印刷時だけ医院コードに置き換える
+  function noteForPrint(note: string): string {
+    const m = note.match(/^\[(.+?)\](.*)$/)
+    if (!m) return note
+    const code = clinicCodeByName.get(m[1])
+    return code ? `[${code}]${m[2]}` : note
   }
 
   async function deleteItem(itemId: string) {
@@ -394,7 +409,12 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
                       <span className="print-only" style={{ display: "none" }}>{i.product_name}</span>
                     </>
                   ) : i.product_name}
-                  {i.note && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#999" }}>{i.note}</p>}
+                  {i.note && (
+                    <>
+                      <p className="no-print" style={{ margin: "3px 0 0", fontSize: 10, color: "#999" }}>{i.note}</p>
+                      <p className="print-only" style={{ display: "none", margin: "3px 0 0", fontSize: 10, color: "#999" }}>{noteForPrint(i.note)}</p>
+                    </>
+                  )}
                 </td>
                 <td style={{ ...tdCell, textAlign: "right" }}>
                   {editMode ? (
