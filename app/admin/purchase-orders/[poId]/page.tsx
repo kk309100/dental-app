@@ -394,7 +394,7 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
                       <span className="print-only" style={{ display: "none" }}>{i.product_name}</span>
                     </>
                   ) : i.product_name}
-                  {i.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{i.note}</p>}
+                  {i.note && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#999" }}>{i.note}</p>}
                 </td>
                 <td style={{ ...tdCell, textAlign: "right" }}>
                   {editMode ? (
@@ -475,7 +475,7 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
   )
 }
 
-const th: React.CSSProperties = { padding: "6px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 11, color: "#555" }
+const th: React.CSSProperties = { padding: "8px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 12, color: "#555" }
 const td: React.CSSProperties = { padding: "4px 8px", background: "#f9fafb", fontSize: 11, color: "#555", width: 80, borderRight: "1px solid #eee" }
 const td2: React.CSSProperties = { padding: "4px 8px", fontSize: 11, color: "#111", borderRight: "1px solid #eee" }
-const tdCell: React.CSSProperties = { padding: "6px 8px", fontSize: 12 }
+const tdCell: React.CSSProperties = { padding: "9px 8px", fontSize: 13, lineHeight: 1.6 }

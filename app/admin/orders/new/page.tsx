@@ -400,7 +400,8 @@ function NewOrderPage() {
                       onChange={e => { updateRow(idx, { product_name: e.target.value, product_id: null }); setProductSearch(e.target.value); setInlineOpenIdx(idx) }}
                       onFocus={() => { setProductSearch(r.product_name); setInlineOpenIdx(idx) }}
                       onBlur={() => setTimeout(() => setInlineOpenIdx(o => (o === idx ? null : o)), 150)}
-                      placeholder="商品名・コード・メーカーで検索 or 手入力"
+                      onKeyDown={e => { if (e.key === "F4") { e.preventDefault(); setShowProductPicker(idx); setProductSearch(r.product_name) } }}
+                      placeholder="商品名・コード・メーカーで検索 or 手入力（F4で商品マスタ検索）"
                       className="flex-1 px-2 py-1 border border-gray-200 rounded text-sm"
                     />
                     <button
@@ -453,6 +454,7 @@ function NewOrderPage() {
                   onChange={e => { updateRow(idx, { product_name: e.target.value, product_id: null }); setProductSearch(e.target.value); setInlineOpenIdx(idx) }}
                   onFocus={() => { setProductSearch(r.product_name); setInlineOpenIdx(idx) }}
                   onBlur={() => setTimeout(() => setInlineOpenIdx(o => (o === idx ? null : o)), 150)}
+                  onKeyDown={e => { if (e.key === "F4") { e.preventDefault(); setShowProductPicker(idx); setProductSearch(r.product_name) } }}
                   placeholder="商品名・コード・メーカーで検索"
                   className="flex-1 px-3 py-2 border border-gray-200 rounded text-base"
                 />
