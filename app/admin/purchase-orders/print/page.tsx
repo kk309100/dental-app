@@ -11,6 +11,14 @@ type PO = { id: string; po_number: string | null; supplier_id: string | null; or
 type Item = { id: string; purchase_order_id: string; product_id: string | null; product_name: string | null; quantity: number; unit_price: number; note: string | null }
 type Supplier = { id: string; name: string; address: string | null; phone: string | null; fax: string | null; contact: string | null }
 
+// 明細のnote「[医院名] 注文 xxxxxxxx」の医院名部分を、印刷時は医院コードに置き換える
+function noteForPrint(note: string, clinicCodeByName: Map<string, string>): string {
+  const m = note.match(/^\[(.+?)\](.*)$/)
+  if (!m) return note
+  const code = clinicCodeByName.get(m[1])
+  return code ? `[${code}]${m[2]}` : note
+}
+
 export default function BulkPrintWrapper() {
   return (
     <Suspense fallback={<p>読み込み中…</p>}>
@@ -25,6 +33,7 @@ function BulkPrint() {
   const [pos, setPos] = useState<PO[]>([])
   const [items, setItems] = useState<Item[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [clinicCodeByName, setClinicCodeByName] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     if (ids.length === 0) return
@@ -34,11 +43,15 @@ function BulkPrint() {
       supabase.from("purchase_orders").select("*").in("id", ids),
       supabase.from("purchase_order_items").select("*").in("purchase_order_id", ids),
       supabase.from("suppliers").select("*").limit(50000),
-    ]).then(([p, i, s]) => {
+      supabase.from("clinics").select("name,clinic_code").limit(50000),
+    ]).then(([p, i, s, c]) => {
       if (cancelled) return
       setPos((p.data as PO[]) || [])
       setItems((i.data as Item[]) || [])
       setSuppliers((s.data as Supplier[]) || [])
+      const map = new Map<string, string>()
+      ;((c.data as any[]) || []).forEach(cl => { if (cl.clinic_code) map.set(cl.name, cl.clinic_code) })
+      setClinicCodeByName(map)
       printTimer = setTimeout(() => { if (!cancelled) window.print() }, 800)
     })
     return () => {
@@ -58,11 +71,12 @@ function BulkPrint() {
         <button onClick={() => window.close()} className="px-4 py-2 bg-gray-200 text-sm rounded">閉じる</button>
         <span className="ml-3 text-xs text-gray-700">{pos.length}件の発注書</span>
       </div>
-      {pos.map(po => {
+      {pos.map((po, idx) => {
         const sup = po.supplier_id ? supBy.get(po.supplier_id) : null
         const its = itemsByPO.get(po.id) || []
+        const isLast = idx === pos.length - 1
         return (
-          <main key={po.id} className="bg-white max-w-3xl mx-auto p-8 mb-8 print-page" style={{ pageBreakAfter: "always", minHeight: "27cm" }}>
+          <main key={po.id} className="bg-white max-w-3xl mx-auto p-8 mb-8 print-page" style={{ pageBreakAfter: isLast ? "auto" : "always", minHeight: isLast ? undefined : "27cm" }}>
             <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
               <h1 style={{ fontSize: 28, letterSpacing: "0.3em", margin: "20px 0 4px", textAlign: "center" }}>発 注 書</h1>
               <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {po.po_number || po.id.slice(0, 8)}</p>
@@ -102,7 +116,7 @@ function BulkPrint() {
               <tbody>
                 {its.map(i => (
                   <tr key={i.id} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={tdC}>{i.product_name}{i.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{i.note}</p>}</td>
+                    <td style={tdC}>{i.product_name}{i.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{noteForPrint(i.note, clinicCodeByName)}</p>}</td>
                     <td style={{ ...tdC, textAlign: "right" }}>{i.quantity}</td>
                   </tr>
                 ))}
@@ -133,8 +147,9 @@ function BulkPrint() {
           .mobile-bottom-nav { display: none !important; }
           nav { display: none !important; }
           @page { size: A4; margin: 10mm; }
-          /* 発注書ごとに改ページ */
-          .print-page { break-after: page !important; }
+          /* 発注書ごとに改ページ（最後の1件のあとは空白ページを作らない） */
+          .print-page:not(:last-of-type) { break-after: page !important; }
+          .print-page:last-of-type { break-after: auto !important; }
           /* テーブル行が途中で切れないようにする */
           .print-page table { break-inside: auto; }
           .print-page table thead { display: table-header-group; }
