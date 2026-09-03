@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-
-const FB_KEY = "denthub_feedback_v1"
+import { supabase } from "@/lib/supabase"
 
 type FeedbackItem = {
   id: string
@@ -14,11 +13,17 @@ type FeedbackItem = {
   status: "未対応" | "対応中" | "完了"
 }
 
-function load(): FeedbackItem[] {
-  try { return JSON.parse(localStorage.getItem(FB_KEY) || "[]") } catch { return [] }
-}
-function save(items: FeedbackItem[]) {
-  localStorage.setItem(FB_KEY, JSON.stringify(items))
+async function load(): Promise<FeedbackItem[]> {
+  const { data, error } = await supabase
+    .from("feedback_notes")
+    .select("id,created_at,page,content,priority,status")
+    .order("created_at", { ascending: false })
+    .limit(1000)
+  if (error) { console.error("feedback_notes 取得エラー:", error.message); return [] }
+  return (data || []).map(r => ({
+    id: r.id, timestamp: r.created_at, page: r.page || "", content: r.content,
+    priority: r.priority as FeedbackItem["priority"], status: r.status as FeedbackItem["status"],
+  }))
 }
 
 const PRIORITY_STYLE: Record<string, { bg: string; color: string; border: string }> = {
@@ -40,24 +45,25 @@ export default function FeedbackPage() {
 
   useEffect(() => {
     setMounted(true)
-    setItems(load())
+    load().then(setItems)
   }, [])
 
-  function updateStatus(id: string, status: FeedbackItem["status"]) {
-    const next = items.map(i => i.id === id ? { ...i, status } : i)
-    setItems(next); save(next)
+  async function updateStatus(id: string, status: FeedbackItem["status"]) {
+    setItems(items.map(i => i.id === id ? { ...i, status } : i))
+    await supabase.from("feedback_notes").update({ status }).eq("id", id)
   }
 
-  function deleteItem(id: string) {
+  async function deleteItem(id: string) {
     if (!confirm("この修正メモを削除しますか？")) return
-    const next = items.filter(i => i.id !== id)
-    setItems(next); save(next)
+    setItems(items.filter(i => i.id !== id))
+    await supabase.from("feedback_notes").delete().eq("id", id)
   }
 
-  function clearDone() {
+  async function clearDone() {
     if (!confirm("「完了」の修正メモをすべて削除しますか？")) return
-    const next = items.filter(i => i.status !== "完了")
-    setItems(next); save(next)
+    const doneIds = items.filter(i => i.status === "完了").map(i => i.id)
+    setItems(items.filter(i => i.status !== "完了"))
+    await supabase.from("feedback_notes").delete().in("id", doneIds)
   }
 
   async function copyForClaudeCode(item: FeedbackItem) {

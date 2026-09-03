@@ -9,17 +9,10 @@ import { supabase } from "@/lib/supabase"
 import OrderAlert from "./_components/OrderAlert"
 import "./admin-base.css"
 
-// ─── フィードバック localStorage キー ────────────────────────────
-const FB_KEY = "denthub_feedback_v1"
+// ─── フィードバック（修正メモ）: DB保存（feedback_notes テーブル） ──────────
 type FeedbackItem = {
   id: string; timestamp: string; page: string;
   content: string; priority: "高"|"中"|"低"; status: "未対応"|"対応中"|"完了"
-}
-function loadFeedbacks(): FeedbackItem[] {
-  try { return JSON.parse(localStorage.getItem(FB_KEY) || "[]") } catch { return [] }
-}
-function saveFeedbacks(items: FeedbackItem[]) {
-  localStorage.setItem(FB_KEY, JSON.stringify(items))
 }
 // ──────────────────────────────────────────────────────────────────
 
@@ -82,18 +75,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [feedbackText, setFeedbackText]         = useState("")
   const [feedbackPriority, setFeedbackPriority] = useState<"高"|"中"|"低">("中")
   const [feedbackSaved, setFeedbackSaved]       = useState(false)
+  const [feedbackSaving, setFeedbackSaving]     = useState(false)
   const [feedbackPendingCount, setFeedbackPendingCount] = useState(0)
 
-  // 未対応件数バッジ用
+  // 未対応件数バッジ用（DBから取得）
   useEffect(() => {
-    const update = () => {
-      const count = loadFeedbacks().filter(f => f.status !== "完了").length
-      setFeedbackPendingCount(count)
-    }
-    update()
-    window.addEventListener("storage", update)
-    return () => window.removeEventListener("storage", update)
-  }, [])
+    supabase.from("feedback_notes").select("id", { count: "exact", head: true }).neq("status", "完了")
+      .then(({ count }) => setFeedbackPendingCount(count || 0))
+  }, [feedbackSaved])
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -481,20 +470,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </div>
                 {/* 保存ボタン */}
                 <button
-                  disabled={!feedbackText.trim()}
-                  onClick={() => {
+                  disabled={!feedbackText.trim() || feedbackSaving}
+                  onClick={async () => {
                     if (!feedbackText.trim()) return
-                    const items = loadFeedbacks()
-                    const newItem: FeedbackItem = {
-                      id: Date.now().toString(),
-                      timestamp: new Date().toISOString(),
+                    setFeedbackSaving(true)
+                    const { error } = await supabase.from("feedback_notes").insert({
                       page: pathname,
                       content: feedbackText.trim(),
                       priority: feedbackPriority,
                       status: "未対応",
-                    }
-                    saveFeedbacks([newItem, ...items])
-                    setFeedbackPendingCount(items.filter(f => f.status !== "完了").length + 1)
+                    })
+                    setFeedbackSaving(false)
+                    if (error) { alert("保存失敗: " + error.message); return }
                     setFeedbackSaved(true)
                   }}
                   style={{
@@ -503,7 +490,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     color: "#fff", fontSize: 14, fontWeight: 700,
                     cursor: feedbackText.trim() ? "pointer" : "not-allowed",
                   }}>
-                  💾 修正メモを保存する
+                  {feedbackSaving ? "保存中…" : "💾 修正メモを保存する"}
                 </button>
               </div>
             )}
