@@ -53,6 +53,8 @@ export default function ReceivingFromPoPage() {
   const [listPriceOverride, setListPriceOverride] = useState<Map<string, number>>(new Map())
   // 展開状態: poId → open/close（デフォルト全展開）
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // 商品名検索
+  const [search, setSearch] = useState("")
 
   useEffect(() => { fetchData() }, [])
 
@@ -101,6 +103,24 @@ export default function ReceivingFromPoPage() {
     }
     return m
   }, [poItems])
+
+  // 半角全角・カナひらがな統一の検索キー
+  function searchKey(s: string) {
+    return String(s || "")
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60)) // カナ→ひらがな
+  }
+  const searchK = useMemo(() => searchKey(search), [search])
+  // 検索キーワードにヒットする発注書だけ表示（商品名・発注書番号で検索）
+  const visiblePos = useMemo(() => {
+    if (!searchK) return pos
+    return pos.filter(po => {
+      if (searchKey(po.po_number || "").includes(searchK)) return true
+      const its = itemsByPo.get(po.id) || []
+      return its.some(it => searchKey(it.product_name || "").includes(searchK))
+    })
+  }, [pos, itemsByPo, searchK])
 
   function remaining(item: POItem) {
     return Math.max(0, Number(item.quantity) - Number(item.received_quantity || 0))
@@ -307,6 +327,22 @@ export default function ReceivingFromPoPage() {
           💡 <strong>今日届いた商品だけチェック</strong>して「入荷処理」を押してください。
           まだ届いていない商品はチェックを外せばOK。数量が違う場合は数字を変えられます。
         </div>
+        <div style={{ marginTop: 12 }}>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="🔍 商品名・発注書番号で検索（カナ/半角全角OK）"
+            style={{
+              width: "100%", padding: "10px 14px", borderRadius: 10,
+              border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box",
+            }}
+          />
+          {search && (
+            <p style={{ fontSize: 12, color: "#6b7280", margin: "6px 0 0" }}>
+              該当 {visiblePos.length}/{pos.length}件の発注書
+            </p>
+          )}
+        </div>
       </div>
 
       {/* ─── 処理結果 ───────────────────────────────────── */}
@@ -379,9 +415,13 @@ export default function ReceivingFromPoPage() {
             <Link href="/admin/purchase-orders/pool"><button style={btnOrange}>📦 発注プール</button></Link>
           </div>
         </div>
+      ) : visiblePos.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "48px 24px", color: "#9ca3af" }}>
+          「{search}」に該当する商品・発注書はありません
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {pos.map(po => {
+          {visiblePos.map(po => {
             const allIts      = itemsByPo.get(po.id) || []
             const pendingIts  = allIts.filter(it => remaining(it) > 0)
             const checkedIts  = pendingIts.filter(it => checked.has(it.id))
@@ -486,6 +526,7 @@ export default function ReceivingFromPoPage() {
                         const isDone  = rem === 0
                         const isChk   = checked.has(it.id)
                         const recvQty = receiveQty(it)
+                        const isMatch = searchK && searchKey(it.product_name || "").includes(searchK)
 
                         return (
                           <div key={it.id} style={{
@@ -493,7 +534,8 @@ export default function ReceivingFromPoPage() {
                             padding: "10px 18px",
                             borderBottom: "1px solid #f3f4f6",
                             minWidth: 640,
-                            background: isDone ? "#f0fdf4"
+                            background: isMatch ? "#fef9c3"
+                              : isDone ? "#f0fdf4"
                               : isChk ? "#f0fdf9"
                               : "transparent",
                           }}>
