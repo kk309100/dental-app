@@ -124,6 +124,8 @@ function NewOrderPage() {
     return m
   }, [clinics])
 
+  const productById = useMemo(() => new Map(products.map(p => [p.id, p])), [products])
+
   // 商品ピッカー: NFKC + カタカナ統一で検索
   const filteredProducts = useMemo(() => {
     if (!productSearch) return products.slice(0, 50)
@@ -410,6 +412,9 @@ function NewOrderPage() {
                       title="商品マスタから選択"
                     >🔍</button>
                   </div>
+                  {r.product_id && productById.get(r.product_id)?.manufacturer && (
+                    <p className="text-xs text-gray-400 mt-0.5">［{productById.get(r.product_id)!.manufacturer}］</p>
+                  )}
                   <InlineProductSuggestions idx={idx} />
                 </td>
                 <td className="px-2 py-1">
@@ -464,6 +469,9 @@ function NewOrderPage() {
                 >🔍</button>
                 <InlineProductSuggestions idx={idx} />
               </div>
+              {r.product_id && productById.get(r.product_id)?.manufacturer && (
+                <p className="text-xs text-gray-400 -mt-1">［{productById.get(r.product_id)!.manufacturer}］</p>
+              )}
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label style={{ fontSize: 12 }} className="text-gray-500">数量</label>

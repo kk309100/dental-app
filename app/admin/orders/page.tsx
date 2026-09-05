@@ -19,7 +19,7 @@ export default function AdminOrdersPageWrapper() {
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; invoice_id: string | null; source?: string | null; note?: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
 type Clinic = { id: string; name: string; corporate_name?: string | null }
-type Product = { id: string; name: string; stock: number | null; cost: number | null; price: number | null }
+type Product = { id: string; name: string; stock: number | null; cost: number | null; price: number | null; manufacturer?: string | null }
 type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null }
 type POHead = { id: string; status: string }
 
@@ -63,7 +63,7 @@ function AdminOrdersPage() {
       supabase.from("order_items").select("*").limit(50000),  // デフォルト1000件 limit を回避
       supabase.from("clinics").select("id,name,corporate_name").limit(50000),
       // products は1万件超あるため .limit() だけでは1000件上限に引っかかる → fetchAll でページング取得
-      fetchAll("products", "id,name,stock,cost,price"),
+      fetchAll("products", "id,name,stock,cost,price,manufacturer"),
       // 業務状態判定用: 「未入荷の発注」を検出するため
       supabase.from("purchase_orders").select("id,status").limit(50000),
       supabase.from("purchase_order_items").select("purchase_order_id,product_id,quantity,received_quantity").limit(50000),
@@ -798,7 +798,7 @@ function AdminOrdersPage() {
                                                   {enough ? "OK" : `0`}
                                                 </span>
                                               </td>
-                                              <td className="px-1 py-0.5 whitespace-nowrap">{it.product_name || "(不明)"}</td>
+                                              <td className="px-1 py-0.5 whitespace-nowrap">{it.product_name || "(不明)"}{p?.manufacturer && <span className="text-gray-400 ml-1">［{p.manufacturer}］</span>}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums">{qty}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(cost)}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(listPrice)}</td>
@@ -939,7 +939,7 @@ function AdminOrdersPage() {
                                         {enough ? "OK" : `0`}
                                       </span>
                                     </td>
-                                    <td className="px-1 py-0.5 whitespace-nowrap">{it.product_name || "(不明)"}</td>
+                                    <td className="px-1 py-0.5 whitespace-nowrap">{it.product_name || "(不明)"}{p?.manufacturer && <span className="text-gray-400 ml-1">［{p.manufacturer}］</span>}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums">{qty}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(cost)}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(listPrice)}</td>
