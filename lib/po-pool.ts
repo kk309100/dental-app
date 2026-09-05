@@ -280,16 +280,18 @@ export async function removeFromUnassignedPool(items: PoolItem[]): Promise<void>
 /**
  * 下書き状態の発注書を「発注済」に確定
  */
-export async function confirmPoolPO(poId: string, sentMethod: string = "FAX"): Promise<{ ok: boolean; error?: string }> {
+export async function confirmPoolPO(poId: string, sentMethod?: string): Promise<{ ok: boolean; error?: string }> {
   const now = new Date().toISOString()
+  // 発注確定 = 「発注済」にするだけ。実際に印刷・FAX・メール送付したタイミングで
+  // 別途 sent_method/sent_at を記録するため、ここでは指定があった場合のみ書き込む。
+  const payload: Record<string, unknown> = { status: "発注済", ordered_at: now }
+  if (sentMethod) {
+    payload.sent_method = sentMethod
+    payload.sent_at = now
+  }
   const { error } = await supabase
     .from("purchase_orders")
-    .update({
-      status: "発注済",
-      ordered_at: now,
-      sent_method: sentMethod,
-      sent_at: now,
-    })
+    .update(payload)
     .eq("id", poId)
   if (error) return { ok: false, error: error.message }
   return { ok: true }

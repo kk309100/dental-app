@@ -354,7 +354,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
             <tr>
               <td style={td}>状態</td><td style={td2}>{po.status}</td>
               <td style={td}>送付方法</td><td style={td2}>
-                {po.sent_method ? `${po.sent_method}${po.sent_at ? `（${new Date(po.sent_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}）` : ""}` : "— 未送付"}
+                {po.sent_method ? `${po.sent_method}${po.sent_at ? `（${new Date(po.sent_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}）` : ""}` : "— 未印刷"}
               </td>
             </tr>
           </tbody>

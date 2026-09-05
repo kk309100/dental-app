@@ -232,7 +232,7 @@ export default function PurchaseOrdersListPage() {
                           {p.sent_method === "FAX" ? "📠" : "✉"} {p.sent_method}済
                         </span>
                       )
-                      : <span className="text-gray-400">— 未送付</span>}
+                      : <span className="text-gray-400">— 未印刷</span>}
                   </td>
                   <td className="px-2 py-1.5 text-center">
                     <Link href={`/admin/purchase-orders/${p.id}`} className="text-[12px] px-3 py-2 border border-gray-200 rounded hover:bg-gray-50">開く</Link>

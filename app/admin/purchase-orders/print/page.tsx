@@ -7,7 +7,7 @@ import { fmtYen } from "@/lib/invoice"
 import { COMPANY } from "@/lib/company"
 import Seal from "@/app/components/Seal"
 
-type PO = { id: string; po_number: string | null; supplier_id: string | null; ordered_at: string | null; expected_at: string | null; total_amount: number | null; note: string | null; sent_method: string | null; status: string }
+type PO = { id: string; po_number: string | null; supplier_id: string | null; ordered_at: string | null; expected_at: string | null; total_amount: number | null; note: string | null; sent_method: string | null; sent_at?: string | null; status: string }
 type Item = { id: string; purchase_order_id: string; product_id: string | null; product_name: string | null; quantity: number; unit_price: number; note: string | null }
 type Supplier = { id: string; name: string; address: string | null; phone: string | null; fax: string | null; contact: string | null }
 
@@ -61,6 +61,10 @@ function BulkPrint() {
         ;(prods || []).forEach((pr: any) => { if (pr.manufacturer) mMap.set(pr.id, pr.manufacturer) })
         if (!cancelled) setManufacturerByProduct(mMap)
       }
+      // 一括印刷 = FAX送付とみなし、送付済みの記録を残す
+      const now = new Date().toISOString()
+      await supabase.from("purchase_orders").update({ sent_method: "FAX", sent_at: now }).in("id", ids)
+      if (!cancelled) setPos(prev => prev.map(po => ({ ...po, sent_method: "FAX", sent_at: now })))
       printTimer = setTimeout(() => { if (!cancelled) window.print() }, 800)
     })
     return () => {

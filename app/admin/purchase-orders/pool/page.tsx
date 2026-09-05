@@ -84,10 +84,10 @@ export default function POPoolPage() {
     return m
   }, [items])
 
-  async function handleConfirm(poId: string, supplierName: string, total: number, sentMethod: string) {
-    if (!confirm(`${supplierName} へ ${fmtYen(total)} の発注書を発行しますか？\n\n送付方法: ${sentMethod}\n（発注済みになり、編集不可になります）`)) return
+  async function handleConfirm(poId: string, supplierName: string, total: number) {
+    if (!confirm(`${supplierName} へ ${fmtYen(total)} の発注書を発行しますか？\n（発注済みになり、編集不可になります。送付済みの記録は、印刷やFAX送信済みボタンを押した時点で付きます）`)) return
     setBusy(poId)
-    const r = await confirmPoolPO(poId, sentMethod)
+    const r = await confirmPoolPO(poId)
     setBusy(null)
     if (!r.ok) { alert("確定失敗: " + r.error); return }
     alert(`✅ ${supplierName} への発注書を発行しました。`)
@@ -106,11 +106,11 @@ export default function POPoolPage() {
   async function handleConfirmAll() {
     const targets = pos.filter(p => p.supplier_id) // 仕入先未定は一括確定の対象外
     if (targets.length === 0) return
-    if (!confirm(`プール中の ${targets.length}社 すべての発注書を発行しますか？\n各仕入先には FAX で送付されます（後で個別に変更可能）。\n※仕入先未定のものは対象外です。`)) return
+    if (!confirm(`プール中の ${targets.length}社 すべての発注書を発行しますか？\n※仕入先未定のものは対象外です。\n※送付済みの記録は、印刷やFAX送信済みボタンを押した時点で付きます。`)) return
     setBusy("all")
     let success = 0, fail = 0
     for (const po of targets) {
-      const r = await confirmPoolPO(po.id, "FAX")
+      const r = await confirmPoolPO(po.id)
       if (r.ok) success++; else fail++
     }
     setBusy(null)
@@ -268,7 +268,7 @@ export default function POPoolPage() {
                       </>
                     ) : (
                       <button
-                        onClick={() => handleConfirm(po.id, supplierName, total, "FAX")}
+                        onClick={() => handleConfirm(po.id, supplierName, total)}
                         disabled={busy === po.id || poItems.length === 0}
                         className="px-3 py-1.5 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700 disabled:opacity-50">
                         ✓ 発注確定 (FAX)
