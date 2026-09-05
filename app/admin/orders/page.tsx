@@ -6,7 +6,7 @@ import { supabase, fetchAll } from "@/lib/supabase"
 import Link from "next/link"
 import { fmtYen } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
-import { poolFromOrders } from "@/lib/po-pool"
+import { poolFromOrders, addItemsToPool, removeFromUnassignedPool, type PoolItem } from "@/lib/po-pool"
 
 export default function AdminOrdersPageWrapper() {
   return (
@@ -228,9 +228,12 @@ function AdminOrdersPage() {
 
   // 仕入先未設定商品のフォールバック選択用 state
   const [fallbackPickerOrderIds, setFallbackPickerOrderIds] = useState<string[] | null>(null)
-  const [fallbackProducts, setFallbackProducts] = useState<{ product_id: string; product_name: string; quantity: number }[]>([])
+  const [fallbackProducts, setFallbackProducts] = useState<PoolItem[]>([])
+  const [selectedFallbackKeys, setSelectedFallbackKeys] = useState<Set<string>>(new Set())
   const [allSuppliers, setAllSuppliers] = useState<{ id: string; name: string }[]>([])
   const [supplierSearch, setSupplierSearch] = useState("")
+
+  function fallbackKey(p: PoolItem) { return `${p.source_order_id}:${p.product_id || p.product_name}` }
 
   // 注文の不足分を「発注プール」に追加（仕入先別の下書き発注書）
   async function addToPool(orderIds: string[], fallbackSupplierId?: string) {
@@ -246,6 +249,7 @@ function AdminOrdersPage() {
       const { data: sups } = await supabase.from("suppliers").select("id,name").order("name").limit(50000)
       setAllSuppliers((sups as { id: string; name: string }[]) || [])
       setFallbackProducts(r.productsNeedingSupplier)
+      setSelectedFallbackKeys(new Set(r.productsNeedingSupplier.map(fallbackKey)))
       setFallbackPickerOrderIds(orderIds)
       // 既にプール追加されたものについても、後でまとめて結果表示するため一旦ここで return
       // ※ 既に追加された分は既に DB に書き込み済み
@@ -965,25 +969,41 @@ function AdminOrdersPage() {
       {/* 仕入先未設定商品のフォールバック選択モーダル */}
       {fallbackPickerOrderIds && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-          onClick={() => { setFallbackPickerOrderIds(null); setFallbackProducts([]); setSupplierSearch("") }}>
+          onClick={() => { setFallbackPickerOrderIds(null); setFallbackProducts([]); setSelectedFallbackKeys(new Set()); setSupplierSearch("") }}>
           <div className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col"
             onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-gray-100">
               <h3 className="text-base font-bold text-gray-900">⚠️ 仕入先が未設定の商品</h3>
               <p className="text-xs text-gray-600 mt-1">
                 以下 {fallbackProducts.length}品 の仕入先がマスタに登録されていません。<br />
-                どの仕入先の発注プールに追加しますか？
+                チェックした商品だけをまとめて選択中の仕入先に割り当てます（仕入先ごとにチェックを変えて複数回に分けられます）。
               </p>
             </div>
             <div className="flex-1 overflow-y-auto p-3">
-              <div className="bg-gray-50 rounded p-2 mb-3 text-xs max-h-32 overflow-auto">
-                {fallbackProducts.map(p => (
-                  <div key={p.product_id} className="py-0.5 flex justify-between border-b border-gray-100 last:border-0">
-                    <span>{p.product_name}</span>
-                    <span className="text-gray-500">×{p.quantity}</span>
-                  </div>
-                ))}
+              <div className="bg-gray-50 rounded p-2 mb-3 text-xs max-h-40 overflow-auto">
+                <div className="flex justify-end gap-2 mb-1">
+                  <button className="text-[11px] text-blue-600 underline" onClick={() => setSelectedFallbackKeys(new Set(fallbackProducts.map(fallbackKey)))}>全選択</button>
+                  <button className="text-[11px] text-gray-500 underline" onClick={() => setSelectedFallbackKeys(new Set())}>全解除</button>
+                </div>
+                {fallbackProducts.map(p => {
+                  const key = fallbackKey(p)
+                  const checked = selectedFallbackKeys.has(key)
+                  return (
+                    <label key={key} className="py-0.5 flex items-center gap-2 border-b border-gray-100 last:border-0 cursor-pointer">
+                      <input type="checkbox" checked={checked} onChange={() => {
+                        setSelectedFallbackKeys(prev => {
+                          const next = new Set(prev)
+                          checked ? next.delete(key) : next.add(key)
+                          return next
+                        })
+                      }} />
+                      <span className="flex-1">{p.product_name}</span>
+                      <span className="text-gray-500">×{p.quantity}</span>
+                    </label>
+                  )
+                })}
               </div>
+              <p className="text-[11px] text-gray-500 mb-2">{selectedFallbackKeys.size}/{fallbackProducts.length}品を選択中</p>
 
               {/* 検索 */}
               <div className="mb-2">
@@ -1009,15 +1029,28 @@ function AdminOrdersPage() {
                 const filtered = !k ? allSuppliers : allSuppliers.filter(s => searchKeyOf(s.name).includes(k))
                 const pinned = filtered.filter(s => isPinned(s.name))
                 const others = filtered.filter(s => !isPinned(s.name))
-                const onClick = async (sId: string) => {
-                  const ids = fallbackPickerOrderIds
-                  setFallbackPickerOrderIds(null)
-                  setFallbackProducts([])
-                  setSupplierSearch("")
-                  await addToPool(ids!, sId)
+                const onClick = async (sId: string, sName: string) => {
+                  const selected = fallbackProducts.filter(p => selectedFallbackKeys.has(fallbackKey(p)))
+                  if (selected.length === 0) { alert("商品を1つ以上選択してください"); return }
+                  const r = await addItemsToPool(new Map([[sId, selected]]), new Map([[sId, sName]]))
+                  if (!r.ok && r.errors.length > 0) { alert("一部失敗:\n" + r.errors.join("\n")) }
+                  // 「仕入先未定」プールに二重で積まれている分を取り除く
+                  await removeFromUnassignedPool(selected)
+                  const remaining = fallbackProducts.filter(p => !selectedFallbackKeys.has(fallbackKey(p)))
+                  setFallbackProducts(remaining)
+                  setSelectedFallbackKeys(new Set(remaining.map(fallbackKey)))
+                  if (remaining.length === 0) {
+                    setFallbackPickerOrderIds(null)
+                    setSupplierSearch("")
+                    if (confirm(`✅ ${sName} へ ${selected.length}品を発注プールに追加しました。\n\n発注プール画面に移動しますか？`)) {
+                      window.location.href = "/admin/purchase-orders/pool"
+                    }
+                  } else {
+                    alert(`✅ ${sName} へ ${selected.length}品を追加しました。\n残り ${remaining.length}品 の仕入先を選択してください。`)
+                  }
                 }
                 const SupBtn = ({ s, highlight }: { s: { id: string; name: string }; highlight?: boolean }) => (
-                  <button onClick={() => onClick(s.id)}
+                  <button onClick={() => onClick(s.id, s.name)}
                     className={"text-left px-3 py-2 border rounded text-sm transition-colors " +
                       (highlight ? "border-emerald-300 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 font-bold"
                         : "border-gray-200 hover:bg-blue-50 hover:border-blue-300")}>
@@ -1051,7 +1084,7 @@ function AdminOrdersPage() {
             </div>
             <div className="p-3 border-t border-gray-100 flex items-center justify-between">
               <Link href="/admin/products" className="text-xs text-gray-500 underline">商品マスタで仕入先を設定する →</Link>
-              <button onClick={() => { setFallbackPickerOrderIds(null); setFallbackProducts([]); setSupplierSearch("") }}
+              <button onClick={() => { setFallbackPickerOrderIds(null); setFallbackProducts([]); setSelectedFallbackKeys(new Set()); setSupplierSearch("") }}
                 className="text-xs text-gray-500 underline">スキップ</button>
             </div>
           </div>

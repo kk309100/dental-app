@@ -136,7 +136,7 @@ export async function addItemsToPool(
 export async function poolFromOrders(
   orderIds: string[],
   fallbackSupplierId?: string,
-): Promise<PoolResult & { skippedNoSupplier: number; skippedNoShortage: number; productsNeedingSupplier: { product_id: string; product_name: string; quantity: number }[] }> {
+): Promise<PoolResult & { skippedNoSupplier: number; skippedNoShortage: number; productsNeedingSupplier: PoolItem[] }> {
   // 1. データ取得
   // products は件数が多い（1万件超）ため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
   const [oRes, oiRes, products, sRes, srRes, cRes] = await Promise.all([
@@ -173,7 +173,7 @@ export async function poolFromOrders(
   const itemsBySupplier = new Map<string, PoolItem[]>()
   let skippedNoSupplier = 0
   let skippedNoShortage = 0
-  const productsNeedingSupplier: { product_id: string; product_name: string; quantity: number }[] = []
+  const productsNeedingSupplier: PoolItem[] = []
 
   for (const oi of orderItems as any[]) {
     // 商品マスタと紐付いていない「手入力商品」（product_id が無い）は、
@@ -184,16 +184,7 @@ export async function poolFromOrders(
       const order = orderById.get(oi.order_id) as any
       const clinicName = order?.clinic_id ? (clinicById.get(order.clinic_id) || "(医院)") : "(医院)"
       const supplierId = fallbackSupplierId || ""
-      if (!supplierId) {
-        skippedNoSupplier++
-        productsNeedingSupplier.push({
-          product_id: "",
-          product_name: oi.product_name || "(商品名なし・手入力)",
-          quantity: orderQty,
-        })
-      }
-      const list = itemsBySupplier.get(supplierId) || []
-      list.push({
+      const poolItem: PoolItem = {
         product_id: null,
         product_name: oi.product_name || "(商品名なし・手入力)",
         quantity: orderQty,
@@ -201,7 +192,13 @@ export async function poolFromOrders(
         source_order_id: oi.order_id,
         source_clinic_name: clinicName,
         source_clinic_id: order?.clinic_id || null,
-      })
+      }
+      if (!supplierId) {
+        skippedNoSupplier++
+        productsNeedingSupplier.push(poolItem)
+      }
+      const list = itemsBySupplier.get(supplierId) || []
+      list.push(poolItem)
       itemsBySupplier.set(supplierId, list)
       continue
     }
@@ -218,21 +215,10 @@ export async function poolFromOrders(
     const last = lastSupplierByProduct.get(oi.product_id)
     const supplierId = product.default_supplier_id || last?.supplierId || fallbackSupplierId || ""
 
-    if (!supplierId) {
-      skippedNoSupplier++
-      productsNeedingSupplier.push({
-        product_id: oi.product_id,
-        product_name: product.name,
-        quantity: shortBy,
-      })
-    }
-
     const order = orderById.get(oi.order_id) as any
     const clinicName = order?.clinic_id ? (clinicById.get(order.clinic_id) || "(医院)") : "(医院)"
     const unitPrice = last?.unitPrice ?? Number(product.cost || 0)
-
-    const list = itemsBySupplier.get(supplierId) || []
-    list.push({
+    const poolItem: PoolItem = {
       product_id: oi.product_id,
       product_name: product.name,
       quantity: shortBy,
@@ -240,13 +226,55 @@ export async function poolFromOrders(
       source_order_id: oi.order_id,
       source_clinic_name: clinicName,
       source_clinic_id: order?.clinic_id || null,
-    })
+    }
+
+    if (!supplierId) {
+      skippedNoSupplier++
+      productsNeedingSupplier.push(poolItem)
+    }
+
+    const list = itemsBySupplier.get(supplierId) || []
+    list.push(poolItem)
     itemsBySupplier.set(supplierId, list)
   }
 
   // 3. プールに追加
   const result = await addItemsToPool(itemsBySupplier, supplierById)
   return { ...result, skippedNoSupplier, skippedNoShortage, productsNeedingSupplier }
+}
+
+/**
+ * 「仕入先未定」の下書きプールから、指定した明細（重複分）を取り除く。
+ * poolFromOrders は不足商品を仕入先未定バケットへも同時に積むため、
+ * 後から個別に仕入先を割り当てた分はここで二重計上を解消する。
+ */
+export async function removeFromUnassignedPool(items: PoolItem[]): Promise<void> {
+  if (items.length === 0) return
+  const { data: pos } = await supabase
+    .from("purchase_orders")
+    .select("id,total_amount")
+    .eq("status", "下書き")
+    .is("supplier_id", null)
+  if (!pos || pos.length === 0) return
+
+  for (const po of pos as any[]) {
+    const { data: rows } = await supabase.from("purchase_order_items").select("*").eq("purchase_order_id", po.id)
+    if (!rows || rows.length === 0) continue
+    const toDelete = (rows as any[]).filter(r =>
+      items.some(it =>
+        r.note && it.source_order_id && r.note.includes(String(it.source_order_id).slice(0, 8)) &&
+        (it.product_id ? r.product_id === it.product_id : r.product_name === it.product_name)
+      )
+    )
+    if (toDelete.length === 0) continue
+    const removedTotal = toDelete.reduce((s, r) => s + Number(r.quantity || 0) * Number(r.unit_price || 0), 0)
+    await supabase.from("purchase_order_items").delete().in("id", toDelete.map(r => r.id))
+    if (toDelete.length >= rows.length) {
+      await supabase.from("purchase_orders").delete().eq("id", po.id)
+    } else {
+      await supabase.from("purchase_orders").update({ total_amount: Math.max(0, Number(po.total_amount || 0) - removedTotal) }).eq("id", po.id)
+    }
+  }
 }
 
 /**
