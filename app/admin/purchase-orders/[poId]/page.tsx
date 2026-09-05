@@ -34,6 +34,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   const [allSuppliers, setAllSuppliers] = useState<SupplierOption[]>([])
   const [savingField, setSavingField] = useState<string | null>(null)
   const [clinicCodeByName, setClinicCodeByName] = useState<Map<string, string>>(new Map())
+  const [manufacturerByProduct, setManufacturerByProduct] = useState<Map<string, string>>(new Map())
 
   useEffect(() => { fetchData() }, [poId])
 
@@ -43,7 +44,15 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
     if (e1 || !p) { setErr("発注書が見つかりません"); setLoading(false); return }
     setPo(p as PO)
     const { data: it } = await supabase.from("purchase_order_items").select("*").eq("purchase_order_id", poId)
-    setItems((it as Item[]) || [])
+    const itemsData = (it as Item[]) || []
+    setItems(itemsData)
+    const productIds = itemsData.map(i => i.product_id).filter((id): id is string => !!id)
+    if (productIds.length > 0) {
+      const { data: prods } = await supabase.from("products").select("id,manufacturer").in("id", productIds)
+      const map = new Map<string, string>()
+      ;(prods || []).forEach((pr: any) => { if (pr.manufacturer) map.set(pr.id, pr.manufacturer) })
+      setManufacturerByProduct(map)
+    }
     if (p.supplier_id) {
       const { data: s } = await supabase.from("suppliers").select("*").eq("id", p.supplier_id).single()
       setSupplier(s as Supplier | null)
@@ -248,6 +257,16 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
     } catch { /* テーブル無くてもOK */ }
   }
 
+  // FAXで送付した記録（実際の送信はアプリからはできないため、手動での記録用）
+  async function markSentByFax() {
+    if (!po) return
+    await supabase.from("purchase_orders").update({
+      sent_method: "FAX",
+      sent_at: new Date().toISOString(),
+    }).eq("id", po.id)
+    fetchData()
+  }
+
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
   if (err || !po) return <p className="text-red-600 text-center py-12">{err}</p>
 
@@ -265,6 +284,11 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
           {(po.status === "発注済" || po.status === "部分入荷") && <button onClick={() => setStatus("入荷済")} className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded">入荷完了</button>}
           {po.status !== "取消" && po.status !== "入荷済" && <button onClick={() => setStatus("取消")} className="text-xs px-3 py-1.5 bg-gray-200 text-gray-700 rounded">取消</button>}
           <button onClick={sendByEmail} className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded" title={supplier?.email ? `${supplier.email} 宛に送信` : "仕入先のメール未設定"}>✉ メール送付</button>
+          <button onClick={markSentByFax}
+            className={"text-xs px-3 py-1.5 rounded font-bold " + (po.sent_method === "FAX" ? "bg-emerald-100 text-emerald-700 border border-emerald-300" : "bg-white border border-gray-300 text-gray-700")}
+            title="FAXで送付したら押してください（送付済みの記録用）">
+            {po.sent_method === "FAX" ? "📠 FAX送信済み" : "📠 FAX送信済みにする"}
+          </button>
           <button onClick={() => window.print()} className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded">🖨 印刷</button>
           <button onClick={() => setEditMode(v => !v)} className={"text-xs px-3 py-1.5 rounded font-bold " + (editMode ? "bg-amber-600 text-white" : "bg-white border border-gray-300 text-gray-700")}>
             {editMode ? "✓ 編集を終了" : "✎ 編集する"}
@@ -329,7 +353,9 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
             </tr>
             <tr>
               <td style={td}>状態</td><td style={td2}>{po.status}</td>
-              <td style={td}>送付方法</td><td style={td2}>{po.sent_method || "—"}</td>
+              <td style={td}>送付方法</td><td style={td2}>
+                {po.sent_method ? `${po.sent_method}${po.sent_at ? `（${new Date(po.sent_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}）` : ""}` : "— 未送付"}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -409,6 +435,9 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
                       <span className="print-only" style={{ display: "none" }}>{i.product_name}</span>
                     </>
                   ) : i.product_name}
+                  {i.product_id && manufacturerByProduct.has(i.product_id) && (
+                    <span style={{ marginLeft: 6, fontSize: 10, color: "#888" }}>［{manufacturerByProduct.get(i.product_id)}］</span>
+                  )}
                   {i.note && (
                     <>
                       <p className="no-print" style={{ margin: "3px 0 0", fontSize: 10, color: "#999" }}>{i.note}</p>

@@ -223,8 +223,16 @@ export default function PurchaseOrdersListPage() {
                     {p.expected_at ? new Date(p.expected_at).toLocaleDateString("ja-JP") : "—"}
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums font-bold">{fmtYen(p.total_amount || 0)}</td>
-                  <td className="px-2 py-1.5 text-center text-[12px] text-gray-500">
-                    {p.sent_method || "—"}
+                  <td className="px-2 py-1.5 text-center text-[12px]">
+                    {p.sent_method
+                      ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold"
+                          style={{ background: p.sent_method === "FAX" ? "#dbeafe" : "#dcfce7", color: p.sent_method === "FAX" ? "#1e40af" : "#15803d" }}
+                          title={p.sent_at ? new Date(p.sent_at).toLocaleString("ja-JP") : ""}>
+                          {p.sent_method === "FAX" ? "📠" : "✉"} {p.sent_method}済
+                        </span>
+                      )
+                      : <span className="text-gray-400">— 未送付</span>}
                   </td>
                   <td className="px-2 py-1.5 text-center">
                     <Link href={`/admin/purchase-orders/${p.id}`} className="text-[12px] px-3 py-2 border border-gray-200 rounded hover:bg-gray-50">開く</Link>

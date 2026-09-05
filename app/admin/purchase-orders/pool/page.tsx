@@ -38,6 +38,7 @@ export default function POPoolPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
+  const [manufacturerByProduct, setManufacturerByProduct] = useState<Map<string, string>>(new Map())
 
   useEffect(() => { fetchData() }, [])
 
@@ -58,7 +59,15 @@ export default function POPoolPage() {
         .select("*")
         .in("purchase_order_id", ids)
         .limit(50000)
-      setItems((itms as POItem[]) || [])
+      const itemsData = (itms as POItem[]) || []
+      setItems(itemsData)
+      const productIds = Array.from(new Set(itemsData.map(i => i.product_id).filter((id): id is string => !!id)))
+      if (productIds.length > 0) {
+        const { data: prods } = await supabase.from("products").select("id,manufacturer").in("id", productIds)
+        const map = new Map<string, string>()
+        ;(prods || []).forEach((pr: any) => { if (pr.manufacturer) map.set(pr.id, pr.manufacturer) })
+        setManufacturerByProduct(map)
+      }
     } else {
       setItems([])
     }
@@ -293,7 +302,12 @@ export default function POPoolPage() {
                       <tr><td colSpan={isUnassigned ? 7 : 6} className="px-4 py-4 text-center text-gray-400">明細なし</td></tr>
                     ) : poItems.map(it => (
                       <tr key={it.id} className="border-t border-gray-100">
-                        <td className="px-2 py-1.5 whitespace-nowrap">{it.product_name || "(商品名なし)"}</td>
+                        <td className="px-2 py-1.5 whitespace-nowrap">
+                          {it.product_name || "(商品名なし)"}
+                          {it.product_id && manufacturerByProduct.has(it.product_id) && (
+                            <span style={{ marginLeft: 6, fontSize: 11, color: "#888" }}>［{manufacturerByProduct.get(it.product_id)}］</span>
+                          )}
+                        </td>
                         <td className="px-2 py-1.5 text-[12px] text-gray-500 whitespace-nowrap">{it.note || "—"}</td>
                         <td className="px-2 py-1.5 text-right">
                           <input type="number"

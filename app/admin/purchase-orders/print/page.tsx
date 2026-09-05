@@ -34,6 +34,7 @@ function BulkPrint() {
   const [items, setItems] = useState<Item[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [clinicCodeByName, setClinicCodeByName] = useState<Map<string, string>>(new Map())
+  const [manufacturerByProduct, setManufacturerByProduct] = useState<Map<string, string>>(new Map())
 
   useEffect(() => {
     if (ids.length === 0) return
@@ -44,14 +45,22 @@ function BulkPrint() {
       supabase.from("purchase_order_items").select("*").in("purchase_order_id", ids),
       supabase.from("suppliers").select("*").limit(50000),
       supabase.from("clinics").select("name,clinic_code").limit(50000),
-    ]).then(([p, i, s, c]) => {
+    ]).then(async ([p, i, s, c]) => {
       if (cancelled) return
+      const itemsData = (i.data as Item[]) || []
       setPos((p.data as PO[]) || [])
-      setItems((i.data as Item[]) || [])
+      setItems(itemsData)
       setSuppliers((s.data as Supplier[]) || [])
       const map = new Map<string, string>()
       ;((c.data as any[]) || []).forEach(cl => { if (cl.clinic_code) map.set(cl.name, cl.clinic_code) })
       setClinicCodeByName(map)
+      const productIds = Array.from(new Set(itemsData.map(it => it.product_id).filter((id): id is string => !!id)))
+      if (productIds.length > 0) {
+        const { data: prods } = await supabase.from("products").select("id,manufacturer").in("id", productIds)
+        const mMap = new Map<string, string>()
+        ;(prods || []).forEach((pr: any) => { if (pr.manufacturer) mMap.set(pr.id, pr.manufacturer) })
+        if (!cancelled) setManufacturerByProduct(mMap)
+      }
       printTimer = setTimeout(() => { if (!cancelled) window.print() }, 800)
     })
     return () => {
@@ -116,7 +125,13 @@ function BulkPrint() {
               <tbody>
                 {its.map(i => (
                   <tr key={i.id} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={tdC}>{i.product_name}{i.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{noteForPrint(i.note, clinicCodeByName)}</p>}</td>
+                    <td style={tdC}>
+                      {i.product_name}
+                      {i.product_id && manufacturerByProduct.has(i.product_id) && (
+                        <span style={{ marginLeft: 6, fontSize: 9, color: "#888" }}>［{manufacturerByProduct.get(i.product_id)}］</span>
+                      )}
+                      {i.note && <p style={{ margin: "2px 0 0", fontSize: 9, color: "#999" }}>{noteForPrint(i.note, clinicCodeByName)}</p>}
+                    </td>
                     <td style={{ ...tdC, textAlign: "right" }}>{i.quantity}</td>
                   </tr>
                 ))}
