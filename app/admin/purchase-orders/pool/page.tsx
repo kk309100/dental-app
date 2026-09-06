@@ -282,15 +282,13 @@ export default function POPoolPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {isUnassigned ? (
-                      <>
-                        <select
-                          defaultValue=""
-                          onChange={e => assignSupplier(po.id, e.target.value)}
-                          className="px-2 py-1 border border-orange-300 rounded text-xs bg-white">
-                          <option value="">仕入先を選択…</option>
-                          {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                      </>
+                      <div style={{ width: 220 }}>
+                        <SupplierSearchSelect
+                          suppliers={suppliers}
+                          onSelect={sId => assignSupplier(po.id, sId)}
+                          placeholder="🔍 仕入先を検索…"
+                        />
+                      </div>
                     ) : (
                       <button
                         onClick={() => handleConfirm(po.id, supplierName, total)}
@@ -344,14 +342,12 @@ export default function POPoolPage() {
                         <td className="px-2 py-1.5 text-right tabular-nums font-bold">{fmtYen(Number(it.quantity) * Number(it.unit_price || 0))}</td>
                         {isUnassigned && (
                           <td className="px-2 py-1.5">
-                            <select
-                              defaultValue=""
+                            <SupplierSearchSelect
+                              suppliers={suppliers}
                               disabled={busy === it.id}
-                              onChange={e => assignItemSupplier(it, e.target.value)}
-                              className="w-full px-1.5 py-0.5 border border-orange-300 rounded text-[11px] bg-white">
-                              <option value="">この商品の仕入先…</option>
-                              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
+                              onSelect={sId => assignItemSupplier(it, sId)}
+                              placeholder="🔍 この商品の仕入先…"
+                            />
                           </td>
                         )}
                         <td className="px-2 py-1.5 text-center">
@@ -365,6 +361,57 @@ export default function POPoolPage() {
               </div>
             )
           })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 仕入先を検索して選ぶための小さなコンボボックス（85件超の一覧から探しやすくする）
+function SupplierSearchSelect({
+  suppliers, onSelect, disabled, placeholder,
+}: {
+  suppliers: Supplier[]
+  onSelect: (supplierId: string) => void
+  disabled?: boolean
+  placeholder: string
+}) {
+  const [q, setQ] = useState("")
+  const [open, setOpen] = useState(false)
+  const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC")
+  const k = norm(q)
+  const filtered = k ? suppliers.filter(s => norm(s.name).includes(k)).slice(0, 30) : suppliers.slice(0, 30)
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        value={q}
+        disabled={disabled}
+        onChange={e => { setQ(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        className="w-full px-1.5 py-0.5 border border-orange-300 rounded text-[11px] bg-white"
+      />
+      {open && (
+        <div style={{
+          position: "absolute", zIndex: 20, top: "100%", left: 0, right: 0,
+          background: "#fff", border: "1px solid #d1d5db", borderRadius: 6,
+          maxHeight: 220, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+        }}>
+          {filtered.length === 0 ? (
+            <div className="px-2 py-1.5 text-[11px] text-gray-400">該当する仕入先なし</div>
+          ) : (
+            filtered.map(s => (
+              <button
+                key={s.id}
+                type="button"
+                onMouseDown={e => { e.preventDefault(); onSelect(s.id); setQ(""); setOpen(false) }}
+                className="w-full text-left px-2 py-1.5 text-[11px] hover:bg-blue-50 border-b border-gray-50 last:border-0">
+                {s.name}
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>
