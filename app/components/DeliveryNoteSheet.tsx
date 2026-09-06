@@ -124,6 +124,18 @@ export default function DeliveryNoteSheet({
           </div>
         </div>
 
+        {/* 注文時のメモ（社内連絡・特記事項） */}
+        {order.note && (
+          <div style={{
+            fontSize: 7.5, color: "#92400e", background: "#fffbeb",
+            border: "1px solid #fde68a", borderRadius: 3,
+            padding: "1px 5px", marginBottom: 2,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>
+            📝 {order.note}
+          </div>
+        )}
+
         {/* ── 明細（div フレックス・admin-base.css 干渉なし） ── */}
         <div style={{ width: "100%", fontSize: 9 }}>
 
