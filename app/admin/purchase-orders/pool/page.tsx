@@ -39,6 +39,7 @@ export default function POPoolPage() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [manufacturerByProduct, setManufacturerByProduct] = useState<Map<string, string>>(new Map())
+  const [search, setSearch] = useState("")
 
   useEffect(() => { fetchData() }, [])
 
@@ -75,6 +76,15 @@ export default function POPoolPage() {
   }
 
   const supplierById = useMemo(() => new Map(suppliers.map(s => [s.id, s])), [suppliers])
+  const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC")
+  const filteredPos = useMemo(() => {
+    const k = norm(search)
+    if (!k) return pos
+    return pos.filter(po => {
+      const name = po.supplier_id ? (supplierById.get(po.supplier_id)?.name || "") : "仕入先未定"
+      return norm(name).includes(k)
+    })
+  }, [pos, supplierById, search])
   const itemsByPO = useMemo(() => {
     const m = new Map<string, POItem[]>()
     items.forEach(it => {
@@ -230,6 +240,17 @@ export default function POPoolPage() {
         半日 or 1日溜めた後、各仕入先の「✓ 発注確定」ボタンで発注書を発行（FAX/メール送付）。
       </div>
 
+      {pos.length > 0 && (
+        <div className="bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="🔍 仕入先名で検索"
+            className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
+          />
+        </div>
+      )}
+
       {pos.length === 0 ? (
         <div className="bg-white rounded-lg p-8 text-center" style={{ border: "1px solid #e8eaed" }}>
           <p className="text-gray-400 text-sm">プール中の下書き発注書はありません</p>
@@ -238,9 +259,13 @@ export default function POPoolPage() {
           </p>
           <Link href="/admin/orders" className="inline-block mt-3 text-xs text-blue-600 underline">→ 注文一覧へ</Link>
         </div>
+      ) : filteredPos.length === 0 ? (
+        <div className="bg-white rounded-lg p-8 text-center" style={{ border: "1px solid #e8eaed" }}>
+          <p className="text-gray-400 text-sm">「{search}」に該当する仕入先はありません</p>
+        </div>
       ) : (
         <div className="space-y-3">
-          {pos.map(po => {
+          {filteredPos.map(po => {
             const supplier = po.supplier_id ? supplierById.get(po.supplier_id) : null
             const isUnassigned = !po.supplier_id
             const supplierName = isUnassigned ? "仕入先未定" : (supplier?.name || "(削除済み仕入先)")
