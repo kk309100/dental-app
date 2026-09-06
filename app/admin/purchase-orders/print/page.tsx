@@ -61,10 +61,6 @@ function BulkPrint() {
         ;(prods || []).forEach((pr: any) => { if (pr.manufacturer) mMap.set(pr.id, pr.manufacturer) })
         if (!cancelled) setManufacturerByProduct(mMap)
       }
-      // 一括印刷 = FAX送付とみなし、送付済みの記録を残す
-      const now = new Date().toISOString()
-      await supabase.from("purchase_orders").update({ sent_method: "FAX", sent_at: now }).in("id", ids)
-      if (!cancelled) setPos(prev => prev.map(po => ({ ...po, sent_method: "FAX", sent_at: now })))
       printTimer = setTimeout(() => { if (!cancelled) window.print() }, 800)
     })
     return () => {
@@ -73,14 +69,34 @@ function BulkPrint() {
     }
   }, [ids.join(",")])
 
+  // 「送付済みにする」は明示的なボタン操作でのみ記録する
+  // （印刷ダイアログを開いただけ・プレビューしただけでは記録しない。
+  //   ブラウザのafterprintイベントはキャンセル時にも発火するなど不確実なため使わない）
+  const [marking, setMarking] = useState(false)
+  async function markSent() {
+    setMarking(true)
+    const now = new Date().toISOString()
+    await supabase.from("purchase_orders").update({ sent_method: "FAX", sent_at: now }).in("id", ids)
+    setPos(prev => prev.map(po => ids.includes(po.id) ? { ...po, sent_method: "FAX", sent_at: now } : po))
+    setMarking(false)
+  }
+
   const supBy = new Map(suppliers.map(s => [s.id, s]))
   const itemsByPO = new Map<string, Item[]>()
   items.forEach(i => { if (!itemsByPO.has(i.purchase_order_id)) itemsByPO.set(i.purchase_order_id, []); itemsByPO.get(i.purchase_order_id)!.push(i) })
+  const allSent = pos.length > 0 && pos.every(po => po.sent_method === "FAX")
 
   return (
     <>
       <div className="no-print p-4 bg-yellow-50 border-b border-yellow-200 sticky top-0">
         <button onClick={() => window.print()} className="px-4 py-2 bg-gray-900 text-white text-sm rounded mr-2">🖨 印刷</button>
+        <button
+          onClick={markSent}
+          disabled={marking || allSent}
+          className={"px-4 py-2 text-sm rounded mr-2 font-bold " + (allSent ? "bg-emerald-100 text-emerald-700" : "bg-blue-600 text-white")}
+          title="実際にFAXで送付し終えたら押してください">
+          {allSent ? "📠 送付済みとして記録済み" : marking ? "記録中…" : "📠 送付済みにする"}
+        </button>
         <button onClick={() => window.close()} className="px-4 py-2 bg-gray-200 text-sm rounded">閉じる</button>
         <span className="ml-3 text-xs text-gray-700">{pos.length}件の発注書</span>
       </div>
