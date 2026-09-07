@@ -19,6 +19,7 @@ type Clinic = { id: string; name: string; corporate_name?: string | null; clinic
 type Product = { id: string; name: string; product_code: string | null; price: number | null; stock: number | null; manufacturer?: string | null; category?: string | null }
 type Row = { product_id: string | null; product_name: string; quantity: number; price: number; note?: string }
 type RecentOrder = { id: string; clinic_id: string; created_at: string; total_price: number; delivery_number: string | null }
+type ProductHistory = { product_id: string | null; product_name: string; last_price: number; last_ordered_at: string; times: number }
 
 const SALES_REP_KEY = "denthub:sales_rep"
 const RECENT_CLINIC_KEY = "denthub:recent_clinic"
@@ -46,6 +47,9 @@ function NewOrderPage() {
   const [salesRep, setSalesRep] = useState("")
   const [saving, setSaving] = useState(false)
   const [showRecent, setShowRecent] = useState(false)
+  const [productHistory, setProductHistory] = useState<ProductHistory[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+  const [historySearch, setHistorySearch] = useState("")
   const [productSearch, setProductSearch] = useState("")
   const [showProductPicker, setShowProductPicker] = useState<number | null>(null)
   const [inlineOpenIdx, setInlineOpenIdx] = useState<number | null>(null)
@@ -115,6 +119,50 @@ function NewOrderPage() {
         .order("created_at", { ascending: false })
         .limit(8)
       setRecentOrders((data as RecentOrder[]) || [])
+    })()
+  }, [clinicId])
+
+  // 医院別の商品注文履歴（過去に何を注文したか商品単位で振り返れるようにする）
+  useEffect(() => {
+    if (!clinicId) { setProductHistory([]); return }
+    (async () => {
+      const { data: pastOrders } = await supabase
+        .from("orders")
+        .select("id,created_at")
+        .eq("clinic_id", clinicId)
+        .order("created_at", { ascending: false })
+        .limit(300)
+      const orderIds = (pastOrders || []).map((o: any) => o.id)
+      if (orderIds.length === 0) { setProductHistory([]); return }
+      const createdAtById = new Map((pastOrders || []).map((o: any) => [o.id, o.created_at]))
+      const { data: pastItems } = await supabase
+        .from("order_items")
+        .select("order_id,product_id,product_name,price")
+        .in("order_id", orderIds)
+        .limit(5000)
+      const byKey = new Map<string, ProductHistory>()
+      ;(pastItems || []).forEach((it: any) => {
+        const key = it.product_id || `name:${it.product_name}`
+        const orderedAt = createdAtById.get(it.order_id) || ""
+        const existing = byKey.get(key)
+        if (!existing) {
+          byKey.set(key, {
+            product_id: it.product_id || null,
+            product_name: it.product_name || "(商品名なし)",
+            last_price: Number(it.price || 0),
+            last_ordered_at: orderedAt,
+            times: 1,
+          })
+        } else {
+          existing.times += 1
+          if (orderedAt > existing.last_ordered_at) {
+            existing.last_ordered_at = orderedAt
+            existing.last_price = Number(it.price || 0)
+          }
+        }
+      })
+      const list = Array.from(byKey.values()).sort((a, b) => b.last_ordered_at.localeCompare(a.last_ordered_at))
+      setProductHistory(list)
     })()
   }, [clinicId])
 
@@ -193,6 +241,15 @@ function NewOrderPage() {
     })
     setShowProductPicker(null)
     setProductSearch("")
+  }
+
+  function addProductFromHistory(h: ProductHistory) {
+    const clinicPrice = clinicId && h.product_id ? clinicPriceMap.get(clinicPriceKey(clinicId, h.product_id)) : undefined
+    const price = clinicPrice !== undefined ? clinicPrice : h.last_price
+    const emptyIdx = rows.findIndex(r => !r.product_name)
+    const patch: Partial<Row> = { product_id: h.product_id, product_name: h.product_name, price, quantity: 1 }
+    if (emptyIdx >= 0) updateRow(emptyIdx, patch)
+    else setRows(prev => [...prev, { product_id: h.product_id, product_name: h.product_name, price, quantity: 1 }])
   }
 
   function addRow() {
@@ -371,6 +428,46 @@ function NewOrderPage() {
                     <span className="ml-2 text-gray-600">{fmtYen(o.total_price)}</span>
                   </button>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+        {clinicId && productHistory.length > 0 && (
+          <div className="mt-1">
+            <button onClick={() => setShowHistory(s => !s)} className="text-xs text-blue-600 hover:underline">
+              {showHistory ? "▼" : "▶"} この医院の商品注文履歴から検索・追加（{productHistory.length}品目）
+            </button>
+            {showHistory && (
+              <div className="mt-2 bg-gray-50 p-2 rounded">
+                <input
+                  value={historySearch}
+                  onChange={e => setHistorySearch(e.target.value)}
+                  placeholder="🔍 商品名で絞り込み"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white mb-2"
+                />
+                <div className="space-y-1" style={{ maxHeight: 260, overflowY: "auto" }}>
+                  {productHistory
+                    .filter(h => !historySearch || searchKey(h.product_name).includes(searchKey(historySearch)))
+                    .slice(0, 100)
+                    .map((h, idx) => (
+                      <button
+                        key={h.product_id || `${idx}-${h.product_name}`}
+                        onClick={() => addProductFromHistory(h)}
+                        className="block w-full text-left text-xs px-2 py-1.5 bg-white border border-gray-200 rounded hover:bg-blue-50"
+                        title="クリックで注文行に追加"
+                      >
+                        <span className="font-bold text-gray-800">{h.product_name}</span>
+                        <span className="ml-2 text-gray-500">
+                          最終注文: {h.last_ordered_at ? new Date(h.last_ordered_at).toLocaleDateString("ja-JP") : "—"}
+                        </span>
+                        <span className="ml-2 text-gray-500">{h.times}回注文</span>
+                        <span className="ml-2 text-gray-600">{fmtYen(h.last_price)}</span>
+                      </button>
+                    ))}
+                  {productHistory.filter(h => !historySearch || searchKey(h.product_name).includes(searchKey(historySearch))).length === 0 && (
+                    <p className="text-center text-gray-400 text-xs py-3">該当する商品履歴なし</p>
+                  )}
+                </div>
               </div>
             )}
           </div>
