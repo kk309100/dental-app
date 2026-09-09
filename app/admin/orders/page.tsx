@@ -92,15 +92,39 @@ function AdminOrdersPage() {
   }, [orderItems])
   const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC")
 
+  // 在庫の「早い者勝ち」判定: 同じ商品を複数の未処理注文が欲しがっている場合、
+  // 在庫が1個しかなければ最初の注文だけが「在庫あり」になるようにする
+  // （そうしないと、在庫1個を複数注文が同時に「在庫あり」と誤判定してしまう）
+  const itemAvailability = useMemo(() => {
+    const map = new Map<string, boolean>()  // order_item.id → 在庫確保できるか
+    const activeOrders = orders
+      .filter(o => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status))
+      .slice()
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+    const usedByProduct = new Map<string, number>()
+    for (const o of activeOrders) {
+      const items = itemsByOrder.get(o.id) || []
+      for (const it of items) {
+        if (!it.product_id) continue
+        const stock = Number(productById.get(it.product_id)?.stock || 0)
+        const usedSoFar = usedByProduct.get(it.product_id) || 0
+        const qty = Number(it.quantity || 0)
+        const usedAfter = usedSoFar + qty
+        usedByProduct.set(it.product_id, usedAfter)
+        map.set(it.id, usedAfter <= stock)
+      }
+    }
+    return map
+  }, [orders, itemsByOrder, productById])
+
   // 各注文の在庫充足判定
   function stockState(orderId: string): { ok: number; short: number; total: number; shortItems: OrderItem[] } {
     const items = itemsByOrder.get(orderId) || []
     let ok = 0, short = 0
     const shortItems: OrderItem[] = []
     items.forEach(it => {
-      const p = it.product_id ? productById.get(it.product_id) : null
-      const stock = Number(p?.stock || 0)
-      if (stock >= Number(it.quantity || 0)) ok++
+      const available = it.product_id ? (itemAvailability.get(it.id) ?? false) : false
+      if (available) ok++
       else { short++; shortItems.push(it) }
     })
     return { ok, short, total: items.length, shortItems }

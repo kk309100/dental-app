@@ -91,6 +91,28 @@ function ShippingPage() {
     return m
   }, [items])
 
+  // 在庫の「早い者勝ち」判定: 同じ商品を複数の未処理注文が欲しがっている場合、
+  // 在庫が1個しかなければ最初の注文だけが「在庫あり」になるようにする
+  // （そうしないと、在庫1個を複数注文が同時に「在庫あり」と誤判定してしまう）
+  const itemAvailability = useMemo(() => {
+    const map = new Map<string, boolean>()  // order_item.id → 在庫確保できるか
+    const ordersByCreatedAt = orders.slice().sort((a, b) => a.created_at.localeCompare(b.created_at))
+    const usedByProduct = new Map<string, number>()
+    for (const o of ordersByCreatedAt) {
+      const its = itemsByOrder.get(o.id) || []
+      for (const it of its) {
+        if (!it.product_id) continue
+        const stock = Number(productById.get(it.product_id)?.stock || 0)
+        const usedSoFar = usedByProduct.get(it.product_id) || 0
+        const qty = Number(it.quantity || 0)
+        const usedAfter = usedSoFar + qty
+        usedByProduct.set(it.product_id, usedAfter)
+        map.set(it.id, usedAfter <= stock)
+      }
+    }
+    return map
+  }, [orders, itemsByOrder, productById])
+
   // 注文単位で「出荷可能か」判定
   function orderReadiness(order: Order) {
     const its = itemsByOrder.get(order.id) || []
@@ -98,8 +120,7 @@ function ShippingPage() {
     let anyOk = false
     for (const it of its) {
       if (!it.product_id) { allOk = false; continue }
-      const stock = Number(productById.get(it.product_id)?.stock || 0)
-      if (stock >= Number(it.quantity)) anyOk = true
+      if (itemAvailability.get(it.id)) anyOk = true
       else allOk = false
     }
     return allOk ? "ready" : (anyOk ? "partial" : "short")
@@ -413,7 +434,7 @@ function ShippingPage() {
                           {its.map(it => {
                             const product = it.product_id ? productById.get(it.product_id) : null
                             const stock = Number(product?.stock || 0)
-                            const enough = stock >= Number(it.quantity)
+                            const enough = it.product_id ? !!itemAvailability.get(it.id) : false
                             const loc = product?.location || null
                             const cost = Number((product as any)?.cost || 0)
                             const listPrice = Number((product as any)?.price || 0)
