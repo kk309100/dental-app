@@ -244,6 +244,61 @@ export async function poolFromOrders(
 }
 
 /**
+ * 在庫が足りている（＝通常のプール処理では対象外になる）商品でも、
+ * 強制的に1明細だけ発注プールへ追加する。
+ * 「在庫を持たず、注文が来るたびに毎回仕入れる」運用の医院向け。
+ */
+export async function forceAddOrderItemToPool(
+  orderItemId: string,
+  fallbackSupplierId?: string,
+): Promise<{ ok: boolean; error?: string; supplierName?: string }> {
+  const { data: oi, error: oiErr } = await supabase
+    .from("order_items")
+    .select("id,order_id,product_id,product_name,quantity,price")
+    .eq("id", orderItemId)
+    .single()
+  if (oiErr || !oi) return { ok: false, error: oiErr?.message || "明細が見つかりません" }
+
+  const { data: order } = await supabase.from("orders").select("id,clinic_id").eq("id", oi.order_id).single()
+  const clinicName = order?.clinic_id
+    ? (await supabase.from("clinics").select("name").eq("id", order.clinic_id).single()).data?.name || "(医院)"
+    : "(医院)"
+
+  let supplierId = fallbackSupplierId || ""
+  let unitPrice = Number(oi.price || 0)
+  if (oi.product_id) {
+    const { data: product } = await supabase.from("products").select("default_supplier_id,cost").eq("id", oi.product_id).single()
+    if (product?.default_supplier_id) supplierId = product.default_supplier_id
+    else if (!supplierId) {
+      const { data: last } = await supabase
+        .from("stock_receipts").select("supplier_id,unit_price")
+        .eq("product_id", oi.product_id).not("supplier_id", "is", null)
+        .order("created_at", { ascending: false }).limit(1)
+      if (last && last.length > 0) { supplierId = last[0].supplier_id; unitPrice = Number(last[0].unit_price ?? unitPrice) }
+    }
+    if (product?.cost && !unitPrice) unitPrice = Number(product.cost)
+  }
+
+  const item: PoolItem = {
+    product_id: oi.product_id,
+    product_name: oi.product_name || "(商品名なし)",
+    quantity: Number(oi.quantity || 0),
+    unit_price: unitPrice,
+    source_order_id: oi.order_id,
+    source_clinic_name: clinicName,
+    source_clinic_id: order?.clinic_id || null,
+  }
+  if (item.quantity <= 0) return { ok: false, error: "数量が0以下です" }
+
+  const supplierName = supplierId
+    ? (await supabase.from("suppliers").select("name").eq("id", supplierId).single()).data?.name || "(仕入先)"
+    : "仕入先未定"
+  const result = await addItemsToPool(new Map([[supplierId, [item]]]), new Map([[supplierId, supplierName]]))
+  if (!result.ok) return { ok: false, error: result.errors.join(" / ") }
+  return { ok: true, supplierName }
+}
+
+/**
  * 「仕入先未定」の下書きプールから、指定した明細（重複分）を取り除く。
  * poolFromOrders は不足商品を仕入先未定バケットへも同時に積むため、
  * 後から個別に仕入先を割り当てた分はここで二重計上を解消する。

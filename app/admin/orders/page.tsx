@@ -6,7 +6,7 @@ import { supabase, fetchAll } from "@/lib/supabase"
 import Link from "next/link"
 import { fmtYen } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
-import { poolFromOrders, addItemsToPool, removeFromUnassignedPool, type PoolItem } from "@/lib/po-pool"
+import { poolFromOrders, addItemsToPool, removeFromUnassignedPool, forceAddOrderItemToPool, type PoolItem } from "@/lib/po-pool"
 
 export default function AdminOrdersPageWrapper() {
   return (
@@ -264,6 +264,21 @@ function AdminOrdersPage() {
   const [receiveQtyByItem, setReceiveQtyByItem] = useState<Record<string, string>>({})
   function receiveQtyFor(itemId: string, shortfall: number) {
     return receiveQtyByItem[itemId] ?? String(shortfall > 0 ? shortfall : 1)
+  }
+
+  const [forcingItemId, setForcingItemId] = useState<string | null>(null)
+  // 在庫が足りていても、この商品だけ強制的に発注プールへ入れる
+  // （在庫を持たず注文が来るたびに毎回仕入れる運用の医院向け）
+  async function forceOrderItem(itemId: string, productName: string) {
+    if (!confirm(`「${productName}」を在庫があっても強制的に発注プールへ追加しますか？`)) return
+    setForcingItemId(itemId)
+    try {
+      const r = await forceAddOrderItemToPool(itemId)
+      if (!r.ok) { alert("追加失敗: " + r.error); return }
+      alert(`✅ ${r.supplierName} の発注プールに追加しました。`)
+    } finally {
+      setForcingItemId(null)
+    }
   }
   // 明細行から直接その場で入荷（在庫を増やす）
   async function quickReceiveItem(itemId: string, productId: string, productName: string, shortfall: number) {
@@ -841,6 +856,7 @@ function AdminOrdersPage() {
                                           <th className="text-right px-1 py-0.5 w-14">粗利%</th>
                                           <th className="text-right px-1 py-0.5 w-24">小計</th>
                                           <th className="text-center px-1 py-0.5 w-16">入荷</th>
+                                          <th className="text-center px-1 py-0.5 w-16">発注</th>
                                         </tr>
                                       </thead>
                                       <tbody>
@@ -887,6 +903,17 @@ function AdminOrdersPage() {
                                                       {receivingItemId === it.id ? "…" : "＋入荷"}
                                                     </button>
                                                   </div>
+                                                )}
+                                              </td>
+                                              <td className="px-1 py-0.5 text-center">
+                                                {it.product_id && (
+                                                  <button
+                                                    onClick={() => forceOrderItem(it.id, it.product_name || "(不明)")}
+                                                    disabled={forcingItemId === it.id}
+                                                    className="text-[11px] px-1.5 py-0.5 rounded border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                                                    title="在庫があっても強制的に発注プールへ追加する">
+                                                    {forcingItemId === it.id ? "…" : "強制発注"}
+                                                  </button>
                                                 )}
                                               </td>
                                             </tr>
@@ -1008,6 +1035,7 @@ function AdminOrdersPage() {
                                   <th className="text-right px-1 py-0.5 w-14">粗利%</th>
                                   <th className="text-right px-1 py-0.5 w-24">小計</th>
                                   <th className="text-center px-1 py-0.5 w-16">入荷</th>
+                                  <th className="text-center px-1 py-0.5 w-16">発注</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -1053,6 +1081,17 @@ function AdminOrdersPage() {
                                             {receivingItemId === it.id ? "…" : "＋入荷"}
                                           </button>
                                         </div>
+                                      )}
+                                    </td>
+                                    <td className="px-1 py-0.5 text-center">
+                                      {it.product_id && (
+                                        <button
+                                          onClick={() => forceOrderItem(it.id, it.product_name || "(不明)")}
+                                          disabled={forcingItemId === it.id}
+                                          className="text-[11px] px-1.5 py-0.5 rounded border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                                          title="在庫があっても強制的に発注プールへ追加する">
+                                          {forcingItemId === it.id ? "…" : "強制発注"}
+                                        </button>
                                       )}
                                     </td>
                                   </tr>
