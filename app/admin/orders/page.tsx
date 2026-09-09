@@ -260,11 +260,14 @@ function AdminOrdersPage() {
   function fallbackKey(p: PoolItem) { return `${p.source_order_id}:${p.product_id || p.product_name}` }
 
   const [receivingItemId, setReceivingItemId] = useState<string | null>(null)
+  // 各明細行の「入荷数量」入力欄（デフォルトは不足数。ポップアップなしでその場入力）
+  const [receiveQtyByItem, setReceiveQtyByItem] = useState<Record<string, string>>({})
+  function receiveQtyFor(itemId: string, shortfall: number) {
+    return receiveQtyByItem[itemId] ?? String(shortfall > 0 ? shortfall : 1)
+  }
   // 明細行から直接その場で入荷（在庫を増やす）
   async function quickReceiveItem(itemId: string, productId: string, productName: string, shortfall: number) {
-    const input = prompt(`「${productName}」の入荷数量を入力してください（不足: ${shortfall}）`, String(shortfall > 0 ? shortfall : 1))
-    if (input === null) return
-    const qty = Number(input)
+    const qty = Number(receiveQtyFor(itemId, shortfall))
     if (!qty || qty <= 0) { alert("正しい数量を入力してください"); return }
     setReceivingItemId(itemId)
     try {
@@ -870,13 +873,20 @@ function AdminOrdersPage() {
                                               <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                               <td className="px-1 py-0.5 text-center">
                                                 {!enough && it.product_id && (
-                                                  <button
-                                                    onClick={() => quickReceiveItem(it.id, it.product_id!, it.product_name || "(不明)", qty - stock)}
-                                                    disabled={receivingItemId === it.id}
-                                                    className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                                                    title="この商品だけその場で入荷する">
-                                                    {receivingItemId === it.id ? "…" : "＋入荷"}
-                                                  </button>
+                                                  <div className="flex items-center gap-1 justify-center">
+                                                    <input type="number" min={1}
+                                                      value={receiveQtyFor(it.id, qty - stock)}
+                                                      onChange={e => setReceiveQtyByItem(prev => ({ ...prev, [it.id]: e.target.value }))}
+                                                      onClick={e => e.stopPropagation()}
+                                                      className="w-12 px-1 py-0.5 border border-gray-200 rounded text-[11px] text-right" />
+                                                    <button
+                                                      onClick={() => quickReceiveItem(it.id, it.product_id!, it.product_name || "(不明)", qty - stock)}
+                                                      disabled={receivingItemId === it.id}
+                                                      className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                                      title="この商品だけその場で入荷する">
+                                                      {receivingItemId === it.id ? "…" : "＋入荷"}
+                                                    </button>
+                                                  </div>
                                                 )}
                                               </td>
                                             </tr>
@@ -1029,13 +1039,20 @@ function AdminOrdersPage() {
                                     <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                     <td className="px-1 py-0.5 text-center">
                                       {!enough && it.product_id && (
-                                        <button
-                                          onClick={() => quickReceiveItem(it.id, it.product_id!, it.product_name || "(不明)", qty - stock)}
-                                          disabled={receivingItemId === it.id}
-                                          className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                                          title="この商品だけその場で入荷する">
-                                          {receivingItemId === it.id ? "…" : "＋入荷"}
-                                        </button>
+                                        <div className="flex items-center gap-1 justify-center">
+                                          <input type="number" min={1}
+                                            value={receiveQtyFor(it.id, qty - stock)}
+                                            onChange={e => setReceiveQtyByItem(prev => ({ ...prev, [it.id]: e.target.value }))}
+                                            onClick={e => e.stopPropagation()}
+                                            className="w-12 px-1 py-0.5 border border-gray-200 rounded text-[11px] text-right" />
+                                          <button
+                                            onClick={() => quickReceiveItem(it.id, it.product_id!, it.product_name || "(不明)", qty - stock)}
+                                            disabled={receivingItemId === it.id}
+                                            className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                            title="この商品だけその場で入荷する">
+                                            {receivingItemId === it.id ? "…" : "＋入荷"}
+                                          </button>
+                                        </div>
                                       )}
                                     </td>
                                   </tr>
