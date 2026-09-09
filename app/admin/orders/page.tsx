@@ -772,7 +772,7 @@ function AdminOrdersPage() {
                                     <button className="text-[11px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>
                                   </Link>
                                 )}
-                                {(biz === "waiting" || biz === "partial") && (
+                                {ss.short > 0 && (
                                   <Link href="/admin/receiving-from-po">
                                     <button className="text-[11px] px-1.5 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1" title="不足商品の入荷処理を行う">📦 入荷</button>
                                   </Link>
@@ -918,7 +918,7 @@ function AdminOrdersPage() {
                             <button className="text-[11px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>
                           </Link>
                         )}
-                        {(biz === "waiting" || biz === "partial") && (
+                        {ss.short > 0 && (
                                   <Link href="/admin/receiving-from-po">
                                     <button className="text-[11px] px-1.5 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1" title="不足商品の入荷処理を行う">📦 入荷</button>
                                   </Link>
