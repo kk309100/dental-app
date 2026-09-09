@@ -218,10 +218,7 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
           {/* フォーム */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
             <Field label="依頼医院">
-              <select value={clinicId} onChange={e => setClinicId(e.target.value)} style={sel}>
-                <option value="">{clinics.length === 0 ? "（読み込み中…）" : "（選択してください）"}</option>
-                {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <ClinicSearchSelect clinics={clinics} value={clinicId} onChange={setClinicId} />
               {clinics.length === 0 && !errorMsg && (
                 <p style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
                   ⚠ 医院データが見つかりません。<a href="/admin/clinics" style={{ color: "#2563eb" }}>医院マスタ</a>を確認してください。
@@ -312,6 +309,52 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
           .print-area { max-width: 720px; }
         }
       `}</style>
+    </div>
+  )
+}
+
+// ── 医院を検索して選ぶコンボボックス ─────────────────────────
+function ClinicSearchSelect({ clinics, value, onChange }: { clinics: Clinic[]; value: string; onChange: (id: string) => void }) {
+  const [q, setQ] = useState("")
+  const [open, setOpen] = useState(false)
+  const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC")
+  const selected = clinics.find(c => c.id === value)
+  const k = norm(q)
+  const filtered = k ? clinics.filter(c => norm(c.name).includes(k)).slice(0, 50) : clinics.slice(0, 50)
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        value={open ? q : (selected?.name || "")}
+        onChange={e => { setQ(e.target.value); setOpen(true) }}
+        onFocus={() => { setQ(""); setOpen(true) }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={clinics.length === 0 ? "（読み込み中…）" : "🔍 医院名で検索"}
+        style={sel}
+      />
+      {open && (
+        <div style={{
+          position: "absolute", zIndex: 20, top: "100%", left: 0, right: 0, marginTop: 2,
+          background: "#fff", border: "1px solid #d1d5db", borderRadius: 8,
+          maxHeight: 260, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+        }}>
+          <button type="button" onMouseDown={e => { e.preventDefault(); onChange(""); setQ(""); setOpen(false) }}
+            className="w-full text-left" style={{ padding: "8px 10px", fontSize: 12, color: "#9ca3af", border: "none", background: "none", cursor: "pointer" }}>
+            （未選択にする）
+          </button>
+          {filtered.length === 0 ? (
+            <div style={{ padding: "8px 10px", fontSize: 12, color: "#9ca3af" }}>該当する医院なし</div>
+          ) : (
+            filtered.map(c => (
+              <button key={c.id} type="button"
+                onMouseDown={e => { e.preventDefault(); onChange(c.id); setQ(""); setOpen(false) }}
+                style={{ width: "100%", textAlign: "left", padding: "8px 10px", fontSize: 13, border: "none", borderTop: "1px solid #f3f4f6", background: value === c.id ? "#eff6ff" : "none", cursor: "pointer" }}>
+                {c.name}
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }
