@@ -102,6 +102,11 @@ export default function AdminClinicsPage() {
   const filtered = useMemo(() => {
     const k = norm(search)
     if (!k) return clinics
+    // 数字だけの検索は「医院コード」の前方一致とみなす
+    // （そうしないと "1" が "21"「31" 等どこかに"1"を含むコード全部にヒットして絞り込めない）
+    if (/^\d+$/.test(k)) {
+      return clinics.filter((c) => (c.clinic_code || "").startsWith(k))
+    }
     return clinics.filter((c) => {
       const target = norm(`${c.name} ${c.clinic_code || ""} ${c.corporate_name || ""} ${c.contact || ""} ${c.sales_rep || ""}`)
       return target.includes(k)
