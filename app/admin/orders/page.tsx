@@ -772,6 +772,11 @@ function AdminOrdersPage() {
                                     <button className="text-[11px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>
                                   </Link>
                                 )}
+                                {(biz === "waiting" || biz === "partial") && (
+                                  <Link href="/admin/receiving-from-po">
+                                    <button className="text-[11px] px-1.5 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1" title="不足商品の入荷処理を行う">📦 入荷</button>
+                                  </Link>
+                                )}
                                 <Link href={`/admin/deliveries/${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 mr-1" title="LOT番号を入力して納品書に記載">LOT</button></Link>
                                 <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
                                 <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
@@ -913,7 +918,12 @@ function AdminOrdersPage() {
                             <button className="text-[11px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>
                           </Link>
                         )}
-                        <Link href={`/admin/deliveries/${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 mr-1" title="LOT番号を入力して納品書に記載">LOT</button></Link>
+                        {(biz === "waiting" || biz === "partial") && (
+                                  <Link href="/admin/receiving-from-po">
+                                    <button className="text-[11px] px-1.5 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 mr-1" title="不足商品の入荷処理を行う">📦 入荷</button>
+                                  </Link>
+                                )}
+                                <Link href={`/admin/deliveries/${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 mr-1" title="LOT番号を入力して納品書に記載">LOT</button></Link>
                         <Link href={`/admin/orders/new?copy=${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-blue-50 text-blue-700 mr-1" title="この注文を複製">📋</button></Link>
                         <Link href={`/admin/quotes/create?from_order=${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 mr-1" title="見積書発行">見積</button></Link>
                         {ss.short > 0 && (
