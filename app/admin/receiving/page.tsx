@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen, ymd } from "@/lib/invoice"
 
 type Product = {
@@ -68,12 +68,13 @@ export default function ReceivingPage() {
 
   async function fetchData() {
     setLoading(true)
+    // products は1万件超あるため、Supabase既定の1000件上限を回避するため fetchAll でページング取得する
     const [p, s, r] = await Promise.all([
-      supabase.from("products").select("id,name,product_code,manufacturer,stock,cost,barcode").limit(50000),
+      fetchAll("products", "id,name,product_code,manufacturer,stock,cost,barcode"),
       supabase.from("suppliers").select("id,name,maker_name").order("name").limit(50000),
       supabase.from("stock_receipts").select("*").order("created_at", { ascending: false }).limit(20),
     ])
-    setProducts((p.data as Product[]) || [])
+    setProducts((p as Product[]) || [])
     setSuppliers((s.data as Supplier[]) || [])
     setRecent(r.data || [])
     setLoading(false)
