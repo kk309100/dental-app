@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { COMPANY } from "@/lib/company"
 import Link from "next/link"
 
-type Clinic = { id: string; name: string; adress: string | null; phone: string | null }
+type Clinic = { id: string; name: string; address: string | null; phone: string | null }
 
 const STATUSES    = ["受付中", "対応中", "修理完了", "返却済み", "キャンセル"] as const
 const DESTINATIONS = ["自社対応", "メーカー修理", "外注（修理業者）", "その他"]
@@ -48,7 +48,7 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
   }, [id])
 
   async function loadClinics() {
-    const { data, error } = await supabase.from("clinics").select("id,name,adress,phone").order("name").limit(10000)
+    const { data, error } = await supabase.from("clinics").select("id,name,address,phone").order("name").limit(10000)
     if (error) {
       console.error("[repair-orders] loadClinics error:", error)
       setErrorMsg("医院情報の取得に失敗しました: " + error.message)
@@ -230,9 +230,9 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
               {/* 選択した医院の情報プレビュー */}
               {selectedClinic && (
                 <div style={{ marginTop: 6, padding: "7px 10px", background: "#f0f5ff", borderRadius: 7, fontSize: 11, color: "#374151", lineHeight: 1.7 }}>
-                  {selectedClinic.adress && <div>📍 {selectedClinic.adress}</div>}
+                  {selectedClinic.address && <div>📍 {selectedClinic.address}</div>}
                   {selectedClinic.phone  && <div>📞 {selectedClinic.phone}</div>}
-                  {!selectedClinic.adress && !selectedClinic.phone && (
+                  {!selectedClinic.address && !selectedClinic.phone && (
                     <span style={{ color: "#9ca3af" }}>住所・電話未登録（<a href="/admin/clinics" style={{ color: "#2563eb" }}>医院マスタ</a>から登録できます）</span>
                   )}
                 </div>
@@ -285,7 +285,7 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
             receiptNumber={receiptNumber}
             dateStr={dateStr}
             clinicName={selectedClinic?.name || ""}
-            clinicAdress={selectedClinic?.adress || ""}
+            clinicAdress={selectedClinic?.address || ""}
             clinicPhone={selectedClinic?.phone || ""}
             contactPerson={contactPerson}
             equipmentName={equipmentName}
