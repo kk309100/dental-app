@@ -373,7 +373,7 @@ export default function AdminClinicsPage() {
       )}
 
       <div className="bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
-        <input
+        <input lang="ja"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="医院名・医院コード・法人名・担当で検索（半角/全角OK）"

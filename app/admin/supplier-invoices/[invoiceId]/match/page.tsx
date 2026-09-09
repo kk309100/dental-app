@@ -356,7 +356,7 @@ export default function MatchPage({ params }: { params: Promise<{ invoiceId: str
             onClick={e => e.stopPropagation()}>
             <div className="p-3 border-b border-gray-100">
               <h3 className="text-sm font-bold mb-2">この明細を自社商品マスタの商品と紐付け</h3>
-              <input autoFocus value={pickQuery} onChange={e => setPickQuery(e.target.value)}
+              <input lang="ja" autoFocus value={pickQuery} onChange={e => setPickQuery(e.target.value)}
                 placeholder="商品名・コードで検索"
                 className="w-full px-3 py-2 border border-gray-200 rounded text-sm" />
               <p className="text-[10px] text-gray-500 mt-1">

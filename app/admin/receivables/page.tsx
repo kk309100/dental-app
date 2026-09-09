@@ -136,7 +136,7 @@ export default function ReceivablesPage() {
       </div>
 
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="医院名で検索"
+        <input lang="ja" value={search} onChange={e => setSearch(e.target.value)} placeholder="医院名で検索"
           className="flex-1 min-w-[180px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white" />
         <label className="flex items-center gap-1 text-xs text-gray-700 cursor-pointer px-2">
           <input type="checkbox" checked={overdueOnly} onChange={e => setOverdueOnly(e.target.checked)} />

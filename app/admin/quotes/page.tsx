@@ -126,7 +126,7 @@ export default function QuotesPage() {
 
       {/* フィルタ */}
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
-        <input
+        <input lang="ja"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="見積書番号・医院で検索"

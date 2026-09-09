@@ -92,7 +92,7 @@ export default function RepairOrdersPage() {
 
       {/* フィルター */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-        <input
+        <input lang="ja"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="受付番号・医院名・機器名で検索"

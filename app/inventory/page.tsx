@@ -1304,7 +1304,7 @@ export default function ClinicInventoryPage() {
         <div style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 200, display: "flex", flexDirection: "column" }}>
           {/* 検索バー */}
           <div style={{ padding: "10px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-            <input
+            <input lang="ja"
               autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -1534,7 +1534,7 @@ export default function ClinicInventoryPage() {
               {/* 商品名（サジェスト付き） */}
               <div style={{ position: "relative" }}>
                 <label style={{ fontSize: 12, color: C.sub }}>商品名<span style={{ color: "#ef4444" }}> *</span></label>
-                <input
+                <input lang="ja"
                   value={addForm.product_name}
                   placeholder="例）グローブM（マスタから検索）"
                   onChange={e => { setAddForm(f => ({ ...f, product_name: e.target.value })); searchProducts(e.target.value) }}

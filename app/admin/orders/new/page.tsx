@@ -494,7 +494,7 @@ function NewOrderPage() {
                 <td className="px-2 py-1 text-xs text-gray-400">{idx + 1}</td>
                 <td className="px-2 py-1" style={{ position: "relative" }}>
                   <div className="flex items-center gap-1">
-                    <input
+                    <input lang="ja"
                       value={r.product_name}
                       onChange={e => { updateRow(idx, { product_name: e.target.value, product_id: null }); setProductSearch(e.target.value); setInlineOpenIdx(idx) }}
                       onFocus={() => { setProductSearch(r.product_name); setInlineOpenIdx(idx) }}
@@ -551,7 +551,7 @@ function NewOrderPage() {
                 <button onClick={() => removeRow(idx)} className="text-xs text-red-500">削除</button>
               </div>
               <div className="flex items-center gap-1" style={{ position: "relative" }}>
-                <input
+                <input lang="ja"
                   value={r.product_name}
                   onChange={e => { updateRow(idx, { product_name: e.target.value, product_id: null }); setProductSearch(e.target.value); setInlineOpenIdx(idx) }}
                   onFocus={() => { setProductSearch(r.product_name); setInlineOpenIdx(idx) }}
@@ -644,7 +644,7 @@ function NewOrderPage() {
             >
               <div className="p-3 border-b border-gray-100">
                 <h3 className="text-sm font-bold mb-2">🏥 医院を選択</h3>
-                <input
+                <input lang="ja"
                   autoFocus
                   value={clinicSearchInPicker}
                   onChange={e => setClinicSearchInPicker(e.target.value)}
@@ -695,7 +695,7 @@ function NewOrderPage() {
             onClick={e => e.stopPropagation()}
           >
             <div className="p-3 border-b border-gray-100">
-              <input
+              <input lang="ja"
                 autoFocus
                 value={productSearch}
                 onChange={e => setProductSearch(e.target.value)}

@@ -398,7 +398,7 @@ export default function ProductImagesPage() {
           {/* 商品名検索 */}
           <form onSubmit={e => { e.preventDefault(); searchManualProducts(manualSearchInput) }}
             style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <input
+            <input lang="ja"
               value={manualSearchInput}
               onChange={e => setManualSearchInput(e.target.value)}
               placeholder="商品名で検索…"
@@ -550,7 +550,7 @@ export default function ProductImagesPage() {
         <div>
           {/* 検索 */}
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <input
+            <input lang="ja"
               value={editSearch}
               onChange={e => setEditSearch(e.target.value)}
               onKeyDown={e => e.key === "Enter" && loadEditProducts(editSearch)}

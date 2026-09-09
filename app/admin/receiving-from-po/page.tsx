@@ -328,7 +328,7 @@ export default function ReceivingFromPoPage() {
           まだ届いていない商品はチェックを外せばOK。数量が違う場合は数字を変えられます。
         </div>
         <div style={{ marginTop: 12 }}>
-          <input
+          <input lang="ja"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="🔍 商品名・発注書番号で検索（カナ/半角全角OK）"

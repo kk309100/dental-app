@@ -149,7 +149,7 @@ export default function BarcodePage() {
 
         {/* 検索 */}
         <div style={{ marginBottom: 14 }}>
-          <input
+          <input lang="ja"
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}

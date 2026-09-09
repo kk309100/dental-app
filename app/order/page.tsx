@@ -499,7 +499,7 @@ function OrderPageInner() {
             <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
               <Search size={16} color={search ? C.primary : "#b0b8c1"} strokeWidth={2} />
             </div>
-            <input
+            <input lang="ja"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="商品名・コード・メーカーで検索"

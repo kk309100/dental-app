@@ -324,7 +324,7 @@ export default function PurchaseOrderPage() {
 
       {/* フィルタ */}
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
-        <input
+        <input lang="ja"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="商品・メーカー・医院・納品書で検索"

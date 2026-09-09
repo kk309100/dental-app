@@ -142,7 +142,7 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
       </div>
 
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap no-print" style={{ border: "1px solid #e8eaed" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="商品名・コード・棚番号で検索"
+        <input lang="ja" value={search} onChange={e => setSearch(e.target.value)} placeholder="商品名・コード・棚番号で検索"
           className="flex-1 min-w-[200px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white" />
         <select value={filterMode} onChange={e => setFilterMode(e.target.value as typeof filterMode)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
           <option value="uncounted">未カウント ({stats.total - stats.counted})</option>

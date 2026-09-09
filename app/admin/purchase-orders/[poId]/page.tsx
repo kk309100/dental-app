@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { COMPANY } from "@/lib/company"
 import Seal from "@/app/components/Seal"
@@ -19,6 +19,15 @@ type Item = {
 }
 type Supplier = { id: string; name: string; address: string | null; phone: string | null; fax: string | null; contact: string | null }
 type SupplierOption = { id: string; name: string }
+type ProductOption = { id: string; name: string; product_code: string | null; manufacturer: string | null; cost: number | null }
+
+// 半角/全角・カナひらがな統一の検索キー
+function searchKey(s: string) {
+  return String(s || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
+}
 
 export default function POPage({ params }: { params: Promise<{ poId: string }> }) {
   const { poId } = use(params)
@@ -35,6 +44,9 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   const [savingField, setSavingField] = useState<string | null>(null)
   const [clinicCodeByName, setClinicCodeByName] = useState<Map<string, string>>(new Map())
   const [manufacturerByProduct, setManufacturerByProduct] = useState<Map<string, string>>(new Map())
+  const [allProducts, setAllProducts] = useState<ProductOption[]>([])
+  const [productQuery, setProductQuery] = useState<Record<string, string>>({})
+  const [productSuggestOpenId, setProductSuggestOpenId] = useState<string | null>(null)
 
   useEffect(() => { fetchData() }, [poId])
 
@@ -290,7 +302,14 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
             {po.sent_method === "FAX" ? "📠 FAX送信済み" : "📠 FAX送信済みにする"}
           </button>
           <button onClick={() => window.print()} className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded">🖨 印刷</button>
-          <button onClick={() => setEditMode(v => !v)} className={"text-xs px-3 py-1.5 rounded font-bold " + (editMode ? "bg-amber-600 text-white" : "bg-white border border-gray-300 text-gray-700")}>
+          <button onClick={async () => {
+            const next = !editMode
+            setEditMode(next)
+            if (next && allProducts.length === 0) {
+              const prods = await fetchAll("products", "id,name,product_code,manufacturer,cost")
+              setAllProducts((prods as ProductOption[]) || [])
+            }
+          }} className={"text-xs px-3 py-1.5 rounded font-bold " + (editMode ? "bg-amber-600 text-white" : "bg-white border border-gray-300 text-gray-700")}>
             {editMode ? "✓ 編集を終了" : "✎ 編集する"}
           </button>
           <button onClick={deletePO} className="text-xs px-3 py-1.5 text-red-600 hover:bg-red-50 rounded">削除</button>
@@ -428,10 +447,57 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
                 <td style={tdCell}>
                   {editMode ? (
                     <>
-                      <input defaultValue={i.product_name || ""} placeholder="商品名"
-                        onBlur={e => { if (e.target.value !== i.product_name) updateItemField(i.id, { product_name: e.target.value }) }}
-                        disabled={savingField === i.id}
-                        className="no-print w-full px-1.5 py-1 border border-gray-200 rounded text-xs" />
+                      <div className="no-print" style={{ position: "relative" }}>
+                        <input lang="ja"
+                          value={productQuery[i.id] ?? (i.product_name || "")}
+                          placeholder="商品名（商品マスタから検索可）"
+                          onChange={e => { setProductQuery(prev => ({ ...prev, [i.id]: e.target.value })); setProductSuggestOpenId(i.id) }}
+                          onFocus={() => setProductSuggestOpenId(i.id)}
+                          onBlur={e => {
+                            setTimeout(() => setProductSuggestOpenId(cur => (cur === i.id ? null : cur)), 150)
+                            const v = e.target.value
+                            if (v !== i.product_name) updateItemField(i.id, { product_name: v })
+                          }}
+                          disabled={savingField === i.id}
+                          className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" />
+                        {productSuggestOpenId === i.id && (() => {
+                          const q = searchKey(productQuery[i.id] ?? (i.product_name || ""))
+                          const matches = q
+                            ? allProducts.filter(p => searchKey(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""}`).includes(q)).slice(0, 30)
+                            : []
+                          if (!q) return null
+                          return (
+                            <div style={{
+                              position: "absolute", zIndex: 20, top: "100%", left: 0, right: 0,
+                              background: "#fff", border: "1px solid #d1d5db", borderRadius: 6,
+                              maxHeight: 240, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.12)",
+                            }}>
+                              {matches.length === 0 ? (
+                                <div className="px-2 py-1.5 text-[11px] text-gray-400">該当商品なし（手入力として保存されます）</div>
+                              ) : (
+                                matches.map(p => (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onMouseDown={e => {
+                                      e.preventDefault()
+                                      setProductQuery(prev => ({ ...prev, [i.id]: p.name }))
+                                      setProductSuggestOpenId(null)
+                                      updateItemField(i.id, { product_id: p.id, product_name: p.name, unit_price: p.cost ?? i.unit_price })
+                                    }}
+                                    className="w-full text-left px-2 py-1.5 text-[11px] hover:bg-blue-50 border-b border-gray-50 last:border-0">
+                                    <div className="text-gray-900">{p.name}</div>
+                                    <div className="text-gray-400 mt-0.5">
+                                      {p.product_code && <span className="mr-2">#{p.product_code}</span>}
+                                      {p.manufacturer && <span>{p.manufacturer}</span>}
+                                    </div>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </div>
                       <span className="print-only" style={{ display: "none" }}>{i.product_name}</span>
                     </>
                   ) : i.product_name}

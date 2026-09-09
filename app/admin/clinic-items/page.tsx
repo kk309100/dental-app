@@ -267,7 +267,7 @@ export default function ClinicItemsPage() {
 
       {/* ── フィルター ── */}
       <div className="flex gap-2 flex-wrap items-center bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
-        <input value={search} onChange={(e) => setSearch(e.target.value)}
+        <input lang="ja" value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder="🔍 商品名・メーカー・場所で検索"
           className="flex-1 min-w-[200px] px-3 py-1.5 border border-gray-200 rounded text-sm bg-white" />
         <select value={clinicFilter} onChange={(e) => setClinicFilter(e.target.value)}

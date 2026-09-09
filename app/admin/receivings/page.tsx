@@ -164,7 +164,7 @@ export default function ReceivingsListPage() {
 
       {/* フィルタ */}
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)}
+        <input lang="ja" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="商品名・仕入先・メモで検索"
           className="flex-1 min-w-[180px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white" />
         <select value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)}

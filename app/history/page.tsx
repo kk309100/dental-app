@@ -202,7 +202,7 @@ export default function HistoryPage() {
       {/* 検索・フィルター */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
         <div style={{ display: "flex", gap: 8 }}>
-          <input value={search} onChange={(e) => setSearch(e.target.value)}
+          <input lang="ja" value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="納品書番号・商品名・担当者で検索"
             style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1px solid #ddd", fontSize: 14, boxSizing: "border-box" as const }} />
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}

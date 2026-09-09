@@ -242,7 +242,7 @@ export default function POPoolPage() {
 
       {pos.length > 0 && (
         <div className="bg-gray-50 p-2 rounded-lg" style={{ border: "1px solid #e8eaed" }}>
-          <input
+          <input lang="ja"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="🔍 仕入先名で検索"

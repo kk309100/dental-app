@@ -213,7 +213,7 @@ export default function InvoicesPage() {
 
       {/* フィルタバー */}
       <div style={filterBar}>
-        <input
+        <input lang="ja"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="請求書番号・医院名で検索"

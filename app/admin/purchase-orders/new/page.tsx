@@ -202,7 +202,7 @@ function NewPOPage() {
               <tr key={idx} className="border-t border-gray-100">
                 <td className="px-2 py-1 text-xs text-gray-400">{idx + 1}</td>
                 <td className="px-2 py-1" style={{ position: "relative" }}>
-                  <input value={productQuery[idx] ?? r.product_name}
+                  <input lang="ja" value={productQuery[idx] ?? r.product_name}
                     onChange={e => typeProductName(idx, e.target.value)}
                     onFocus={() => setOpenRowIdx(idx)}
                     onBlur={() => setTimeout(() => setOpenRowIdx(o => (o === idx ? null : o)), 150)}

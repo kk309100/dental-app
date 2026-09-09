@@ -177,7 +177,7 @@ export default function PaymentsPage() {
 
       {/* フィルタ */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <input
+        <input lang="ja"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="請求書番号・医院名で検索"
