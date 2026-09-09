@@ -200,7 +200,7 @@ export default function PurchaseOrdersListPage() {
               <th className="px-2 py-1.5 text-center w-24">納期予定</th>
               <th className="px-2 py-1.5 text-right w-28">金額</th>
               <th className="px-2 py-1.5 text-center w-24">送付方法</th>
-              <th className="px-2 py-1.5 text-center w-20">操作</th>
+              <th className="px-2 py-1.5 text-center w-36">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -234,7 +234,10 @@ export default function PurchaseOrdersListPage() {
                       )
                       : <span className="text-gray-400">— 未印刷</span>}
                   </td>
-                  <td className="px-2 py-1.5 text-center">
+                  <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                    {(p.status === "発注済" || p.status === "部分入荷") && (
+                      <Link href={`/admin/purchase-orders/${p.id}`} className="text-[12px] px-2 py-2 mr-1 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700" title="この発注書の入荷処理を行う">📦 入荷処理</Link>
+                    )}
                     <Link href={`/admin/purchase-orders/${p.id}`} className="text-[12px] px-3 py-2 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
                   </td>
                 </tr>
