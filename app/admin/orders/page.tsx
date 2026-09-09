@@ -259,6 +259,37 @@ function AdminOrdersPage() {
 
   function fallbackKey(p: PoolItem) { return `${p.source_order_id}:${p.product_id || p.product_name}` }
 
+  const [receivingItemId, setReceivingItemId] = useState<string | null>(null)
+  // 明細行から直接その場で入荷（在庫を増やす）
+  async function quickReceiveItem(itemId: string, productId: string, productName: string, shortfall: number) {
+    const input = prompt(`「${productName}」の入荷数量を入力してください（不足: ${shortfall}）`, String(shortfall > 0 ? shortfall : 1))
+    if (input === null) return
+    const qty = Number(input)
+    if (!qty || qty <= 0) { alert("正しい数量を入力してください"); return }
+    setReceivingItemId(itemId)
+    try {
+      const { data: prod } = await supabase.from("products").select("stock").eq("id", productId).single()
+      const before = Number(prod?.stock || 0)
+      const after = before + qty
+      const { error } = await supabase.from("products").update({ stock: after }).eq("id", productId)
+      if (error) { alert("入荷失敗: " + error.message); return }
+      await supabase.from("stock_receipts").insert({
+        product_id: productId, quantity: qty,
+        memo: `注文管理から入荷（${productName}）`,
+      })
+      try {
+        await supabase.from("stock_movements").insert({
+          product_id: productId, movement_type: "入庫", quantity: qty,
+          before_stock: before, after_stock: after,
+          ref_type: "manual", reason: "注文管理から入荷",
+        })
+      } catch { /* テーブル無くてもOK */ }
+      await fetchData()
+    } finally {
+      setReceivingItemId(null)
+    }
+  }
+
   // 注文の不足分を「発注プール」に追加（仕入先別の下書き発注書）
   async function addToPool(orderIds: string[], fallbackSupplierId?: string) {
     if (orderIds.length === 0) return
@@ -806,6 +837,7 @@ function AdminOrdersPage() {
                                           <th className="text-right px-1 py-0.5 w-20">粗利</th>
                                           <th className="text-right px-1 py-0.5 w-14">粗利%</th>
                                           <th className="text-right px-1 py-0.5 w-24">小計</th>
+                                          <th className="text-center px-1 py-0.5 w-16">入荷</th>
                                         </tr>
                                       </thead>
                                       <tbody>
@@ -836,6 +868,17 @@ function AdminOrdersPage() {
                                               <td className={"px-1 py-0.5 text-right tabular-nums " + (gross >= 0 ? "text-gray-700" : "text-red-600 font-bold")}>{fmtYen(gross)}</td>
                                               <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
+                                              <td className="px-1 py-0.5 text-center">
+                                                {!enough && it.product_id && (
+                                                  <button
+                                                    onClick={() => quickReceiveItem(it.id, it.product_id!, it.product_name || "(不明)", qty - stock)}
+                                                    disabled={receivingItemId === it.id}
+                                                    className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                                    title="この商品だけその場で入荷する">
+                                                    {receivingItemId === it.id ? "…" : "＋入荷"}
+                                                  </button>
+                                                )}
+                                              </td>
                                             </tr>
                                           )
                                         })}
@@ -954,6 +997,7 @@ function AdminOrdersPage() {
                                   <th className="text-right px-1 py-0.5 w-20">粗利</th>
                                   <th className="text-right px-1 py-0.5 w-14">粗利%</th>
                                   <th className="text-right px-1 py-0.5 w-24">小計</th>
+                                  <th className="text-center px-1 py-0.5 w-16">入荷</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -983,6 +1027,17 @@ function AdminOrdersPage() {
                                     <td className={"px-1 py-0.5 text-right tabular-nums " + (gross >= 0 ? "text-gray-700" : "text-red-600 font-bold")}>{fmtYen(gross)}</td>
                                     <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
+                                    <td className="px-1 py-0.5 text-center">
+                                      {!enough && it.product_id && (
+                                        <button
+                                          onClick={() => quickReceiveItem(it.id, it.product_id!, it.product_name || "(不明)", qty - stock)}
+                                          disabled={receivingItemId === it.id}
+                                          className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                          title="この商品だけその場で入荷する">
+                                          {receivingItemId === it.id ? "…" : "＋入荷"}
+                                        </button>
+                                      )}
+                                    </td>
                                   </tr>
                                 )
                               })}
