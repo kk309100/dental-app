@@ -280,24 +280,35 @@ function AdminOrdersPage() {
       setForcingItemId(null)
     }
   }
-  // 明細行から直接その場で入荷（在庫を増やす）
-  async function quickReceiveItem(itemId: string, productId: string, productName: string, shortfall: number) {
+  // 明細行から直接その場で入荷（在庫を増やす）。
+  // productId が null の場合（商品コードなし・商品マスタ未登録の手入力商品）は、
+  // 商品マスタに新規登録してから入荷する
+  async function quickReceiveItem(itemId: string, productId: string | null, productName: string, shortfall: number) {
     const qty = Number(receiveQtyFor(itemId, shortfall))
     if (!qty || qty <= 0) { alert("正しい数量を入力してください"); return }
     setReceivingItemId(itemId)
     try {
-      const { data: prod } = await supabase.from("products").select("stock").eq("id", productId).single()
+      let pid = productId
+      if (!pid) {
+        const { data: newProd, error: cpe } = await supabase.from("products")
+          .insert({ name: productName, stock: 0, active: true })
+          .select("id").single()
+        if (cpe || !newProd) { alert("商品マスタへの新規登録に失敗: " + (cpe?.message || "")); return }
+        pid = newProd.id
+        await supabase.from("order_items").update({ product_id: pid }).eq("id", itemId)
+      }
+      const { data: prod } = await supabase.from("products").select("stock").eq("id", pid).single()
       const before = Number(prod?.stock || 0)
       const after = before + qty
-      const { error } = await supabase.from("products").update({ stock: after }).eq("id", productId)
+      const { error } = await supabase.from("products").update({ stock: after }).eq("id", pid)
       if (error) { alert("入荷失敗: " + error.message); return }
       await supabase.from("stock_receipts").insert({
-        product_id: productId, quantity: qty,
+        product_id: pid, quantity: qty,
         memo: `注文管理から入荷（${productName}）`,
       })
       try {
         await supabase.from("stock_movements").insert({
-          product_id: productId, movement_type: "入庫", quantity: qty,
+          product_id: pid, movement_type: "入庫", quantity: qty,
           before_stock: before, after_stock: after,
           ref_type: "manual", reason: "注文管理から入荷",
         })
@@ -888,7 +899,7 @@ function AdminOrdersPage() {
                                               <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                               <td className="px-1 py-0.5 text-center">
-                                                {!enough && it.product_id && (
+                                                {!enough && (
                                                   <div className="flex items-center gap-1 justify-center">
                                                     <input type="number" min={1}
                                                       value={receiveQtyFor(it.id, qty - stock)}
@@ -896,7 +907,7 @@ function AdminOrdersPage() {
                                                       onClick={e => e.stopPropagation()}
                                                       className="w-12 px-1 py-0.5 border border-gray-200 rounded text-[11px] text-right" />
                                                     <button
-                                                      onClick={() => quickReceiveItem(it.id, it.product_id!, it.product_name || "(不明)", qty - stock)}
+                                                      onClick={() => quickReceiveItem(it.id, it.product_id, it.product_name || "(不明)", qty - stock)}
                                                       disabled={receivingItemId === it.id}
                                                       className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                                                       title="この商品だけその場で入荷する">
@@ -906,7 +917,7 @@ function AdminOrdersPage() {
                                                 )}
                                               </td>
                                               <td className="px-1 py-0.5 text-center">
-                                                {it.product_id && (
+                                                {(
                                                   <button
                                                     onClick={() => forceOrderItem(it.id, it.product_name || "(不明)")}
                                                     disabled={forcingItemId === it.id}
@@ -1066,7 +1077,7 @@ function AdminOrdersPage() {
                                     <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                     <td className="px-1 py-0.5 text-center">
-                                      {!enough && it.product_id && (
+                                      {!enough && (
                                         <div className="flex items-center gap-1 justify-center">
                                           <input type="number" min={1}
                                             value={receiveQtyFor(it.id, qty - stock)}
@@ -1074,7 +1085,7 @@ function AdminOrdersPage() {
                                             onClick={e => e.stopPropagation()}
                                             className="w-12 px-1 py-0.5 border border-gray-200 rounded text-[11px] text-right" />
                                           <button
-                                            onClick={() => quickReceiveItem(it.id, it.product_id!, it.product_name || "(不明)", qty - stock)}
+                                            onClick={() => quickReceiveItem(it.id, it.product_id, it.product_name || "(不明)", qty - stock)}
                                             disabled={receivingItemId === it.id}
                                             className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                                             title="この商品だけその場で入荷する">
@@ -1084,7 +1095,7 @@ function AdminOrdersPage() {
                                       )}
                                     </td>
                                     <td className="px-1 py-0.5 text-center">
-                                      {it.product_id && (
+                                      {(
                                         <button
                                           onClick={() => forceOrderItem(it.id, it.product_name || "(不明)")}
                                           disabled={forcingItemId === it.id}
