@@ -17,7 +17,7 @@ export default function AdminOrdersPageWrapper() {
 }
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; invoice_id: string | null; source?: string | null; note?: string | null }
-type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
+type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null }
 type Clinic = { id: string; name: string; corporate_name?: string | null }
 type Product = { id: string; name: string; stock: number | null; cost: number | null; price: number | null; manufacturer?: string | null }
 type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null }
@@ -300,10 +300,17 @@ function AdminOrdersPage() {
         pid = newProd.id
         await supabase.from("order_items").update({ product_id: pid }).eq("id", itemId)
       }
-      await supabase.from("stock_receipts").insert({
+      const { error: sre } = await supabase.from("stock_receipts").insert({
         product_id: pid, quantity: qty,
         memo: `注文管理から入荷・医院へ直送（在庫は加算せず）（${productName}）`,
       })
+      if (sre) { alert("入荷記録に失敗しました: " + sre.message); return }
+      // この注文明細は入荷済みとして扱う（在庫は増やさないため「在庫あり」表示は変わらないが、
+      // このボタンは既に入荷対応済みであることが分かるよう「入荷済み」表示に切り替える）
+      const { error: oie } = await supabase.from("order_items")
+        .update({ delivered_quantity: qty }).eq("id", itemId)
+      if (oie) { alert("入荷記録は保存されましたが、明細の更新に失敗しました: " + oie.message) }
+      alert(`✅ ${qty}個の入荷を記録しました（在庫には加算されません。医院へ直送扱いです）`)
       await fetchData()
     } finally {
       setReceivingItemId(null)
@@ -890,7 +897,9 @@ function AdminOrdersPage() {
                                               <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                               <td className="px-1 py-0.5 text-center">
-                                                {!enough && (
+                                                {!enough && Number(it.delivered_quantity || 0) >= (qty - stock) ? (
+                                                  <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
+                                                ) : !enough && (
                                                   <div className="flex items-center gap-1 justify-center">
                                                     <input type="number" min={1}
                                                       value={receiveQtyFor(it.id, qty - stock)}
@@ -1068,7 +1077,9 @@ function AdminOrdersPage() {
                                     <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                     <td className="px-1 py-0.5 text-center">
-                                      {!enough && (
+                                      {!enough && Number(it.delivered_quantity || 0) >= (qty - stock) ? (
+                                        <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
+                                      ) : !enough && (
                                         <div className="flex items-center gap-1 justify-center">
                                           <input type="number" min={1}
                                             value={receiveQtyFor(it.id, qty - stock)}
