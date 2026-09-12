@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
+import { forceAddOrderItemToPool } from "@/lib/po-pool"
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; sales_rep?: string | null; note?: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
@@ -124,6 +125,21 @@ function ShippingPage() {
       else allOk = false
     }
     return allOk ? "ready" : (anyOk ? "partial" : "short")
+  }
+
+  const [forcingItemId, setForcingItemId] = useState<string | null>(null)
+  // 在庫があっても、この商品だけ強制的に発注プールへ入れる
+  // （在庫を持たず注文が来るたびに毎回仕入れる運用の医院向け）
+  async function forceOrderItem(itemId: string, productName: string) {
+    if (!confirm(`「${productName}」を在庫があっても強制的に発注プールへ追加しますか？`)) return
+    setForcingItemId(itemId)
+    try {
+      const r = await forceAddOrderItemToPool(itemId)
+      if (!r.ok) { alert("追加失敗: " + r.error); return }
+      alert(`✅ ${r.supplierName} の発注プールに追加しました。`)
+    } finally {
+      setForcingItemId(null)
+    }
   }
 
   // 医院ごとにグルーピング
@@ -430,6 +446,7 @@ function ShippingPage() {
                             <span className="w-12 text-right">粗利%</span>
                             <span className="w-24 text-right">小計</span>
                             <span className="w-12 text-right">在庫</span>
+                            <span className="w-16 text-right">発注</span>
                           </div>
                           {its.map(it => {
                             const product = it.product_id ? productById.get(it.product_id) : null
@@ -535,6 +552,17 @@ function ShippingPage() {
                                   title="小計（編集すると販売価格が逆算: 小計÷数量）" />
                                 <span className={"w-12 text-right text-[13px] tabular-nums " + (enough ? "text-gray-500" : "text-red-600 font-bold")}>
                                   {stock}
+                                </span>
+                                <span className="w-16 text-right">
+                                  {it.product_id && (
+                                    <button
+                                      onClick={() => forceOrderItem(it.id, it.product_name || "(不明)")}
+                                      disabled={forcingItemId === it.id}
+                                      className="text-[11px] px-1.5 py-0.5 rounded border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
+                                      title="在庫があっても強制的に発注プールへ追加する">
+                                      {forcingItemId === it.id ? "…" : "強制発注"}
+                                    </button>
+                                  )}
                                 </span>
                               </div>
                             )
