@@ -15,7 +15,12 @@ export default function CreateQuotePageWrapper() {
   )
 }
 
-type Clinic = { id: string; name: string; corporate_name?: string | null }
+type Clinic = { id: string; name: string; corporate_name?: string | null; clinic_code?: string | null }
+
+// 半角・全角・カナ・大文字小文字を統一して検索可能にする
+function nfkc(s: string) { return String(s || "").normalize("NFKC").toLowerCase() }
+function kata(s: string) { return s.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60)) }
+function searchKey(s: string) { return kata(nfkc(s)) }
 type Product = { id: string; name: string; price: number | null; cost: number | null }
 
 type Line = {
@@ -51,13 +56,15 @@ function CreateQuotePage() {
 
   const [productSearch, setProductSearch] = useState("")
   const [openLineIdx, setOpenLineIdx] = useState<number | null>(null)
+  const [clinicSearch, setClinicSearch] = useState("")
+  const [clinicOpen, setClinicOpen] = useState(false)
 
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setLoading(true)
     const [c, p] = await Promise.all([
-      supabase.from("clinics").select("id,name,corporate_name").order("name").limit(50000),
+      supabase.from("clinics").select("id,name,corporate_name,clinic_code").order("name").limit(50000),
       supabase.from("products").select("id,name,price,cost").order("name").limit(50000),
     ])
     setClinics(c.data || [])
@@ -231,14 +238,44 @@ function CreateQuotePage() {
 
       {/* 医院 + 日付 */}
       <div className="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-3 gap-3" style={{ border: "1px solid #e8eaed" }}>
-        <div>
+        <div style={{ position: "relative" }}>
           <label className="block text-[11px] text-gray-700 font-bold mb-1">① 医院</label>
-          <select value={clinicId} onChange={(e) => setClinicId(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
-            <option value="">医院を選択</option>
-            {clinics.map((c) => (
-              <option key={c.id} value={c.id}>{c.corporate_name ? `${c.corporate_name} ${c.name}` : c.name}</option>
-            ))}
-          </select>
+          {(() => {
+            const selected = clinics.find(c => c.id === clinicId)
+            const k = searchKey(clinicSearch)
+            const filtered = k
+              ? clinics.filter(c => searchKey(`${c.name} ${c.corporate_name || ""} ${c.clinic_code || ""}`).includes(k)).slice(0, 50)
+              : clinics.slice(0, 50)
+            return (
+              <>
+                <input lang="ja"
+                  value={clinicOpen ? clinicSearch : (selected ? (selected.corporate_name ? `${selected.corporate_name} ${selected.name}` : selected.name) : "")}
+                  onChange={e => { setClinicSearch(e.target.value); setClinicOpen(true) }}
+                  onFocus={() => { setClinicSearch(""); setClinicOpen(true) }}
+                  onBlur={() => setTimeout(() => setClinicOpen(false), 150)}
+                  placeholder={clinics.length === 0 ? "（読み込み中…）" : "🔍 医院名・医院コードで検索"}
+                  className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+                {clinicOpen && (
+                  <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow-lg" style={{ maxHeight: 260, overflowY: "auto" }}>
+                    <button type="button" onMouseDown={e => { e.preventDefault(); setClinicId(""); setClinicSearch(""); setClinicOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-xs text-gray-400 hover:bg-gray-50">（未選択にする）</button>
+                    {filtered.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-gray-400">該当する医院なし</div>
+                    ) : (
+                      filtered.map(c => (
+                        <button key={c.id} type="button"
+                          onMouseDown={e => { e.preventDefault(); setClinicId(c.id); setClinicSearch(""); setClinicOpen(false) }}
+                          className={"w-full text-left px-3 py-2 text-sm border-t border-gray-100 hover:bg-blue-50 " + (clinicId === c.id ? "bg-blue-50" : "")}>
+                          {c.corporate_name ? `${c.corporate_name} ${c.name}` : c.name}
+                          {c.clinic_code && <span className="text-gray-400 ml-1">#{c.clinic_code}</span>}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
         <div>
           <label className="block text-[11px] text-gray-700 font-bold mb-1">② 発行日</label>
