@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { poolFromOrders } from "@/lib/po-pool"
+import { poolFromOrders, forceAddOrderItemToPool } from "@/lib/po-pool"
 import { fmtYen, calcTax, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
 import Link from "next/link"
 
@@ -59,8 +59,23 @@ export default function OrderProcessPage() {
   const [showResult, setShowResult] = useState(false)
   const [processingAll, setProcessingAll] = useState(false)
   const [sellMode, setSellMode]     = useState(true)
+  const [forcingItemId, setForcingItemId] = useState<string | null>(null)
 
   useEffect(() => { fetchData() }, [])
+
+  // 在庫があっても、この商品だけ強制的に発注プールへ入れる
+  // （在庫を持たず注文が来るたびに毎回仕入れる運用の医院向け）
+  async function forceOrderItem(itemId: string, productName: string) {
+    if (!confirm(`「${productName}」を在庫があっても強制的に発注プールへ追加しますか？`)) return
+    setForcingItemId(itemId)
+    try {
+      const r = await forceAddOrderItemToPool(itemId)
+      if (!r.ok) { alert("追加失敗: " + r.error); return }
+      alert(`✅ ${r.supplierName} の発注プールに追加しました。`)
+    } finally {
+      setForcingItemId(null)
+    }
+  }
 
   async function fetchData() {
     setLoading(true)
@@ -491,6 +506,7 @@ export default function OrderProcessPage() {
                       {predictMode === "split" && (
                         <th style={{ ...thStyle, textAlign: "center", width: 70 }}>今回の処理</th>
                       )}
+                      <th style={{ ...thStyle, textAlign: "center", width: 70 }}>発注</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -522,11 +538,26 @@ export default function OrderProcessPage() {
                               }
                             </td>
                           )}
+                          <td style={{ padding: "6px 6px", textAlign: "center" }}>
+                            {it.product_id && (
+                              <button
+                                onClick={() => forceOrderItem(it.id, it.product_name || "(不明)")}
+                                disabled={forcingItemId === it.id}
+                                style={{
+                                  fontSize: 11, padding: "3px 6px", borderRadius: 6,
+                                  border: "1px solid #fdba74", background: "#fff7ed", color: "#9a3412",
+                                  cursor: "pointer", opacity: forcingItemId === it.id ? 0.5 : 1,
+                                }}
+                                title="在庫があっても強制的に発注プールへ追加する">
+                                {forcingItemId === it.id ? "…" : "強制発注"}
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       )
                     })}
                     {its.length === 0 && (
-                      <tr><td colSpan={5} style={{ padding: "12px 6px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>明細なし</td></tr>
+                      <tr><td colSpan={predictMode === "split" ? 6 : 5} style={{ padding: "12px 6px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>明細なし</td></tr>
                     )}
                   </tbody>
                 </table>
