@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",  // 月次は精度重視で sonnet
-        max_tokens: 16384,            // 多明細対応
+        max_tokens: 64000,            // 多明細対応（枚数の多い月次請求書で出力が切れないよう引き上げ）
         system: SYSTEM_PROMPT,
         messages: [
           {
@@ -136,13 +136,20 @@ export async function POST(req: NextRequest) {
     let jsonText = text.trim()
     const fence = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/)
     if (fence) jsonText = fence[1].trim()
+    else jsonText = jsonText.replace(/^```(?:json)?\s*/, "")  // 出力が途中で切れて閉じ```が無い場合
 
     let parsed: ParsedSupplierInvoice
     try {
       parsed = JSON.parse(jsonText)
     } catch {
+      const truncated = result.stop_reason === "max_tokens"
       return NextResponse.json(
-        { error: "JSON 解析失敗", raw: text.slice(0, 1000) },
+        {
+          error: truncated
+            ? "PDFの明細が多く、AIの回答が最後まで出力される前に打ち切られました（max_tokens到達）。ページを分割して読み込んでください。"
+            : "JSON 解析失敗",
+          raw: text.slice(0, 1000),
+        },
         { status: 502 }
       )
     }
