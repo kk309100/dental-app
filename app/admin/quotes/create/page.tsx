@@ -363,15 +363,15 @@ function CreateQuotePage() {
                     <td className="px-2 py-1">
                       <input type="number" value={l.cost}
                         onChange={(e) => updateLine(i, { cost: Number(e.target.value) || 0 })}
-                        className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-xs bg-gray-50"
-                        title="仕入価格（商品マスタから自動）" />
+                        className="w-full px-1 py-0.5 border border-gray-300 rounded text-right text-xs bg-white"
+                        title="仕入価格（商品マスタから自動、クリックして編集可）" />
                     </td>
                   )}
                   <td className="px-2 py-1">
                     <input type="number" value={l.listPrice}
                       onChange={(e) => updateLine(i, { listPrice: Number(e.target.value) || 0 })}
-                      className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-xs"
-                      title="定価（商品マスタから自動、編集可）" />
+                      className="w-full px-1 py-0.5 border border-gray-300 rounded text-right text-xs bg-white"
+                      title="定価（商品マスタから自動、クリックして編集可）" />
                   </td>
                   <td className="px-2 py-1">
                     <input type="number" value={l.price}
