@@ -33,8 +33,25 @@ export default function QuotesPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | QuoteStatus | "active">("all")
   const [clinicFilter, setClinicFilter] = useState("all")
   const [groupView, setGroupView] = useGroupView()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => { fetchData() }, [])
+
+  async function deleteQuote(quoteId: string, quoteNumber: string, status: QuoteStatus) {
+    const msg = status === "converted"
+      ? `⚠️ 「売上化済み」の見積書 ${quoteNumber} を削除します。\n\n請求書とのリンクも切れる可能性があります。\n\n本当によろしいですか？`
+      : `見積書 ${quoteNumber} を削除します。\n明細も一緒に削除されます。\nよろしいですか？`
+    if (!confirm(msg)) return
+    setDeletingId(quoteId)
+    try {
+      await supabase.from("quote_items").delete().eq("quote_id", quoteId)
+      const { error } = await supabase.from("quotes").delete().eq("id", quoteId)
+      if (error) { alert("削除失敗: " + error.message); return }
+      await fetchData()
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   async function fetchData() {
     setLoading(true)
@@ -178,8 +195,15 @@ export default function QuotesPage() {
                   <td className="px-2 py-1.5 text-center text-[12px] text-gray-600">{fmtDate(q.issue_date)}</td>
                   <td className="px-2 py-1.5 text-center text-[12px] text-gray-600">{q.expiry_date ? fmtDate(q.expiry_date) : "—"}</td>
                   <td className="px-2 py-1.5 text-right text-[12px] font-bold">{fmtYen(q.total)}</td>
-                  <td className="px-2 py-1.5 text-center">
-                    <Link href={`/admin/quotes/${q.id}`} className="text-[12px] px-2 py-1 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
+                  <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                    <Link href={`/admin/quotes/${q.id}`} className="text-[12px] px-2 py-1 border border-gray-200 rounded hover:bg-gray-50 mr-1">開く</Link>
+                    <button
+                      onClick={() => deleteQuote(q.id, q.quote_number, q.status)}
+                      disabled={deletingId === q.id}
+                      className="text-[11px] px-1.5 py-1 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50"
+                      title="この見積書を削除">
+                      {deletingId === q.id ? "…" : "🗑"}
+                    </button>
                   </td>
                 </tr>
               )
