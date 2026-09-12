@@ -280,9 +280,12 @@ function AdminOrdersPage() {
       setForcingItemId(null)
     }
   }
-  // 明細行から直接その場で入荷（在庫を増やす）。
+  // 明細行から直接その場で入荷。
+  // ★在庫数は増やさない（素通り扱い）: この入荷はこの注文向けに個別発注したものを
+  //   受け取ってそのまま医院へ渡す運用のため、共有の在庫数に足すと「在庫あり」判定が
+  //   実態とズレて、他の注文が誤って発注不要と判定されてしまう。履歴だけ残す。
   // productId が null の場合（商品コードなし・商品マスタ未登録の手入力商品）は、
-  // 商品マスタに新規登録してから入荷する
+  // 商品マスタに新規登録してから入荷記録を残す
   async function quickReceiveItem(itemId: string, productId: string | null, productName: string, shortfall: number) {
     const qty = Number(receiveQtyFor(itemId, shortfall))
     if (!qty || qty <= 0) { alert("正しい数量を入力してください"); return }
@@ -297,22 +300,10 @@ function AdminOrdersPage() {
         pid = newProd.id
         await supabase.from("order_items").update({ product_id: pid }).eq("id", itemId)
       }
-      const { data: prod } = await supabase.from("products").select("stock").eq("id", pid).single()
-      const before = Number(prod?.stock || 0)
-      const after = before + qty
-      const { error } = await supabase.from("products").update({ stock: after }).eq("id", pid)
-      if (error) { alert("入荷失敗: " + error.message); return }
       await supabase.from("stock_receipts").insert({
         product_id: pid, quantity: qty,
-        memo: `注文管理から入荷（${productName}）`,
+        memo: `注文管理から入荷・医院へ直送（在庫は加算せず）（${productName}）`,
       })
-      try {
-        await supabase.from("stock_movements").insert({
-          product_id: pid, movement_type: "入庫", quantity: qty,
-          before_stock: before, after_stock: after,
-          ref_type: "manual", reason: "注文管理から入荷",
-        })
-      } catch { /* テーブル無くてもOK */ }
       await fetchData()
     } finally {
       setReceivingItemId(null)
