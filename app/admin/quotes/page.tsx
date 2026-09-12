@@ -22,7 +22,7 @@ type Quote = {
   created_at: string
 }
 type Clinic = { id: string; name: string }
-type QuoteItem = { id: string; quote_id: string; product_name: string | null; quantity: number; unit_price: number; amount: number | null }
+type QuoteItem = { id: string; quote_id: string; product_name: string | null; quantity: number; price: number }
 
 export default function QuotesPage() {
   const [quotes, setQuotes] = useState<Quote[]>([])
@@ -46,7 +46,7 @@ export default function QuotesPage() {
     setClinics(c.data || [])
     // 商品別集計用に明細取得（テーブル無ければスキップ）
     try {
-      const { data: its } = await supabase.from("quote_items").select("id,quote_id,product_name,quantity,unit_price,amount").limit(50000)
+      const { data: its } = await supabase.from("quote_items").select("id,quote_id,product_name,quantity,price").limit(50000)
       setItems((its as QuoteItem[]) || [])
     } catch { setItems([]) }
     setLoading(false)
@@ -93,7 +93,7 @@ export default function QuotesPage() {
     items: (itemsByQuote.get(q.id) || []).map(it => ({
       name: it.product_name || "(不明)",
       quantity: Number(it.quantity || 0),
-      price: Number(it.unit_price || 0),
+      price: Number(it.price || 0),
     })),
   })), [filtered, clinics, itemsByQuote])
 
