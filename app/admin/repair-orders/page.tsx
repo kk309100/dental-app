@@ -11,6 +11,7 @@ type RepairOrder = {
   clinic_id: string | null
   contact_person: string | null
   equipment_name: string
+  manufacturer: string | null
   model_number: string | null
   fault_description: string | null
   desired_delivery_date: string | null
@@ -62,7 +63,7 @@ export default function RepairOrdersPage() {
     const k = search.toLowerCase()
     return rows.filter(r => {
       const clinic = r.clinic_id ? clinicById.get(r.clinic_id)?.name || "" : ""
-      const match = !k || [r.receipt_number, r.equipment_name, r.model_number, clinic, r.contact_person]
+      const match = !k || [r.receipt_number, r.equipment_name, r.manufacturer, r.model_number, clinic, r.contact_person]
         .some(v => (v || "").toLowerCase().includes(k))
       const st = statusFilter === "all" || statusFilter === "active"
         ? (statusFilter === "active" ? !["返却済み", "キャンセル"].includes(r.status) : true)
@@ -157,6 +158,7 @@ export default function RepairOrdersPage() {
                     <td style={td}>{r.contact_person || "—"}</td>
                     <td style={{ ...td, fontWeight: 600 }}>
                       {r.equipment_name}
+                      {r.manufacturer && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 5 }}>［{r.manufacturer}］</span>}
                       {r.model_number && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 5 }}>{r.model_number}</span>}
                     </td>
                     <td style={td}>{r.repair_destination || "—"}</td>

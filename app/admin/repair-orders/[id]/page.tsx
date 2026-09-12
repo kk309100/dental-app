@@ -33,6 +33,7 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
   const [clinicId,           setClinicId]           = useState("")
   const [contactPerson,      setContactPerson]      = useState("")
   const [equipmentName,      setEquipmentName]      = useState("")
+  const [manufacturer,       setManufacturer]       = useState("")
   const [modelNumber,        setModelNumber]        = useState("")
   const [faultDescription,   setFaultDescription]   = useState("")
   const [desiredDelivery,    setDesiredDelivery]    = useState("")
@@ -63,6 +64,7 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
       setClinicId(data.clinic_id || "")
       setContactPerson(data.contact_person || "")
       setEquipmentName(data.equipment_name || "")
+      setManufacturer(data.manufacturer || "")
       setModelNumber(data.model_number || "")
       setFaultDescription(data.fault_description || "")
       setDesiredDelivery(data.desired_delivery_date || "")
@@ -98,6 +100,7 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
           clinic_id:             clinicId || null,
           contact_person:        contactPerson.trim() || null,
           equipment_name:        equipmentName.trim(),
+          manufacturer:          manufacturer.trim() || null,
           model_number:          modelNumber.trim() || null,
           fault_description:     faultDescription.trim() || null,
           desired_delivery_date: desiredDelivery || null,
@@ -126,6 +129,7 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
           clinic_id:             clinicId || null,
           contact_person:        contactPerson.trim() || null,
           equipment_name:        equipmentName.trim(),
+          manufacturer:          manufacturer.trim() || null,
           model_number:          modelNumber.trim() || null,
           fault_description:     faultDescription.trim() || null,
           desired_delivery_date: desiredDelivery || null,
@@ -241,6 +245,9 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
             <Field label="機器名・品名 *">
               <input value={equipmentName} onChange={e => setEquipmentName(e.target.value)} placeholder="例：歯科用ハンドピース" style={{ ...inp, borderColor: equipmentName ? "#d1d5db" : "#fca5a5" }} />
             </Field>
+            <Field label="メーカー名">
+              <input value={manufacturer} onChange={e => setManufacturer(e.target.value)} placeholder="例：NSK" style={inp} />
+            </Field>
             <Field label="型番">
               <input value={modelNumber} onChange={e => setModelNumber(e.target.value)} placeholder="例：NSK-ABC123" style={inp} />
             </Field>
@@ -286,6 +293,7 @@ export default function RepairOrderDetailPage({ params }: { params: Promise<{ id
             clinicPhone={selectedClinic?.phone || ""}
             contactPerson={contactPerson}
             equipmentName={equipmentName}
+            manufacturer={manufacturer}
             modelNumber={modelNumber}
             faultDescription={faultDescription}
             desiredDelivery={desiredDelivery}
@@ -372,11 +380,11 @@ function Field({ label, children, full }: { label: string; children: React.React
 // ── 印刷シート ────────────────────────────────────────────
 function PrintSheet({
   receiptNumber, dateStr, clinicName, clinicAdress, clinicPhone,
-  contactPerson, equipmentName, modelNumber, faultDescription,
+  contactPerson, equipmentName, manufacturer, modelNumber, faultDescription,
   desiredDelivery, repairDestination, status, notes,
 }: {
   receiptNumber: string; dateStr: string; clinicName: string; clinicAdress: string; clinicPhone: string;
-  contactPerson: string; equipmentName: string; modelNumber: string; faultDescription: string;
+  contactPerson: string; equipmentName: string; manufacturer: string; modelNumber: string; faultDescription: string;
   desiredDelivery: string; repairDestination: string; status: string; notes: string;
 }) {
   const statusStyle = STATUS_STYLE[status] || { bg: "#f3f4f6", color: "#6b7280" }
@@ -438,6 +446,7 @@ function PrintSheet({
           </tr>
           {[
             ["機器名・品名", equipmentName || "—", true],
+            ["メーカー名",   manufacturer || "—",  false],
             ["型番・品番",   modelNumber || "—",   false],
             ["修理先",       repairDestination || "—", false],
             ["希望納期",     desiredDelivery || "—", false],
