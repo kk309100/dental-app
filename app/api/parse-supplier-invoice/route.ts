@@ -6,11 +6,17 @@
 //   - 明細が多い (50〜500行程度)
 //   - 各明細に納品日・伝票No・商品コード・数量・金額が並ぶ
 //   - 集計表（カテゴリ別小計）も付いていることが多い
+//
+// 実測: 13ページ/168明細のPDFで処理に約300秒かかり、Vercelのプラン上限
+// （実測で約300秒。コード側の maxDuration をそれ以上に設定しても勝てない）
+// で504になることを確認済み。そのため呼び出し側（lib/parse-supplier-invoice-client.ts）
+// でPDFを数ページ単位に分割してこのAPIを複数回呼ぶ方式に変更した。
+// このAPI自体は「渡された分だけ」を読み取ればよいので変更していない。
 
 import { NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
-export const maxDuration = 300  // 大きなPDFは時間かかる
+export const maxDuration = 280  // Vercel側の実際の上限（約300秒）に収まるよう設定
 
 type ParsedItem = {
   delivery_date?: string         // YYYY-MM-DD（納品日）
@@ -92,6 +98,11 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // 明細が多い月次請求書はAIの生成そのものに数分かかることがあり、
+    // 非ストリーミングだと「最初の1バイトが来るまで」の既定タイムアウト
+    // （NodeのfetchはHeadersTimeoutErrorで5分前後）に引っかかって落ちる。
+    // ストリーミングにすると生成の合間も細かくデータが届くため、この種の
+    // タイムアウトを回避できる（Anthropicも長時間かかる処理にはstream推奨）。
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -103,6 +114,7 @@ export async function POST(req: NextRequest) {
         model: "claude-sonnet-4-5",  // 月次は精度重視で sonnet
         max_tokens: 64000,            // 多明細対応（枚数の多い月次請求書で出力が切れないよう引き上げ）
         system: SYSTEM_PROMPT,
+        stream: true,
         messages: [
           {
             role: "user",
@@ -129,9 +141,47 @@ export async function POST(req: NextRequest) {
         { status: 502 }
       )
     }
+    if (!r.body) {
+      return NextResponse.json({ error: "ストリーミング応答の取得に失敗しました" }, { status: 502 })
+    }
 
-    const result = await r.json()
-    const text = result.content?.[0]?.text || ""
+    // SSEストリームを読み、content_block_delta の text_delta を連結する
+    let text = ""
+    let stopReason: string | null = null
+    let sawError: string | null = null
+    let usage: { input_tokens?: number; output_tokens?: number } = {}
+    {
+      const reader = r.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ""
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split("\n")
+        buf = lines.pop() || ""
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue
+          const jsonStr = line.slice(5).trim()
+          if (!jsonStr) continue
+          let evt: any
+          try { evt = JSON.parse(jsonStr) } catch { continue }
+          if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+            text += evt.delta.text
+          } else if (evt.type === "message_start" && evt.message?.usage) {
+            usage = { ...usage, ...evt.message.usage }
+          } else if (evt.type === "message_delta") {
+            if (evt.delta?.stop_reason) stopReason = evt.delta.stop_reason
+            if (evt.usage) usage = { ...usage, ...evt.usage }
+          } else if (evt.type === "error") {
+            sawError = evt.error?.message || "unknown stream error"
+          }
+        }
+      }
+    }
+    if (sawError) {
+      return NextResponse.json({ error: `Claude API (stream): ${sawError}` }, { status: 502 })
+    }
 
     let jsonText = text.trim()
     const fence = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -142,7 +192,7 @@ export async function POST(req: NextRequest) {
     try {
       parsed = JSON.parse(jsonText)
     } catch {
-      const truncated = result.stop_reason === "max_tokens"
+      const truncated = stopReason === "max_tokens"
       return NextResponse.json(
         {
           error: truncated
@@ -160,7 +210,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       data: parsed,
-      usage: result.usage,
+      usage,
     })
   } catch (e) {
     console.error("parse-supplier-invoice error:", e)

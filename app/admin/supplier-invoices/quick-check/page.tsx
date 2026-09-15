@@ -21,33 +21,9 @@ import {
   findProductId, findStockReceipt, classifyMatch,
   type SupplierInvoiceItem, type StockReceipt, type Product, type Alias,
 } from "@/lib/supplier-invoice-match"
+import { parseSupplierInvoicePdf, type ParsedInvoice, type ParseProgress } from "@/lib/parse-supplier-invoice-client"
 
 type SupplierWithCode = SupplierOption & { supplier_code?: string | null }
-
-type ParsedInvoiceItem = {
-  delivery_date?: string
-  delivery_number?: string
-  supplier_product_code?: string
-  jan_code?: string
-  product_name: string
-  manufacturer?: string
-  pack_size?: string
-  quantity: number
-  unit_price: number
-  amount: number
-  tax_rate?: number
-}
-type ParsedInvoice = {
-  supplier_name?: string
-  invoice_number?: string
-  invoice_date?: string
-  period_start?: string
-  period_end?: string
-  subtotal?: number
-  tax?: number
-  total?: number
-  items: ParsedInvoiceItem[]
-}
 
 type ResultRow = {
   status: string
@@ -85,7 +61,9 @@ export default function QuickCheckPage() {
 
   const [pdfFileName, setPdfFileName] = useState("")
   const [pdfParsing, setPdfParsing] = useState(false)
+  const [pdfProgress, setPdfProgress] = useState<ParseProgress | null>(null)
   const [pdfError, setPdfError] = useState("")
+  const [pdfWarnings, setPdfWarnings] = useState<string[]>([])
   const [invoice, setInvoice] = useState<ParsedInvoice | null>(null)
 
   const [checked, setChecked] = useState(false)
@@ -132,23 +110,18 @@ export default function QuickCheckPage() {
 
   async function handlePdfFile(file: File) {
     if (!supplierId) { alert("先に仕入先を選択してください（自動判定できなかった場合は手動で選んでください）"); return }
-    setPdfFileName(file.name); setPdfError(""); setInvoice(null); setChecked(false); setSaved(false)
+    setPdfFileName(file.name); setPdfError(""); setPdfWarnings([]); setInvoice(null); setChecked(false); setSaved(false)
     setPdfParsing(true)
+    setPdfProgress(null)
     try {
-      const buf = await file.arrayBuffer()
-      const base64 = Buffer.from(buf).toString("base64")
-      const r = await fetch("/api/parse-supplier-invoice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pdfBase64: base64 }),
-      })
-      const body = await r.json().catch(() => null)
-      if (!r.ok || !body) throw new Error(body?.error || `HTTP ${r.status}`)
-      setInvoice(body.data as ParsedInvoice)
+      const { data, warnings } = await parseSupplierInvoicePdf(file, setPdfProgress)
+      setInvoice(data)
+      setPdfWarnings(warnings)
     } catch (e) {
       setPdfError((e as Error).message)
     } finally {
       setPdfParsing(false)
+      setPdfProgress(null)
     }
   }
 
@@ -360,7 +333,18 @@ export default function QuickCheckPage() {
             <input type="file" accept="application/pdf" className="hidden" disabled={pdfParsing}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePdfFile(f); e.target.value = "" }} />
           </label>
+          {pdfParsing && pdfProgress && pdfProgress.chunkCount > 1 && (
+            <p className="text-xs text-blue-700">
+              ページ{pdfProgress.pageRange}を読み取り中…（{pdfProgress.chunkIndex}/{pdfProgress.chunkCount}）
+              ページ数が多いため分割して読み取っています
+            </p>
+          )}
           {pdfFileName && invoice && <p className="text-xs text-gray-500">{pdfFileName} — {invoice.items.length}行 / 合計{fmtYen(invoice.total || 0)}</p>}
+          {pdfWarnings.length > 0 && (
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded whitespace-pre-wrap">
+              ⚠ 一部のページの読み取りに失敗しました（他のページの結果は反映されています）:{"\n"}{pdfWarnings.join("\n")}
+            </p>
+          )}
           {pdfError && <p className="text-xs text-red-700 bg-red-50 p-2 rounded whitespace-pre-wrap">⚠ {pdfError}</p>}
         </div>
       </div>

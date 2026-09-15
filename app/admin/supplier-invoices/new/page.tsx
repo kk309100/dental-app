@@ -17,32 +17,7 @@ import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
 import { runAutoMatch } from "@/lib/supplier-invoice-match"
-
-type ParsedItem = {
-  delivery_date?: string
-  delivery_number?: string
-  supplier_product_code?: string
-  jan_code?: string
-  product_name: string
-  manufacturer?: string
-  pack_size?: string
-  quantity: number
-  unit_price: number
-  amount: number
-  tax_rate?: number
-}
-
-type ParsedInvoice = {
-  supplier_name?: string
-  invoice_number?: string
-  invoice_date?: string
-  period_start?: string
-  period_end?: string
-  subtotal?: number
-  tax?: number
-  total?: number
-  items: ParsedItem[]
-}
+import { parseSupplierInvoicePdf, type ParsedInvoice, type ParsedInvoiceItem as ParsedItem, type ParseProgress } from "@/lib/parse-supplier-invoice-client"
 
 export default function NewSupplierInvoicePage() {
   const router = useRouter()
@@ -51,8 +26,10 @@ export default function NewSupplierInvoicePage() {
   const [supplierId, setSupplierId] = useState("")
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [parsing, setParsing] = useState(false)
+  const [parseProgress, setParseProgress] = useState<ParseProgress | null>(null)
   const [parsed, setParsed] = useState<ParsedInvoice | null>(null)
   const [parseError, setParseError] = useState("")
+  const [parseWarnings, setParseWarnings] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   // 編集可能フィールド
@@ -74,21 +51,11 @@ export default function NewSupplierInvoicePage() {
     if (!pdfFile) { alert("PDFを選択してください"); return }
     if (!supplierId) { alert("仕入先を選択してください"); return }
 
-    setParsing(true); setParseError(""); setParsed(null)
+    setParsing(true); setParseError(""); setParseWarnings([]); setParsed(null); setParseProgress(null)
     try {
-      const buf = await pdfFile.arrayBuffer()
-      const base64 = Buffer.from(buf).toString("base64")
-      const r = await fetch("/api/parse-supplier-invoice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pdfBase64: base64 }),
-      })
-      if (!r.ok) {
-        const err = await r.json()
-        throw new Error(err.error || `HTTP ${r.status}`)
-      }
-      const { data } = await r.json()
+      const { data, warnings } = await parseSupplierInvoicePdf(pdfFile, setParseProgress)
       setParsed(data)
+      setParseWarnings(warnings)
       setInvoiceNumber(data.invoice_number || "")
       setInvoiceDate(data.invoice_date || "")
       setPeriodStart(data.period_start || "")
@@ -99,6 +66,7 @@ export default function NewSupplierInvoicePage() {
       setParseError((e as Error).message)
     } finally {
       setParsing(false)
+      setParseProgress(null)
     }
   }
 
@@ -199,6 +167,17 @@ export default function NewSupplierInvoicePage() {
           </button>
           {pdfFile && <span className="text-[11px] text-gray-500">{pdfFile.name} ({(pdfFile.size / 1024 / 1024).toFixed(1)}MB)</span>}
         </div>
+        {parsing && parseProgress && parseProgress.chunkCount > 1 && (
+          <p className="text-xs text-blue-700">
+            ページ{parseProgress.pageRange}を読み取り中…（{parseProgress.chunkIndex}/{parseProgress.chunkCount}）
+            ページ数が多いため分割して読み取っています
+          </p>
+        )}
+        {parseWarnings.length > 0 && (
+          <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded whitespace-pre-wrap" style={{ border: "1px solid #fde68a" }}>
+            ⚠ 一部のページの読み取りに失敗しました（他のページの結果は反映されています）:{"\n"}{parseWarnings.join("\n")}
+          </p>
+        )}
         {parseError && (
           <p className="text-xs text-red-700 bg-red-50 p-2 rounded" style={{ border: "1px solid #fecaca" }}>
             ⚠ {parseError}
