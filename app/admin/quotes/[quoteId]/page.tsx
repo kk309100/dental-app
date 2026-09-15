@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
 import { fmtYen, fmtDate, getClinicPrefix, getCorporateLabel, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
 import { QUOTE_STATUSES, type QuoteStatus } from "@/lib/quote"
+import { forceAddQuoteItemToPool } from "@/lib/po-pool"
 import Seal from "@/app/components/Seal"
 import Link from "next/link"
 
@@ -35,6 +36,9 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
   useEffect(() => { getCompany().then(setCompany) }, [])
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
+  const [unitPriceMode, setUnitPriceMode] = useState(false)  // 単価表（合計を出さず、品名・単価だけ並べる）
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
+  const [orderingId, setOrderingId] = useState<string | null>(null)
 
   useEffect(() => { fetchData() }, [quoteId])
 
@@ -223,6 +227,38 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
     }
   }
 
+  function toggleChecked(id: string) {
+    setCheckedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  // チェックした明細だけを発注プールへ追加（在庫状況に関わらず強制発注）
+  async function orderCheckedItems() {
+    if (checkedIds.size === 0) { alert("発注する商品にチェックを入れてください"); return }
+    if (!confirm(`チェックした ${checkedIds.size} 件を発注プールへ追加しますか？`)) return
+    setOrderingId("bulk")
+    try {
+      const results: string[] = []
+      const errors: string[] = []
+      for (const id of checkedIds) {
+        const it = items.find(x => x.id === id)
+        const r = await forceAddQuoteItemToPool(id)
+        if (r.ok) results.push(`${it?.product_name || id}: ${r.supplierName}`)
+        else errors.push(`${it?.product_name || id}: ${r.error}`)
+      }
+      let msg = ""
+      if (results.length > 0) msg += "✅ 発注プールに追加:\n" + results.join("\n")
+      if (errors.length > 0) msg += (msg ? "\n\n" : "") + "⚠️ 失敗:\n" + errors.join("\n")
+      alert(msg)
+      setCheckedIds(new Set())
+    } finally {
+      setOrderingId(null)
+    }
+  }
+
   function doPrint() { window.print() }
 
   if (loading) return <main style={page}><p>読み込み中…</p></main>
@@ -238,6 +274,11 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
         <Link href="/admin/quotes"><button style={btnGray}>← 一覧</button></Link>
         <div style={{ flex: 1 }} />
         <span style={{ marginRight: 8, padding: "4px 12px", borderRadius: 99, background: status.color + "22", color: status.color, fontSize: 12, fontWeight: 700 }}>{status.label}</span>
+        <Link href={`/admin/quotes/create?edit=${quote.id}`}><button style={btnGray}>✏️ 編集</button></Link>
+        <Link href={`/admin/quotes/create?copy=${quote.id}`}><button style={btnGray}>📋 複製</button></Link>
+        <button onClick={() => setUnitPriceMode(m => !m)} style={unitPriceMode ? btnGreen : btnGray} title="複数案からお選びいただく見積など、合計を出さず品名と単価だけを並べる表示に切り替えます">
+          🧾 {unitPriceMode ? "通常表示に戻す" : "単価表で表示"}
+        </button>
         <button onClick={doPrint} style={btnDark}>🖨 印刷</button>
         {quote.status === "draft" && <button onClick={() => updateStatus("sent")} style={btnGray}>送付済にする</button>}
         {(quote.status === "draft" || quote.status === "sent" || quote.status === "accepted") && quote.status !== "converted" && (
@@ -288,43 +329,86 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
           {quote.expiry_date && <div><strong>有効期限:</strong> {fmtDate(quote.expiry_date)}</div>}
         </div>
 
-        <div style={totalBox}>
-          <span style={{ fontSize: 13 }}>御見積金額（税込）</span>
-          <span style={{ fontSize: 28, fontWeight: 800 }}>{fmtYen(quote.total)}</span>
-        </div>
+        {!unitPriceMode && (
+          <div style={totalBox}>
+            <span style={{ fontSize: 13 }}>御見積金額（税込）</span>
+            <span style={{ fontSize: 28, fontWeight: 800 }}>{fmtYen(quote.total)}</span>
+          </div>
+        )}
 
-        <p style={{ fontSize: 11, color: "#666", margin: "16px 0 6px" }}>下記のとおり御見積申し上げます。</p>
-        <table style={table}>
-          <thead>
-            <tr>
-              <th style={th}>品名</th>
-              <th style={{ ...th, width: 60, textAlign: "right" }}>数量</th>
-              <th style={{ ...th, width: 80, textAlign: "right" }}>定価</th>
-              <th style={{ ...th, width: 80, textAlign: "right" }}>単価</th>
-              <th style={{ ...th, width: 100, textAlign: "right" }}>金額</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 ? <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
-              : items.map((it) => (
-                <tr key={it.id}>
-                  <td style={td}>{it.product_name}</td>
-                  <td style={{ ...td, textAlign: "right" }}>{it.quantity}</td>
-                  <td style={{ ...td, textAlign: "right" }}>{it.list_price != null ? fmtYen(it.list_price) : "—"}</td>
-                  <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price)}</td>
-                  <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price * it.quantity)}</td>
-                </tr>
+        <p style={{ fontSize: 11, color: "#666", margin: "16px 0 6px" }}>
+          {unitPriceMode ? "下記の各案より、ご希望のものをお選びください。" : "下記のとおり御見積申し上げます。"}
+        </p>
+
+        {/* 明細から選んで発注（画面上のみ。印刷には出ない） */}
+        {items.length > 0 && (
+          <div className="no-print" style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={orderCheckedItems} disabled={orderingId !== null || checkedIds.size === 0} style={{ ...btnGray, opacity: checkedIds.size === 0 ? 0.5 : 1 }}>
+              {orderingId ? "処理中…" : `📦 チェックした商品を発注（${checkedIds.size}）`}
+            </button>
+            <span style={{ fontSize: 11, color: "#9ca3af" }}>在庫があっても、選んだ商品だけ強制的に発注プールへ追加します</span>
+          </div>
+        )}
+
+        {unitPriceMode ? (
+          <table style={table}>
+            <thead>
+              <tr>
+                <th className="no-print" style={{ ...th, width: 28 }}></th>
+                <th style={th}>品名</th>
+                <th style={{ ...th, width: 100, textAlign: "right" }}>単価</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? <tr><td colSpan={3} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
+                : items.map((it) => (
+                  <tr key={it.id}>
+                    <td className="no-print" style={td}>
+                      <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
+                    </td>
+                    <td style={td}>{it.product_name}</td>
+                    <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtYen(it.price)}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        ) : (
+          <table style={table}>
+            <thead>
+              <tr>
+                <th className="no-print" style={{ ...th, width: 28 }}></th>
+                <th style={th}>品名</th>
+                <th style={{ ...th, width: 60, textAlign: "right" }}>数量</th>
+                <th style={{ ...th, width: 80, textAlign: "right" }}>定価</th>
+                <th style={{ ...th, width: 80, textAlign: "right" }}>単価</th>
+                <th style={{ ...th, width: 100, textAlign: "right" }}>金額</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
+                : items.map((it) => (
+                  <tr key={it.id}>
+                    <td className="no-print" style={td}>
+                      <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
+                    </td>
+                    <td style={td}>{it.product_name}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{it.quantity}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{it.list_price != null ? fmtYen(it.list_price) : "—"}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price * it.quantity)}</td>
+                  </tr>
+                ))}
+              {Array.from({ length: Math.max(0, 10 - items.length) }).map((_, i) => (
+                <tr key={"e" + i}><td className="no-print" style={td}></td><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
               ))}
-            {Array.from({ length: Math.max(0, 10 - items.length) }).map((_, i) => (
-              <tr key={"e" + i}><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
-            <tr><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
-            <tr><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
-          </tfoot>
-        </table>
+            </tbody>
+            <tfoot>
+              <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
+              <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
+              <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
+            </tfoot>
+          </table>
+        )}
 
         {quote.notes && (
           <div style={{ marginTop: 12, padding: 10, background: "#fafafa", border: "1px solid #eee", borderRadius: 4 }}>

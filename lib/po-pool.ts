@@ -35,7 +35,8 @@ export type PoolResult = {
  */
 export async function addItemsToPool(
   itemsBySupplier: Map<string, PoolItem[]>,
-  suppliersInfo: Map<string, string>  // supplier_id → name
+  suppliersInfo: Map<string, string>,  // supplier_id → name
+  sourceLabel: string = "注文",  // note に記録する接頭辞（「注文」or「見積」）
 ): Promise<PoolResult> {
   const result: PoolResult = { ok: true, pos: [], errors: [] }
 
@@ -95,7 +96,7 @@ export async function addItemsToPool(
         quantity: it.quantity,
         unit_price: it.unit_price,
         received_quantity: 0,
-        note: `[${it.source_clinic_name}] 注文 ${it.source_order_id.slice(0, 8)}`,
+        note: `[${it.source_clinic_name}] ${sourceLabel} ${it.source_order_id.slice(0, 8)}`,
       }))
       const { error: e2 } = await supabase
         .from("purchase_order_items")
@@ -294,6 +295,60 @@ export async function forceAddOrderItemToPool(
     ? (await supabase.from("suppliers").select("name").eq("id", supplierId).single()).data?.name || "(仕入先)"
     : "仕入先未定"
   const result = await addItemsToPool(new Map([[supplierId, [item]]]), new Map([[supplierId, supplierName]]))
+  if (!result.ok) return { ok: false, error: result.errors.join(" / ") }
+  return { ok: true, supplierName }
+}
+
+/**
+ * 見積書の明細1件を、発注プールへ追加する。
+ * 見積から直接「これだけ発注したい」という場合に使う（注文を経由しない）。
+ */
+export async function forceAddQuoteItemToPool(
+  quoteItemId: string,
+  fallbackSupplierId?: string,
+): Promise<{ ok: boolean; error?: string; supplierName?: string }> {
+  const { data: qi, error: qiErr } = await supabase
+    .from("quote_items")
+    .select("id,quote_id,product_id,product_name,quantity,price")
+    .eq("id", quoteItemId)
+    .single()
+  if (qiErr || !qi) return { ok: false, error: qiErr?.message || "明細が見つかりません" }
+
+  const { data: quote } = await supabase.from("quotes").select("id,clinic_id").eq("id", qi.quote_id).single()
+  const clinicName = quote?.clinic_id
+    ? (await supabase.from("clinics").select("name").eq("id", quote.clinic_id).single()).data?.name || "(医院)"
+    : "(医院)"
+
+  let supplierId = fallbackSupplierId || ""
+  let unitPrice = Number(qi.price || 0)
+  if (qi.product_id) {
+    const { data: product } = await supabase.from("products").select("default_supplier_id,cost").eq("id", qi.product_id).single()
+    if (product?.default_supplier_id) supplierId = product.default_supplier_id
+    else if (!supplierId) {
+      const { data: last } = await supabase
+        .from("stock_receipts").select("supplier_id,unit_price")
+        .eq("product_id", qi.product_id).not("supplier_id", "is", null)
+        .order("created_at", { ascending: false }).limit(1)
+      if (last && last.length > 0) { supplierId = last[0].supplier_id; unitPrice = Number(last[0].unit_price ?? unitPrice) }
+    }
+    if (product?.cost && !unitPrice) unitPrice = Number(product.cost)
+  }
+
+  const item: PoolItem = {
+    product_id: qi.product_id,
+    product_name: qi.product_name || "(商品名なし)",
+    quantity: Number(qi.quantity || 0),
+    unit_price: unitPrice,
+    source_order_id: qi.quote_id,
+    source_clinic_name: clinicName,
+    source_clinic_id: quote?.clinic_id || null,
+  }
+  if (item.quantity <= 0) return { ok: false, error: "数量が0以下です" }
+
+  const supplierName = supplierId
+    ? (await supabase.from("suppliers").select("name").eq("id", supplierId).single()).data?.name || "(仕入先)"
+    : "仕入先未定"
+  const result = await addItemsToPool(new Map([[supplierId, [item]]]), new Map([[supplierId, supplierName]]), "見積")
   if (!result.ok) return { ok: false, error: result.errors.join(" / ") }
   return { ok: true, supplierName }
 }

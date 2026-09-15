@@ -38,6 +38,8 @@ function CreateQuotePage() {
   const router = useRouter()
   const sp = useSearchParams()
   const fromOrderId = sp.get("from_order")
+  const editQuoteId = sp.get("edit")
+  const copyQuoteId = sp.get("copy")
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,6 +60,8 @@ function CreateQuotePage() {
   const [openLineIdx, setOpenLineIdx] = useState<number | null>(null)
   const [clinicSearch, setClinicSearch] = useState("")
   const [clinicOpen, setClinicOpen] = useState(false)
+  const [existingQuoteNumber, setExistingQuoteNumber] = useState<string | null>(null)
+  const [existingStatus, setExistingStatus] = useState<string | null>(null)
 
   useEffect(() => { fetchData() }, [])
 
@@ -69,6 +73,7 @@ function CreateQuotePage() {
     ])
     setClinics(c.data || [])
     setProducts((p.data as Product[]) || [])
+    const productMap = new Map((p.data as Product[] || []).map(pp => [pp.id, pp]))
 
     // ?from_order=xxx で注文から見積コピー
     if (fromOrderId) {
@@ -76,8 +81,6 @@ function CreateQuotePage() {
       const { data: items } = await supabase.from("order_items").select("product_id,product_name,quantity,price").eq("order_id", fromOrderId)
       if (o?.clinic_id) setClinicId(o.clinic_id)
       if (items && items.length > 0) {
-        // 商品マスタから cost と listPrice を引く
-        const productMap = new Map((p.data as Product[] || []).map(pp => [pp.id, pp]))
         setLines(items.map((it: any) => {
           const prod = it.product_id ? productMap.get(it.product_id) : null
           return {
@@ -90,6 +93,30 @@ function CreateQuotePage() {
           }
         }))
         setNotes(`注文 #${fromOrderId.slice(0, 8)} から作成`)
+      }
+    }
+
+    // ?edit=xxx / ?copy=xxx で既存見積を読み込む
+    const sourceQuoteId = editQuoteId || copyQuoteId
+    if (sourceQuoteId) {
+      const { data: q } = await supabase.from("quotes").select("*").eq("id", sourceQuoteId).single()
+      const { data: its } = await supabase.from("quote_items").select("*").eq("quote_id", sourceQuoteId).order("sort_order")
+      if (q) {
+        setClinicId(q.clinic_id || "")
+        setIssueDate((q.issue_date || "").slice(0, 10) || ymd(new Date()))
+        setExpiryDate((q.expiry_date || "").slice(0, 10) || defaultExpiryDate(new Date()))
+        setNotes(q.notes || "")
+        if (editQuoteId) { setExistingQuoteNumber(q.quote_number); setExistingStatus(q.status) }
+      }
+      if (its && its.length > 0) {
+        setLines(its.map((it: any) => ({
+          productId: it.product_id,
+          productName: it.product_name || "",
+          quantity: Number(it.quantity || 1),
+          cost: Number((it.product_id ? productMap.get(it.product_id) : null)?.cost || 0),
+          listPrice: Number(it.list_price || 0),
+          price: Number(it.price || 0),
+        })))
       }
     }
     setLoading(false)
@@ -106,6 +133,29 @@ function CreateQuotePage() {
   }
   function addLine() {
     setLines((prev) => [...prev, { productId: null, productName: "", quantity: 1, cost: 0, listPrice: 0, price: 0 }])
+  }
+  // 明細テーブル内で Enter を押したら、次の入力欄へフォーカスを移す
+  // （最後の行の最後の欄なら、新しい行を追加してそこへ移動）
+  function handleLineKeyDown(e: React.KeyboardEvent<HTMLElement>) {
+    if (e.key !== "Enter") return
+    const target = e.target as HTMLElement
+    if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") return
+    e.preventDefault()
+    const container = e.currentTarget
+    const focusables = Array.from(container.querySelectorAll<HTMLInputElement>("input, textarea"))
+    const idx = focusables.indexOf(target as HTMLInputElement)
+    if (idx === -1) return
+    if (idx === focusables.length - 1) {
+      addLine()
+      setTimeout(() => {
+        const updated = Array.from(container.querySelectorAll<HTMLInputElement>("input, textarea"))
+        updated[idx + 1]?.focus()
+        updated[idx + 1]?.select?.()
+      }, 0)
+    } else {
+      focusables[idx + 1].focus()
+      focusables[idx + 1].select?.()
+    }
   }
   function removeLine(idx: number) {
     setLines((prev) => prev.filter((_, i) => i !== idx))
@@ -178,6 +228,36 @@ function CreateQuotePage() {
 
     setSubmitting(true)
     try {
+      if (editQuoteId) {
+        // 編集: ヘッダーを更新し、明細は一旦全削除してから入れ直す（シンプルな方式）
+        const { error: e1 } = await supabase.from("quotes").update({
+          clinic_id: clinicId,
+          issue_date: issueDate,
+          expiry_date: expiryDate || null,
+          subtotal, tax, total,
+          notes: notes || null,
+        }).eq("id", editQuoteId)
+        if (e1) throw new Error("見積更新失敗: " + e1.message)
+
+        const { error: eDel } = await supabase.from("quote_items").delete().eq("quote_id", editQuoteId)
+        if (eDel) throw new Error("明細更新失敗: " + eDel.message)
+
+        const itemsPayload = validLines.map((l, i) => ({
+          quote_id: editQuoteId,
+          product_id: l.productId,
+          product_name: l.productName,
+          quantity: l.quantity,
+          price: l.price,
+          list_price: l.listPrice,
+          sort_order: i,
+        }))
+        const { error: e2 } = await supabase.from("quote_items").insert(itemsPayload)
+        if (e2) throw new Error("明細保存失敗: " + e2.message)
+
+        router.push(`/admin/quotes/${editQuoteId}`)
+        return
+      }
+
       const quote_number = await generateQuoteNumber(new Date(issueDate))
       const { data: q, error: e1 } = await supabase
         .from("quotes")
@@ -220,8 +300,10 @@ function CreateQuotePage() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <Link href="/admin/quotes" className="text-xs text-gray-500 underline">← 見積書一覧</Link>
-        <h1 className="text-lg font-bold text-gray-900">見積書を作成</h1>
+        <Link href={editQuoteId ? `/admin/quotes/${editQuoteId}` : "/admin/quotes"} className="text-xs text-gray-500 underline">← {editQuoteId ? "見積書に戻る" : "見積書一覧"}</Link>
+        <h1 className="text-lg font-bold text-gray-900">
+          {editQuoteId ? `見積書を編集${existingQuoteNumber ? `（${existingQuoteNumber}）` : ""}` : "見積書を作成"}
+        </h1>
         {/* 表示モード切替 */}
         <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs">
           <button onClick={() => setViewMode("internal")}
@@ -236,6 +318,11 @@ function CreateQuotePage() {
       </div>
 
       {error && <div className="text-xs px-3 py-2 rounded bg-red-50 text-red-700" style={{ border: "1px solid #fcc" }}>{error}</div>}
+      {editQuoteId && existingStatus === "converted" && (
+        <div className="text-xs px-3 py-2 rounded bg-amber-50 text-amber-800" style={{ border: "1px solid #fde68a" }}>
+          ⚠️ この見積は既に「売上化済み」です。ここで内容を変更しても、既に作成された注文・請求書には反映されません。
+        </div>
+      )}
 
       {/* 医院 + 日付 */}
       <div className="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-3 gap-3" style={{ border: "1px solid #e8eaed" }}>
@@ -324,7 +411,7 @@ function CreateQuotePage() {
               <th className="px-2 py-1.5 w-8"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody onKeyDown={handleLineKeyDown}>
             {lines.map((l, i) => {
               const gross = calcGross(l.cost, l.price)
               const grossRate = calcGrossRate(l.cost, l.price)
@@ -455,10 +542,10 @@ function CreateQuotePage() {
 
       {/* 作成ボタン */}
       <div className="flex items-center justify-end gap-2 pt-2 sticky bottom-2 bg-gray-50/80 backdrop-blur p-2 rounded-lg">
-        <Link href="/admin/quotes" className="text-xs text-gray-500 hover:bg-gray-100 px-3 py-2 rounded">キャンセル</Link>
+        <Link href={editQuoteId ? `/admin/quotes/${editQuoteId}` : "/admin/quotes"} className="text-xs text-gray-500 hover:bg-gray-100 px-3 py-2 rounded">キャンセル</Link>
         <button onClick={createQuote} disabled={submitting}
           className="px-5 py-2 text-sm font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50">
-          {submitting ? "作成中…" : "✓ 見積書を作成"}
+          {submitting ? "保存中…" : editQuoteId ? "💾 変更を保存" : "✓ 見積書を作成"}
         </button>
       </div>
     </div>
