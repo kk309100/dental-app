@@ -37,10 +37,27 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
   const [unitPriceMode, setUnitPriceMode] = useState(false)  // 単価表（合計を出さず、品名・単価だけ並べる）
+  // 合計金額（御見積金額・小計・消費税・合計）を表示するかどうか。見積ごとにブラウザに保存する
+  const [showTotal, setShowTotal] = useState(true)
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
   const [orderingId, setOrderingId] = useState<string | null>(null)
 
   useEffect(() => { fetchData() }, [quoteId])
+
+  // 合計表示設定の読み込み・保存（Supabaseは変更せず、ブラウザ側にだけ保存）
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`denthub:quote_showtotal:${quoteId}`)
+      if (saved !== null) setShowTotal(saved !== "0")
+    } catch { /* localStorage不可の環境は無視 */ }
+  }, [quoteId])
+  function toggleShowTotal() {
+    setShowTotal(prev => {
+      const next = !prev
+      try { localStorage.setItem(`denthub:quote_showtotal:${quoteId}`, next ? "1" : "0") } catch { /* ignore */ }
+      return next
+    })
+  }
 
   async function fetchData() {
     setLoading(true); setError("")
@@ -279,6 +296,11 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
         <button onClick={() => setUnitPriceMode(m => !m)} style={unitPriceMode ? btnGreen : btnGray} title="複数案からお選びいただく見積など、合計を出さず品名と単価だけを並べる表示に切り替えます">
           🧾 {unitPriceMode ? "通常表示に戻す" : "単価表で表示"}
         </button>
+        {!unitPriceMode && (
+          <button onClick={toggleShowTotal} style={showTotal ? btnGray : btnGreen} title="御見積金額・小計・消費税・合計の表示/非表示を切り替えます（この見積を開いたブラウザに記憶されます）">
+            {showTotal ? "🙈 合計金額を非表示にする" : "👁 合計金額を表示する"}
+          </button>
+        )}
         <button onClick={doPrint} style={btnDark}>🖨 印刷</button>
         {quote.status === "draft" && <button onClick={() => updateStatus("sent")} style={btnGray}>送付済にする</button>}
         {(quote.status === "draft" || quote.status === "sent" || quote.status === "accepted") && quote.status !== "converted" && (
@@ -329,7 +351,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
           {quote.expiry_date && <div><strong>有効期限:</strong> {fmtDate(quote.expiry_date)}</div>}
         </div>
 
-        {!unitPriceMode && (
+        {!unitPriceMode && showTotal && (
           <div style={totalBox}>
             <span style={{ fontSize: 13 }}>御見積金額（税込）</span>
             <span style={{ fontSize: 28, fontWeight: 800 }}>{fmtYen(quote.total)}</span>
@@ -402,11 +424,13 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
                 <tr key={"e" + i}><td className="no-print" style={td}></td><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
-              <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
-              <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
-            </tfoot>
+            {showTotal && (
+              <tfoot>
+                <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
+                <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
+                <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
+              </tfoot>
+            )}
           </table>
         )}
 
