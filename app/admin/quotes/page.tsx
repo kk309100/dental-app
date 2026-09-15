@@ -69,6 +69,28 @@ export default function QuotesPage() {
   const [importError, setImportError] = useState("")
 
   type ImportLine = { productName: string; quantity: number; price: number; listPrice: number | null }
+  // "a,\"b, c\",d" のようなダブルクォート囲みのCSVセルにも対応した簡易パーサ
+  function splitCsvRow(row: string): string[] {
+    const cols: string[] = []
+    let cur = ""
+    let inQuotes = false
+    for (let i = 0; i < row.length; i++) {
+      const c = row[i]
+      if (inQuotes) {
+        if (c === '"') {
+          if (row[i + 1] === '"') { cur += '"'; i++ }
+          else inQuotes = false
+        } else cur += c
+      } else {
+        if (c === '"') inQuotes = true
+        else if (c === ",") { cols.push(cur); cur = "" }
+        else cur += c
+      }
+    }
+    cols.push(cur)
+    return cols
+  }
+
   function parseImportText(text: string): ImportLine[] {
     const rows = text.split(/\r?\n/).map(r => r.trim()).filter(r => r.length > 0)
     if (rows.length === 0) return []
@@ -79,7 +101,7 @@ export default function QuotesPage() {
       return isNaN(n) ? 0 : n
     }
     return body.map(row => {
-      const cols = row.includes("\t") ? row.split("\t") : row.split(",")
+      const cols = row.includes("\t") ? row.split("\t") : splitCsvRow(row)
       return {
         productName: (cols[0] || "").trim(),
         quantity: toNum(cols[1]) || 1,
@@ -391,17 +413,35 @@ function ImportModal({
         </div>
         <div className="p-4 space-y-3 overflow-y-auto">
           <div className="text-xs text-gray-500 bg-gray-50 rounded p-2" style={{ border: "1px solid #e8eaed" }}>
-            Excelなどから <strong>商品名・数量・単価</strong>（列の順番はこの通り。定価は任意で4列目）をコピーして、下の欄に貼り付けてください。
+            <strong>商品名・数量・単価</strong>（列の順番はこの通り。定価は任意で4列目）のCSVファイルを選択するか、Excelなどからコピーして下の欄に直接貼り付けてください。
             先頭行が見出し（商品名／数量／単価 等の文字）の場合は「先頭行は見出し」にチェックを入れてください。
           </div>
 
           {importError && <div className="text-xs px-3 py-2 rounded bg-red-50 text-red-700" style={{ border: "1px solid #fcc" }}>{importError}</div>}
 
+          <div>
+            <label className="block text-[11px] text-gray-700 font-bold mb-1">CSVファイルを選択</label>
+            <input type="file" accept=".csv,text/csv" onChange={async e => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              const buf = await file.arrayBuffer()
+              let text = ""
+              try {
+                text = new TextDecoder("utf-8", { fatal: true }).decode(buf)
+              } catch {
+                // Excelで作った日本語CSVはShift_JIS（CP932）のことが多いため、UTF-8で読めなければこちらで再挑戦
+                text = new TextDecoder("shift-jis").decode(buf)
+              }
+              setImportText(text.replace(/^﻿/, ""))  // 先頭のBOMを除去
+              e.target.value = ""
+            }} className="w-full text-xs" />
+          </div>
+
           <textarea
             value={importText}
             onChange={e => setImportText(e.target.value)}
             rows={6}
-            placeholder={"例（Excelからコピー）:\n商品名\t数量\t単価\nエルコプレス motion\t1\t524000"}
+            placeholder={"例（Excelからコピー、またはCSVファイル選択で自動入力）:\n商品名,数量,単価\nエルコプレス motion,1,524000"}
             className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs font-mono bg-white"
           />
           <label className="flex items-center gap-1.5 text-xs text-gray-600">
