@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { fmtYen, fmtDate } from "@/lib/invoice"
-import { QUOTE_STATUSES, type QuoteStatus } from "@/lib/quote"
+import { fmtYen, fmtDate, calcTax } from "@/lib/invoice"
+import { QUOTE_STATUSES, generateQuoteNumber, defaultExpiryDate, type QuoteStatus } from "@/lib/quote"
+import { useRouter } from "next/navigation"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 import Link from "next/link"
 
@@ -25,6 +26,7 @@ type Clinic = { id: string; name: string }
 type QuoteItem = { id: string; quote_id: string; product_name: string | null; quantity: number; price: number }
 
 export default function QuotesPage() {
+  const router = useRouter()
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [items, setItems] = useState<QuoteItem[]>([])
@@ -50,6 +52,115 @@ export default function QuotesPage() {
       await fetchData()
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  // ── 他ツールの見積データをインポート ──────────────────────
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState("")
+  const [importHasHeader, setImportHasHeader] = useState(true)
+  const [importClinicId, setImportClinicId] = useState("")
+  const [importIssueDate, setImportIssueDate] = useState("")
+  const [importExpiryDate, setImportExpiryDate] = useState("")
+  const [importTargetMode, setImportTargetMode] = useState<"new" | "replace">("new")
+  const [importTargetQuoteId, setImportTargetQuoteId] = useState("")
+  const [importNotes, setImportNotes] = useState("")
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState("")
+
+  type ImportLine = { productName: string; quantity: number; price: number; listPrice: number | null }
+  function parseImportText(text: string): ImportLine[] {
+    const rows = text.split(/\r?\n/).map(r => r.trim()).filter(r => r.length > 0)
+    if (rows.length === 0) return []
+    const body = importHasHeader ? rows.slice(1) : rows
+    const toNum = (s: string | undefined) => {
+      if (!s) return 0
+      const n = Number(String(s).replace(/[¥￥,\s]/g, ""))
+      return isNaN(n) ? 0 : n
+    }
+    return body.map(row => {
+      const cols = row.includes("\t") ? row.split("\t") : row.split(",")
+      return {
+        productName: (cols[0] || "").trim(),
+        quantity: toNum(cols[1]) || 1,
+        price: toNum(cols[2]),
+        listPrice: cols[3] !== undefined ? toNum(cols[3]) : null,
+      }
+    }).filter(l => l.productName)
+  }
+  const importPreview = useMemo(() => parseImportText(importText), [importText, importHasHeader])
+
+  function openImport() {
+    setImportText("")
+    setImportClinicId("")
+    setImportIssueDate(new Date().toISOString().slice(0, 10))
+    setImportExpiryDate(defaultExpiryDate(new Date()))
+    setImportTargetMode("new")
+    setImportTargetQuoteId("")
+    setImportNotes("他ツールからインポート")
+    setImportError("")
+    setShowImport(true)
+  }
+
+  async function runImport() {
+    setImportError("")
+    if (importTargetMode === "new" && !importClinicId) { setImportError("医院を選択してください"); return }
+    if (importTargetMode === "replace" && !importTargetQuoteId) { setImportError("置き換え先の見積書を選択してください"); return }
+    if (importPreview.length === 0) { setImportError("有効な明細行がありません（貼り付け内容をご確認ください）"); return }
+
+    const subtotal = importPreview.reduce((s, l) => s + l.price * l.quantity, 0)
+    const tax = calcTax(subtotal)
+    const total = subtotal + tax
+
+    setImporting(true)
+    try {
+      let targetQuoteId: string
+      if (importTargetMode === "replace") {
+        targetQuoteId = importTargetQuoteId
+        const target = quotes.find(q => q.id === targetQuoteId)
+        const { error: e1 } = await supabase.from("quotes").update({
+          clinic_id: importClinicId || target?.clinic_id || null,
+          issue_date: importIssueDate || target?.issue_date,
+          expiry_date: importExpiryDate || target?.expiry_date || null,
+          subtotal, tax, total,
+          notes: importNotes || null,
+        }).eq("id", targetQuoteId)
+        if (e1) throw new Error("見積更新失敗: " + e1.message)
+        const { error: eDel } = await supabase.from("quote_items").delete().eq("quote_id", targetQuoteId)
+        if (eDel) throw new Error("既存明細の削除失敗: " + eDel.message)
+      } else {
+        const quote_number = await generateQuoteNumber(new Date(importIssueDate))
+        const { data: q, error: e1 } = await supabase.from("quotes").insert({
+          clinic_id: importClinicId,
+          quote_number,
+          issue_date: importIssueDate,
+          expiry_date: importExpiryDate || null,
+          subtotal, tax, total,
+          status: "draft",
+          notes: importNotes || null,
+        }).select().single()
+        if (e1 || !q) throw new Error(e1?.message || "見積書作成失敗")
+        targetQuoteId = q.id
+      }
+
+      const itemsPayload = importPreview.map((l, i) => ({
+        quote_id: targetQuoteId,
+        product_id: null,
+        product_name: l.productName,
+        quantity: l.quantity,
+        price: l.price,
+        list_price: l.listPrice,
+        sort_order: i,
+      }))
+      const { error: e2 } = await supabase.from("quote_items").insert(itemsPayload)
+      if (e2) throw new Error("明細保存失敗: " + e2.message)
+
+      setShowImport(false)
+      router.push(`/admin/quotes/${targetQuoteId}`)
+    } catch (e) {
+      setImportError((e as Error).message)
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -139,6 +250,9 @@ export default function QuotesPage() {
         <Link href="/admin/quotes/create" className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700">
           ＋ 見積書を作成
         </Link>
+        <button onClick={openImport} className="px-3 py-2 bg-white border border-gray-200 text-sm font-bold rounded hover:bg-gray-50">
+          📥 他ツールからインポート
+        </button>
       </div>
 
       {/* フィルタ */}
@@ -212,6 +326,190 @@ export default function QuotesPage() {
         </table>
       </div>
       </GroupViewTabs>
+
+      {showImport && (
+        <ImportModal
+          importText={importText} setImportText={setImportText}
+          importHasHeader={importHasHeader} setImportHasHeader={setImportHasHeader}
+          clinics={clinics}
+          importClinicId={importClinicId} setImportClinicId={setImportClinicId}
+          importIssueDate={importIssueDate} setImportIssueDate={setImportIssueDate}
+          importExpiryDate={importExpiryDate} setImportExpiryDate={setImportExpiryDate}
+          importTargetMode={importTargetMode} setImportTargetMode={setImportTargetMode}
+          importTargetQuoteId={importTargetQuoteId} setImportTargetQuoteId={setImportTargetQuoteId}
+          importNotes={importNotes} setImportNotes={setImportNotes}
+          importPreview={importPreview}
+          quotes={quotes} clinicName={clinicName}
+          importing={importing} importError={importError}
+          onClose={() => setShowImport(false)}
+          onImport={runImport}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── 他ツールの見積データをインポート モーダル ──────────────
+function ImportModal({
+  importText, setImportText, importHasHeader, setImportHasHeader,
+  clinics, importClinicId, setImportClinicId,
+  importIssueDate, setImportIssueDate, importExpiryDate, setImportExpiryDate,
+  importTargetMode, setImportTargetMode, importTargetQuoteId, setImportTargetQuoteId,
+  importNotes, setImportNotes,
+  importPreview, quotes, clinicName,
+  importing, importError, onClose, onImport,
+}: {
+  importText: string; setImportText: (v: string) => void
+  importHasHeader: boolean; setImportHasHeader: (v: boolean) => void
+  clinics: Clinic[]
+  importClinicId: string; setImportClinicId: (v: string) => void
+  importIssueDate: string; setImportIssueDate: (v: string) => void
+  importExpiryDate: string; setImportExpiryDate: (v: string) => void
+  importTargetMode: "new" | "replace"; setImportTargetMode: (v: "new" | "replace") => void
+  importTargetQuoteId: string; setImportTargetQuoteId: (v: string) => void
+  importNotes: string; setImportNotes: (v: string) => void
+  importPreview: { productName: string; quantity: number; price: number; listPrice: number | null }[]
+  quotes: Quote[]; clinicName: (id: string | null) => string
+  importing: boolean; importError: string
+  onClose: () => void; onImport: () => void
+}) {
+  const [clinicQuery, setClinicQuery] = useState("")
+  const [clinicOpen, setClinicOpen] = useState(false)
+  const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC")
+  const filteredClinics = clinicQuery
+    ? clinics.filter(c => norm(c.name).includes(norm(clinicQuery))).slice(0, 50)
+    : clinics.slice(0, 50)
+  const selectedClinic = clinics.find(c => c.id === importClinicId)
+  const subtotal = importPreview.reduce((s, l) => s + l.price * l.quantity, 0)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.4)" }} onClick={onClose}>
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-base font-bold">📥 他ツールの見積データをインポート</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        </div>
+        <div className="p-4 space-y-3 overflow-y-auto">
+          <div className="text-xs text-gray-500 bg-gray-50 rounded p-2" style={{ border: "1px solid #e8eaed" }}>
+            Excelなどから <strong>商品名・数量・単価</strong>（列の順番はこの通り。定価は任意で4列目）をコピーして、下の欄に貼り付けてください。
+            先頭行が見出し（商品名／数量／単価 等の文字）の場合は「先頭行は見出し」にチェックを入れてください。
+          </div>
+
+          {importError && <div className="text-xs px-3 py-2 rounded bg-red-50 text-red-700" style={{ border: "1px solid #fcc" }}>{importError}</div>}
+
+          <textarea
+            value={importText}
+            onChange={e => setImportText(e.target.value)}
+            rows={6}
+            placeholder={"例（Excelからコピー）:\n商品名\t数量\t単価\nエルコプレス motion\t1\t524000"}
+            className="w-full px-2 py-1.5 border border-gray-200 rounded text-xs font-mono bg-white"
+          />
+          <label className="flex items-center gap-1.5 text-xs text-gray-600">
+            <input type="checkbox" checked={importHasHeader} onChange={e => setImportHasHeader(e.target.checked)} />
+            先頭行は見出し（データではない）
+          </label>
+
+          {/* プレビュー */}
+          <div className="border border-gray-200 rounded overflow-hidden">
+            <div className="px-2 py-1 bg-gray-50 text-[11px] font-bold text-gray-600 border-b border-gray-200">
+              読み取り結果プレビュー（{importPreview.length}件）
+            </div>
+            {importPreview.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-gray-400 text-center">まだデータがありません</div>
+            ) : (
+              <table className="w-full text-[11px]">
+                <thead className="bg-gray-50 text-gray-500">
+                  <tr><th className="px-2 py-1 text-left">商品名</th><th className="px-2 py-1 text-right w-16">数量</th><th className="px-2 py-1 text-right w-24">単価</th><th className="px-2 py-1 text-right w-24">小計</th></tr>
+                </thead>
+                <tbody>
+                  {importPreview.map((l, i) => (
+                    <tr key={i} className="border-t border-gray-100">
+                      <td className="px-2 py-1">{l.productName}</td>
+                      <td className="px-2 py-1 text-right">{l.quantity}</td>
+                      <td className="px-2 py-1 text-right">{fmtYen(l.price)}</td>
+                      <td className="px-2 py-1 text-right">{fmtYen(l.price * l.quantity)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-gray-200"><td colSpan={3} className="px-2 py-1 text-right font-bold text-gray-500">小計</td><td className="px-2 py-1 text-right font-bold">{fmtYen(subtotal)}</td></tr>
+                </tfoot>
+              </table>
+            )}
+          </div>
+
+          {/* 取り込み先 */}
+          <div className="flex gap-2 text-xs">
+            <button onClick={() => setImportTargetMode("new")} className={"flex-1 px-3 py-2 rounded border font-bold " + (importTargetMode === "new" ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-gray-200 text-gray-500")}>
+              🆕 新しい見積書として作成
+            </button>
+            <button onClick={() => setImportTargetMode("replace")} className={"flex-1 px-3 py-2 rounded border font-bold " + (importTargetMode === "replace" ? "border-amber-400 bg-amber-50 text-amber-700" : "border-gray-200 text-gray-500")}>
+              🔁 既存の見積書を置き換える
+            </button>
+          </div>
+
+          {importTargetMode === "replace" && (
+            <div>
+              <label className="block text-[11px] text-gray-700 font-bold mb-1">置き換え先の見積書</label>
+              <select value={importTargetQuoteId} onChange={e => setImportTargetQuoteId(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
+                <option value="">選択してください</option>
+                {quotes.map(q => <option key={q.id} value={q.id}>{q.quote_number}（{clinicName(q.clinic_id)}）</option>)}
+              </select>
+              <p className="text-[10px] text-amber-700 mt-1">⚠️ 選んだ見積書の明細は、インポートしたデータで完全に上書きされます。</p>
+            </div>
+          )}
+
+          {/* 医院（新規作成時のみ必須。置き換え時は変更したい場合のみ） */}
+          <div style={{ position: "relative" }}>
+            <label className="block text-[11px] text-gray-700 font-bold mb-1">
+              医院 {importTargetMode === "new" ? "*" : "（変更する場合のみ選択）"}
+            </label>
+            <input lang="ja"
+              value={clinicOpen ? clinicQuery : (selectedClinic?.name || "")}
+              onChange={e => { setClinicQuery(e.target.value); setClinicOpen(true) }}
+              onFocus={() => { setClinicQuery(""); setClinicOpen(true) }}
+              onBlur={() => setTimeout(() => setClinicOpen(false), 150)}
+              placeholder="🔍 医院名で検索"
+              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+            {clinicOpen && (
+              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow-lg" style={{ maxHeight: 220, overflowY: "auto" }}>
+                {filteredClinics.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-gray-400">該当する医院なし</div>
+                ) : filteredClinics.map(c => (
+                  <button key={c.id} type="button"
+                    onMouseDown={e => { e.preventDefault(); setImportClinicId(c.id); setClinicQuery(""); setClinicOpen(false) }}
+                    className={"w-full text-left px-3 py-2 text-sm border-t border-gray-100 hover:bg-blue-50 " + (importClinicId === c.id ? "bg-blue-50" : "")}>
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-gray-700 font-bold mb-1">発行日</label>
+              <input type="date" value={importIssueDate} onChange={e => setImportIssueDate(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-gray-700 font-bold mb-1">有効期限</label>
+              <input type="date" value={importExpiryDate} onChange={e => setImportExpiryDate(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] text-gray-700 font-bold mb-1">備考</label>
+            <input value={importNotes} onChange={e => setImportNotes(e.target.value)} className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+          </div>
+        </div>
+        <div className="p-3 border-t border-gray-100 flex justify-end gap-2">
+          <button onClick={onClose} className="text-xs text-gray-500 hover:bg-gray-100 px-3 py-2 rounded">キャンセル</button>
+          <button onClick={onImport} disabled={importing}
+            className="px-5 py-2 text-sm font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50">
+            {importing ? "取り込み中…" : "✓ インポートする"}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
