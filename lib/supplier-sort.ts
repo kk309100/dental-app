@@ -34,7 +34,7 @@ export async function fetchSuppliersByUsage(fields = "id,name"): Promise<Supplie
     if (t > e.lastAt) e.lastAt = t
     usage.set(p.supplier_id, e)
   })
-  const list: Supplier[] = ((sups as Supplier[]) || []).map(s => ({
+  const list: Supplier[] = ((sups as unknown as Supplier[]) || []).map(s => ({
     ...s,
     usage_count: usage.get(s.id)?.count || 0,
     last_used_at: usage.get(s.id)?.lastAt || null,

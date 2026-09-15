@@ -46,7 +46,9 @@ const NAV = [
 
 const SUB = [
   { href: "/admin/audit",                label: "📋 請求書チェック" },
+  { href: "/admin/supplier-invoices/quick-check", label: "📋 請求書チェック(CSV×PDF一括)" },
   { href: "/admin/supplier-invoices",    label: "仕入先請求書付け合わせ" },
+  { href: "/admin/receiving/csv-import", label: "仕入CSV取り込み" },
   { href: "/admin/invoices/bulk",        label: "一括請求" },
   { href: "/admin/payments",             label: "入金処理" },
   { href: "/admin/receivables",          label: "売掛金台帳" },
