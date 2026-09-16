@@ -790,6 +790,7 @@ function AdminOrdersPage() {
                         <th className="px-2 py-1 text-left w-32">納品書No</th>
                         <th className="px-2 py-1 text-left w-24">日時</th>
                         <th className="px-2 py-1 text-right w-24">金額</th>
+                        <th className="px-2 py-1 text-left w-36">備考</th>
                         <th className="px-2 py-1 text-center w-40">操作</th>
                       </tr>
                     </thead>
@@ -821,6 +822,9 @@ function AdminOrdersPage() {
                               <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
                               <td className="px-2 py-1 text-[11px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                               <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
+                              <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
+                                {o.note ? <span className="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded text-[11px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
+                              </td>
                               <td className="px-2 py-1 text-center whitespace-nowrap">
                                 <button onClick={() => toggleOrderOpen(o.id)} className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="明細を開閉">{isOpen ? "−" : "+"}</button>
                                 <Link href={`/order-edit/${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="編集">編</button></Link>
@@ -849,7 +853,7 @@ function AdminOrdersPage() {
                             </tr>
                             {isOpen && (
                               <tr key={o.id + "-d"} className="bg-yellow-50">
-                                <td colSpan={8} className="px-4 py-2">
+                                <td colSpan={9} className="px-4 py-2">
                                   {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
                                     <div className="overflow-x-auto">
                                     <table className="w-full text-[11px]" style={{ minWidth: 640 }}>
