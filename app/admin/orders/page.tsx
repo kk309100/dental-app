@@ -747,12 +747,16 @@ function AdminOrdersPage() {
                     // 進行中あり: 進行中バッジ + 完了済件数（小さく）
                     // バッジは種類ごとに固定の列幅で並べる（無い場合も空枠を確保）
                     // → 医院ごとにバッジの有無が違っても、同じ種類のバッジは常に同じ横位置に並ぶ
+                    // 幅はラベルの長さに合わせる（「一部要発注」は5文字あるため広めに確保）
+                    const BADGE_SLOT_WIDTH: Record<string, number> = {
+                      need_po: 76, partial: 110, waiting: 92, ready: 92,
+                    }
                     return (
                       <span className="flex items-center gap-1 ml-2">
                         {(["need_po", "partial", "waiting", "ready"] as const).map(s => (
-                          <span key={s} style={{ width: 92, flexShrink: 0 }}>
+                          <span key={s} style={{ width: BADGE_SLOT_WIDTH[s], flexShrink: 0 }}>
                             {bizCounts[s] ? (
-                              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"
+                              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap"
                                 style={{ background: BIZ_BADGES[s].bg, color: BIZ_BADGES[s].color, border: `1px solid ${BIZ_BADGES[s].border}` }}>
                                 {BIZ_BADGES[s].icon}{BIZ_BADGES[s].label} {bizCounts[s]}
                               </span>
