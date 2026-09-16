@@ -763,19 +763,20 @@ function AdminOrdersPage() {
                       </span>
                     )
                   })()}
-                  {/* 医院単位で「不足分を発注」ボタン */}
+                  <div className="flex-1" />
+                  {/* 医院単位で「不足分を発注」ボタン。バッジの数が医院ごとに違うと
+                      ボタンの横位置がバラバラになって揃わないため、右端に固定する */}
                   {stockSummary.short > 0 && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
                         addToPool(undeliveredOrders.map(o => o.id))
                       }}
-                      className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-500 text-white hover:bg-amber-600"
+                      className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-500 text-white hover:bg-amber-600 flex-shrink-0"
                       title="この医院の不足分を発注プールに追加"
                     >🛒 プール追加</button>
                   )}
-                  <div className="flex-1" />
-                  <span className="text-sm font-bold text-gray-900">{fmtYen(total)}</span>
+                  <span className="text-sm font-bold text-gray-900 flex-shrink-0" style={{ minWidth: 90, textAlign: "right" }}>{fmtYen(total)}</span>
                 </div>
 
                 {/* 注文リスト */}
