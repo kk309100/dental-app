@@ -23,6 +23,7 @@ const NAV = [
   // ①受注
   { id: "orders",         href: "/admin/orders",              label: "注文",       icon: Ic.order,     group: "受注" },
   { id: "order-process",  href: "/admin/orders/process",      label: "受注処理",   icon: Ic.order,     group: "受注" },
+  { id: "tooth-chart",    href: "/admin/tooth-chart",         label: "歯式図注文", icon: Ic.order,     group: "受注" },
 
   // ②発注・入荷
   { id: "purchase-orders",href: "/admin/purchase-orders",     label: "発注",       icon: Ic.truck,     group: "発注・入荷" },
