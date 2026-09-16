@@ -70,17 +70,39 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
 }
 
 function ByDate({ rows }: { rows: GroupableRow[] }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
+
   const groups = useMemo(() => {
-    const m = new Map<string, { date: string; count: number; amount: number }>()
+    const m = new Map<string, { date: string; count: number; amount: number; orders: GroupableRow[] }>()
     rows.forEach(r => {
       const day = (r.date || "").slice(0, 10)
-      const e = m.get(day) || { date: day, count: 0, amount: 0 }
+      const e = m.get(day) || { date: day, count: 0, amount: 0, orders: [] }
       e.count++; e.amount += Number(r.amount || 0)
+      e.orders.push(r)
       m.set(day, e)
     })
-    return Array.from(m.values()).sort((a, b) => b.date.localeCompare(a.date))
+    const arr = Array.from(m.values()).sort((a, b) => b.date.localeCompare(a.date))
+    arr.forEach(g => g.orders.sort((a, b) => a.party.localeCompare(b.party, "ja")))
+    return arr
   }, [rows])
   const total = groups.reduce((s, g) => s + g.amount, 0)
+
+  function toggleDate(date: string) {
+    setExpanded(prev => {
+      const n = new Set(prev)
+      if (n.has(date)) n.delete(date); else n.add(date)
+      return n
+    })
+  }
+  function toggleOrder(id: string) {
+    setExpandedOrders(prev => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+  }
+
   return (
     <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
       <table className="w-full text-xs">
@@ -93,14 +115,83 @@ function ByDate({ rows }: { rows: GroupableRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {groups.map(g => (
-            <tr key={g.date} className="border-b border-gray-100 hover:bg-blue-50/40">
-              <td className="px-3 py-1.5">{g.date}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums">{g.count}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums font-bold">{fmtYen(g.amount)}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{total > 0 ? `${(g.amount / total * 100).toFixed(1)}%` : "—"}</td>
-            </tr>
-          ))}
+          {groups.map(g => {
+            const isOpen = expanded.has(g.date)
+            return (
+              <>
+                {/* 日付ヘッダー行 */}
+                <tr
+                  key={g.date}
+                  className="border-b border-gray-200 cursor-pointer hover:bg-emerald-50/60"
+                  style={{ background: isOpen ? "#f0fdf4" : undefined }}
+                  onClick={() => toggleDate(g.date)}
+                >
+                  <td className="px-3 py-1.5">
+                    <span style={{ marginRight: 6, color: "#6b7280", fontSize: 10 }}>{isOpen ? "▼" : "▶"}</span>
+                    {g.date}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{g.count}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-bold">{fmtYen(g.amount)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{total > 0 ? `${(g.amount / total * 100).toFixed(1)}%` : "—"}</td>
+                </tr>
+
+                {/* 展開: その日の注文一覧 */}
+                {isOpen && g.orders.map(order => {
+                  const isOrderOpen = expandedOrders.has(order.id)
+                  const hasItems = (order.items || []).length > 0
+                  return (
+                    <>
+                      <tr
+                        key={`order-${order.id}`}
+                        className="border-b border-gray-100 hover:bg-blue-50/40"
+                        style={{ background: "#f8fafc" }}
+                        onClick={() => hasItems && toggleOrder(order.id)}
+                      >
+                        <td className="py-1.5" style={{ paddingLeft: 32 }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {hasItems && (
+                              <span style={{ color: "#9ca3af", fontSize: 9, flexShrink: 0 }}>{isOrderOpen ? "▼" : "▶"}</span>
+                            )}
+                            <span style={{ color: "#374151", fontSize: 11, fontWeight: 700 }}>{order.party}</span>
+                            {order.ref && (
+                              <span style={{ fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{order.ref}</span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-gray-500 text-[11px]">
+                          {(order.items || []).length}品目
+                        </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-[11px]">{fmtYen(order.amount)}</td>
+                        <td></td>
+                      </tr>
+
+                      {/* 展開: 明細 */}
+                      {isOrderOpen && (order.items || []).map((it, idx) => (
+                        <tr
+                          key={`item-${order.id}-${idx}`}
+                          className="border-b border-gray-50"
+                          style={{ background: "#fafbff" }}
+                        >
+                          <td className="py-1" style={{ paddingLeft: 54 }}>
+                            <span style={{ fontSize: 11, color: "#374151" }}>{it.name}</span>
+                          </td>
+                          <td className="px-3 py-1 text-right tabular-nums text-[11px] text-gray-600">
+                            {it.quantity}個
+                          </td>
+                          <td className="px-3 py-1 text-right tabular-nums text-[11px]">
+                            {fmtYen(it.price * it.quantity)}
+                          </td>
+                          <td className="px-3 py-1 text-right text-[10px] text-gray-400">
+                            @{fmtYen(it.price)}
+                          </td>
+                        </tr>
+                      ))}
+                    </>
+                  )
+                })}
+              </>
+            )
+          })}
           <tr className="bg-gray-50 border-t-2 border-gray-300">
             <td className="px-3 py-2 font-bold">合計</td>
             <td className="px-3 py-2 text-right tabular-nums font-bold">{rows.length}</td>
