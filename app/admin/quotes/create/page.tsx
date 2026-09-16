@@ -113,7 +113,11 @@ function CreateQuotePage() {
           productId: it.product_id,
           productName: it.product_name || "",
           quantity: Number(it.quantity || 1),
-          cost: Number((it.product_id ? productMap.get(it.product_id) : null)?.cost || 0),
+          // 仕入価格はこの見積の明細自体に保存された値を優先する。
+          // （商品マスタに紐づかない手入力の明細だと、マスタ側からは
+          //   仕入価格を復元できないため。古いデータ等で未保存の場合のみ
+          //   商品マスタの現在の仕入価格にフォールバックする）
+          cost: it.cost != null ? Number(it.cost) : Number((it.product_id ? productMap.get(it.product_id) : null)?.cost || 0),
           listPrice: Number(it.list_price || 0),
           price: Number(it.price || 0),
         })))
@@ -249,6 +253,7 @@ function CreateQuotePage() {
           quantity: l.quantity,
           price: l.price,
           list_price: l.listPrice,
+          cost: l.cost,
           sort_order: i,
         }))
         const { error: e2 } = await supabase.from("quote_items").insert(itemsPayload)
@@ -281,6 +286,7 @@ function CreateQuotePage() {
         quantity: l.quantity,
         price: l.price,
         list_price: l.listPrice,
+        cost: l.cost,
         sort_order: i,
       }))
       const { error: e2 } = await supabase.from("quote_items").insert(itemsPayload)
