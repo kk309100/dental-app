@@ -58,7 +58,25 @@ export default function OrderProcessPage() {
   const [results, setResults]       = useState<ProcessResult[]>([])
   const [showResult, setShowResult] = useState(false)
   const [processingAll, setProcessingAll] = useState(false)
-  const [sellMode, setSellMode]     = useState(true)
+  // 在庫を持たず注文の都度仕入れる運用のため、既定はOFF（すべて準備中止まり）。
+  // 在庫数は実態とズレることがあり、ONのままだと在庫あり判定で誤って
+  // 自動的に納品済み・請求書発行までされてしまう事故が実際に発生したため、
+  // 選択はブラウザに記憶し、うっかり毎回ONに戻らないようにする。
+  const SELL_MODE_KEY = "denthub:orders_process_sell_mode"
+  const [sellMode, setSellModeState] = useState(false)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SELL_MODE_KEY)
+      if (saved !== null) setSellModeState(saved === "1")
+    } catch { /* ignore */ }
+  }, [])
+  function setSellMode(updater: boolean | ((v: boolean) => boolean)) {
+    setSellModeState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater
+      try { localStorage.setItem(SELL_MODE_KEY, next ? "1" : "0") } catch { /* ignore */ }
+      return next
+    })
+  }
   const [forcingItemId, setForcingItemId] = useState<string | null>(null)
 
   useEffect(() => { fetchData() }, [])
@@ -351,7 +369,7 @@ export default function OrderProcessPage() {
           </div>
           <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
             {sellMode
-              ? "在庫あり品 → 即座に納品書＋請求書作成。一部在庫不足の注文も在庫あり分だけ先に納品"
+              ? "在庫あり品 → 即座に納品書＋請求書作成。一部在庫不足の注文も在庫あり分だけ先に納品 ⚠️在庫数が実態とズレていると誤って納品済みになるためご注意ください"
               : "すべての注文を「準備中」にします（請求書・納品書は後で作成）"}
           </div>
         </div>
