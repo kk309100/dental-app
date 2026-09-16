@@ -179,11 +179,13 @@ function BulkPrint() {
         .print-page.print-page table th {
           padding: 9px 8px !important;
           font-size: 15px !important;
+          line-height: 1.5 !important;
         }
         .print-page.print-page table td div,
         .print-page.print-page table td span,
         .print-page.print-page table td p {
           font-size: 14px !important;
+          line-height: 1.5 !important;
         }
         .print-page.print-page h1 {
           font-size: 28px !important;
@@ -208,7 +210,7 @@ function BulkPrint() {
   )
 }
 
-const th: React.CSSProperties = { padding: "9px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 15, color: "#555" }
-const tdL: React.CSSProperties = { padding: "7px 8px", background: "#f9fafb", fontSize: 15, color: "#555", width: 80, borderRight: "1px solid #eee" }
-const tdR: React.CSSProperties = { padding: "7px 8px", fontSize: 15, color: "#111", borderRight: "1px solid #eee" }
+const th: React.CSSProperties = { padding: "9px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 15, lineHeight: 1.5, color: "#555" }
+const tdL: React.CSSProperties = { padding: "7px 8px", background: "#f9fafb", fontSize: 15, lineHeight: 1.5, color: "#555", width: 80, borderRight: "1px solid #eee" }
+const tdR: React.CSSProperties = { padding: "7px 8px", fontSize: 15, lineHeight: 1.5, color: "#111", borderRight: "1px solid #eee" }
 const tdC: React.CSSProperties = { padding: "10px 8px", fontSize: 16, lineHeight: 1.5 }
