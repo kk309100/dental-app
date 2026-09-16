@@ -121,6 +121,7 @@ export default function ToothChartPage() {
   const [clinicOpen, setClinicOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // クリックするたびに数量を1ずつ増やす。取り消す場合はカート側の「×」で行う。
   function clickTooth(position: string) {
     const item = itemByPosition.get(position)
     if (!item || !item.product_id) { alert(`「${positionLabel(position)}」にはまだ商品が割り当てられていません。テンプレート編集で設定してください。`); return }
@@ -128,9 +129,7 @@ export default function ToothChartPage() {
     setCart(prev => {
       const existing = prev[position]
       if (existing) {
-        const next = { ...prev }
-        delete next[position]
-        return next
+        return { ...prev, [position]: { ...existing, quantity: existing.quantity + 1 } }
       }
       return {
         ...prev,
@@ -147,6 +146,15 @@ export default function ToothChartPage() {
 
   function updateCartLine(position: string, patch: Partial<CartLine>) {
     setCart(prev => prev[position] ? { ...prev, [position]: { ...prev[position], ...patch } } : prev)
+  }
+
+  function removeCartLine(position: string) {
+    setCart(prev => {
+      if (!prev[position]) return prev
+      const next = { ...prev }
+      delete next[position]
+      return next
+    })
   }
 
   const cartLines = ALL_POSITIONS.map(p => cart[p]).filter((l): l is CartLine => !!l)
@@ -311,7 +319,7 @@ export default function ToothChartPage() {
                       </td>
                       <td className="px-2 py-1 text-right font-bold">{fmtYen(l.price * l.quantity)}</td>
                       <td className="px-2 py-1 text-center">
-                        <button onClick={() => clickTooth(l.position)} className="text-red-500 text-sm">×</button>
+                        <button onClick={() => removeCartLine(l.position)} className="text-red-500 text-sm" title="この明細を削除">×</button>
                       </td>
                     </tr>
                   ))}
@@ -378,6 +386,11 @@ function ToothChart({
       <div className="flex items-center justify-center gap-6 mb-2">
         <span className="text-[11px] text-gray-500 font-bold">上顎弓</span>
       </div>
+      <div className="flex items-center justify-center gap-1 mb-1 flex-wrap">
+        <span className="text-[11px] text-gray-400 font-bold" style={{ width: UPPER_R.length * 34 + (UPPER_R.length - 1) * 4, textAlign: "center" }}>右</span>
+        <div className="mx-1" style={{ width: 1 }} />
+        <span className="text-[11px] text-gray-400 font-bold" style={{ width: UPPER_L.length * 34 + (UPPER_L.length - 1) * 4, textAlign: "center" }}>左</span>
+      </div>
       <div className="flex items-center justify-center gap-1 mb-3 flex-wrap">
         <Row positions={UPPER_R} />
         <div className="w-px bg-gray-300 self-stretch mx-1" />
@@ -392,7 +405,7 @@ function ToothChart({
         <span className="text-[11px] text-gray-500 font-bold">下顎弓</span>
       </div>
       <p className="text-[10px] text-gray-400 text-center mt-3">
-        白＝商品が設定されている歯　グレー＝未設定　緑＝選択中（クリックで選択/解除）
+        白＝商品が設定されている歯　グレー＝未設定　緑＝選択中（クリックするたびに数量+1／削除は下のリストの×で）
       </p>
     </div>
   )
