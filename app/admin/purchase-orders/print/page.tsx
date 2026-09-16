@@ -72,12 +72,23 @@ function BulkPrint() {
   // 「送付済みにする」は明示的なボタン操作でのみ記録する
   // （印刷ダイアログを開いただけ・プレビューしただけでは記録しない。
   //   ブラウザのafterprintイベントはキャンセル時にも発火するなど不確実なため使わない）
+  //
+  // この一覧印刷は発注プール画面の「発注書を発行する」（下書き→発注済）を経由せず
+  // 下書きのまま直接開けるため、送付済みにする際に「まだ下書きのPOだけ」を
+  // 発注済へ確定する。これをしないと「FAX済みなのに下書きのまま」という
+  // 矛盾した状態になり、入荷処理ボタンが出せなくなる（実際に発生した不具合）。
   const [marking, setMarking] = useState(false)
   async function markSent() {
     setMarking(true)
     const now = new Date().toISOString()
     await supabase.from("purchase_orders").update({ sent_method: "FAX", sent_at: now }).in("id", ids)
-    setPos(prev => prev.map(po => ids.includes(po.id) ? { ...po, sent_method: "FAX", sent_at: now } : po))
+    const draftIds = pos.filter(po => ids.includes(po.id) && po.status === "下書き").map(po => po.id)
+    if (draftIds.length > 0) {
+      await supabase.from("purchase_orders").update({ status: "発注済", ordered_at: now }).in("id", draftIds)
+    }
+    setPos(prev => prev.map(po => ids.includes(po.id)
+      ? { ...po, sent_method: "FAX", sent_at: now, status: po.status === "下書き" ? "発注済" : po.status }
+      : po))
     setMarking(false)
   }
 
