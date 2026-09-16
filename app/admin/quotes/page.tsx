@@ -68,7 +68,8 @@ export default function QuotesPage() {
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState("")
 
-  type ImportLine = { productName: string; quantity: number; price: number; listPrice: number | null }
+  type ImportLine = { productName: string; quantity: number; price: number; listPrice: number | null; cost: number | null }
+  type ImportMeta = { clinicNameGuess: string | null; issueDateGuess: string | null; notesGuess: string | null }
   // "a,\"b, c\",d" のようなダブルクォート囲みのCSVセルにも対応した簡易パーサ
   function splitCsvRow(row: string): string[] {
     const cols: string[] = []
@@ -91,26 +92,104 @@ export default function QuotesPage() {
     return cols
   }
 
-  function parseImportText(text: string): ImportLine[] {
+  // 他ツール（見積システム等）が出力するCSVは列名・列順がまちまちなため、
+  // ヘッダー行の列名からできるだけ自動でマッピングする。
+  // 見つからない場合は「商品名,数量,単価,定価」という単純な並びとして扱う（従来互換）。
+  const HEADER_ALIASES: Record<string, string[]> = {
+    productName: ["商品名", "品名"],
+    quantity: ["売上数量", "数量", "個数"],
+    price: ["売価", "単価", "販売単価", "販売価格"],
+    listPrice: ["定価"],
+    cost: ["仕入単価", "仕入価格", "原価"],
+    clinicName: ["得意先名", "医院名", "取引先名"],
+    issueDate: ["作成年月日", "発行日", "見積日", "作成日"],
+    notes: ["表題名", "件名", "備考", "摘要"],
+  }
+  function normHeader(s: string) { return s.trim().replace(/^"|"$/g, "") }
+  function findColIndex(headers: string[], aliases: string[]): number {
+    return headers.findIndex(h => aliases.some(a => normHeader(h) === a))
+  }
+  // "2026/07/15" 等 → "2026-07-15"
+  function normDate(s: string): string | null {
+    const t = s.trim().replace(/^"|"$/g, "")
+    const m = t.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
+    if (!m) return null
+    return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`
+  }
+
+  function parseImportSource(text: string, hasHeader: boolean): { lines: ImportLine[]; meta: ImportMeta } {
     const rows = text.split(/\r?\n/).map(r => r.trim()).filter(r => r.length > 0)
-    if (rows.length === 0) return []
-    const body = importHasHeader ? rows.slice(1) : rows
+    if (rows.length === 0) return { lines: [], meta: { clinicNameGuess: null, issueDateGuess: null, notesGuess: null } }
+    const splitRow = (row: string) => row.includes("\t") ? row.split("\t") : splitCsvRow(row)
     const toNum = (s: string | undefined) => {
       if (!s) return 0
-      const n = Number(String(s).replace(/[¥￥,\s]/g, ""))
+      const n = Number(String(s).replace(/[¥￥,\s"]/g, ""))
       return isNaN(n) ? 0 : n
     }
-    return body.map(row => {
-      const cols = row.includes("\t") ? row.split("\t") : splitCsvRow(row)
+
+    let idx = { productName: 0, quantity: 1, price: 2, listPrice: -1, cost: -1, clinicName: -1, issueDate: -1, notes: -1 }
+    let body = rows
+    if (hasHeader && rows.length > 0) {
+      const headers = splitRow(rows[0]).map(normHeader)
+      const found = {
+        productName: findColIndex(headers, HEADER_ALIASES.productName),
+        quantity: findColIndex(headers, HEADER_ALIASES.quantity),
+        price: findColIndex(headers, HEADER_ALIASES.price),
+        listPrice: findColIndex(headers, HEADER_ALIASES.listPrice),
+        cost: findColIndex(headers, HEADER_ALIASES.cost),
+        clinicName: findColIndex(headers, HEADER_ALIASES.clinicName),
+        issueDate: findColIndex(headers, HEADER_ALIASES.issueDate),
+        notes: findColIndex(headers, HEADER_ALIASES.notes),
+      }
+      // 商品名・数量・単価の列名が見つかった場合だけ「名前でマッピング」を採用。
+      // 見つからなければ従来通りの「1列目=商品名,2列目=数量,3列目=単価,4列目=定価」に留める。
+      if (found.productName >= 0 && found.quantity >= 0 && found.price >= 0) {
+        idx = { ...idx, ...found }
+      } else {
+        idx.listPrice = 3
+      }
+      body = rows.slice(1)
+    } else {
+      idx.listPrice = 3
+    }
+
+    const lines: ImportLine[] = body.map(row => {
+      const cols = splitRow(row)
       return {
-        productName: (cols[0] || "").trim(),
-        quantity: toNum(cols[1]) || 1,
-        price: toNum(cols[2]),
-        listPrice: cols[3] !== undefined ? toNum(cols[3]) : null,
+        productName: (cols[idx.productName] || "").trim().replace(/^"|"$/g, ""),
+        quantity: toNum(cols[idx.quantity]) || 1,
+        price: toNum(cols[idx.price]),
+        listPrice: idx.listPrice >= 0 && cols[idx.listPrice] !== undefined ? toNum(cols[idx.listPrice]) : null,
+        cost: idx.cost >= 0 && cols[idx.cost] !== undefined ? toNum(cols[idx.cost]) : null,
       }
     }).filter(l => l.productName)
+
+    const firstRow = body[0] ? splitRow(body[0]) : []
+    const meta: ImportMeta = {
+      clinicNameGuess: idx.clinicName >= 0 ? (firstRow[idx.clinicName] || "").trim().replace(/^"|"$/g, "") || null : null,
+      issueDateGuess: idx.issueDate >= 0 ? normDate(firstRow[idx.issueDate] || "") : null,
+      notesGuess: idx.notes >= 0 ? (firstRow[idx.notes] || "").trim().replace(/^"|"$/g, "") || null : null,
+    }
+    return { lines, meta }
   }
-  const importPreview = useMemo(() => parseImportText(importText), [importText, importHasHeader])
+
+  const importParsed = useMemo(() => parseImportSource(importText, importHasHeader), [importText, importHasHeader])
+  const importPreview = importParsed.lines
+  const importMeta = importParsed.meta
+
+  // CSVから医院名・発行日・件名を読み取れたら、入力欄が未編集ならそのまま反映する
+  useEffect(() => {
+    if (!importMeta.clinicNameGuess && !importMeta.issueDateGuess && !importMeta.notesGuess) return
+    if (importMeta.clinicNameGuess && !importClinicId) {
+      const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s/g, "")
+      const key = norm(importMeta.clinicNameGuess)
+      const match = clinics.find(c => norm(c.name) === key) || clinics.find(c => norm(c.name).includes(key) || key.includes(norm(c.name)))
+      if (match) setImportClinicId(match.id)
+    }
+    if (importMeta.issueDateGuess) setImportIssueDate(importMeta.issueDateGuess)
+    if (importMeta.notesGuess) setImportNotes(importMeta.notesGuess)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importMeta.clinicNameGuess, importMeta.issueDateGuess, importMeta.notesGuess])
 
   function openImport() {
     setImportText("")
@@ -172,6 +251,7 @@ export default function QuotesPage() {
         quantity: l.quantity,
         price: l.price,
         list_price: l.listPrice,
+        cost: l.cost,
         sort_order: i,
       }))
       const { error: e2 } = await supabase.from("quote_items").insert(itemsPayload)
@@ -361,6 +441,7 @@ export default function QuotesPage() {
           importTargetQuoteId={importTargetQuoteId} setImportTargetQuoteId={setImportTargetQuoteId}
           importNotes={importNotes} setImportNotes={setImportNotes}
           importPreview={importPreview}
+          importMeta={importMeta}
           quotes={quotes} clinicName={clinicName}
           importing={importing} importError={importError}
           onClose={() => setShowImport(false)}
@@ -378,7 +459,7 @@ function ImportModal({
   importIssueDate, setImportIssueDate, importExpiryDate, setImportExpiryDate,
   importTargetMode, setImportTargetMode, importTargetQuoteId, setImportTargetQuoteId,
   importNotes, setImportNotes,
-  importPreview, quotes, clinicName,
+  importPreview, importMeta, quotes, clinicName,
   importing, importError, onClose, onImport,
 }: {
   importText: string; setImportText: (v: string) => void
@@ -390,7 +471,8 @@ function ImportModal({
   importTargetMode: "new" | "replace"; setImportTargetMode: (v: "new" | "replace") => void
   importTargetQuoteId: string; setImportTargetQuoteId: (v: string) => void
   importNotes: string; setImportNotes: (v: string) => void
-  importPreview: { productName: string; quantity: number; price: number; listPrice: number | null }[]
+  importPreview: { productName: string; quantity: number; price: number; listPrice: number | null; cost: number | null }[]
+  importMeta: { clinicNameGuess: string | null; issueDateGuess: string | null; notesGuess: string | null }
   quotes: Quote[]; clinicName: (id: string | null) => string
   importing: boolean; importError: string
   onClose: () => void; onImport: () => void
@@ -413,8 +495,9 @@ function ImportModal({
         </div>
         <div className="p-4 space-y-3 overflow-y-auto">
           <div className="text-xs text-gray-500 bg-gray-50 rounded p-2" style={{ border: "1px solid #e8eaed" }}>
-            <strong>商品名・数量・単価</strong>（列の順番はこの通り。定価は任意で4列目）のCSVファイルを選択するか、Excelなどからコピーして下の欄に直接貼り付けてください。
-            先頭行が見出し（商品名／数量／単価 等の文字）の場合は「先頭行は見出し」にチェックを入れてください。
+            見積システム等から出力したCSVファイルを選択するか、Excelなどからコピーして下の欄に直接貼り付けてください。
+            「商品名」「数量」「単価（売価）」等の見出しがあれば自動で列を認識します（仕入単価・定価・得意先名・発行日・件名の見出しがあれば、それらも自動で読み取ります）。
+            見出しが無い単純な表の場合は「商品名,数量,単価,定価」の順番として扱われます。
           </div>
 
           {importError && <div className="text-xs px-3 py-2 rounded bg-red-50 text-red-700" style={{ border: "1px solid #fcc" }}>{importError}</div>}
@@ -459,20 +542,32 @@ function ImportModal({
             ) : (
               <table className="w-full text-[11px]">
                 <thead className="bg-gray-50 text-gray-500">
-                  <tr><th className="px-2 py-1 text-left">商品名</th><th className="px-2 py-1 text-right w-16">数量</th><th className="px-2 py-1 text-right w-24">単価</th><th className="px-2 py-1 text-right w-24">小計</th></tr>
+                  <tr>
+                    <th className="px-2 py-1 text-left">商品名</th>
+                    <th className="px-2 py-1 text-right w-16">数量</th>
+                    {importPreview.some(l => l.cost != null) && <th className="px-2 py-1 text-right w-24">仕入価格</th>}
+                    {importPreview.some(l => l.listPrice != null) && <th className="px-2 py-1 text-right w-24">定価</th>}
+                    <th className="px-2 py-1 text-right w-24">単価</th>
+                    <th className="px-2 py-1 text-right w-24">小計</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {importPreview.map((l, i) => (
                     <tr key={i} className="border-t border-gray-100">
                       <td className="px-2 py-1">{l.productName}</td>
                       <td className="px-2 py-1 text-right">{l.quantity}</td>
+                      {importPreview.some(x => x.cost != null) && <td className="px-2 py-1 text-right">{l.cost != null ? fmtYen(l.cost) : "—"}</td>}
+                      {importPreview.some(x => x.listPrice != null) && <td className="px-2 py-1 text-right">{l.listPrice != null ? fmtYen(l.listPrice) : "—"}</td>}
                       <td className="px-2 py-1 text-right">{fmtYen(l.price)}</td>
                       <td className="px-2 py-1 text-right">{fmtYen(l.price * l.quantity)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-gray-200"><td colSpan={3} className="px-2 py-1 text-right font-bold text-gray-500">小計</td><td className="px-2 py-1 text-right font-bold">{fmtYen(subtotal)}</td></tr>
+                  <tr className="border-t-2 border-gray-200">
+                    <td colSpan={1 + 1 + (importPreview.some(l => l.cost != null) ? 1 : 0) + (importPreview.some(l => l.listPrice != null) ? 1 : 0) + 1} className="px-2 py-1 text-right font-bold text-gray-500">小計</td>
+                    <td className="px-2 py-1 text-right font-bold">{fmtYen(subtotal)}</td>
+                  </tr>
                 </tfoot>
               </table>
             )}
@@ -511,6 +606,11 @@ function ImportModal({
               onBlur={() => setTimeout(() => setClinicOpen(false), 150)}
               placeholder="🔍 医院名で検索"
               className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+            {importMeta.clinicNameGuess && (
+              selectedClinic
+                ? <p className="text-[10px] text-emerald-700 mt-1">✓ CSVの得意先名「{importMeta.clinicNameGuess}」から自動選択しました</p>
+                : <p className="text-[10px] text-amber-700 mt-1">⚠️ CSVの得意先名「{importMeta.clinicNameGuess}」に一致する医院が見つかりませんでした。手動で選択してください</p>
+            )}
             {clinicOpen && (
               <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow-lg" style={{ maxHeight: 220, overflowY: "auto" }}>
                 {filteredClinics.length === 0 ? (
