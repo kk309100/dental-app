@@ -705,9 +705,13 @@ function AdminOrdersPage() {
                     onClick={(e) => e.stopPropagation()}
                     onChange={() => toggleClinicOrders(clinicId, clinicOrders.map((o) => o.id))}
                   />
-                  <span className="text-base">{open ? "▼" : "▶"}</span>
-                  <span className="font-bold text-gray-900">{clinic?.name || "医院不明"}</span>
-                  <span className="text-xs text-gray-500">{clinicOrders.length}件</span>
+                  <span className="text-base" style={{ width: 14, flexShrink: 0 }}>{open ? "▼" : "▶"}</span>
+                  {/* 医院名は長さがバラバラだと後ろのバッジ列がずれるため、幅を固定してはみ出し部分は省略表示にする */}
+                  <span className="font-bold text-gray-900" title={clinic?.name || "医院不明"}
+                    style={{ width: 220, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {clinic?.name || "医院不明"}
+                  </span>
+                  <span className="text-xs text-gray-500" style={{ width: 32, flexShrink: 0 }}>{clinicOrders.length}件</span>
                   {/* 業務状態サマリー */}
                   {(() => {
                     const total = clinicOrders.length
