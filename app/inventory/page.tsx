@@ -436,7 +436,8 @@ export default function ClinicInventoryPage() {
 
   async function deleteItem(id: string, name: string) {
     if (!confirm(`「${name}」を在庫リストから削除しますか？`)) return
-    await supabase.from("clinic_inventory_items").delete().eq("id", id)
+    const { error } = await supabase.from("clinic_inventory_items").delete().eq("id", id)
+    if (error) { alert("削除に失敗しました: " + error.message); return }
     setItems(prev => prev.filter(i => i.id !== id))
     showToast("✓ 削除しました")
   }
@@ -447,22 +448,43 @@ export default function ClinicInventoryPage() {
     photoInputRef.current?.click()
   }
 
+  // スマホカメラの写真は5〜10MB超えも珍しくなく、そのままだと
+  // 8MBの上限に引っかかってアップロード自体が失敗したり、
+  // 通信が遅い環境でアップロード中に途切れて「消えた」ように見えたりする。
+  // 送信前にリサイズ・再圧縮して確実に軽くする。
+  async function compressImage(file: File, maxSize = 1600, quality = 0.8): Promise<Blob> {
+    const bitmap = await createImageBitmap(file).catch(() => null)
+    if (!bitmap) return file  // 万一デコードできない形式ならそのまま送る（サーバー側で弾かれる）
+    const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height))
+    const w = Math.round(bitmap.width * scale)
+    const h = Math.round(bitmap.height * scale)
+    const canvas = document.createElement("canvas")
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return file
+    ctx.drawImage(bitmap, 0, 0, w, h)
+    const blob: Blob | null = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", quality))
+    return blob || file
+  }
+
   async function handlePhotoCapture(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !photoTargetId.current) return
     const itemId = photoTargetId.current
     setUploadingPhotoId(itemId)
-    const form = new FormData()
-    form.append("file", file)
-    form.append("itemId", itemId)
     try {
+      const compressed = await compressImage(file)
+      const form = new FormData()
+      form.append("file", compressed, "photo.jpg")
+      form.append("itemId", itemId)
       const res = await fetch("/api/clinic/upload-item-image", { method: "POST", body: form })
       const json = await res.json()
       if (!res.ok) { alert("アップロード失敗: " + json.error); return }
       setItems(prev => prev.map(i => i.id === itemId ? { ...i, item_image_url: json.publicUrl } : i))
       showToast("✅ 写真を保存しました")
     } catch {
-      alert("通信エラーが発生しました")
+      alert("通信エラーが発生しました。電波の良い場所でもう一度お試しください。")
     } finally {
       setUploadingPhotoId(null)
       photoTargetId.current = null
