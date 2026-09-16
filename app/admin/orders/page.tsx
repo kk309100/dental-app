@@ -745,15 +745,19 @@ function AdminOrdersPage() {
                       )
                     }
                     // 進行中あり: 進行中バッジ + 完了済件数（小さく）
+                    // バッジは種類ごとに固定の列幅で並べる（無い場合も空枠を確保）
+                    // → 医院ごとにバッジの有無が違っても、同じ種類のバッジは常に同じ横位置に並ぶ
                     return (
-                      <span className="flex items-center gap-1 ml-2 flex-wrap">
+                      <span className="flex items-center gap-1 ml-2">
                         {(["need_po", "partial", "waiting", "ready"] as const).map(s => (
-                          bizCounts[s] ? (
-                            <span key={s} className="text-[11px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"
-                              style={{ background: BIZ_BADGES[s].bg, color: BIZ_BADGES[s].color, border: `1px solid ${BIZ_BADGES[s].border}` }}>
-                              {BIZ_BADGES[s].icon}{BIZ_BADGES[s].label} {bizCounts[s]}
-                            </span>
-                          ) : null
+                          <span key={s} style={{ width: 92, flexShrink: 0 }}>
+                            {bizCounts[s] ? (
+                              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded inline-flex items-center gap-0.5"
+                                style={{ background: BIZ_BADGES[s].bg, color: BIZ_BADGES[s].color, border: `1px solid ${BIZ_BADGES[s].border}` }}>
+                                {BIZ_BADGES[s].icon}{BIZ_BADGES[s].label} {bizCounts[s]}
+                              </span>
+                            ) : null}
+                          </span>
                         ))}
                         {finished > 0 && (
                           <span className="text-[11px] text-gray-500" title={`納品済 ${delivered} / 取消 ${cancelled}`}>
