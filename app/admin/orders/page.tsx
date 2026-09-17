@@ -836,7 +836,7 @@ function AdminOrdersPage() {
                               <td className="px-2 py-1 text-[11px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                               <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                               <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
-                                {o.note ? <span className="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded text-[11px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
+                                {o.note ? <span className="bg-amber-100 text-amber-900 font-medium border border-amber-200 px-1.5 py-0.5 rounded text-[11px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
                               </td>
                               <td className="px-2 py-1 text-center whitespace-nowrap">
                                 <button onClick={() => toggleOrderOpen(o.id)} className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="明細を開閉">{isOpen ? "−" : "+"}</button>
@@ -1016,7 +1016,7 @@ function AdminOrdersPage() {
                       <td className="px-2 py-1 text-[11px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                       <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
-                        {o.note ? <span className="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded text-[11px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
+                        {o.note ? <span className="bg-amber-100 text-amber-900 font-medium border border-amber-200 px-1.5 py-0.5 rounded text-[11px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
                       </td>
                       <td className="px-2 py-1 text-center whitespace-nowrap">
                         <button onClick={() => toggleOrderOpen(o.id)} className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">{open ? "−" : "+"}</button>

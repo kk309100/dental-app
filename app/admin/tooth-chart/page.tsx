@@ -101,6 +101,31 @@ export default function ToothChartPage() {
     await fetchAll()
   }
 
+  async function renameTemplate(tid: string, oldName: string) {
+    const name = prompt("新しいテンプレート名を入力してください", oldName)?.trim()
+    if (!name || name === oldName) return
+    const { error } = await supabase.from("tooth_chart_templates").update({ name }).eq("id", tid)
+    if (error) { alert("名前変更失敗: " + error.message); return }
+    await fetchAll()
+  }
+
+  async function copyTemplate(tid: string, oldName: string) {
+    const name = prompt("コピー後のテンプレート名を入力してください", `${oldName}のコピー`)?.trim()
+    if (!name) return
+    const { data: newTpl, error: e1 } = await supabase.from("tooth_chart_templates").insert({ name }).select().single()
+    if (e1 || !newTpl) { alert("コピー失敗: " + e1?.message); return }
+    const { data: srcItems, error: e2 } = await supabase.from("tooth_chart_template_items").select("position,product_id,product_name").eq("template_id", tid)
+    if (e2) { alert("コピー失敗: " + e2.message); return }
+    if (srcItems && srcItems.length > 0) {
+      const rows = srcItems.map((it: any) => ({ template_id: newTpl.id, position: it.position, product_id: it.product_id, product_name: it.product_name }))
+      const { error: e3 } = await supabase.from("tooth_chart_template_items").insert(rows)
+      if (e3) { alert("コピー失敗: " + e3.message); return }
+    }
+    await fetchAll()
+    setTemplateId(newTpl.id)
+    setMode("edit")
+  }
+
   async function assignProduct(position: string, product: Product | null) {
     if (!templateId) return
     const { error } = await supabase.from("tooth_chart_template_items").upsert({
@@ -233,6 +258,14 @@ export default function ToothChartPage() {
           <option value="">選択してください</option>
           {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
+        {templateId && (
+          <button onClick={() => renameTemplate(templateId, templates.find(t => t.id === templateId)?.name || "")}
+            className="text-[11px] px-2 py-1.5 rounded border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100">✏️ 名前変更</button>
+        )}
+        {templateId && (
+          <button onClick={() => copyTemplate(templateId, templates.find(t => t.id === templateId)?.name || "")}
+            className="text-[11px] px-2 py-1.5 rounded border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100">📄 コピー</button>
+        )}
         {templateId && mode === "edit" && (
           <button onClick={() => deleteTemplate(templateId, templates.find(t => t.id === templateId)?.name || "")}
             className="text-[11px] px-2 py-1.5 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100">🗑 このテンプレートを削除</button>
