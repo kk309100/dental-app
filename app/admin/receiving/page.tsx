@@ -194,17 +194,24 @@ export default function ReceivingPage() {
   }
 
   // 商品マスタ検索: JAN → product_code → name
+  // PDF由来のコード・商品名は全角/半角・大小文字・前後の空白が揺れやすいため正規化して比較する
+  function normKey(s: string | null | undefined): string {
+    return String(s || "").normalize("NFKC").toLowerCase().trim().replace(/\s+/g, "")
+  }
   function findProduct(row: Row): Product | undefined {
     if (row.supplierJan) {
-      const m = products.find((p) => p.barcode === row.supplierJan)
+      const key = normKey(row.supplierJan)
+      const m = products.find((p) => normKey(p.barcode) === key)
       if (m) return m
     }
     if (row.supplierCode) {
-      const m = products.find((p) => p.product_code === row.supplierCode)
+      const key = normKey(row.supplierCode)
+      const m = products.find((p) => normKey(p.product_code) === key)
       if (m) return m
     }
     if (row.productName) {
-      return products.find((p) => p.name === row.productName.trim())
+      const key = normKey(row.productName)
+      return products.find((p) => normKey(p.name) === key)
     }
     return undefined
   }
@@ -449,6 +456,11 @@ export default function ReceivingPage() {
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors"
           title="過去の入荷履歴を一覧表示">
           📋 入荷履歴一覧
+        </a>
+        <a href="/admin/receiving/csv-import"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 transition-colors"
+          title="外部システムの仕入日報CSVをまとめて登録">
+          📥 CSV取り込み
         </a>
         <a href="/admin/supplier-invoices"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 transition-colors"
