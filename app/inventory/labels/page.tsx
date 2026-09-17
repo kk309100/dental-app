@@ -244,7 +244,7 @@ export default function LabelsPage() {
                 }}>{allChecked ? "全解除" : "全選択"}</button>
               </div>
               <div style={{ padding: "8px 12px" }}>
-                <input value={search} onChange={e => setSearch(e.target.value)}
+                <input lang="ja" value={search} onChange={e => setSearch(e.target.value)}
                   placeholder="🔍 商品名・場所で絞り込み"
                   style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 14, boxSizing: "border-box", outline: "none" }} />
               </div>

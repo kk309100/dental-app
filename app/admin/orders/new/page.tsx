@@ -440,6 +440,7 @@ function NewOrderPage() {
             {showHistory && (
               <div className="mt-2 bg-gray-50 p-2 rounded">
                 <input
+                  lang="ja"
                   value={historySearch}
                   onChange={e => setHistorySearch(e.target.value)}
                   placeholder="🔍 商品名で絞り込み"

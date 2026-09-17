@@ -1186,6 +1186,7 @@ function AdminOrdersPage() {
               <div className="mb-2">
                 <input
                   autoFocus
+                  lang="ja"
                   value={supplierSearch}
                   onChange={(e) => setSupplierSearch(e.target.value)}
                   placeholder="仕入先名・メーカー名で検索（カナ/半角全角OK）"

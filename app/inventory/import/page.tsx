@@ -225,7 +225,7 @@ export default function ImportPage() {
             )}
             <div style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.border}`, padding: "12px 14px", marginBottom: 12 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
-                <input value={search} onChange={e => setSearch(e.target.value)}
+                <input lang="ja" value={search} onChange={e => setSearch(e.target.value)}
                   placeholder="🔍 商品名・メーカーで絞り込み"
                   style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
                 <button onClick={() => toggleProduct(-1, true)} style={{
