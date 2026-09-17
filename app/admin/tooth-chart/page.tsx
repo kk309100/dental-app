@@ -430,11 +430,13 @@ function TemplateEditor({
   }, [products, query])
 
   return (
-    <div className="bg-white rounded-lg overflow-hidden" style={{ border: "1px solid #e8eaed" }}>
-      <div className="p-2 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-700">
+    // 検索候補が下方向に開くため、下の段の欄で候補が見切れないよう
+    // ここでは overflow を隠さない（角丸は各要素側で個別に付ける）
+    <div className="bg-white rounded-lg" style={{ border: "1px solid #e8eaed" }}>
+      <div className="p-2 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-700 rounded-t-lg">
         32本それぞれに商品を割り当ててください（商品名で検索できます）
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-gray-100">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-gray-100 rounded-b-lg">
         {positions.map(pos => {
           const assigned = itemByPosition.get(pos)
           const isOpen = openPos === pos
