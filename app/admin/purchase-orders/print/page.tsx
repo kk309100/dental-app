@@ -73,21 +73,23 @@ function BulkPrint() {
   // （印刷ダイアログを開いただけ・プレビューしただけでは記録しない。
   //   ブラウザのafterprintイベントはキャンセル時にも発火するなど不確実なため使わない）
   //
-  // この一覧印刷は発注プール画面の「発注書を発行する」（下書き→発注済）を経由せず
-  // 下書きのまま直接開けるため、送付済みにする際に「まだ下書きのPOだけ」を
-  // 発注済へ確定する。これをしないと「FAX済みなのに下書きのまま」という
-  // 矛盾した状態になり、入荷処理ボタンが出せなくなる（実際に発生した不具合）。
+  // この一覧印刷は発注プール画面の「発注書を発行する」（下書き→未送付）を経由せず
+  // 下書きのまま直接開けるため、送付済みにする際に「まだ下書き・未送付のPO」を
+  // まとめて発注済へ確定する。これをしないと「FAX済みなのに発注済になっていない」
+  // という矛盾した状態になり、入荷処理ボタンが出せなくなる（実際に発生した不具合）。
+  // 逆に、ここを通らない限り status は「発注済」にはならない
+  // （プール確定の時点ではまだ「未送付」のまま＝実際に送るまでは発注済と表示しない）。
   const [marking, setMarking] = useState(false)
   async function markSent() {
     setMarking(true)
     const now = new Date().toISOString()
     await supabase.from("purchase_orders").update({ sent_method: "FAX", sent_at: now }).in("id", ids)
-    const draftIds = pos.filter(po => ids.includes(po.id) && po.status === "下書き").map(po => po.id)
-    if (draftIds.length > 0) {
-      await supabase.from("purchase_orders").update({ status: "発注済", ordered_at: now }).in("id", draftIds)
+    const notYetSentIds = pos.filter(po => ids.includes(po.id) && po.status !== "発注済" && po.status !== "部分入荷" && po.status !== "入荷済").map(po => po.id)
+    if (notYetSentIds.length > 0) {
+      await supabase.from("purchase_orders").update({ status: "発注済", ordered_at: now }).in("id", notYetSentIds)
     }
     setPos(prev => prev.map(po => ids.includes(po.id)
-      ? { ...po, sent_method: "FAX", sent_at: now, status: po.status === "下書き" ? "発注済" : po.status }
+      ? { ...po, sent_method: "FAX", sent_at: now, status: notYetSentIds.includes(po.id) ? "発注済" : po.status }
       : po))
     setMarking(false)
   }
@@ -142,7 +144,7 @@ function BulkPrint() {
               <tbody>
                 <tr>
                   <td style={tdL}>発注日</td><td style={tdR}>{po.ordered_at ? new Date(po.ordered_at).toLocaleDateString("ja-JP") : "—"}</td>
-                  <td style={tdL}>納期希望</td><td style={tdR}>{po.expected_at ? new Date(po.expected_at).toLocaleDateString("ja-JP") : "—"}</td>
+                  <td style={tdL}>納期希望</td><td style={tdR}>{po.expected_at ? new Date(po.expected_at).toLocaleDateString("ja-JP") : "最短"}</td>
                 </tr>
               </tbody>
             </table>

@@ -22,9 +22,10 @@ type PO = {
 type Supplier = { id: string; name: string }
 type POItem = { id: string; po_id: string; product_name: string | null; quantity: number; unit_price: number | null }
 
-const STATUSES = ["下書き", "発注済", "部分入荷", "入荷済", "取消"] as const
+const STATUSES = ["下書き", "未送付", "発注済", "部分入荷", "入荷済", "取消"] as const
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   "下書き": { bg: "#f3f4f6", color: "#6b7280" },
+  "未送付": { bg: "#fef9c3", color: "#854d0e" },
   "発注済": { bg: "#dbeafe", color: "#1e40af" },
   "部分入荷": { bg: "#fef3c7", color: "#92400e" },
   "入荷済": { bg: "#dcfce7", color: "#15803d" },
@@ -232,7 +233,7 @@ export default function PurchaseOrdersListPage() {
                           {p.sent_method === "FAX" ? "📠" : "✉"} {p.sent_method}済
                         </span>
                       )
-                      : <span className="text-gray-400">— 未印刷</span>}
+                      : <span className="text-gray-400">— 未送付</span>}
                   </td>
                   <td className="px-2 py-1.5 text-center whitespace-nowrap">
                     {(p.status === "発注済" || p.status === "部分入荷") && (

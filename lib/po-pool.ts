@@ -388,14 +388,22 @@ export async function removeFromUnassignedPool(items: PoolItem[]): Promise<void>
 }
 
 /**
- * 下書き状態の発注書を「発注済」に確定
+ * 下書き状態の発注書を「未送付」に確定（プールへの追加は締め切るが、
+ * まだ仕入先へは送っていない状態）
+ *
+ * 以前はここで status を直接「発注済」にしていたが、実際にFAX/メール等で
+ * 送付する前から「発注済」と表示されてしまい、社内で「もう発注済みだから
+ * 送らなくていい」と誤解されたり、仕入先から「発注が来ていない」と
+ * 問い合わせが入る事故につながっていた。
+ * 「発注済」は実際に送付した時点（sent_method が付いた時点）でのみ
+ * 付けるようにし、それまでは「未送付」として区別する。
  */
 export async function confirmPoolPO(poId: string, sentMethod?: string): Promise<{ ok: boolean; error?: string }> {
   const now = new Date().toISOString()
-  // 発注確定 = 「発注済」にするだけ。実際に印刷・FAX・メール送付したタイミングで
-  // 別途 sent_method/sent_at を記録するため、ここでは指定があった場合のみ書き込む。
-  const payload: Record<string, unknown> = { status: "発注済", ordered_at: now }
+  const payload: Record<string, unknown> = { status: "未送付" }
   if (sentMethod) {
+    payload.status = "発注済"
+    payload.ordered_at = now
     payload.sent_method = sentMethod
     payload.sent_at = now
   }

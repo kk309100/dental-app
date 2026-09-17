@@ -342,7 +342,7 @@ function NewPOPage() {
                       <td style={{ padding: "4px 8px", background: "#f9fafb", fontSize: 11, color: "#555", width: 80, borderRight: "1px solid #eee" }}>発注日</td>
                       <td style={{ padding: "4px 8px", fontSize: 11, color: "#111", borderRight: "1px solid #eee" }}>{orderedAt ? new Date(orderedAt).toLocaleDateString("ja-JP") : "—"}</td>
                       <td style={{ padding: "4px 8px", background: "#f9fafb", fontSize: 11, color: "#555", width: 80, borderRight: "1px solid #eee" }}>納期希望</td>
-                      <td style={{ padding: "4px 8px", fontSize: 11, color: "#111" }}>{expectedAt ? new Date(expectedAt).toLocaleDateString("ja-JP") : "—"}</td>
+                      <td style={{ padding: "4px 8px", fontSize: 11, color: "#111" }}>{expectedAt ? new Date(expectedAt).toLocaleDateString("ja-JP") : "最短"}</td>
                     </tr>
                     <tr>
                       <td style={{ padding: "4px 8px", background: "#f9fafb", fontSize: 11, color: "#555", borderRight: "1px solid #eee" }}>送付方法</td>
