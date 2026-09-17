@@ -409,7 +409,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
             <tbody>
               {items.length === 0 ? <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
                 : items.map((it) => (
-                  <tr key={it.id}>
+                  <tr key={it.id} style={rowNoBreak}>
                     <td className="no-print" style={td}>
                       <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
                     </td>
@@ -421,16 +421,18 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
                   </tr>
                 ))}
               {Array.from({ length: Math.max(0, 10 - items.length) }).map((_, i) => (
-                <tr key={"e" + i}><td className="no-print" style={td}></td><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
+                <tr key={"e" + i} style={rowNoBreak}><td className="no-print" style={td}></td><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
               ))}
+              {/* 小計・消費税・合計は tfoot にすると印刷時に複数ページそれぞれの末尾に
+                  繰り返し表示されて紛らわしいため、通常の tbody 行として明細の最後に1回だけ表示する */}
+              {showTotal && (
+                <>
+                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
+                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
+                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
+                </>
+              )}
             </tbody>
-            {showTotal && (
-              <tfoot>
-                <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
-                <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
-                <tr><td className="no-print" style={td}></td><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
-              </tfoot>
-            )}
           </table>
         )}
 
@@ -470,3 +472,5 @@ const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse", 
 const th: React.CSSProperties = { borderBottom: "2px solid #111", padding: "6px 8px", textAlign: "left", fontSize: 11, fontWeight: 700, background: "#fafafa" }
 const td: React.CSSProperties = { borderBottom: "1px solid #eee", padding: "5px 8px", fontSize: 11 }
 const tdTotal: React.CSSProperties = { borderTop: "2px solid #111", padding: "8px", fontSize: 13, fontWeight: 700 }
+// 印刷時、1行の途中でページが分割されないようにする（Chrome等はtr単位のbreak-insideに対応）
+const rowNoBreak: React.CSSProperties = { breakInside: "avoid", pageBreakInside: "avoid" }
