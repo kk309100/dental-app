@@ -317,6 +317,53 @@ function AdminOrdersPage() {
     }
   }
 
+  // 押し間違いで入荷済みにしてしまった場合に戻す（在庫を増やしていないため元に戻すだけでよい。
+  // stock_receipts の記録は履歴として残す）
+  async function undoReceiveItem(itemId: string) {
+    if (!confirm("入荷済みを取り消しますか？")) return
+    setReceivingItemId(itemId)
+    try {
+      const { error } = await supabase.from("order_items").update({ delivered_quantity: 0 }).eq("id", itemId)
+      if (error) { alert("取消に失敗しました: " + error.message); return }
+      await fetchData()
+    } finally {
+      setReceivingItemId(null)
+    }
+  }
+
+  // チェックを付けた明細をまとめて入荷処理する
+  const [receiveSelectedIds, setReceiveSelectedIds] = useState<Set<string>>(new Set())
+  function toggleReceiveSelect(itemId: string) {
+    setReceiveSelectedIds(prev => { const n = new Set(prev); if (n.has(itemId)) n.delete(itemId); else n.add(itemId); return n })
+  }
+  async function bulkReceiveItems(targets: { id: string; productId: string | null; productName: string; qty: number }[]) {
+    if (targets.length === 0) return
+    if (!confirm(`選択した${targets.length}件をまとめて入荷しますか？`)) return
+    setReceivingItemId("__bulk__")
+    try {
+      for (const t of targets) {
+        let pid = t.productId
+        if (!pid) {
+          const { data: newProd, error: cpe } = await supabase.from("products")
+            .insert({ name: t.productName, stock: 0, active: true })
+            .select("id").single()
+          if (cpe || !newProd) continue
+          pid = newProd.id
+          await supabase.from("order_items").update({ product_id: pid }).eq("id", t.id)
+        }
+        await supabase.from("stock_receipts").insert({
+          product_id: pid, quantity: t.qty,
+          memo: `注文管理から一括入荷・医院へ直送（在庫は加算せず）（${t.productName}）`,
+        })
+        await supabase.from("order_items").update({ delivered_quantity: t.qty }).eq("id", t.id)
+      }
+      setReceiveSelectedIds(prev => { const n = new Set(prev); targets.forEach(t => n.delete(t.id)); return n })
+      await fetchData()
+    } finally {
+      setReceivingItemId(null)
+    }
+  }
+
   // 注文の不足分を「発注プール」に追加（仕入先別の下書き発注書）
   async function addToPool(orderIds: string[], fallbackSupplierId?: string) {
     if (orderIds.length === 0) return
@@ -867,8 +914,30 @@ function AdminOrdersPage() {
                             {isOpen && (
                               <tr key={o.id + "-d"} className="bg-yellow-50">
                                 <td colSpan={9} className="px-4 py-2">
-                                  {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
+                                  {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (() => {
+                                    const receivableItems = items
+                                      .map(it => {
+                                        const p = it.product_id ? productById.get(it.product_id) : null
+                                        const stock = Number(p?.stock || 0)
+                                        const qty = Number(it.quantity || 0)
+                                        const enough = stock >= qty
+                                        const delivered = Number(it.delivered_quantity || 0) >= (qty - stock)
+                                        return { it, enough, delivered, qty: qty - stock }
+                                      })
+                                      .filter(x => !x.enough && !x.delivered)
+                                    const selectedInOrder = receivableItems.filter(x => receiveSelectedIds.has(x.it.id))
+                                    return (
                                     <div className="overflow-x-auto">
+                                    {receivableItems.length > 0 && (
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <button
+                                          onClick={() => bulkReceiveItems(selectedInOrder.map(x => ({ id: x.it.id, productId: x.it.product_id, productName: x.it.product_name || "(不明)", qty: Number(receiveQtyFor(x.it.id, x.qty)) })))}
+                                          disabled={selectedInOrder.length === 0 || receivingItemId === "__bulk__"}
+                                          className="text-[11px] px-2 py-1 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 font-bold">
+                                          {receivingItemId === "__bulk__" ? "処理中…" : `☑ 選択した商品を一括入荷（${selectedInOrder.length}）`}
+                                        </button>
+                                      </div>
+                                    )}
                                     <table className="w-full text-[11px]" style={{ minWidth: 640 }}>
                                       <thead className="text-[12px] text-gray-500">
                                         <tr>
@@ -881,7 +950,7 @@ function AdminOrdersPage() {
                                           <th className="text-right px-1 py-0.5 w-20">粗利</th>
                                           <th className="text-right px-1 py-0.5 w-14">粗利%</th>
                                           <th className="text-right px-1 py-0.5 w-24">小計</th>
-                                          <th className="text-center px-1 py-0.5 w-16">入荷</th>
+                                          <th className="text-center px-1 py-0.5 w-20">入荷</th>
                                           <th className="text-center px-1 py-0.5 w-16">発注</th>
                                         </tr>
                                       </thead>
@@ -915,9 +984,21 @@ function AdminOrdersPage() {
                                               <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                               <td className="px-1 py-0.5 text-center">
                                                 {!enough && Number(it.delivered_quantity || 0) >= (qty - stock) ? (
-                                                  <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
+                                                  <div className="flex items-center gap-1 justify-center">
+                                                    <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
+                                                    <button
+                                                      onClick={() => undoReceiveItem(it.id)}
+                                                      disabled={receivingItemId === it.id}
+                                                      className="text-[11px] px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                                      title="間違えて入荷済みにした場合、取り消す">取消</button>
+                                                  </div>
                                                 ) : !enough && (
                                                   <div className="flex items-center gap-1 justify-center">
+                                                    <input type="checkbox"
+                                                      checked={receiveSelectedIds.has(it.id)}
+                                                      onChange={() => toggleReceiveSelect(it.id)}
+                                                      onClick={e => e.stopPropagation()}
+                                                      title="選択して一括入荷の対象にする" />
                                                     <input type="number" min={1}
                                                       value={receiveQtyFor(it.id, qty - stock)}
                                                       onChange={e => setReceiveQtyByItem(prev => ({ ...prev, [it.id]: e.target.value }))}
@@ -950,7 +1031,8 @@ function AdminOrdersPage() {
                                       </tbody>
                                     </table>
                                     </div>
-                                  )}
+                                    )
+                                  })()}
                                 </td>
                               </tr>
                             )}
@@ -1048,8 +1130,30 @@ function AdminOrdersPage() {
                     {open && (
                       <tr key={o.id + "-d"} className="bg-yellow-50">
                         <td colSpan={9} className="px-4 py-2">
-                          {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (
+                          {items.length === 0 ? <p className="text-[11px] text-gray-400">明細なし</p> : (() => {
+                            const receivableItems = items
+                              .map(it => {
+                                const p = it.product_id ? productById.get(it.product_id) : null
+                                const stock = Number(p?.stock || 0)
+                                const qty = Number(it.quantity || 0)
+                                const enough = stock >= qty
+                                const delivered = Number(it.delivered_quantity || 0) >= (qty - stock)
+                                return { it, enough, delivered, qty: qty - stock }
+                              })
+                              .filter(x => !x.enough && !x.delivered)
+                            const selectedInOrder = receivableItems.filter(x => receiveSelectedIds.has(x.it.id))
+                            return (
                             <div className="overflow-x-auto">
+                            {receivableItems.length > 0 && (
+                              <div className="flex items-center gap-2 mb-1">
+                                <button
+                                  onClick={() => bulkReceiveItems(selectedInOrder.map(x => ({ id: x.it.id, productId: x.it.product_id, productName: x.it.product_name || "(不明)", qty: Number(receiveQtyFor(x.it.id, x.qty)) })))}
+                                  disabled={selectedInOrder.length === 0 || receivingItemId === "__bulk__"}
+                                  className="text-[11px] px-2 py-1 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 font-bold">
+                                  {receivingItemId === "__bulk__" ? "処理中…" : `☑ 選択した商品を一括入荷（${selectedInOrder.length}）`}
+                                </button>
+                              </div>
+                            )}
                             <table className="w-full text-[11px]" style={{ minWidth: 640 }}>
                               <thead className="text-[12px] text-gray-500">
                                 <tr>
@@ -1062,7 +1166,7 @@ function AdminOrdersPage() {
                                   <th className="text-right px-1 py-0.5 w-20">粗利</th>
                                   <th className="text-right px-1 py-0.5 w-14">粗利%</th>
                                   <th className="text-right px-1 py-0.5 w-24">小計</th>
-                                  <th className="text-center px-1 py-0.5 w-16">入荷</th>
+                                  <th className="text-center px-1 py-0.5 w-20">入荷</th>
                                   <th className="text-center px-1 py-0.5 w-16">発注</th>
                                 </tr>
                               </thead>
@@ -1095,9 +1199,21 @@ function AdminOrdersPage() {
                                     <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                     <td className="px-1 py-0.5 text-center">
                                       {!enough && Number(it.delivered_quantity || 0) >= (qty - stock) ? (
-                                        <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
+                                        <div className="flex items-center gap-1 justify-center">
+                                          <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
+                                          <button
+                                            onClick={() => undoReceiveItem(it.id)}
+                                            disabled={receivingItemId === it.id}
+                                            className="text-[11px] px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                            title="間違えて入荷済みにした場合、取り消す">取消</button>
+                                        </div>
                                       ) : !enough && (
                                         <div className="flex items-center gap-1 justify-center">
+                                          <input type="checkbox"
+                                            checked={receiveSelectedIds.has(it.id)}
+                                            onChange={() => toggleReceiveSelect(it.id)}
+                                            onClick={e => e.stopPropagation()}
+                                            title="選択して一括入荷の対象にする" />
                                           <input type="number" min={1}
                                             value={receiveQtyFor(it.id, qty - stock)}
                                             onChange={e => setReceiveQtyByItem(prev => ({ ...prev, [it.id]: e.target.value }))}
@@ -1130,7 +1246,8 @@ function AdminOrdersPage() {
                               </tbody>
                             </table>
                             </div>
-                          )}
+                            )
+                          })()}
                         </td>
                       </tr>
                     )}
