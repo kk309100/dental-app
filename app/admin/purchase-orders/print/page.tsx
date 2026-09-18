@@ -84,13 +84,14 @@ function BulkPrint() {
     setMarking(true)
     const now = new Date().toISOString()
     await supabase.from("purchase_orders").update({ sent_method: "FAX", sent_at: now }).in("id", ids)
-    const notYetSentIds = pos.filter(po => ids.includes(po.id) && po.status !== "発注済" && po.status !== "部分入荷" && po.status !== "入荷済").map(po => po.id)
-    if (notYetSentIds.length > 0) {
-      await supabase.from("purchase_orders").update({ status: "発注済", ordered_at: now }).in("id", notYetSentIds)
-    }
-    setPos(prev => prev.map(po => ids.includes(po.id)
-      ? { ...po, sent_method: "FAX", sent_at: now, status: notYetSentIds.includes(po.id) ? "発注済" : po.status }
-      : po))
+    // 画面上の React state（pos）は読み込みタイミング次第で古い・空のことがあるため、
+    // 「まだ未送付のもの」の判定はクライアント側の状態に頼らず、DBに直接条件を指定する
+    // （そうしないと sent_method/sent_at だけ更新されて status が「未送付」のまま
+    //   取り残される不具合が起きる）
+    await supabase.from("purchase_orders").update({ status: "発注済", ordered_at: now })
+      .in("id", ids).not("status", "in", "(発注済,部分入荷,入荷済)")
+    const { data: refreshed } = await supabase.from("purchase_orders").select("*").in("id", ids)
+    if (refreshed) setPos(refreshed as PO[])
     setMarking(false)
   }
 
