@@ -102,7 +102,12 @@ function BulkPrint() {
   return (
     <>
       <div className="no-print p-4 bg-yellow-50 border-b border-yellow-200 sticky top-0">
-        <button onClick={() => window.print()} className="px-4 py-2 bg-gray-900 text-white text-sm rounded mr-2">🖨 印刷</button>
+        <button onClick={() => {
+          window.print()
+          // window.print() はダイアログが閉じるまで処理をブロックするため、
+          // afterprint イベント（キャンセル時にも発火して不確実）を使わずここで確認できる
+          if (!allSent && confirm("印刷しました。この発注書を「送付済み」として記録しますか？")) markSent()
+        }} className="px-4 py-2 bg-gray-900 text-white text-sm rounded mr-2">🖨 印刷</button>
         <button
           onClick={markSent}
           disabled={marking || allSent}
