@@ -12,6 +12,14 @@ import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { confirmPoolPO, discardPoolPO } from "@/lib/po-pool"
 
+// 明細の note「[医院名] 注文 xxxxxxxx」から医院名だけを取り出して表示する
+// （列の幅をそろえるため、注文IDの部分は表示しない）
+function clinicNameFromNote(note: string | null): string {
+  if (!note) return "—"
+  const m = note.match(/^\[(.+?)\]/)
+  return m ? m[1] : note
+}
+
 type PO = {
   id: string
   po_number: string | null
@@ -308,11 +316,11 @@ export default function POPoolPage() {
                 </div>
                 {/* 明細 */}
                 <div className="overflow-x-auto">
-                <table className="w-full text-[13px]" style={{ minWidth: 640 }}>
+                <table className="w-full text-[13px]" style={{ minWidth: 640, tableLayout: "fixed" }}>
                   <thead className="bg-gray-50">
                     <tr className="text-[12px] text-gray-500">
-                      <th className="px-2 py-1 text-left">商品名</th>
-                      <th className="px-2 py-1 text-left">納品先（医院）</th>
+                      <th className="px-2 py-1 text-left" style={{ width: 260 }}>商品名</th>
+                      <th className="px-2 py-1 text-left" style={{ width: 180 }}>納品先（医院）</th>
                       <th className="px-2 py-1 text-right w-16">数量</th>
                       <th className="px-2 py-1 text-right w-24">単価</th>
                       <th className="px-2 py-1 text-right w-24">小計</th>
@@ -325,13 +333,18 @@ export default function POPoolPage() {
                       <tr><td colSpan={isUnassigned ? 7 : 6} className="px-4 py-4 text-center text-gray-400">明細なし</td></tr>
                     ) : poItems.map(it => (
                       <tr key={it.id} className="border-t border-gray-100">
-                        <td className="px-2 py-1.5 whitespace-nowrap">
+                        <td className="px-2 py-1.5" style={{ width: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          title={it.product_name || "(商品名なし)"}>
                           {it.product_name || "(商品名なし)"}
                           {it.product_id && manufacturerByProduct.has(it.product_id) && (
                             <span style={{ marginLeft: 6, fontSize: 11, color: "#888" }}>［{manufacturerByProduct.get(it.product_id)}］</span>
                           )}
                         </td>
-                        <td className="px-2 py-1.5 text-[12px] text-gray-500 whitespace-nowrap">{it.note || "—"}</td>
+                        <td className="px-2 py-1.5 text-[12px] text-gray-500"
+                          style={{ width: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          title={it.note || ""}>
+                          {clinicNameFromNote(it.note)}
+                        </td>
                         <td className="px-2 py-1.5 text-right">
                           <input type="number"
                             defaultValue={it.quantity}
