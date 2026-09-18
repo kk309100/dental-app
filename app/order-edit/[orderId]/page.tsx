@@ -29,8 +29,16 @@ export default function OrderEditPage() {
   const [items,   setItems]   = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [saving,  setSaving]  = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => { fetchOrder() }, [])
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", session.user.id).single()
+      setIsAdmin(profile?.role === "admin")
+    })
+  }, [])
 
   async function fetchOrder() {
     const { data: orderData } = await supabase
@@ -50,8 +58,15 @@ export default function OrderEditPage() {
     setOrder((prev: any) => ({ ...prev, total_price: total }))
   }
 
+  function canEditNow() {
+    if (!order) return false
+    // 管理者は納品済み・キャンセル以外なら編集可能。医院側は注文受付中のみ（処理が始まった後の勝手な変更を防ぐため）
+    if (isAdmin) return order.status !== "納品済み" && order.status !== "キャンセル"
+    return order.status === "注文受付"
+  }
+
   async function changeQuantity(item: any, type: "plus" | "minus") {
-    if (order?.status !== "注文受付") {
+    if (!canEditNow()) {
       alert("この注文は編集できません")
       return
     }
@@ -75,18 +90,23 @@ export default function OrderEditPage() {
       await recalculateTotal(updatedItems)
     }
 
-    // 管理画面に「医院修正あり」を通知
-    const currentNote: string = order?.note || ""
-    if (!currentNote.includes("【医院修正】")) {
-      const newNote = "【医院修正】" + (currentNote ? " " + currentNote : "")
-      await supabase.from("orders").update({ note: newNote }).eq("id", orderId)
-      setOrder((prev: any) => ({ ...prev, note: newNote }))
-    }
+    // 管理画面に修正あり（誰が直したか）を通知
+    await tagEditNote()
     setSaving(false)
   }
 
+  async function tagEditNote() {
+    const tag = isAdmin ? "【担当者修正】" : "【医院修正】"
+    const currentNote: string = order?.note || ""
+    if (!currentNote.includes(tag)) {
+      const newNote = tag + (currentNote ? " " + currentNote : "")
+      await supabase.from("orders").update({ note: newNote }).eq("id", orderId)
+      setOrder((prev: any) => ({ ...prev, note: newNote }))
+    }
+  }
+
   async function setQuantityDirect(item: any, val: string) {
-    if (order?.status !== "注文受付") return
+    if (!canEditNow()) return
     const q = Number(val)
     if (isNaN(q) || q < 0) return
 
@@ -103,12 +123,7 @@ export default function OrderEditPage() {
       await recalculateTotal(updatedItems)
     }
 
-    const currentNote: string = order?.note || ""
-    if (!currentNote.includes("【医院修正】")) {
-      const newNote = "【医院修正】" + (currentNote ? " " + currentNote : "")
-      await supabase.from("orders").update({ note: newNote }).eq("id", orderId)
-      setOrder((prev: any) => ({ ...prev, note: newNote }))
-    }
+    await tagEditNote()
     setSaving(false)
   }
 
@@ -116,7 +131,7 @@ export default function OrderEditPage() {
     (sum, i) => sum + Number(i.price || 0) * Number(i.quantity || 0), 0
   )
   const totalQty   = items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
-  const editable   = order?.status === "注文受付"
+  const editable   = canEditNow()
 
   // ─── ローディング ──────────────────────────────────────────
   if (loading) return (
