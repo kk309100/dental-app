@@ -185,15 +185,15 @@ function BulkPrint() {
         /* ── admin-base.css の table/h1 強制スタイルを発注書印刷ページ内で上書き ── */
         .print-page.print-page table td,
         .print-page.print-page table th {
-          padding: 12px 8px !important;
+          padding: 10px 8px !important;
           font-size: 15px !important;
-          line-height: 1.8 !important;
+          line-height: 1.6 !important;
         }
         .print-page.print-page table td div,
         .print-page.print-page table td span,
         .print-page.print-page table td p {
           font-size: 14px !important;
-          line-height: 1.8 !important;
+          line-height: 1.6 !important;
         }
         .print-page.print-page h1 {
           font-size: 28px !important;
@@ -218,7 +218,7 @@ function BulkPrint() {
   )
 }
 
-const th: React.CSSProperties = { padding: "12px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 15, lineHeight: 1.8, color: "#555" }
-const tdL: React.CSSProperties = { padding: "10px 8px", background: "#f9fafb", fontSize: 15, lineHeight: 1.8, color: "#555", width: 80, borderRight: "1px solid #eee" }
-const tdR: React.CSSProperties = { padding: "10px 8px", fontSize: 15, lineHeight: 1.8, color: "#111", borderRight: "1px solid #eee" }
-const tdC: React.CSSProperties = { padding: "12px 8px", fontSize: 16, lineHeight: 1.8 }
+const th: React.CSSProperties = { padding: "10px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 15, lineHeight: 1.6, color: "#555" }
+const tdL: React.CSSProperties = { padding: "10px 8px", background: "#f9fafb", fontSize: 15, lineHeight: 1.6, color: "#555", width: 80, borderRight: "1px solid #eee" }
+const tdR: React.CSSProperties = { padding: "10px 8px", fontSize: 15, lineHeight: 1.6, color: "#111", borderRight: "1px solid #eee" }
+const tdC: React.CSSProperties = { padding: "10px 8px", fontSize: 16, lineHeight: 1.6 }
