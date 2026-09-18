@@ -301,7 +301,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
             title="FAXで送付したら押してください（送付済みの記録用）">
             {po.sent_method === "FAX" ? "📠 FAX送信済み" : "📠 FAX送信済みにする"}
           </button>
-          <button onClick={() => window.print()} className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded">🖨 印刷</button>
+          <button onClick={() => window.open(`/admin/purchase-orders/print?ids=${po.id}`, "_blank")} className="text-xs px-3 py-1.5 bg-gray-900 text-white rounded">🖨 印刷</button>
           <button onClick={async () => {
             const next = !editMode
             setEditMode(next)
