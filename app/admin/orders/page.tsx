@@ -49,6 +49,7 @@ function AdminOrdersPage() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"undelivered" | "delivered" | "all" | string>(initialStatus)
   const [clinicFilter, setClinicFilter] = useState("all")
+  const [bizStateFilter, setBizStateFilter] = useState<"all" | BizState>("all")
   const [openOrderIds, setOpenOrderIds] = useState<Set<string>>(new Set())
   const [openClinicIds, setOpenClinicIds] = useState<Set<string>>(new Set())
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
@@ -476,9 +477,10 @@ function AdminOrdersPage() {
       if (statusFilter !== "undelivered" && statusFilter !== "delivered" && statusFilter !== "all" && o.status !== statusFilter) return false
 
       if (clinicFilter !== "all" && o.clinic_id !== clinicFilter) return false
+      if (bizStateFilter !== "all" && businessState(o.id) !== bizStateFilter) return false
       return matchSearch
     })
-  }, [orders, itemsByOrder, clinicById, search, statusFilter, clinicFilter])
+  }, [orders, itemsByOrder, clinicById, search, statusFilter, clinicFilter, bizStateFilter, productById, orderedAwaitingReceipt, orderedAwaitingReceiptByItemId, orderedAwaitingReceiptByOrderId])
 
   // 医院別グループ
   const byClinic = useMemo(() => {
@@ -501,6 +503,16 @@ function AdminOrdersPage() {
     delivered: orders.filter((o) => ["納品済み", "納品済"].includes(o.status)).length,
     total: orders.length,
   }), [orders])
+
+  // 業務状態バッジ別の件数（未納品の注文のみが対象。納品済・取消は集計しない）
+  const bizStateCounts = useMemo(() => {
+    const c: Record<BizState, number> = { delivered: 0, cancelled: 0, ready: 0, waiting: 0, partial: 0, need_po: 0 }
+    orders.forEach((o) => {
+      if (["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)) return
+      c[businessState(o.id)]++
+    })
+    return c
+  }, [orders, itemsByOrder, productById, orderedAwaitingReceipt, orderedAwaitingReceiptByItemId, orderedAwaitingReceiptByOrderId])
 
   // GroupViewTabs 用の行データ（filtered を集計用に変換）
   const groupRows: GroupableRow[] = useMemo(() => filtered.map(o => ({
@@ -699,6 +711,12 @@ function AdminOrdersPage() {
         <select value={clinicFilter} onChange={(e) => setClinicFilter(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white max-w-[200px]">
           <option value="all">全医院</option>
           {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={bizStateFilter} onChange={(e) => setBizStateFilter(e.target.value as "all" | BizState)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
+          <option value="all">業務状態すべて</option>
+          {(Object.keys(BIZ_BADGES) as BizState[]).map((s) => (
+            <option key={s} value={s}>{BIZ_BADGES[s].icon} {BIZ_BADGES[s].label} ({bizStateCounts[s]})</option>
+          ))}
         </select>
       </div>
 
