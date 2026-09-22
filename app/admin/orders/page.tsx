@@ -20,7 +20,7 @@ type Order = { id: string; clinic_id: string; status: string; created_at: string
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null }
 type Clinic = { id: string; name: string; corporate_name?: string | null }
 type Product = { id: string; name: string; stock: number | null; cost: number | null; price: number | null; manufacturer?: string | null }
-type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null }
+type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null; note?: string | null }
 type POHead = { id: string; status: string }
 
 const STATUSES = ["注文受付", "確認中", "準備中", "納品済み", "キャンセル"] as const
@@ -66,7 +66,7 @@ function AdminOrdersPage() {
       fetchAll("products", "id,name,stock,cost,price,manufacturer"),
       // 業務状態判定用: 「未入荷の発注」を検出するため
       supabase.from("purchase_orders").select("id,status").limit(50000),
-      supabase.from("purchase_order_items").select("purchase_order_id,product_id,quantity,received_quantity").limit(50000),
+      supabase.from("purchase_order_items").select("purchase_order_id,product_id,quantity,received_quantity,note").limit(50000),
     ])
     const orders = (o.data as Order[]) || []
     setOrders(orders)
@@ -144,6 +144,41 @@ function AdminOrdersPage() {
     return ids
   }, [poHeads, poItems])
 
+  // 商品マスタに紐付いていない「手入力商品」（product_id が無い）は上の product_id 集合では
+  // 追跡できないため、発注プール登録時に note へ記録される情報から発注元を逆引きして追跡する。
+  // note には「明細xxxxxxxx」(order_item_id 先頭8桁) が入っていれば明細単位で厳密に判定でき、
+  // 古い発注（この対応より前に作られたもの）は「注文xxxxxxxx」(order_id 先頭8桁) しか無いため
+  // 注文単位（同じ注文の手入力商品なら一律）でフォールバック判定する
+  const orderedAwaitingReceiptByItemId = useMemo(() => {
+    const activePOIds = new Set(poHeads.filter(p => p.status === "発注済" || p.status === "部分入荷").map(p => p.id))
+    const ids = new Set<string>()
+    poItems.forEach(it => {
+      if (it.product_id) return
+      if (!activePOIds.has(it.purchase_order_id)) return
+      const remaining = Number(it.quantity || 0) - Number(it.received_quantity || 0)
+      if (remaining <= 0) return
+      const m = String(it.note || "").match(/明細([0-9a-f]{8})/i)
+      if (m) ids.add(m[1])
+    })
+    return ids
+  }, [poHeads, poItems])
+
+  const orderedAwaitingReceiptByOrderId = useMemo(() => {
+    const activePOIds = new Set(poHeads.filter(p => p.status === "発注済" || p.status === "部分入荷").map(p => p.id))
+    const ids = new Set<string>()
+    poItems.forEach(it => {
+      if (it.product_id) return
+      if (!activePOIds.has(it.purchase_order_id)) return
+      const remaining = Number(it.quantity || 0) - Number(it.received_quantity || 0)
+      if (remaining <= 0) return
+      // 明細IDが note に無い＝この対応より前に作られた古い発注書のみ、注文単位でフォールバック
+      if (/明細[0-9a-f]{8}/i.test(String(it.note || ""))) return
+      const m = String(it.note || "").match(/注文\s+([0-9a-f]{8})/i)
+      if (m) ids.add(m[1])
+    })
+    return ids
+  }, [poHeads, poItems])
+
   // 業務状態（一目で「次にやること」が分かるバッジ用）
   // delivered  : 納品済み（完了）
   // cancelled  : キャンセル
@@ -161,12 +196,17 @@ function AdminOrdersPage() {
     const items = itemsByOrder.get(orderId) || []
     if (items.length === 0) return "ready"
 
+    const orderIdPrefix = orderId.slice(0, 8)
     let shortCount = 0, awaitingCount = 0
     for (const it of items) {
       const stock = it.product_id ? Number(productById.get(it.product_id)?.stock || 0) : 0
       if (stock < Number(it.quantity || 0)) {
         shortCount++
-        if (it.product_id && orderedAwaitingReceipt.has(it.product_id)) awaitingCount++
+        if (it.product_id) {
+          if (orderedAwaitingReceipt.has(it.product_id)) awaitingCount++
+        } else if (orderedAwaitingReceiptByItemId.has(it.id.slice(0, 8)) || orderedAwaitingReceiptByOrderId.has(orderIdPrefix)) {
+          awaitingCount++
+        }
       }
     }
     if (shortCount === 0) return "ready"

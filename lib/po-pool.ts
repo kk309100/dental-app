@@ -17,6 +17,7 @@ export type PoolItem = {
   quantity: number
   unit_price: number
   source_order_id: string
+  source_order_item_id?: string
   source_clinic_name: string
   source_clinic_id: string | null
 }
@@ -96,7 +97,8 @@ export async function addItemsToPool(
         quantity: it.quantity,
         unit_price: it.unit_price,
         received_quantity: 0,
-        note: `[${it.source_clinic_name}] ${sourceLabel} ${it.source_order_id.slice(0, 8)}`,
+        note: `[${it.source_clinic_name}] ${sourceLabel} ${it.source_order_id.slice(0, 8)}`
+          + (it.source_order_item_id ? ` 明細${it.source_order_item_id.slice(0, 8)}` : ""),
       }))
       const { error: e2 } = await supabase
         .from("purchase_order_items")
@@ -142,7 +144,7 @@ export async function poolFromOrders(
   // products は件数が多い（1万件超）ため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
   const [oRes, oiRes, products, sRes, srRes, cRes] = await Promise.all([
     supabase.from("orders").select("id,clinic_id").in("id", orderIds),
-    supabase.from("order_items").select("order_id,product_id,quantity,product_name,price").in("order_id", orderIds).limit(50000),
+    supabase.from("order_items").select("id,order_id,product_id,quantity,product_name,price").in("order_id", orderIds).limit(50000),
     fetchAll("products", "id,name,stock,cost,default_supplier_id"),
     supabase.from("suppliers").select("id,name").limit(50000),
     // 過去仕入履歴（最新優先で仕入先決定）
@@ -191,6 +193,7 @@ export async function poolFromOrders(
         quantity: orderQty,
         unit_price: Number(oi.price || 0),
         source_order_id: oi.order_id,
+        source_order_item_id: oi.id,
         source_clinic_name: clinicName,
         source_clinic_id: order?.clinic_id || null,
       }
@@ -286,6 +289,7 @@ export async function forceAddOrderItemToPool(
     quantity: Number(oi.quantity || 0),
     unit_price: unitPrice,
     source_order_id: oi.order_id,
+    source_order_item_id: oi.id,
     source_clinic_name: clinicName,
     source_clinic_id: order?.clinic_id || null,
   }
