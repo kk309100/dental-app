@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 
 type Product = {
@@ -30,11 +30,12 @@ export default function InventoryPage() {
 
   async function fetchData() {
     setLoading(true)
-    const { data } = await supabase
-      .from("products")
-      .select("id,name,product_code,manufacturer,stock,reorder_level,cost,price,category,location")
-      .order("name", { ascending: true })
-      .limit(50000)
+    // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+    const data = await fetchAll(
+      "products",
+      "id,name,product_code,manufacturer,stock,reorder_level,cost,price,category,location",
+      (q: any) => q.order("name", { ascending: true })
+    )
     setProducts((data as Product[]) || [])
     setLoading(false)
   }
