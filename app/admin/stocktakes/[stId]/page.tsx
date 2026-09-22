@@ -53,6 +53,11 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
   const [importOutcomes, setImportOutcomes] = useState<ImportOutcome[] | null>(null)
   const [importApplying, setImportApplying] = useState(false)
   const productList = useMemo(() => Array.from(products.values()), [products])
+  const itemIdByProductId = useMemo(() => {
+    const m = new Map<string, string>()
+    items.forEach(i => m.set(i.product_id, i.id))
+    return m
+  }, [items])
 
   async function handleImportFile(file: File) {
     setImporting(true)
@@ -301,7 +306,7 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
                       </tr>
                     ))}
                     {unmatched.map((o, idx) => (
-                      <UnmatchedRow key={"un" + idx} outcome={o} enriched={enriched} norm={norm}
+                      <UnmatchedRow key={"un" + idx} outcome={o} productList={productList} itemIdByProductId={itemIdByProductId} norm={norm}
                         onChoose={itemId => setImportOutcomes(prev => prev!.map(x => x === o ? { ...x, chosen: itemId } : x))} />
                     ))}
                   </tbody>
@@ -381,46 +386,69 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
 }
 
 // 未一致行用：候補が全商品（1万件超）になるため、セレクトボックスではなく
-// 入力しながら絞り込む検索欄にする（全件をDOMに並べるとページが重くなるため）
-function UnmatchedRow({ outcome, enriched, norm, onChoose }: {
+// 入力しながら絞り込む検索欄にする（全件をDOMに並べるとページが重くなるため）。
+// 検索対象は今の棚卸のスナップショットではなく、商品マスター全体（productList）から探す。
+// 選んだ商品にこの棚卸の明細（stocktake_item）が無い場合（棚卸作成後に登録された商品など）は
+// その場で反映できないため、その旨を伝える。
+function UnmatchedRow({ outcome, productList, itemIdByProductId, norm, onChoose }: {
   outcome: { row: { name: string; qty: number }; chosen: string }
-  enriched: { id: string; product?: { id: string; name: string; product_code: string | null; manufacturer: string | null } }[]
+  productList: { id: string; name: string; product_code: string | null; manufacturer: string | null }[]
+  itemIdByProductId: Map<string, string>
   norm: (v: string) => string
   onChoose: (itemId: string) => void
 }) {
   const [q, setQ] = useState("")
-  const chosenLabel = useMemo(() => {
+  const [notInStocktake, setNotInStocktake] = useState<string | null>(null)
+  const chosenProduct = useMemo(() => {
     if (!outcome.chosen) return null
-    const found = enriched.find(i => i.id === outcome.chosen)
-    return found?.product?.name || null
-  }, [outcome.chosen, enriched])
+    const itemId = outcome.chosen
+    // itemId から逆引き（表示用）
+    for (const p of productList) {
+      if (itemIdByProductId.get(p.id) === itemId) return p
+    }
+    return null
+  }, [outcome.chosen, productList, itemIdByProductId])
   const results = useMemo(() => {
     if (!q.trim()) return []
     const k = norm(q)
-    return enriched.filter(i => i.product && norm(i.product.name).includes(k)).slice(0, 15)
-  }, [q, enriched, norm])
+    return productList.filter(p => norm(p.name).includes(k)).slice(0, 15)
+  }, [q, productList, norm])
+
+  function pick(p: { id: string; name: string }) {
+    const itemId = itemIdByProductId.get(p.id)
+    if (!itemId) {
+      setNotInStocktake(p.name)
+      return
+    }
+    setNotInStocktake(null)
+    onChoose(itemId)
+    setQ("")
+  }
 
   return (
     <tr className="border-t border-gray-100 bg-amber-50/40">
       <td className="px-2 py-1.5">{outcome.row.name}<div className="text-[10px] text-amber-700">DentHubに一致する商品名が見つかりません</div></td>
       <td className="px-2 py-1.5 text-right tabular-nums">{outcome.row.qty}</td>
       <td className="px-2 py-1.5" style={{ position: "relative" }}>
-        {chosenLabel ? (
+        {chosenProduct ? (
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-emerald-700 font-bold">✓ {chosenLabel}</span>
+            <span className="text-[11px] text-emerald-700 font-bold">✓ {chosenProduct.name}</span>
             <button onClick={() => onChoose("")} className="text-[10px] text-gray-400 underline">変更</button>
           </div>
         ) : (
           <>
-            <input lang="ja" value={q} onChange={e => setQ(e.target.value)}
-              placeholder="🔍 商品名で検索してこの実数を割り当てる"
+            <input lang="ja" value={q} onChange={e => { setQ(e.target.value); setNotInStocktake(null) }}
+              placeholder="🔍 商品マスターから検索してこの実数を割り当てる"
               className="w-full px-1.5 py-1 border border-gray-200 rounded text-[11px]" />
+            {notInStocktake && (
+              <p className="text-[10px] text-red-600 mt-0.5">「{notInStocktake}」はこの棚卸の対象になっていません（棚卸作成後に登録された商品の可能性）。棚卸を作り直してください。</p>
+            )}
             {results.length > 0 && (
               <div className="absolute z-10 left-2 right-2 mt-0.5 bg-white border border-gray-200 rounded shadow-lg" style={{ maxHeight: 200, overflowY: "auto" }}>
-                {results.map(i => (
-                  <div key={i.id} onClick={() => { onChoose(i.id); setQ("") }}
+                {results.map(p => (
+                  <div key={p.id} onClick={() => pick(p)}
                     className="px-2 py-1 text-[11px] hover:bg-purple-50 cursor-pointer border-b border-gray-50">
-                    {i.product!.name}<span className="text-gray-400 ml-1">（{i.product!.product_code || "コードなし"}）</span>
+                    {p.name}<span className="text-gray-400 ml-1">（{p.product_code || "コードなし"}）</span>
                   </div>
                 ))}
               </div>
