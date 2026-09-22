@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 
 type Stocktake = {
   id: string
@@ -38,7 +38,8 @@ export default function StocktakesPage() {
       .insert({ taken_on: date, status: "進行中" }).select().single()
     if (e1 || !st) { alert("作成失敗: " + (e1?.message || "")); return }
     // 2) 全商品の現在在庫を初期値としてスナップショット
-    const { data: products } = await supabase.from("products").select("id,stock,active").or("active.is.null,active.eq.true").limit(50000)
+    // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+    const products = await fetchAll("products", "id,stock,active", (q: any) => q.or("active.is.null,active.eq.true"))
     if (products && products.length > 0) {
       const items = (products as { id: string; stock: number | null }[]).map(p => ({
         stocktake_id: st.id,

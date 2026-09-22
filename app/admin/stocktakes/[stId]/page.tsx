@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { downloadCSV, toCSV } from "@/lib/csv"
 
@@ -30,8 +30,9 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
     const { data: s } = await supabase.from("stocktakes").select("*").eq("id", stId).single()
     if (!s) { setLoading(false); return }
     setSt(s as Stocktake)
-    const { data: it } = await supabase.from("stocktake_items").select("*").eq("stocktake_id", stId)
-    const { data: ps } = await supabase.from("products").select("id,name,product_code,manufacturer,category,cost,location,active").limit(50000)
+    // 明細・商品ともに1万件を超えうるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+    const it = await fetchAll("stocktake_items", "*", (q: any) => q.eq("stocktake_id", stId))
+    const ps = await fetchAll("products", "id,name,product_code,manufacturer,category,cost,location,active")
     setItems((it as Item[]) || [])
     const m = new Map<string, Product>()
     ;(ps as Product[] | null)?.forEach(p => m.set(p.id, p))
@@ -39,8 +40,99 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
     setLoading(false)
   }
 
-  const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC")
+  const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s+/g, "")
   const enriched = useMemo(() => items.map(i => ({ ...i, product: products.get(i.product_id) })), [items, products])
+
+  // ── Excel/CSVから実数を取り込む ──────────────────────────────
+  type ImportRow = { name: string; qty: number }
+  type ImportOutcome =
+    | { kind: "matched"; row: ImportRow; itemId: string }
+    | { kind: "ambiguous"; row: ImportRow; candidates: { itemId: string; product: Product }[]; chosen: string }
+    | { kind: "unmatched"; row: ImportRow; chosen: string }
+  const [importing, setImporting] = useState(false)
+  const [importOutcomes, setImportOutcomes] = useState<ImportOutcome[] | null>(null)
+  const [importApplying, setImportApplying] = useState(false)
+  const productList = useMemo(() => Array.from(products.values()), [products])
+
+  async function handleImportFile(file: File) {
+    setImporting(true)
+    try {
+      const XLSX = await import("xlsx")
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: "array" })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" })
+
+      // 「商品名」「棚卸数量」（無ければ「数量」）を含む行をヘッダー行として探す
+      let headerRowIdx = -1, nameCol = -1, qtyCol = -1
+      for (let r = 0; r < Math.min(rows.length, 20); r++) {
+        const nCol = rows[r].findIndex(c => String(c).trim() === "商品名")
+        if (nCol === -1) continue
+        const qCol = rows[r].findIndex(c => String(c).includes("数量"))
+        if (qCol === -1) continue
+        headerRowIdx = r; nameCol = nCol; qtyCol = qCol
+        break
+      }
+      if (headerRowIdx === -1) {
+        alert("「商品名」「数量」の列見出しが見つかりませんでした。ファイルの形式を確認してください。")
+        return
+      }
+
+      const importRows: ImportRow[] = []
+      for (let r = headerRowIdx + 1; r < rows.length; r++) {
+        const name = String(rows[r][nameCol] || "").trim()
+        const qtyRaw = rows[r][qtyCol]
+        if (!name) continue
+        const qty = Number(qtyRaw)
+        if (qtyRaw === "" || isNaN(qty)) continue
+        importRows.push({ name, qty })
+      }
+      if (importRows.length === 0) { alert("取り込める行が見つかりませんでした。"); return }
+
+      // 現在の棚卸の明細を商品名(正規化)でインデックス化
+      const byName = new Map<string, { itemId: string; product: Product }[]>()
+      enriched.forEach(i => {
+        if (!i.product) return
+        const k = norm(i.product.name)
+        if (!byName.has(k)) byName.set(k, [])
+        byName.get(k)!.push({ itemId: i.id, product: i.product })
+      })
+
+      const outcomes: ImportOutcome[] = importRows.map(row => {
+        const cands = byName.get(norm(row.name)) || []
+        if (cands.length === 1) return { kind: "matched", row, itemId: cands[0].itemId }
+        if (cands.length > 1) return { kind: "ambiguous", row, candidates: cands, chosen: "" }
+        return { kind: "unmatched", row, chosen: "" }
+      })
+      setImportOutcomes(outcomes)
+    } catch (e) {
+      alert("読み込みに失敗しました: " + (e as Error).message)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  async function applyImport() {
+    if (!importOutcomes) return
+    const targets: { itemId: string; qty: number }[] = []
+    importOutcomes.forEach(o => {
+      if (o.kind === "matched") targets.push({ itemId: o.itemId, qty: o.row.qty })
+      else if (o.chosen) targets.push({ itemId: o.chosen, qty: o.row.qty })
+    })
+    if (targets.length === 0) { alert("反映できる行がありません"); return }
+    if (!confirm(`${targets.length}件の実数をこの棚卸に反映します。よろしいですか？`)) return
+    setImportApplying(true)
+    try {
+      for (const t of targets) {
+        await supabase.from("stocktake_items").update({ counted_stock: t.qty }).eq("id", t.itemId)
+      }
+      await fetchData()
+      setImportOutcomes(null)
+      alert(`✅ ${targets.length}件の実数を反映しました。`)
+    } finally {
+      setImportApplying(false)
+    }
+  }
 
   const filtered = useMemo(() => {
     return enriched.filter(i => {
@@ -136,6 +228,13 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
         <div className="flex items-center gap-2">
           <button onClick={() => window.print()} className="text-xs px-3 py-1.5 bg-gray-100 border border-gray-200 rounded hover:bg-gray-200">🖨 印刷（カウント用紙）</button>
           <button onClick={exportCSV} className="text-xs px-3 py-1.5 bg-gray-100 border border-gray-200 rounded hover:bg-gray-200">📤 CSV</button>
+          {!isFinalized && (
+            <label className="text-xs px-3 py-1.5 bg-purple-50 border border-purple-200 text-purple-700 rounded hover:bg-purple-100 cursor-pointer font-bold">
+              {importing ? "読込中…" : "📥 Excel/CSV取込"}
+              <input type="file" accept=".xlsx,.xls,.csv" className="hidden" disabled={importing}
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = "" }} />
+            </label>
+          )}
           {!isFinalized && <button onClick={finalize} className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 font-bold">✓ 確定</button>}
           <Link href="/admin/stocktakes" className="text-xs text-gray-500 underline">← 一覧</Link>
         </div>
@@ -151,6 +250,67 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
           <option value="all">すべて ({stats.total})</option>
         </select>
       </div>
+
+      {importOutcomes && (() => {
+        const matchedCount = importOutcomes.filter(o => o.kind === "matched").length
+        const ambiguous = importOutcomes.filter((o): o is Extract<ImportOutcome, { kind: "ambiguous" }> => o.kind === "ambiguous")
+        const unmatched = importOutcomes.filter((o): o is Extract<ImportOutcome, { kind: "unmatched" }> => o.kind === "unmatched")
+        const resolvedCount = ambiguous.filter(o => o.chosen).length + unmatched.filter(o => o.chosen).length
+        return (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2 no-print">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm font-bold text-purple-900">
+                取込プレビュー：自動一致 {matchedCount}件 ／ 要確認 {ambiguous.length + unmatched.length}件（うち選択済み {resolvedCount}件）
+              </p>
+              <div className="flex gap-2">
+                <button onClick={applyImport} disabled={importApplying}
+                  className="text-xs px-3 py-1.5 bg-purple-600 text-white rounded font-bold hover:bg-purple-700 disabled:opacity-50">
+                  {importApplying ? "反映中…" : `この内容を反映（${matchedCount + resolvedCount}件）`}
+                </button>
+                <button onClick={() => setImportOutcomes(null)} className="text-xs px-3 py-1.5 bg-white border border-gray-300 rounded hover:bg-gray-50">キャンセル</button>
+              </div>
+            </div>
+            {(ambiguous.length > 0 || unmatched.length > 0) && (
+              <div className="bg-white rounded border border-purple-200 overflow-auto" style={{ maxHeight: 320 }}>
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr className="text-[11px] text-gray-500">
+                      <th className="px-2 py-1 text-left">Excel上の商品名</th>
+                      <th className="px-2 py-1 text-right w-16">実数</th>
+                      <th className="px-2 py-1 text-left">対応する商品を選択</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ambiguous.map((o, idx) => (
+                      <tr key={"amb" + idx} className="border-t border-gray-100">
+                        <td className="px-2 py-1.5">{o.row.name}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{o.row.qty}</td>
+                        <td className="px-2 py-1.5">
+                          <select value={o.chosen} onChange={e => {
+                            const v = e.target.value
+                            setImportOutcomes(prev => prev!.map(x => x === o ? { ...x, chosen: v } : x))
+                          }} className="w-full px-1.5 py-1 border border-gray-200 rounded text-[11px]">
+                            <option value="">－ 選択してください（{o.candidates.length}件同名）－</option>
+                            {o.candidates.map(c => (
+                              <option key={c.itemId} value={c.itemId}>
+                                {c.product.product_code || "(コードなし)"} / {c.product.manufacturer || "-"} / {c.product.location || "棚番号なし"}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                    {unmatched.map((o, idx) => (
+                      <UnmatchedRow key={"un" + idx} outcome={o} enriched={enriched} norm={norm}
+                        onChoose={itemId => setImportOutcomes(prev => prev!.map(x => x === o ? { ...x, chosen: itemId } : x))} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       <div className="bg-white rounded overflow-auto print-area" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs">
@@ -217,5 +377,57 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
         }
       `}</style>
     </div>
+  )
+}
+
+// 未一致行用：候補が全商品（1万件超）になるため、セレクトボックスではなく
+// 入力しながら絞り込む検索欄にする（全件をDOMに並べるとページが重くなるため）
+function UnmatchedRow({ outcome, enriched, norm, onChoose }: {
+  outcome: { row: { name: string; qty: number }; chosen: string }
+  enriched: { id: string; product?: { id: string; name: string; product_code: string | null; manufacturer: string | null } }[]
+  norm: (v: string) => string
+  onChoose: (itemId: string) => void
+}) {
+  const [q, setQ] = useState("")
+  const chosenLabel = useMemo(() => {
+    if (!outcome.chosen) return null
+    const found = enriched.find(i => i.id === outcome.chosen)
+    return found?.product?.name || null
+  }, [outcome.chosen, enriched])
+  const results = useMemo(() => {
+    if (!q.trim()) return []
+    const k = norm(q)
+    return enriched.filter(i => i.product && norm(i.product.name).includes(k)).slice(0, 15)
+  }, [q, enriched, norm])
+
+  return (
+    <tr className="border-t border-gray-100 bg-amber-50/40">
+      <td className="px-2 py-1.5">{outcome.row.name}<div className="text-[10px] text-amber-700">DentHubに一致する商品名が見つかりません</div></td>
+      <td className="px-2 py-1.5 text-right tabular-nums">{outcome.row.qty}</td>
+      <td className="px-2 py-1.5" style={{ position: "relative" }}>
+        {chosenLabel ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-emerald-700 font-bold">✓ {chosenLabel}</span>
+            <button onClick={() => onChoose("")} className="text-[10px] text-gray-400 underline">変更</button>
+          </div>
+        ) : (
+          <>
+            <input lang="ja" value={q} onChange={e => setQ(e.target.value)}
+              placeholder="🔍 商品名で検索してこの実数を割り当てる"
+              className="w-full px-1.5 py-1 border border-gray-200 rounded text-[11px]" />
+            {results.length > 0 && (
+              <div className="absolute z-10 left-2 right-2 mt-0.5 bg-white border border-gray-200 rounded shadow-lg" style={{ maxHeight: 200, overflowY: "auto" }}>
+                {results.map(i => (
+                  <div key={i.id} onClick={() => { onChoose(i.id); setQ("") }}
+                    className="px-2 py-1 text-[11px] hover:bg-purple-50 cursor-pointer border-b border-gray-50">
+                    {i.product!.name}<span className="text-gray-400 ml-1">（{i.product!.product_code || "コードなし"}）</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </td>
+    </tr>
   )
 }
