@@ -9,7 +9,7 @@
 
 import { use, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { runAutoMatch, setManualMatch } from "@/lib/supplier-invoice-match"
 
@@ -72,10 +72,11 @@ export default function MatchPage({ params }: { params: Promise<{ invoiceId: str
     if (!inv) { setLoading(false); return }
     setInvoice(inv as SI)
 
-    const [{ data: sup }, { data: itms }, { data: prods }] = await Promise.all([
+    // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+    const [{ data: sup }, { data: itms }, prods] = await Promise.all([
       supabase.from("suppliers").select("id,name").eq("id", inv.supplier_id).single(),
       supabase.from("supplier_invoice_items").select("*").eq("supplier_invoice_id", invoiceId).order("line_no").limit(50000),
-      supabase.from("products").select("id,name,product_code").limit(50000),
+      fetchAll("products", "id,name,product_code"),
     ])
     setSupplier(sup as Supplier | null)
     setItems((itms as Item[]) || [])

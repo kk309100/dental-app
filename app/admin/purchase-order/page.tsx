@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
 import { COMPANY } from "@/lib/company"
@@ -56,15 +56,16 @@ export default function PurchaseOrderPage() {
 
   async function fetchData() {
     setLoading(true)
+    // order_items・products は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [o, i, p, c] = await Promise.all([
       supabase.from("orders").select("id,clinic_id,created_at,delivery_number").limit(50000),
-      supabase.from("order_items").select("*").limit(50000),
-      supabase.from("products").select("id,name,manufacturer,unit,cost").limit(50000),
+      fetchAll("order_items", "*"),
+      fetchAll("products", "id,name,manufacturer,unit,cost"),
       supabase.from("clinics").select("id,name").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
-    setOrderItems((i.data as OrderItem[]) || [])
-    setProducts((p.data as Product[]) || [])
+    setOrderItems((i as OrderItem[]) || [])
+    setProducts((p as Product[]) || [])
     setClinics((c.data as Clinic[]) || [])
     setSuppliers(await fetchSuppliersByUsage("id,name"))
     setLoading(false)

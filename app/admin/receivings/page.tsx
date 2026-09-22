@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 import { downloadCSV, toCSV } from "@/lib/csv"
@@ -45,14 +45,15 @@ export default function ReceivingsListPage() {
 
   async function fetchData() {
     setLoading(true)
+    // stock_receipts・products は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [r, s, p] = await Promise.all([
-      supabase.from("stock_receipts").select("*").order("created_at", { ascending: false }).limit(50000),
+      fetchAll("stock_receipts", "*", (q: any) => q.order("created_at", { ascending: false })),
       supabase.from("suppliers").select("id,name").order("name").limit(50000),
-      supabase.from("products").select("id,name,product_code,manufacturer,category").limit(50000),
+      fetchAll("products", "id,name,product_code,manufacturer,category"),
     ])
-    setReceipts((r.data as Receipt[]) || [])
+    setReceipts((r as Receipt[]) || [])
     setSuppliers((s.data as Supplier[]) || [])
-    setProducts((p.data as Product[]) || [])
+    setProducts((p as Product[]) || [])
     setLoading(false)
   }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { downloadCSV, toCSV } from "@/lib/csv"
 
@@ -29,7 +29,8 @@ export default function InventoryValuationPage() {
 
   async function fetchData() {
     setLoading(true)
-    const { data } = await supabase.from("products").select("*").or("active.is.null,active.eq.true").limit(50000)
+    // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+    const data = await fetchAll("products", "*", (q: any) => q.or("active.is.null,active.eq.true"))
     setProducts((data as Product[]) || [])
     setLoading(false)
   }

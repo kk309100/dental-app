@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import Link from "next/link"
 import { Ic } from "./_lib/icons"
 
@@ -20,14 +20,15 @@ export default function AdminHomePage() {
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
+    // products は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [o, i, p] = await Promise.all([
       supabase.from("orders").select("id,status,invoice_id").limit(50000),
       supabase.from("invoices").select("id,status").limit(50000),
-      supabase.from("products").select("id,stock,reorder_level").limit(50000),
+      fetchAll("products", "id,stock,reorder_level"),
     ])
     setOrders((o.data as Order[]) || [])
     setInvoices((i.data as Invoice[]) || [])
-    setProducts((p.data as Product[]) || [])
+    setProducts((p as Product[]) || [])
     setLoading(false)
   }
 
@@ -49,6 +50,7 @@ export default function AdminHomePage() {
     { href: "/admin/deliveries",         label: "④ 医院納品",   desc: "医院へ出荷・納品書発行",       icon: Ic.doc,      color: "#059669", badge: badges.undeliveredCount || undefined, badgeLabel: "未納品" },
     { href: "/admin/invoices",           label: "⑤ 請求",       desc: "請求書発行・入金管理",         icon: Ic.sales,    color: "#dc2626", badge: (badges.unbilled || badges.unpaidInvoices) || undefined, badgeLabel: badges.unbilled > 0 ? "未請求" : "未収" },
     { href: "/admin/sales",              label: "⑥ 売上",       desc: "月次・医院・商品別に集計",     icon: Ic.sales,    color: "#059669" },
+    { href: "/admin/route-planner",      label: "⑦ 訪問ルート", desc: "訪問チームの最適ルート作成",   icon: Ic.truck,    color: "#0891b2" },
   ]
 
   const buttons: ButtonItem[] = [

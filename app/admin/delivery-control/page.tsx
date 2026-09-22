@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 
 export default function DeliveryControlPage() {
   const [orders, setOrders] = useState<any[]>([])
@@ -28,8 +28,9 @@ export default function DeliveryControlPage() {
       (o: any) => !["納品済み", "納品済"].includes(o.status)
     )
 
-    const { data: itemsData } = await supabase.from("order_items").select("*").limit(50000)
-    const { data: productsData } = await supabase.from("products").select("*").limit(10000)
+    // order_items・products は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+    const itemsData = await fetchAll("order_items", "*")
+    const productsData = await fetchAll("products", "*")
     const { data: clinicsData } = await supabase.from("clinics").select("*").limit(10000)
 
     setOrders(ordersData || [])

@@ -5,7 +5,7 @@
 // 商品名の手入力・PDF読取不要。分割入荷・部分入荷に完全対応。
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import Link from "next/link"
 
@@ -60,28 +60,27 @@ export default function ReceivingFromPoPage() {
 
   async function fetchData() {
     setLoading(true)
+    // purchase_order_items・products・order_items は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [p, pi, s, pr, o, oi, cl] = await Promise.all([
       supabase.from("purchase_orders")
         .select("id,po_number,supplier_id,status,ordered_at,note")
         .in("status", ["発注済", "部分入荷", "発注済み"])
         .order("ordered_at", { ascending: false })
         .limit(200),
-      supabase.from("purchase_order_items")
-        .select("id,purchase_order_id,product_id,product_name,quantity,unit_price,received_quantity,note")
-        .limit(50000),
+      fetchAll("purchase_order_items", "id,purchase_order_id,product_id,product_name,quantity,unit_price,received_quantity,note"),
       supabase.from("suppliers").select("id,name").limit(1000),
-      supabase.from("products").select("id,stock,price").limit(50000),
+      fetchAll("products", "id,stock,price"),
       supabase.from("orders").select("id,clinic_id,status,total_price,delivery_number").limit(50000),
-      supabase.from("order_items").select("order_id,product_id,quantity").limit(50000),
+      fetchAll("order_items", "order_id,product_id,quantity"),
       supabase.from("clinics").select("id,name").limit(1000),
     ])
-    const fetchedItems = (pi.data as POItem[]) || []
+    const fetchedItems = (pi as POItem[]) || []
     setPos((p.data as PO[]) || [])
     setPoItems(fetchedItems)
     setSuppliers((s.data as Supplier[]) || [])
-    setProducts((pr.data as { id: string; stock: number | null; price: number | null }[]) || [])
+    setProducts((pr as { id: string; stock: number | null; price: number | null }[]) || [])
     setOrders((o.data as Order[]) || [])
-    setOrderItems((oi.data as { order_id: string; product_id: string | null; quantity: number }[]) || [])
+    setOrderItems((oi as { order_id: string; product_id: string | null; quantity: number }[]) || [])
     setClinics((cl.data as Clinic[]) || [])
     // 初期チェック: 未入荷残数がある商品を全選択
     const initChecked = new Set(

@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { calcTax, fmtYen, ymd } from "@/lib/invoice"
 import { generateQuoteNumber, defaultExpiryDate } from "@/lib/quote"
 import Link from "next/link"
@@ -67,13 +67,14 @@ function CreateQuotePage() {
 
   async function fetchData() {
     setLoading(true)
-    const [c, p] = await Promise.all([
+    // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+    const [c, pData] = await Promise.all([
       supabase.from("clinics").select("id,name,corporate_name,clinic_code").order("name").limit(50000),
-      supabase.from("products").select("id,name,price,cost").order("name").limit(50000),
+      fetchAll("products", "id,name,price,cost", (q: any) => q.order("name")),
     ])
     setClinics(c.data || [])
-    setProducts((p.data as Product[]) || [])
-    const productMap = new Map((p.data as Product[] || []).map(pp => [pp.id, pp]))
+    setProducts((pData as Product[]) || [])
+    const productMap = new Map((pData as Product[] || []).map(pp => [pp.id, pp]))
 
     // ?from_order=xxx で注文から見積コピー
     if (fromOrderId) {

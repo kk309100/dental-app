@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import Seal from "@/app/components/Seal"
 
 export default function DeliveryPage() {
@@ -15,9 +15,10 @@ export default function DeliveryPage() {
   }, [])
 
   async function fetchData() {
+    // order_items・products は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const { data: ordersData } = await supabase.from("orders").select("*").limit(50000)
-    const { data: itemsData } = await supabase.from("order_items").select("*").limit(50000)
-    const { data: productsData } = await supabase.from("products").select("*").limit(50000)
+    const itemsData = await fetchAll("order_items", "*")
+    const productsData = await fetchAll("products", "*")
     const { data: clinicsData } = await supabase.from("clinics").select("*").limit(50000)
 
     setOrders(ordersData || [])

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import Link from "next/link"
 import { downloadCSV, toCSV } from "@/lib/csv"
 
@@ -36,15 +36,16 @@ export default function SalesPage() {
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
+    // order_items・products は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [o, i, p, c] = await Promise.all([
       supabase.from("orders").select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep").limit(50000),
-      supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price").limit(50000),
-      supabase.from("products").select("id,name,cost").limit(50000),
+      fetchAll("order_items", "id,order_id,product_id,product_name,quantity,price"),
+      fetchAll("products", "id,name,cost"),
       supabase.from("clinics").select("id,name,sales_rep").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
-    setItems((i.data as OrderItem[]) || [])
-    setProducts((p.data as Product[]) || [])
+    setItems((i as OrderItem[]) || [])
+    setProducts((p as Product[]) || [])
     setClinics((c.data as Clinic[]) || [])
     setLoading(false)
   }

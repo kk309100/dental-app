@@ -13,7 +13,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { readTextSmart, parsePurchaseCsv, type PurchaseCsvRow } from "@/lib/purchase-csv"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier as SupplierOption } from "@/lib/supplier-sort"
@@ -73,9 +73,10 @@ export default function QuickCheckPage() {
 
   async function ensureMasters() {
     if (mastersLoaded) return
-    const [sups, { data: prod }] = await Promise.all([
+    // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+    const [sups, prod] = await Promise.all([
       fetchSuppliersByUsage("id,name,supplier_code"),
-      supabase.from("products").select("id,name,product_code,barcode,manufacturer").limit(50000),
+      fetchAll("products", "id,name,product_code,barcode,manufacturer"),
     ])
     setSuppliers(sups as SupplierWithCode[])
     setProducts((prod as Product[]) || [])

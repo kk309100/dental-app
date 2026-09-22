@@ -15,7 +15,7 @@
 
 import { useRef, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { readTextSmart, parsePurchaseCsv, type PurchaseCsvRow } from "@/lib/purchase-csv"
 
@@ -52,9 +52,10 @@ export default function CsvImportPage() {
 
   async function loadMasters() {
     setLoadingMasters(true)
-    const [{ data: sup }, { data: prod }] = await Promise.all([
+    // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+    const [{ data: sup }, prod] = await Promise.all([
       supabase.from("suppliers").select("id,name,supplier_code").order("name").limit(2000),
-      supabase.from("products").select("id,name,product_code").limit(50000),
+      fetchAll("products", "id,name,product_code"),
     ])
     setSuppliers((sup as Supplier[]) || [])
     setProducts((prod as Product[]) || [])

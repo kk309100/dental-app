@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { use } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
 import { fmtYen, fmtDate, INVOICE_STATUSES, getClinicPrefix, getCorporateLabel, type InvoiceStatus } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
@@ -62,7 +62,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
   const [nameInput, setNameInput] = useState("")
   const [allProducts, setAllProducts] = useState<{ id: string; name: string; price: number | null; product_code: string | null }[]>([])
   useEffect(() => {
-    supabase.from("products").select("id,name,price,product_code").limit(50000).then(({ data }) => {
+    // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
+    fetchAll("products", "id,name,price,product_code").then((data: any) => {
       if (data) setAllProducts(data)
     })
   }, [])

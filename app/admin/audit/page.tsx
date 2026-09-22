@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 
 type Tab = "receiving" | "delivery" | "stock"
@@ -48,23 +48,25 @@ export default function AuditPage() {
     since.setMonth(since.getMonth() - Number(period))
     const sinceStr = since.toISOString().slice(0, 10)
 
+    // products・order_items・stock_receipts・supplier_invoice_items は件数が多いため、
+    // Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [p, s, r, si, sii, o, oi, cl] = await Promise.all([
-      supabase.from("products").select("id,name,product_code,manufacturer,stock").limit(50000),
+      fetchAll("products", "id,name,product_code,manufacturer,stock"),
       supabase.from("suppliers").select("id,name").limit(1000),
-      supabase.from("stock_receipts").select("*").gte("created_at", sinceStr).order("created_at", { ascending: false }).limit(50000),
+      fetchAll("stock_receipts", "*", (q: any) => q.gte("created_at", sinceStr).order("created_at", { ascending: false })),
       supabase.from("supplier_invoices").select("id,supplier_id,invoice_date,invoice_number,total_amount,status").gte("invoice_date", sinceStr).order("invoice_date", { ascending: false }).limit(10000),
-      supabase.from("supplier_invoice_items").select("id,invoice_id,product_name,quantity,unit_price").limit(50000),
+      fetchAll("supplier_invoice_items", "id,invoice_id,product_name,quantity,unit_price"),
       supabase.from("orders").select("id,clinic_id,status,total_price,delivery_number,created_at").gte("created_at", sinceStr).limit(50000),
-      supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price").limit(200000),
+      fetchAll("order_items", "id,order_id,product_id,product_name,quantity,price"),
       supabase.from("clinics").select("id,name").limit(1000),
     ])
-    setProducts((p.data as Product[]) || [])
+    setProducts((p as Product[]) || [])
     setSuppliers((s.data as Supplier[]) || [])
-    setReceipts((r.data as Receipt[]) || [])
+    setReceipts((r as Receipt[]) || [])
     setSuppInvs((si.data as SuppInv[]) || [])
-    setSuppItems((sii.data as SuppInvItem[]) || [])
+    setSuppItems((sii as SuppInvItem[]) || [])
     setOrders((o.data as Order[]) || [])
-    setOrderItems((oi.data as OrderItem[]) || [])
+    setOrderItems((oi as OrderItem[]) || [])
     setClinics((cl.data as Clinic[]) || [])
     setLoading(false)
   }
