@@ -56,8 +56,8 @@ export default function ToothChartPage() {
 
   useEffect(() => { fetchAll() }, [])
 
-  async function fetchAll() {
-    setLoading(true)
+  async function fetchAll(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     // products は1万件超あるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [t, p, c] = await Promise.all([
       supabase.from("tooth_chart_templates").select("*").order("created_at", { ascending: false }),
@@ -67,7 +67,7 @@ export default function ToothChartPage() {
     setTemplates((t.data as Template[]) || [])
     setProducts((p as Product[]) || [])
     setClinics((c.data as Clinic[]) || [])
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   async function loadTemplateItems(tid: string) {
@@ -87,7 +87,7 @@ export default function ToothChartPage() {
     const { data, error } = await supabase.from("tooth_chart_templates").insert({ name }).select().single()
     if (error || !data) { alert("作成失敗: " + error?.message); return }
     setNewTemplateName("")
-    await fetchAll()
+    await fetchAll({ silent: true })
     setTemplateId(data.id)
     setMode("edit")
   }
@@ -98,7 +98,7 @@ export default function ToothChartPage() {
     const { error } = await supabase.from("tooth_chart_templates").delete().eq("id", tid)
     if (error) { alert("削除失敗: " + error.message); return }
     if (templateId === tid) setTemplateId("")
-    await fetchAll()
+    await fetchAll({ silent: true })
   }
 
   async function renameTemplate(tid: string, oldName: string) {
@@ -106,7 +106,7 @@ export default function ToothChartPage() {
     if (!name || name === oldName) return
     const { error } = await supabase.from("tooth_chart_templates").update({ name }).eq("id", tid)
     if (error) { alert("名前変更失敗: " + error.message); return }
-    await fetchAll()
+    await fetchAll({ silent: true })
   }
 
   async function copyTemplate(tid: string, oldName: string) {
@@ -121,7 +121,7 @@ export default function ToothChartPage() {
       const { error: e3 } = await supabase.from("tooth_chart_template_items").insert(rows)
       if (e3) { alert("コピー失敗: " + e3.message); return }
     }
-    await fetchAll()
+    await fetchAll({ silent: true })
     setTemplateId(newTpl.id)
     setMode("edit")
   }

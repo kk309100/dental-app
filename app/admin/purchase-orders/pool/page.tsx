@@ -51,8 +51,8 @@ export default function POPoolPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const [pRes, sRes] = await Promise.all([
       supabase.from("purchase_orders").select("*").eq("status", "下書き").order("created_at", { ascending: false }).limit(50000),
       supabase.from("suppliers").select("id,name").order("name").limit(50000),
@@ -80,7 +80,7 @@ export default function POPoolPage() {
     } else {
       setItems([])
     }
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   const supplierById = useMemo(() => new Map(suppliers.map(s => [s.id, s])), [suppliers])
@@ -109,7 +109,7 @@ export default function POPoolPage() {
     setBusy(null)
     if (!r.ok) { alert("確定失敗: " + r.error); return }
     alert(`✅ ${supplierName} への発注書を発行しました。`)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function handleDiscard(poId: string, supplierName: string) {
@@ -118,7 +118,7 @@ export default function POPoolPage() {
     const r = await discardPoolPO(poId)
     setBusy(null)
     if (!r.ok) { alert("削除失敗: " + r.error); return }
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function handleConfirmAll() {
@@ -133,13 +133,13 @@ export default function POPoolPage() {
     }
     setBusy(null)
     alert(`完了: ${success}社 発行 / 失敗 ${fail}社`)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function assignSupplier(poId: string, supplierId: string) {
     if (!supplierId) return
     await supabase.from("purchase_orders").update({ supplier_id: supplierId }).eq("id", poId)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   // 「仕入先未定」PO内の1明細だけを、選んだ仕入先の下書きPOへ移動する
@@ -198,7 +198,7 @@ export default function POPoolPage() {
         await supabase.from("purchase_orders").delete().eq("id", fromPoId)
       }
 
-      fetchData()
+      fetchData({ silent: true })
     } finally {
       setBusy(null)
     }
@@ -207,13 +207,13 @@ export default function POPoolPage() {
   async function updateItemQty(itemId: string, newQty: number) {
     if (newQty <= 0) return
     await supabase.from("purchase_order_items").update({ quantity: newQty }).eq("id", itemId)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function deleteItem(itemId: string) {
     if (!confirm("この明細行を削除しますか？")) return
     await supabase.from("purchase_order_items").delete().eq("id", itemId)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   if (loading) return <p className="text-center py-12 text-gray-400">読み込み中…</p>

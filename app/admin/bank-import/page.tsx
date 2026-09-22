@@ -48,8 +48,8 @@ export default function BankImportPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const [i, c] = await Promise.all([
       supabase.from("invoices").select("id,clinic_id,invoice_number,total,paid_amount,status,due_date").neq("status", "cancelled").limit(50000),
       supabase.from("clinics").select("id,name").limit(50000),
@@ -60,7 +60,7 @@ export default function BankImportPage() {
       const { data: p } = await supabase.from("invoice_payments").select("invoice_id,amount")
       setPayments((p as Payment[]) || [])
     } catch { setPayments([]) }
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   const clinicById = useMemo(() => new Map(clinics.map(c => [c.id, c])), [clinics])
@@ -186,7 +186,7 @@ export default function BankImportPage() {
     }
     updateLine(idx, { saved: true, status: "消込済", matched_payment_id: payment?.id })
     setBusy(false)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function commitAll() {

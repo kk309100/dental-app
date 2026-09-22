@@ -28,8 +28,9 @@ export default function InventoryPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  // silent=true の場合、全画面「読み込み中」に切り替えない（一覧のスクロール位置を保ったまま裏で再取得する）
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const data = await fetchAll(
       "products",
@@ -37,7 +38,7 @@ export default function InventoryPage() {
       (q: any) => q.order("name", { ascending: true })
     )
     setProducts((data as Product[]) || [])
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   const isLow = (p: Product) => (p.stock ?? 0) <= (p.reorder_level ?? 10)
@@ -76,14 +77,14 @@ export default function InventoryPage() {
       })
     } catch { /* テーブル無い場合はスキップ */ }
     setSavingId(null)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function updateLocation(id: string, value: string) {
     setSavingId(id)
     await supabase.from("products").update({ location: value || null }).eq("id", id)
     setSavingId(null)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function updateProductCode(id: string, value: string) {
@@ -91,7 +92,7 @@ export default function InventoryPage() {
     const { error } = await supabase.from("products").update({ product_code: value || null }).eq("id", id)
     setSavingId(null)
     if (error) { alert("商品コードの更新に失敗しました: " + error.message); return }
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function updateReorderLevel(id: string, value: string) {
@@ -100,7 +101,7 @@ export default function InventoryPage() {
     setSavingId(id)
     await supabase.from("products").update({ reorder_level: level }).eq("id", id)
     setSavingId(null)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function useStock(id: string) {
@@ -113,7 +114,7 @@ export default function InventoryPage() {
     })
     setUsingId(null)
     if (error) { alert("エラー: " + error.message); return }
-    fetchData()
+    fetchData({ silent: true })
   }
 
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>

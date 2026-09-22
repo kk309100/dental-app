@@ -66,8 +66,8 @@ export default function ReceivingPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     // products は1万件超あるため、Supabase既定の1000件上限を回避するため fetchAll でページング取得する
     const [p, s, r] = await Promise.all([
       fetchAll("products", "id,name,product_code,manufacturer,stock,cost,barcode"),
@@ -77,7 +77,7 @@ export default function ReceivingPage() {
     setProducts((p as Product[]) || [])
     setSuppliers((s.data as Supplier[]) || [])
     setRecent(r.data || [])
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   function updateRow(i: number, partial: Partial<Row>) {
@@ -325,7 +325,7 @@ export default function ReceivingPage() {
       setParsedMeta(null)
       setPdfFile(null)
     }
-    fetchData()
+    fetchData({ silent: true })
 
     // 入庫した商品で「出荷可能になった注文」を全件出力
     // 1) この入庫商品を含む未納品注文を取得

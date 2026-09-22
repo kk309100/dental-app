@@ -46,12 +46,12 @@ export default function AdminSuppliersPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const { data, error } = await supabase.from("suppliers").select("*").order("name", { ascending: true }).limit(50000)
     if (error) setErrMsg(`読込エラー: ${error.message}`)
     setSuppliers(data || [])
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   const filtered = useMemo(() => {
@@ -112,7 +112,7 @@ export default function AdminSuppliersPage() {
       let msg = `✅ 取込完了: 新規${created}件 / 更新${updated}件 / スキップ${skipped}件`
       if (errors.length) msg += `\n⚠ エラー${errors.length}件: ${errors.slice(0, 3).join(" / ")}`
       setImportMsg(msg)
-      await fetchData()
+      await fetchData({ silent: true })
     } catch (e) {
       setImportMsg(`取込失敗: ${(e as Error).message}`)
     } finally {
@@ -142,7 +142,7 @@ export default function AdminSuppliersPage() {
         if (error) throw error
       }
       setShowForm(false)
-      await fetchData()
+      await fetchData({ silent: true })
     } catch (e) {
       setErrMsg(`保存失敗: ${(e as Error).message}`)
     } finally {
@@ -154,7 +154,7 @@ export default function AdminSuppliersPage() {
     if (!confirm(`「${name}」を削除します。よろしいですか？`)) return
     const { error } = await supabase.from("suppliers").delete().eq("id", id)
     if (error) { alert(`削除失敗: ${error.message}`); return }
-    fetchData()
+    fetchData({ silent: true })
   }
 
   function downloadCSV() {

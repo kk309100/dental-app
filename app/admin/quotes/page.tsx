@@ -49,7 +49,7 @@ export default function QuotesPage() {
       await supabase.from("quote_items").delete().eq("quote_id", quoteId)
       const { error } = await supabase.from("quotes").delete().eq("id", quoteId)
       if (error) { alert("削除失敗: " + error.message); return }
-      await fetchData()
+      await fetchData({ silent: true })
     } finally {
       setDeletingId(null)
     }
@@ -266,8 +266,8 @@ export default function QuotesPage() {
     }
   }
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const [q, c] = await Promise.all([
       supabase.from("quotes").select("*").order("issue_date", { ascending: false }).limit(50000),
       supabase.from("clinics").select("id,name").order("name").limit(50000),
@@ -279,7 +279,7 @@ export default function QuotesPage() {
       const { data: its } = await supabase.from("quote_items").select("id,quote_id,product_name,quantity,price").limit(50000)
       setItems((its as QuoteItem[]) || [])
     } catch { setItems([]) }
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   const clinicById = useMemo(() => new Map(clinics.map(c => [c.id, c])), [clinics])

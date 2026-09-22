@@ -51,8 +51,8 @@ export default function InvoicesPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const [i, c] = await Promise.all([
       supabase.from("invoices").select("*").order("issue_date", { ascending: false }).limit(50000),
       supabase.from("clinics").select("id,name,payment_method").order("name").limit(50000),
@@ -63,7 +63,7 @@ export default function InvoicesPage() {
       const { data: items } = await supabase.from("invoice_items").select("invoice_id,product_name,quantity,unit_price").limit(50000)
       setInvoiceItems((items as any[]) || [])
     } catch { setInvoiceItems([]) }
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   const clinicById = useMemo(() => new Map(clinics.map(c => [c.id, c])), [clinics])
@@ -135,7 +135,7 @@ export default function InvoicesPage() {
       supabase.from("invoices").update({ status: "paid", paid_at: today, paid_amount: iv.total }).eq("id", iv.id)
     ))
     clearSel()
-    fetchData()
+    fetchData({ silent: true })
   }
 
   // KPI（全件ベース）

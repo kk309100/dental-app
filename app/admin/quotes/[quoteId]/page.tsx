@@ -59,10 +59,10 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
     })
   }
 
-  async function fetchData() {
-    setLoading(true); setError("")
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) { setLoading(true); setError("") }
     const { data: q, error: e1 } = await supabase.from("quotes").select("*").eq("id", quoteId).single()
-    if (e1 || !q) { setError("見積書が見つかりません"); setLoading(false); return }
+    if (e1 || !q) { setError("見積書が見つかりません"); if (!opts?.silent) setLoading(false); return }
     setQuote(q as Quote)
     if (q.clinic_id) {
       const { data: cl } = await supabase.from("clinics").select("*").eq("id", q.clinic_id).single()
@@ -70,14 +70,14 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
     }
     const { data: its } = await supabase.from("quote_items").select("*").eq("quote_id", quoteId).order("sort_order")
     setItems((its as QuoteItem[]) || [])
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   async function updateStatus(newStatus: QuoteStatus) {
     if (!quote) return
     const { error: e } = await supabase.from("quotes").update({ status: newStatus }).eq("id", quote.id)
     if (e) { alert("更新失敗: " + e.message); return }
-    fetchData()
+    fetchData({ silent: true })
   }
 
   // 見積を実行: 在庫ある商品 → 注文化（出荷準備可能） / 不足品 → 発注プールへ自動振り分け
@@ -173,7 +173,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
       } else {
         alert(msg)
       }
-      fetchData()
+      fetchData({ silent: true })
     } catch (e) {
       alert((e as Error).message)
     } finally {
@@ -236,7 +236,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
       if (qe) throw new Error("見積更新失敗: " + qe.message)
 
       alert(`✓ 売上化完了\n請求書: ${invoice_number}`)
-      fetchData()
+      fetchData({ silent: true })
     } catch (e) {
       alert((e as Error).message)
     } finally {

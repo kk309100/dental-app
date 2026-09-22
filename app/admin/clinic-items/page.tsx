@@ -51,8 +51,8 @@ export default function ClinicItemsPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const [{ data: itemData }, { data: clinicData }] = await Promise.all([
       supabase.from("clinic_inventory_items")
         .select("id,product_name,maker,barcode,stock_quantity,min_stock,location,shelf_no,clinic_id,clinics(name)")
@@ -61,7 +61,7 @@ export default function ClinicItemsPage() {
     ])
     if (itemData) setItems(itemData.map((d: any) => ({ ...d, clinic_name: d.clinics?.name ?? "（未設定）" })))
     if (clinicData) setClinics(clinicData as Clinic[])
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   async function saveField(id: string, field: "location" | "min_stock", value: string) {
@@ -132,7 +132,7 @@ export default function ClinicItemsPage() {
     } else {
       setImportMsg(`✅ ${inserts.length}件を登録しました`)
       setImportRows([])
-      await fetchData()
+      await fetchData({ silent: true })
     }
     setImporting(false)
   }
@@ -160,7 +160,7 @@ export default function ClinicItemsPage() {
     else {
       setShowAdd(false)
       setAddForm(emptyAdd)
-      await fetchData()
+      await fetchData({ silent: true })
     }
     setAddSaving(false)
   }

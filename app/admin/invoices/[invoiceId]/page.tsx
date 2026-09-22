@@ -73,11 +73,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
 
   useEffect(() => { fetchData() }, [invoiceId])
 
-  async function fetchData() {
-    setLoading(true)
-    setError("")
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) { setLoading(true); setError("") }
     const { data: inv, error: e1 } = await supabase.from("invoices").select("*").eq("id", invoiceId).single()
-    if (e1 || !inv) { setError("請求書が見つかりません"); setLoading(false); return }
+    if (e1 || !inv) { setError("請求書が見つかりません"); if (!opts?.silent) setLoading(false); return }
     setInvoice(inv as Invoice)
 
     if (inv.clinic_id) {
@@ -110,7 +109,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
       setPayments((pays as Payment[]) || [])
     } catch { setPayments([]) }
 
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   const totalPaid = useMemo(
@@ -150,7 +149,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
     if (error) { alert("更新失敗: " + error.message); return }
     setNameModal(null)
     setNameInput("")
-    fetchData()
+    fetchData({ silent: true })
   }
 
   function similarProducts(price: number) {
@@ -204,7 +203,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
 
     setPaidAmount(""); setPaidDate(""); setPaidNote(""); setPaidMethod("振込")
     setShowPayForm(false)
-    fetchData()
+    fetchData({ silent: true })
     if (!usePayments) {
       alert("⚠ invoice_payments テーブルが未作成のため簡易方式で記録しました。")
     }
@@ -214,7 +213,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
     if (!confirm("この入金記録を削除しますか？")) return
     const { error } = await supabase.from("invoice_payments").delete().eq("id", id)
     if (error) { alert("削除失敗: " + error.message); return }
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function cancelInvoice() {
@@ -223,7 +222,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
     await supabase.from("orders").update({ invoice_id: null }).eq("invoice_id", invoice.id)
     const { error: e } = await supabase.from("invoices").update({ status: "cancelled" }).eq("id", invoice.id)
     if (e) { alert("取消失敗: " + e.message); return }
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function reissueFromCancel() {
@@ -231,7 +230,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
     if (!confirm("取消した請求書を再発行（issuedに戻す）しますか？")) return
     const { error: e } = await supabase.from("invoices").update({ status: "issued", paid_at: null, paid_amount: null }).eq("id", invoice.id)
     if (e) { alert("失敗: " + e.message); return }
-    fetchData()
+    fetchData({ silent: true })
   }
 
   if (loading) return <main style={page}><p>読み込み中…</p></main>

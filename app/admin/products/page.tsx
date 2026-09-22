@@ -52,15 +52,15 @@ export default function AdminProductsPage() {
 
   useEffect(() => { fetchProducts(); fetchSuppliers() }, [])
 
-  async function fetchProducts() {
-    setLoading(true)
+  async function fetchProducts(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const data = await fetchAll(
       "products",
       "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id,image_url,stocktake_exclude",
       (q) => q.order("name", { ascending: true })
     )
     setProducts((data as Product[]) || [])
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   async function fetchSuppliers() {
@@ -114,7 +114,7 @@ export default function AdminProductsPage() {
     if (error) { alert("保存失敗: " + error.message); setSaving(false); return }
     setSaving(false)
     closeEdit()
-    fetchProducts()
+    fetchProducts({ silent: true })
   }
 
   async function uploadProductImage(file: File) {
@@ -204,7 +204,7 @@ export default function AdminProductsPage() {
       let msg = `✅ 取込完了: 新規${created}件 / 更新${updated}件 / スキップ${skipped}件`
       if (errors.length) msg += `\n⚠ エラー${errors.length}件: ${errors.slice(0, 3).join(" / ")}`
       setImportMsg(msg)
-      await fetchProducts()
+      await fetchProducts({ silent: true })
     } catch (e) {
       setImportMsg(`取込失敗: ${(e as Error).message}`)
     } finally {
@@ -236,7 +236,7 @@ export default function AdminProductsPage() {
   async function toggleActive(p: Product) {
     const newActive = p.active === false ? true : false
     await supabase.from("products").update({ active: newActive }).eq("id", p.id)
-    fetchProducts()
+    fetchProducts({ silent: true })
   }
 
   const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s+/g, "")
@@ -312,7 +312,7 @@ export default function AdminProductsPage() {
     }
     setLinkMsg(`✅ ${linked}件をリンクしました${noMatch.length > 0 ? `（未一致: ${noMatch.length}件）` : ""}`)
     setLinking(false)
-    await fetchProducts()
+    await fetchProducts({ silent: true })
   }
 
   const supplierName = (id: string | null | undefined) =>

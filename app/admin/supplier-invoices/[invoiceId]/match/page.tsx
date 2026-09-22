@@ -66,10 +66,10 @@ export default function MatchPage({ params }: { params: Promise<{ invoiceId: str
 
   useEffect(() => { fetchData() }, [invoiceId])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const { data: inv } = await supabase.from("supplier_invoices").select("*").eq("id", invoiceId).single()
-    if (!inv) { setLoading(false); return }
+    if (!inv) { if (!opts?.silent) setLoading(false); return }
     setInvoice(inv as SI)
 
     // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
@@ -90,7 +90,7 @@ export default function MatchPage({ params }: { params: Promise<{ invoiceId: str
     const { data: rcpts } = await q
     setReceipts((rcpts as Receipt[]) || [])
 
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   async function handleAutoMatch() {
@@ -104,7 +104,7 @@ export default function MatchPage({ params }: { params: Promise<{ invoiceId: str
 
       const result = await runAutoMatch(invoiceId)
       alert(`自動マッチ完了\n  一致: ${result.matched}件\n  数量ズレ: ${result.qty_mismatch}件\n  単価ズレ: ${result.price_mismatch}件\n  商品マスタ無: ${result.no_product}件\n  入荷記録無: ${result.unmatched}件`)
-      await fetchData()
+      await fetchData({ silent: true })
     } catch (e) {
       alert("自動マッチ失敗: " + (e as Error).message)
     } finally {
@@ -117,14 +117,14 @@ export default function MatchPage({ params }: { params: Promise<{ invoiceId: str
     await supabase.from("supplier_invoices").update({
       status: "確定", confirmed_at: new Date().toISOString(),
     }).eq("id", invoiceId)
-    await fetchData()
+    await fetchData({ silent: true })
   }
 
   async function handlePickProduct(itemId: string, productId: string) {
     if (!invoice) return
     await setManualMatch(itemId, productId, invoice.supplier_id, true)
     setPickItemId(null); setPickQuery("")
-    await fetchData()
+    await fetchData({ silent: true })
   }
 
   // サマリー

@@ -54,8 +54,8 @@ export default function PurchaseOrderPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     // order_items・products は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [o, i, p, c] = await Promise.all([
       supabase.from("orders").select("id,clinic_id,created_at,delivery_number").limit(50000),
@@ -68,7 +68,7 @@ export default function PurchaseOrderPage() {
     setProducts((p as Product[]) || [])
     setClinics((c.data as Clinic[]) || [])
     setSuppliers(await fetchSuppliersByUsage("id,name"))
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   const orderById = useMemo(() => new Map(orders.map((o) => [o.id, o])), [orders])
@@ -221,7 +221,7 @@ export default function PurchaseOrderPage() {
       }
       setCreatedPOs(created)
       setSelectedIds(new Set())
-      fetchData()
+      fetchData({ silent: true })
     } finally {
       setPoBusy(false)
     }
@@ -235,7 +235,7 @@ export default function PurchaseOrderPage() {
       purchased_at: null,
     }).in("id", Array.from(selectedIds))
     setSelectedIds(new Set())
-    fetchData()
+    fetchData({ silent: true })
   }
 
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>

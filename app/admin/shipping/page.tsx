@@ -62,8 +62,8 @@ function ShippingPage() {
     setHighlightFromReceiving(true)
   }, [loading, orders, presetOrderIds])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     // order_items・products は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [o, i, p, c] = await Promise.all([
       // 全件取得 → クライアント側で EXCLUDE_STATUSES を除外（PostgREST .not in は日本語値で壊れる + 表記ゆれ吸収）
@@ -79,7 +79,7 @@ function ShippingPage() {
     setItems(((i as OrderItem[]) || []).filter(x => orderIds.has(x.order_id)))
     setProducts((p as Product[]) || [])
     setClinics((c.data as Clinic[]) || [])
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   const productById = useMemo(() => new Map(products.map(p => [p.id, p])), [products])
@@ -281,7 +281,7 @@ function ShippingPage() {
     setBusy(false)
     setSelected(new Set())
     alert(`✅ 出荷確定完了: ${orderList.length}件の注文を「納品済み」にしました（納品書 ${createdSlipIds.length}枚作成）`)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   // ピッキングリスト印刷（棚番号順）
@@ -475,7 +475,7 @@ function ShippingPage() {
                               if (newPrice < 0 || newPrice === sellPrice) return
                               await supabase.from("order_items").update({ price: newPrice }).eq("id", it.id)
                               await recalcTotal()
-                              fetchData()
+                              fetchData({ silent: true })
                             }
                             return (
                               <div key={it.id} className={"flex items-center text-[13px] py-0.5 gap-0.5 " + (noPrice ? "bg-amber-50" : "")}>
@@ -488,7 +488,7 @@ function ShippingPage() {
                                     if (v > 0 && v !== qty) {
                                       await supabase.from("order_items").update({ quantity: v }).eq("id", it.id)
                                       await recalcTotal()
-                                      fetchData()
+                                      fetchData({ silent: true })
                                     }
                                   }}
                                   className="w-12 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[13px] bg-white" />
@@ -499,7 +499,7 @@ function ShippingPage() {
                                     const v = Number(e.target.value)
                                     if (v >= 0 && v !== cost && it.product_id) {
                                       await supabase.from("products").update({ cost: v }).eq("id", it.product_id)
-                                      fetchData()
+                                      fetchData({ silent: true })
                                     }
                                   }}
                                   className="w-20 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[13px] text-gray-600 bg-gray-50 disabled:opacity-50"
@@ -511,7 +511,7 @@ function ShippingPage() {
                                     const v = Number(e.target.value)
                                     if (v >= 0 && v !== listPrice && it.product_id) {
                                       await supabase.from("products").update({ price: v }).eq("id", it.product_id)
-                                      fetchData()
+                                      fetchData({ silent: true })
                                     }
                                   }}
                                   className="w-20 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[13px] text-gray-600 bg-gray-50 disabled:opacity-50"

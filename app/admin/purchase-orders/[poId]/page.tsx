@@ -50,10 +50,10 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
 
   useEffect(() => { fetchData() }, [poId])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const { data: p, error: e1 } = await supabase.from("purchase_orders").select("*").eq("id", poId).single()
-    if (e1 || !p) { setErr("発注書が見つかりません"); setLoading(false); return }
+    if (e1 || !p) { setErr("発注書が見つかりません"); if (!opts?.silent) setLoading(false); return }
     setPo(p as PO)
     const { data: it } = await supabase.from("purchase_order_items").select("*").eq("purchase_order_id", poId)
     const itemsData = (it as Item[]) || []
@@ -81,21 +81,21 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
       ;(cls || []).forEach((c: any) => { if (c.clinic_code) map.set(c.name, c.clinic_code) })
       setClinicCodeByName(map)
     }
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   async function changeSupplier(supplierId: string) {
     if (!po) return
     setSavingField("supplier")
     await supabase.from("purchase_orders").update({ supplier_id: supplierId || null }).eq("id", po.id)
-    await fetchData()
+    await fetchData({ silent: true })
     setSavingField(null)
   }
 
   async function updateItemField(itemId: string, patch: Partial<Item>) {
     setSavingField(itemId)
     await supabase.from("purchase_order_items").update(patch).eq("id", itemId)
-    await fetchData()
+    await fetchData({ silent: true })
     setSavingField(null)
   }
 
@@ -110,7 +110,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   async function deleteItem(itemId: string) {
     if (!confirm("この明細を削除しますか？")) return
     await supabase.from("purchase_order_items").delete().eq("id", itemId)
-    await fetchData()
+    await fetchData({ silent: true })
   }
 
   async function addItem() {
@@ -123,7 +123,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
       unit_price: 0,
       received_quantity: 0,
     })
-    await fetchData()
+    await fetchData({ silent: true })
   }
 
   async function updateNote(note: string) {
@@ -136,7 +136,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   async function updateDates(patch: { ordered_at?: string; expected_at?: string }) {
     if (!po) return
     await supabase.from("purchase_orders").update(patch).eq("id", po.id)
-    await fetchData()
+    await fetchData({ silent: true })
   }
 
   async function setStatus(status: string) {
@@ -144,7 +144,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
     if (status === "取消" && !confirm("この発注書を取消しますか？")) return
     const { error } = await supabase.from("purchase_orders").update({ status }).eq("id", po.id)
     if (error) { alert("更新失敗: " + error.message); return }
-    fetchData()
+    fetchData({ silent: true })
   }
 
   async function updateReceived(itemId: string, qty: number, autoStock = true) {
@@ -201,7 +201,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
       }
 
       // 4) 最後に1回だけ fetch（旧コードは2回呼んでいた）
-      await fetchData()
+      await fetchData({ silent: true })
     } finally {
       setReceivingIds(prev => { const n = new Set(prev); n.delete(itemId); return n })
     }
@@ -265,7 +265,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
         sent_method: "メール",
         sent_at: new Date().toISOString(),
       }).eq("id", po.id)
-      fetchData()
+      fetchData({ silent: true })
     } catch { /* テーブル無くてもOK */ }
   }
 
@@ -276,7 +276,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
       sent_method: "FAX",
       sent_at: new Date().toISOString(),
     }).eq("id", po.id)
-    fetchData()
+    fetchData({ silent: true })
   }
 
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>

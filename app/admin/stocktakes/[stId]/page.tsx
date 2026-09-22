@@ -25,10 +25,10 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
 
   useEffect(() => { fetchData() }, [stId])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const { data: s } = await supabase.from("stocktakes").select("*").eq("id", stId).single()
-    if (!s) { setLoading(false); return }
+    if (!s) { if (!opts?.silent) setLoading(false); return }
     setSt(s as Stocktake)
     // 明細・商品ともに1万件を超えうるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const it = await fetchAll("stocktake_items", "*", (q: any) => q.eq("stocktake_id", stId))
@@ -37,7 +37,7 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
     const m = new Map<string, Product>()
     ;(ps as Product[] | null)?.forEach(p => m.set(p.id, p))
     setProducts(m)
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC").replace(/\s+/g, "")
@@ -131,7 +131,7 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
       for (const t of targets) {
         await supabase.from("stocktake_items").update({ counted_stock: t.qty }).eq("id", t.itemId)
       }
-      await fetchData()
+      await fetchData({ silent: true })
       setImportOutcomes(null)
       alert(`✅ ${targets.length}件の実数を反映しました。`)
     } finally {

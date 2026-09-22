@@ -40,15 +40,15 @@ export default function BulkInvoicePage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const [c, o] = await Promise.all([
       supabase.from("clinics").select("id,name,corporate_name,closing_day").order("name").limit(50000),
       supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,invoice_id").limit(50000),
     ])
     setClinics(c.data || [])
     setOrders((o.data as Order[]) || [])
-    setLoading(false)
+    if (!opts?.silent) setLoading(false)
   }
 
   // 各医院の締日に基づく期間 → その期間内の未請求注文を集計
@@ -132,7 +132,7 @@ export default function BulkInvoicePage() {
 
     setSubmitting(false)
     // 完了したら一覧を再取得
-    fetchData()
+    fetchData({ silent: true })
   }
 
   if (loading) return <main style={page}><p>読み込み中…</p></main>

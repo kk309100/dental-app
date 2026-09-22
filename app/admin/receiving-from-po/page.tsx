@@ -58,8 +58,8 @@ export default function ReceivingFromPoPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     // purchase_order_items・products・order_items は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [p, pi, s, pr, o, oi, cl] = await Promise.all([
       supabase.from("purchase_orders")
@@ -82,12 +82,14 @@ export default function ReceivingFromPoPage() {
     setOrders((o.data as Order[]) || [])
     setOrderItems((oi as { order_id: string; product_id: string | null; quantity: number }[]) || [])
     setClinics((cl.data as Clinic[]) || [])
-    // 初期チェック: 未入荷残数がある商品を全選択
-    const initChecked = new Set(
-      fetchedItems.filter(it => remaining(it) > 0).map(it => it.id)
-    )
-    setChecked(initChecked)
-    setLoading(false)
+    if (!opts?.silent) {
+      // 初期チェック: 未入荷残数がある商品を全選択（裏での再取得時はユーザーの選択状態を維持する）
+      const initChecked = new Set(
+        fetchedItems.filter(it => remaining(it) > 0).map(it => it.id)
+      )
+      setChecked(initChecked)
+      setLoading(false)
+    }
   }
 
   const supplierById = useMemo(() => new Map(suppliers.map(s => [s.id, s])), [suppliers])
@@ -287,7 +289,7 @@ export default function ReceivingFromPoPage() {
       }, ...prev])
     } finally {
       setReceiving(prev => { const n = new Set(prev); n.delete(po.id); return n })
-      fetchData()
+      fetchData({ silent: true })
     }
   }
 
