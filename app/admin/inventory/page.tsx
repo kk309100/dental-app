@@ -22,7 +22,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [maker, setMaker] = useState("")
-  const [filter, setFilter] = useState<"stocked" | "all" | "low" | "zero">("stocked")
+  const [filter, setFilter] = useState<"stocked" | "all" | "low" | "zero" | "managed">("stocked")
   const [savingId, setSavingId] = useState<string | null>(null)
   const [usingId, setUsingId] = useState<string | null>(null)
 
@@ -50,9 +50,10 @@ export default function InventoryPage() {
       if (filter === "stocked" && (p.stock ?? 0) <= 0) return false
       if (filter === "low" && !isLow(p)) return false
       if (filter === "zero" && (p.stock ?? 0) > 0) return false
+      if (filter === "managed" && p.location !== "自社管理") return false
       if (m && !norm(p.manufacturer || "").includes(m)) return false
       if (!k) return true
-      const target = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""}`)
+      const target = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""} ${p.location || ""}`)
       return target.includes(k)
     })
   }, [products, search, maker, filter])
@@ -123,12 +124,13 @@ export default function InventoryPage() {
           className="flex-1 min-w-[160px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white" />
         <input value={maker} onChange={(e) => setMaker(e.target.value)} placeholder="メーカー"
           className="w-32 px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white" />
-        <select value={filter} onChange={(e) => setFilter(e.target.value as "stocked" | "all" | "low" | "zero")}
+        <select value={filter} onChange={(e) => setFilter(e.target.value as "stocked" | "all" | "low" | "zero" | "managed")}
           className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
           <option value="stocked">在庫あり商品のみ</option>
           <option value="all">全商品</option>
           <option value="low">在庫不足のみ</option>
           <option value="zero">在庫0のみ</option>
+          <option value="managed">🏷 自社管理在庫のみ</option>
         </select>
       </div>
 
