@@ -176,7 +176,10 @@ export default function DeliveriesPage() {
       </div>
 
       {/* テーブル */}
-      <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
+      <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院"
+        partyActionLabel="🖨 まとめて印刷"
+        onPartyAction={(_party, orderIds) => window.open(`/admin/deliveries/print?ids=${orderIds.join(",")}&merge=1`, "_blank")}
+      >
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 240px)" }}>
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-gray-100">

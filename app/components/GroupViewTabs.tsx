@@ -34,12 +34,15 @@ export function useGroupView() {
 
 export function GroupViewTabs({
   value, onChange, rows, partyLabel = "得意先", children,
+  partyActionLabel, onPartyAction,
 }: {
   value: GroupViewKey
   onChange: (v: GroupViewKey) => void
   rows: GroupableRow[]
   partyLabel?: string
   children: React.ReactNode
+  partyActionLabel?: string                                    // 医院別の各行に出すボタンのラベル（省略時はボタンなし）
+  onPartyAction?: (party: string, orderIds: string[]) => void   // 押したときに、その医院の全件のidを渡す
 }) {
   return (
     <div>
@@ -53,7 +56,7 @@ export function GroupViewTabs({
 
       {value === "list" && children}
       {value === "by_date" && <ByDate rows={rows} />}
-      {value === "by_party" && <ByParty rows={rows} partyLabel={partyLabel} />}
+      {value === "by_party" && <ByParty rows={rows} partyLabel={partyLabel} partyActionLabel={partyActionLabel} onPartyAction={onPartyAction} />}
       {value === "by_product" && <ByProduct rows={rows} />}
     </div>
   )
@@ -204,7 +207,12 @@ function ByDate({ rows }: { rows: GroupableRow[] }) {
   )
 }
 
-function ByParty({ rows, partyLabel }: { rows: GroupableRow[]; partyLabel: string }) {
+function ByParty({ rows, partyLabel, partyActionLabel, onPartyAction }: {
+  rows: GroupableRow[]
+  partyLabel: string
+  partyActionLabel?: string
+  onPartyAction?: (party: string, orderIds: string[]) => void
+}) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
 
@@ -249,6 +257,7 @@ function ByParty({ rows, partyLabel }: { rows: GroupableRow[]; partyLabel: strin
             <th className="px-3 py-1.5 text-right w-20">件数</th>
             <th className="px-3 py-1.5 text-right w-32">金額合計</th>
             <th className="px-3 py-1.5 text-right w-24">構成比</th>
+            {onPartyAction && <th className="px-3 py-1.5 text-right w-32"></th>}
           </tr>
         </thead>
         <tbody>
@@ -272,6 +281,15 @@ function ByParty({ rows, partyLabel }: { rows: GroupableRow[]; partyLabel: strin
                   <td className="px-3 py-2 text-right tabular-nums text-gray-500 text-[11px]">
                     {total > 0 ? `${(g.amount / total * 100).toFixed(1)}%` : "—"}
                   </td>
+                  {onPartyAction && (
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={e => { e.stopPropagation(); onPartyAction(g.party, g.orders.map(o => o.id)) }}
+                        className="text-[11px] px-2 py-1 rounded bg-blue-600 text-white font-bold hover:bg-blue-700">
+                        {partyActionLabel || "実行"}
+                      </button>
+                    </td>
+                  )}
                 </tr>
 
                 {/* 展開: 納品書一覧 */}
