@@ -100,10 +100,12 @@ export default function DeliveriesPage() {
   function selectAll() { setSelected(new Set(filtered.map(o => o.id))) }
   function clearSel() { setSelected(new Set()) }
 
+  const [mergeByClinic, setMergeByClinic] = useState(false)
   function bulkPrint() {
     if (selected.size === 0) { alert("選択がありません"); return }
     const ids = Array.from(selected).join(",")
-    window.open(`/admin/deliveries/print?ids=${ids}`, "_blank")
+    const mergeParam = mergeByClinic ? "&merge=1" : ""
+    window.open(`/admin/deliveries/print?ids=${ids}${mergeParam}`, "_blank")
   }
 
   function exportCSV() {
@@ -137,6 +139,10 @@ export default function DeliveriesPage() {
             ＋ 出荷準備（在庫減算→納品書発行）
           </Link>
           <button onClick={exportCSV} className="px-3 py-2 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📤 CSV</button>
+          <label className="flex items-center gap-1.5 text-xs text-gray-600 px-2" title="同じ医院への複数の納品書を1枚にまとめて印刷します（紙の節約）">
+            <input type="checkbox" checked={mergeByClinic} onChange={e => setMergeByClinic(e.target.checked)} />
+            医院ごとにまとめる
+          </label>
           <button onClick={bulkPrint} disabled={selected.size === 0} className="px-3 py-2 bg-blue-600 text-white text-sm font-bold rounded hover:bg-blue-700 disabled:opacity-50">
             🖨 選択を一括印刷 ({selected.size})
           </button>
