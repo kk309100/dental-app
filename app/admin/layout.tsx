@@ -57,6 +57,7 @@ const SUB = [
   { href: "/admin/bank-import",          label: "銀行CSV消込" },
   { href: "/admin/purchase-order",       label: "推奨発注リスト(旧)" },
   { href: "/admin/stocktakes",           label: "棚卸" },
+  { href: "/admin/inventory/stock-import", label: "自社管理在庫の取込" },
   { href: "/admin/stock-movements",      label: "在庫履歴" },
   { href: "/admin/inventory-valuation",  label: "在庫評価" },
   { href: "/admin/delivery-search",      label: "納品書検索" },
