@@ -86,6 +86,14 @@ export default function InventoryPage() {
     fetchData()
   }
 
+  async function updateProductCode(id: string, value: string) {
+    setSavingId(id)
+    const { error } = await supabase.from("products").update({ product_code: value || null }).eq("id", id)
+    setSavingId(null)
+    if (error) { alert("商品コードの更新に失敗しました: " + error.message); return }
+    fetchData()
+  }
+
   async function updateReorderLevel(id: string, value: string) {
     const level = Number(value)
     if (Number.isNaN(level) || level < 0) return
@@ -166,7 +174,11 @@ export default function InventoryPage() {
                       className="w-14 px-1 py-0.5 border border-gray-200 rounded text-[12px] font-mono text-gray-700" />
                   </td>
                   <td className="px-2 py-1 text-[12px]" style={td0}>{p.name}</td>
-                  <td className="px-2 py-1 text-[12px] text-gray-500" style={td0}>{p.product_code || ""}</td>
+                  <td className="px-1 py-0.5" style={td0}>
+                    <input defaultValue={p.product_code || ""} placeholder="コード未登録"
+                      onBlur={(e) => { if (e.target.value !== (p.product_code || "")) updateProductCode(p.id, e.target.value) }}
+                      className="w-20 px-1 py-0.5 border border-gray-200 rounded text-[12px] font-mono text-gray-700" />
+                  </td>
                   <td className="px-2 py-1 text-[12px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
                   <td className="px-2 py-1 text-[12px] text-gray-500" style={td0}>{p.category || ""}</td>
                   <td className="px-2 py-1 text-right text-[12px] text-gray-600" style={td0}>{p.cost ? p.cost.toLocaleString() : ""}</td>
