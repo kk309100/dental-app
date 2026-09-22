@@ -57,8 +57,9 @@ function AdminOrdersPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  async function fetchData() {
-    setLoading(true)
+  // silent=true の場合、全画面「読み込み中」に切り替えない（一覧のスクロール位置を保ったまま裏で再取得する）
+  async function fetchData(opts?: { silent?: boolean }) {
+    if (!opts?.silent) setLoading(true)
     const [o, i, c, pData, ph, pi] = await Promise.all([
       supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(50000),
       supabase.from("order_items").select("*").limit(50000),  // デフォルト1000件 limit を回避
@@ -76,9 +77,11 @@ function AdminOrdersPage() {
     setProducts((pData as Product[]) || [])
     setPoHeads((ph.data as POHead[]) || [])
     setPoItems((pi.data as POItem[]) || [])
-    // 未納品の注文は商品明細をデフォルトで展開
-    setOpenOrderIds(new Set(orders.filter(o => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)).map(o => o.id)))
-    setLoading(false)
+    if (!opts?.silent) {
+      // 未納品の注文は商品明細をデフォルトで展開（裏での再取得時は開閉状態を維持する）
+      setOpenOrderIds(new Set(orders.filter(o => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)).map(o => o.id)))
+      setLoading(false)
+    }
   }
 
   const clinicById = useMemo(() => new Map(clinics.map((c) => [c.id, c])), [clinics])
@@ -288,7 +291,7 @@ function AdminOrdersPage() {
     await supabase.from("order_items").delete().eq("order_id", orderId)
     const { error } = await supabase.from("orders").delete().eq("id", orderId)
     if (error) { alert("削除失敗: " + error.message); return }
-    fetchData()
+    fetchData({ silent: true })
   }
 
   // 仕入先未設定商品のフォールバック選択用 state
@@ -352,7 +355,7 @@ function AdminOrdersPage() {
         .update({ delivered_quantity: qty }).eq("id", itemId)
       if (oie) { alert("入荷記録は保存されましたが、明細の更新に失敗しました: " + oie.message) }
       alert(`✅ ${qty}個の入荷を記録しました（在庫には加算されません。医院へ直送扱いです）`)
-      await fetchData()
+      await fetchData({ silent: true })
     } finally {
       setReceivingItemId(null)
     }
@@ -366,7 +369,7 @@ function AdminOrdersPage() {
     try {
       const { error } = await supabase.from("order_items").update({ delivered_quantity: 0 }).eq("id", itemId)
       if (error) { alert("取消に失敗しました: " + error.message); return }
-      await fetchData()
+      await fetchData({ silent: true })
     } finally {
       setReceivingItemId(null)
     }
@@ -399,7 +402,7 @@ function AdminOrdersPage() {
         await supabase.from("order_items").update({ delivered_quantity: t.qty }).eq("id", t.id)
       }
       setReceiveSelectedIds(prev => { const n = new Set(prev); targets.forEach(t => n.delete(t.id)); return n })
-      await fetchData()
+      await fetchData({ silent: true })
     } finally {
       setReceivingItemId(null)
     }
@@ -461,7 +464,7 @@ function AdminOrdersPage() {
     const { error } = await supabase.from("orders").delete().in("id", ids)
     if (error) { alert("一括削除失敗: " + error.message); return }
     setSelectedOrderIds(new Set())
-    fetchData()
+    fetchData({ silent: true })
   }
 
   const filtered = useMemo(() => {
@@ -572,7 +575,7 @@ function AdminOrdersPage() {
     const err = await tryUpdate(Array.from(selectedOrderIds), patch)
     if (err) { alert("一括更新失敗: " + err.message); return }
     setSelectedOrderIds(new Set())
-    fetchData()
+    fetchData({ silent: true })
   }
 
   function toggleSelect(id: string) {
