@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
 
 export default function SuggestPOPageWrapper() {
@@ -425,11 +425,11 @@ function SuggestPOPage() {
                                 })}
                                 className={"text-[12px] px-2 py-1 border rounded hover:bg-emerald-100 " +
                                   (isSelected ? "bg-emerald-100 border-emerald-400 ring-1 ring-emerald-400" : "bg-white border-gray-200")}
-                                title={`${sup?.name || "(未設定)"} ¥${Number(h.unit_price || 0).toLocaleString()} / ${new Date(h.created_at).toLocaleDateString("ja-JP")}`}
+                                title={`${sup?.name || "(未設定)"} ¥${Number(h.unit_price || 0).toLocaleString()} / ${parseDbDate(h.created_at).toLocaleDateString("ja-JP")}`}
                               >
                                 <span className="font-bold text-gray-900">{sup?.name || "(未設定)"}</span>
                                 <span className="ml-1.5 text-emerald-700 font-bold">¥{Number(h.unit_price || 0).toLocaleString()}</span>
-                                <span className="ml-1 text-[11px] text-gray-400">{new Date(h.created_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}</span>
+                                <span className="ml-1 text-[11px] text-gray-400">{parseDbDate(h.created_at).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}</span>
                               </button>
                             )
                           })}
@@ -498,7 +498,7 @@ function SuggestPOPage() {
                                   <span className="text-emerald-700 font-bold tabular-nums ml-2">¥{Number(h.unit_price || 0).toLocaleString()}</span>
                                 </div>
                                 <div className="text-[10px] text-gray-500">
-                                  {new Date(h.created_at).toLocaleDateString("ja-JP")} ・ {h.quantity}個
+                                  {parseDbDate(h.created_at).toLocaleDateString("ja-JP")} ・ {h.quantity}個
                                 </div>
                               </button>
                             )

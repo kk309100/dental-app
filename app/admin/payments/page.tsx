@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { fmtYen, fmtDate, type InvoiceStatus } from "@/lib/invoice"
+import { fmtYen, fmtDate, parseDbDate, type InvoiceStatus } from "@/lib/invoice"
 import Link from "next/link"
 
 type Invoice = {
@@ -324,7 +324,7 @@ export default function PaymentsPage() {
                         <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color: "#555" }}>入金履歴</p>
                         {paysForIv.map(p => (
                           <div key={p.id} style={{ display: "flex", gap: 8, fontSize: 11, color: "#555", padding: "2px 0" }}>
-                            <span>{new Date(p.paid_at).toLocaleDateString("ja-JP")}</span>
+                            <span>{parseDbDate(p.paid_at).toLocaleDateString("ja-JP")}</span>
                             <span style={{ padding: "0 5px", background: "#eef2ff", color: "#3730a3", borderRadius: 99 }}>{p.method || "振込"}</span>
                             <span style={{ fontWeight: 600 }}>{fmtYen(p.amount)}</span>
                             {p.note && <span style={{ color: "#9ca3af" }}>{p.note}</span>}

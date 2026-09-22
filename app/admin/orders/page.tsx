@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
 import Link from "next/link"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 import { poolFromOrders, addItemsToPool, removeFromUnassignedPool, forceAddOrderItemToPool, type PoolItem } from "@/lib/po-pool"
 
@@ -633,7 +633,7 @@ function AdminOrdersPage() {
           .sort((a, b) => b.created_at.localeCompare(a.created_at))
         if (newOrders.length === 0) return null
         const fmtTimeAgo = (dt: string) => {
-          const diffMin = Math.floor((Date.now() - new Date(dt).getTime()) / 60000)
+          const diffMin = Math.floor((Date.now() - parseDbDate(dt).getTime()) / 60000)
           if (diffMin < 1) return "今"
           if (diffMin < 60) return `${diffMin}分前`
           const diffHour = Math.floor(diffMin / 60)
@@ -941,7 +941,7 @@ function AdminOrdersPage() {
                                 {o.note?.includes("【医院修正】") && <ClinicEditBadge />}
                               </td>
                               <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
-                              <td className="px-2 py-1 text-[11px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+                              <td className="px-2 py-1 text-[11px] text-gray-500">{parseDbDate(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                               <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                               <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
                                 {o.note ? <span className="bg-slate-100 text-red-600 font-medium border border-slate-300 px-1.5 py-0.5 rounded text-[11px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
@@ -1156,7 +1156,7 @@ function AdminOrdersPage() {
                       </td>
                       <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
                       <td className="px-2 py-1 whitespace-nowrap">{clinicById.get(o.clinic_id)?.name || "—"}</td>
-                      <td className="px-2 py-1 text-[11px] text-gray-500">{new Date(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+                      <td className="px-2 py-1 text-[11px] text-gray-500">{parseDbDate(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                       <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
                         {o.note ? <span className="bg-slate-100 text-red-600 font-medium border border-slate-300 px-1.5 py-0.5 rounded text-[11px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 
 type PO = {
@@ -218,10 +218,10 @@ export default function PurchaseOrdersListPage() {
                     <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: sc.bg, color: sc.color }}>{p.status}</span>
                   </td>
                   <td className="px-2 py-1.5 text-center text-[12px] text-gray-600">
-                    {p.ordered_at ? new Date(p.ordered_at).toLocaleDateString("ja-JP") : "—"}
+                    {p.ordered_at ? parseDbDate(p.ordered_at).toLocaleDateString("ja-JP") : "—"}
                   </td>
                   <td className="px-2 py-1.5 text-center text-[12px] text-gray-600">
-                    {p.expected_at ? new Date(p.expected_at).toLocaleDateString("ja-JP") : "—"}
+                    {p.expected_at ? parseDbDate(p.expected_at).toLocaleDateString("ja-JP") : "—"}
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums font-bold">{fmtYen(p.total_amount || 0)}</td>
                   <td className="px-2 py-1.5 text-center text-[12px]">
@@ -229,7 +229,7 @@ export default function PurchaseOrdersListPage() {
                       ? (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-bold"
                           style={{ background: p.sent_method === "FAX" ? "#dbeafe" : "#dcfce7", color: p.sent_method === "FAX" ? "#1e40af" : "#15803d" }}
-                          title={p.sent_at ? new Date(p.sent_at).toLocaleString("ja-JP") : ""}>
+                          title={p.sent_at ? parseDbDate(p.sent_at).toLocaleString("ja-JP") : ""}>
                           {p.sent_method === "FAX" ? "📠" : "✉"} {p.sent_method}済
                         </span>
                       )

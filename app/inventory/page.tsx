@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase, fetchAll as fetchAllRows } from "@/lib/supabase"
+import { parseDbDate } from "@/lib/invoice"
 import { Html5Qrcode } from "html5-qrcode"
 import { playBeep } from "@/lib/beep"
 import { useRouter } from "next/navigation"
@@ -1895,7 +1896,7 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
   const needsReorder = item.min_stock !== null && effectiveStock <= item.min_stock
   const isEditing = editStockId === item.id
   const isNew = item.created_at
-    ? (Date.now() - new Date(item.created_at).getTime()) < 7 * 24 * 60 * 60 * 1000
+    ? (Date.now() - parseDbDate(item.created_at).getTime()) < 7 * 24 * 60 * 60 * 1000
     : false
   const isEditingMin = editMinId === item.id
   const meta = [

@@ -74,9 +74,24 @@ export function fmtYen(n: number): string {
   return "¥" + Number(n || 0).toLocaleString("ja-JP")
 }
 
+// Supabase の timestamp 列は UTC で保存されているが、タイムゾーン情報(Z/オフセット)無しで
+// 返ってくることがある。その場合 new Date(...) はブラウザのローカルタイムとして誤解釈してしまい、
+// 日本時間表示が実際の作成時刻より9時間ズレる（例: 実際は23:42のはずが14:42と表示される）。
+// 時刻部分(T)を含み、かつタイムゾーン情報が無い文字列にだけ明示的に "Z" を補って UTC 解釈させる。
+// 日付のみの文字列（"2026-09-22" 等）はそのまま渡す（"Z" を付けると不正な形式になるため）。
+export function parseDbDate(d: string | Date): Date
+export function parseDbDate(d: string | Date | null | undefined): Date | null
+export function parseDbDate(d: string | Date | null | undefined): Date | null {
+  if (!d) return null
+  if (d instanceof Date) return d
+  const hasTime = d.includes("T")
+  const hasTz = /[Zz]$|[+\-]\d{2}:?\d{2}$/.test(d)
+  return new Date(hasTime && !hasTz ? d + "Z" : d)
+}
+
 export function fmtDate(d: string | Date | null | undefined): string {
-  if (!d) return ""
-  const dt = typeof d === "string" ? new Date(d) : d
+  const dt = parseDbDate(d)
+  if (!dt) return ""
   return `${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日`
 }
 

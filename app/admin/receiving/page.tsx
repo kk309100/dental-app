@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { fmtYen, ymd } from "@/lib/invoice"
+import { fmtYen, ymd, parseDbDate } from "@/lib/invoice"
 
 type Product = {
   id: string
@@ -790,7 +790,7 @@ export default function ReceivingPage() {
               <div key={rc.id} className="flex items-center justify-between py-1.5 px-2 text-[13px] border-b border-gray-100">
                 <div className="flex-1 min-w-0">
                   <span className="font-semibold">{product?.name || "—"}</span>
-                  <span className="text-gray-400 ml-2">{new Date(rc.created_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="text-gray-400 ml-2">{parseDbDate(rc.created_at).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                   {supplier && <span className="text-gray-400 ml-2">/ {supplier.name}</span>}
                 </div>
                 <div className="flex items-center gap-3 text-right shrink-0">

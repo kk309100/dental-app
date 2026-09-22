@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { fetchAllClinicPrices, makeClinicPriceMap, clinicPriceKey, bulkUpsertClinicPrices, type ClinicPrice } from "@/lib/pricing"
 
 export default function NewOrderPageWrapper() {
@@ -423,7 +423,7 @@ function NewOrderPage() {
                     onClick={() => copyFromRecent(o.id)}
                     className="block w-full text-left text-xs px-2 py-1.5 bg-white border border-gray-200 rounded hover:bg-blue-50"
                   >
-                    <span className="text-gray-500">{new Date(o.created_at).toLocaleDateString("ja-JP")}</span>
+                    <span className="text-gray-500">{parseDbDate(o.created_at).toLocaleDateString("ja-JP")}</span>
                     <span className="ml-2 font-bold text-gray-700">{o.delivery_number || o.id.slice(0, 8)}</span>
                     <span className="ml-2 text-gray-600">{fmtYen(o.total_price)}</span>
                   </button>

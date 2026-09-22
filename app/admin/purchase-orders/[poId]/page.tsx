@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { COMPANY } from "@/lib/company"
 import Seal from "@/app/components/Seal"
 
@@ -230,8 +230,8 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
     lines.push(`下記のとおり発注いたします。ご確認のほどよろしくお願いいたします。`)
     lines.push("")
     lines.push(`■ 発注書番号: ${po.po_number || po.id.slice(0, 8)}`)
-    if (po.ordered_at) lines.push(`■ 発注日: ${new Date(po.ordered_at).toLocaleDateString("ja-JP")}`)
-    lines.push(`■ 納期希望: ${po.expected_at ? new Date(po.expected_at).toLocaleDateString("ja-JP") : "最短"}`)
+    if (po.ordered_at) lines.push(`■ 発注日: ${parseDbDate(po.ordered_at).toLocaleDateString("ja-JP")}`)
+    lines.push(`■ 納期希望: ${po.expected_at ? parseDbDate(po.expected_at).toLocaleDateString("ja-JP") : "最短"}`)
     lines.push("")
     lines.push("【明細】")
     items.forEach((i, idx) => {
@@ -367,13 +367,13 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
         <table style={{ width: "100%", marginTop: 18, borderCollapse: "collapse", fontSize: 12 }}>
           <tbody>
             <tr>
-              <td style={td}>発注日</td><td style={td2}>{po.ordered_at ? new Date(po.ordered_at).toLocaleDateString("ja-JP") : "—"}</td>
-              <td style={td}>納期希望</td><td style={td2}>{po.expected_at ? new Date(po.expected_at).toLocaleDateString("ja-JP") : "最短"}</td>
+              <td style={td}>発注日</td><td style={td2}>{po.ordered_at ? parseDbDate(po.ordered_at).toLocaleDateString("ja-JP") : "—"}</td>
+              <td style={td}>納期希望</td><td style={td2}>{po.expected_at ? parseDbDate(po.expected_at).toLocaleDateString("ja-JP") : "最短"}</td>
             </tr>
             <tr>
               <td style={td}>状態</td><td style={td2}>{po.status}</td>
               <td style={td}>送付方法</td><td style={td2}>
-                {po.sent_method ? `${po.sent_method}${po.sent_at ? `（${new Date(po.sent_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}）` : ""}` : "— 未送付"}
+                {po.sent_method ? `${po.sent_method}${po.sent_at ? `（${parseDbDate(po.sent_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}）` : ""}` : "— 未送付"}
               </td>
             </tr>
           </tbody>

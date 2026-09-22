@@ -10,7 +10,7 @@
 import { use, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { runAutoMatch, setManualMatch } from "@/lib/supplier-invoice-match"
 
 type SI = {
@@ -288,7 +288,7 @@ export default function MatchPage({ params }: { params: Promise<{ invoiceId: str
                         <span className="font-bold">{matchedProduct.name}</span>
                         {matchedReceipt && (
                           <span className="text-gray-500 ml-2">
-                            {new Date(matchedReceipt.created_at).toLocaleDateString("ja-JP")} ×{matchedReceipt.quantity} @{fmtYen(matchedReceipt.unit_price || 0)}
+                            {parseDbDate(matchedReceipt.created_at).toLocaleDateString("ja-JP")} ×{matchedReceipt.quantity} @{fmtYen(matchedReceipt.unit_price || 0)}
                           </span>
                         )}
                       </div>
@@ -332,7 +332,7 @@ export default function MatchPage({ params }: { params: Promise<{ invoiceId: str
                 const p = r.product_id ? productMap.get(r.product_id) : null
                 return (
                   <tr key={r.id} className="border-t border-indigo-100">
-                    <td className="px-2 py-1">{new Date(r.created_at).toLocaleDateString("ja-JP")}</td>
+                    <td className="px-2 py-1">{parseDbDate(r.created_at).toLocaleDateString("ja-JP")}</td>
                     <td className="px-2 py-1">{p?.name || "(削除済)"}</td>
                     <td className="px-2 py-1 text-right">{r.quantity}</td>
                     <td className="px-2 py-1 text-right">{fmtYen(r.unit_price || 0)}</td>

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { use } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
-import { fmtYen, fmtDate, INVOICE_STATUSES, getClinicPrefix, getCorporateLabel, type InvoiceStatus } from "@/lib/invoice"
+import { fmtYen, fmtDate, parseDbDate, INVOICE_STATUSES, getClinicPrefix, getCorporateLabel, type InvoiceStatus } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -515,7 +515,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
                   <div key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid #f3f4f6", fontSize: 12 }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <span style={{ color: "#374151" }}>{new Date(p.paid_at).toLocaleDateString("ja-JP")}</span>
+                        <span style={{ color: "#374151" }}>{parseDbDate(p.paid_at).toLocaleDateString("ja-JP")}</span>
                         <span style={{ padding: "1px 6px", background: "#eef2ff", color: "#3730a3", borderRadius: 99, fontSize: 10 }}>
                           {p.method || "振込"}
                         </span>

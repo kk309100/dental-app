@@ -14,7 +14,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
 import {
-  fmtYen, fmtDate, getClinicPrefix, getCorporateLabel,
+  fmtYen, fmtDate, parseDbDate, getClinicPrefix, getCorporateLabel,
   EXPENSE_CATEGORIES, normalizeExpenseCategory, isReducedTax,
   type ExpenseCategory,
 } from "@/lib/invoice"
@@ -112,7 +112,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
       const order = orderMap.get(it.order_id)
       const cat = normalizeExpenseCategory(product?.category)
       return {
-        date: order ? new Date(order.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "/") : "",
+        date: order ? parseDbDate(order.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "/") : "",
         delivery_number: order?.delivery_number || (order?.id.slice(0, 8) ?? ""),
         manufacturer: product?.manufacturer || "",
         expense_category: cat,

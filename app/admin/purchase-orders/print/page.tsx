@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { COMPANY } from "@/lib/company"
 import Seal from "@/app/components/Seal"
 
@@ -149,8 +149,8 @@ function BulkPrint() {
             <table style={{ width: "100%", marginTop: 16, borderCollapse: "collapse", fontSize: 15 }}>
               <tbody>
                 <tr>
-                  <td style={tdL}>発注日</td><td style={tdR}>{po.ordered_at ? new Date(po.ordered_at).toLocaleDateString("ja-JP") : "—"}</td>
-                  <td style={tdL}>納期希望</td><td style={tdR}>{po.expected_at ? new Date(po.expected_at).toLocaleDateString("ja-JP") : "最短"}</td>
+                  <td style={tdL}>発注日</td><td style={tdR}>{po.ordered_at ? parseDbDate(po.ordered_at).toLocaleDateString("ja-JP") : "—"}</td>
+                  <td style={tdL}>納期希望</td><td style={tdR}>{po.expected_at ? parseDbDate(po.expected_at).toLocaleDateString("ja-JP") : "最短"}</td>
                 </tr>
               </tbody>
             </table>

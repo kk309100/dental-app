@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 import { downloadCSV, toCSV } from "@/lib/csv"
 
@@ -217,7 +217,7 @@ export default function ReceivingsListPage() {
                 return (
                   <tr key={r.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
                     <td className="px-2 py-1.5 text-center text-[12px] text-gray-700">
-                      {new Date(r.created_at).toLocaleDateString("ja-JP", { year: "2-digit", month: "2-digit", day: "2-digit" })}
+                      {parseDbDate(r.created_at).toLocaleDateString("ja-JP", { year: "2-digit", month: "2-digit", day: "2-digit" })}
                     </td>
                     <td className="px-2 py-1.5 text-[12px]">{supplierName(r.supplier_id)}</td>
                     <td className="px-2 py-1.5 text-[12px] text-gray-500 font-mono">{p?.product_code || "—"}</td>

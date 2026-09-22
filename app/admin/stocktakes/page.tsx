@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
+import { parseDbDate } from "@/lib/invoice"
 
 type Stocktake = {
   id: string
@@ -107,7 +108,7 @@ export default function StocktakesPage() {
                 </td>
                 <td className="px-3 py-1.5 text-gray-600">{st.note || ""}</td>
                 <td className="px-2 py-1.5 text-center text-[12px] text-gray-500">
-                  {st.finalized_at ? new Date(st.finalized_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                  {st.finalized_at ? parseDbDate(st.finalized_at).toLocaleString("ja-JP", { dateStyle: "short", timeStyle: "short" }) : "—"}
                 </td>
                 <td className="px-2 py-1.5 text-center">
                   <Link href={`/admin/stocktakes/${st.id}`} className="text-[12px] px-2 py-1 border border-gray-200 rounded hover:bg-gray-50">開く</Link>

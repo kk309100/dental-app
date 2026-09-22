@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
+import { parseDbDate } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
 
 export default function DeliveryPage() {
@@ -105,7 +106,7 @@ export default function DeliveryPage() {
 
           {/* 右：自社 */}
           <div className="company" style={{ position: "relative" }}>
-            <div>発行日：{new Date(order.created_at).toLocaleDateString()}</div>
+            <div>発行日：{parseDbDate(order.created_at).toLocaleDateString()}</div>
 
             <div className="company-name">株式会社 清新</div>
 

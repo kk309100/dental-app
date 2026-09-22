@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
 import { COMPANY } from "@/lib/company"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
@@ -393,7 +393,7 @@ export default function PurchaseOrderPage() {
                 <td className="px-2 py-1 text-right font-bold">{r.quantity}{r.unit}</td>
                 <td className="px-2 py-1 text-gray-700">{r.clinic_name}</td>
                 <td className="px-2 py-1 font-mono text-gray-500" style={{ fontSize: 12 }}>{r.delivery_number}</td>
-                <td className="px-2 py-1 text-gray-500" style={{ fontSize: 12 }}>{r.created_at ? new Date(r.created_at).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" }) : ""}</td>
+                <td className="px-2 py-1 text-gray-500" style={{ fontSize: 12 }}>{r.created_at ? parseDbDate(r.created_at).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" }) : ""}</td>
                 <td className="px-2 py-1 text-center">
                   {r.purchase_status === "発注済み" ? (
                     <span className="font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded" style={{ fontSize: 11 }}>発注済</span>

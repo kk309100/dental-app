@@ -17,6 +17,7 @@
 //   - unmatched: stock_receipts に対応する入荷記録なし
 
 import { supabase } from "@/lib/supabase"
+import { parseDbDate } from "@/lib/invoice"
 
 export type SupplierInvoiceItem = {
   id: string
@@ -99,6 +100,19 @@ export function findProductId(
     if (p1) return { product_id: p1.id, score: 0.9, reason: "product_code" }
     const p2 = products.find(x => x.barcode && norm(x.barcode) === norm(item.supplier_product_code))
     if (p2) return { product_id: p2.id, score: 0.85, reason: "product_code-as-barcode" }
+
+    // 3.5. 仕入先によっては、自社の商品コード列ではなく商品名の先頭に
+    //      請求書と同じコードが埋め込まれていることがある
+    //      （例: 商品名が "A1485-22-1112 エンパワー2クリア..." のように始まる）。
+    //      ハイフン等の区切り文字だけが違うケースを拾うため英数字だけで比較する。
+    const codeAlnum = norm(item.supplier_product_code).replace(/[^a-z0-9]/g, "")
+    if (codeAlnum.length >= 5) {
+      const p3 = products.find(x => {
+        const firstToken = (x.name || "").trim().split(/\s+/)[0]
+        return norm(firstToken).replace(/[^a-z0-9]/g, "") === codeAlnum
+      })
+      if (p3) return { product_id: p3.id, score: 0.8, reason: "name-prefix-code" }
+    }
   }
 
   // 4. 商品名 完全一致
@@ -156,7 +170,7 @@ export function findStockReceipt(
   if (expectedDate) {
     const expDate = new Date(expectedDate).getTime()
     const within7 = candidates
-      .map(r => ({ r, diff: Math.abs(new Date(r.created_at).getTime() - expDate) }))
+      .map(r => ({ r, diff: Math.abs(parseDbDate(r.created_at).getTime() - expDate) }))
       .filter(x => x.diff <= 7 * 24 * 60 * 60 * 1000)
       .sort((a, b) => a.diff - b.diff)[0]
     if (within7) return { receipt: within7.r, reason: "near-date" }

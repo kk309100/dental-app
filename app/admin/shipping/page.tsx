@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 import { forceAddOrderItemToPool } from "@/lib/po-pool"
 
@@ -422,7 +422,7 @@ function ShippingPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleSelect(o.id)} />
                           <span className="text-xs text-gray-500 font-mono">{o.delivery_number || o.id.slice(0, 8)}</span>
-                          <span className="text-[12px] text-gray-400">{new Date(o.created_at).toLocaleDateString("ja-JP")}</span>
+                          <span className="text-[12px] text-gray-400">{parseDbDate(o.created_at).toLocaleDateString("ja-JP")}</span>
                           <span className="text-[12px] font-bold px-2 py-0.5 rounded"
                             style={{ background: o.status === "注文受付" ? "#fef3c7" : o.status === "確認中" ? "#dbeafe" : "#e0e7ff", color: o.status === "注文受付" ? "#92400e" : o.status === "確認中" ? "#1e40af" : "#3730a3" }}>
                             {o.status}

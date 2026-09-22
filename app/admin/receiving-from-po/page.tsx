@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
-import { fmtYen } from "@/lib/invoice"
+import { fmtYen, parseDbDate } from "@/lib/invoice"
 import Link from "next/link"
 
 type PO = {
@@ -458,7 +458,7 @@ export default function ReceivingFromPoPage() {
                       <span style={{ fontSize: 16, fontWeight: 800, color: "#111827" }}>{supplierName}</span>
                       <span style={{ fontSize: 12, color: "#9ca3af" }}>
                         {po.po_number || po.id.slice(0, 8)}
-                        {po.ordered_at && ` — 発注日 ${new Date(po.ordered_at).toLocaleDateString("ja-JP")}`}
+                        {po.ordered_at && ` — 発注日 ${parseDbDate(po.ordered_at).toLocaleDateString("ja-JP")}`}
                       </span>
                     </div>
                     <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>

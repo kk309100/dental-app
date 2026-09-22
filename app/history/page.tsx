@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { parseDbDate } from "@/lib/invoice"
 
 const STEPS = ["注文受付", "処理中", "発送済み", "納品済み"]
 const CANCEL_STATUSES = new Set(["キャンセル", "取消", "キャンセル申請中"])
@@ -91,7 +92,7 @@ export default function HistoryPage() {
     return orders.filter((order) => {
       const itemNames = getItems(order.id).map((i) => i.product_name || "").join(" ")
       const target = norm(`${order.delivery_number || ""} ${order.status || ""} ${itemNames} ${order.orderer_name || ""}`)
-      const d = new Date(order.created_at)
+      const d = parseDbDate(order.created_at)
       return (
         (!k || target.includes(k)) &&
         (statusFilter === "すべて" || order.status === statusFilter) &&
@@ -106,7 +107,7 @@ export default function HistoryPage() {
     const groups: { key: string; label: string; orders: any[] }[] = []
     const map: Record<string, any[]> = {}
     for (const order of filteredOrders) {
-      const d = new Date(order.created_at)
+      const d = parseDbDate(order.created_at)
       const key   = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
       const label = `${d.getFullYear()}年${d.getMonth() + 1}月`
       if (!map[key]) { map[key] = []; groups.push({ key, label, orders: map[key] }) }
