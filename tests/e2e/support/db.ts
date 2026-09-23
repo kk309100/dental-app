@@ -63,6 +63,16 @@ export async function cleanupTestData() {
     }
   }
 
+  const { data: pos } = await adminDb
+    .from("purchase_orders")
+    .select("id")
+    .ilike("note", `${TEST_PREFIX}%`)
+  const poIds = (pos || []).map((p) => p.id)
+  if (poIds.length > 0) {
+    await adminDb.from("purchase_order_items").delete().in("purchase_order_id", poIds)
+    await adminDb.from("purchase_orders").delete().in("id", poIds)
+  }
+
   if (productIds.length > 0) {
     await adminDb.from("stock_movements").delete().in("product_id", productIds)
     await adminDb.from("stock_receipts").delete().in("product_id", productIds)

@@ -6,6 +6,7 @@ export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
   fullyParallel: false, // テストごとにSupabaseへ実データを作成するため、並列実行はしない
+  workers: 1, // 複数ファイルが同時に実行されるとdevサーバー/実データへの同時アクセスで競合するため1に固定
   retries: 0,
   reporter: [["list"]],
   use: {

@@ -211,11 +211,16 @@ export default function ReceivingFromPoPage() {
 
     setReceiving(prev => new Set([...prev, po.id]))
     const receivedProductIds: string[] = []
+    // 更新後の受入数量をここに集め、DB再取得に頼らずその場でPOステータスを判定する
+    // （更新直後に select で読み直すと、ごく稀に反映前の値を読んでしまい
+    //   「全量入荷済みなのにステータスが発注済のまま」になる不具合があったため）
+    const receivedQtyById = new Map<string, number>()
 
     try {
       for (const it of targetIts) {
         const qty         = receiveQty(it)
         const newReceived = Number(it.received_quantity || 0) + qty
+        receivedQtyById.set(it.id, newReceived)
 
         // 1. received_quantity 更新
         await supabase.from("purchase_order_items")
@@ -259,18 +264,16 @@ export default function ReceivingFromPoPage() {
         }
       }
 
-      // 3. PO ステータス更新（最新DB値で判定）
-      const { data: latestItems } = await supabase
-        .from("purchase_order_items")
-        .select("quantity,received_quantity")
-        .eq("purchase_order_id", po.id)
-      if (latestItems) {
-        const allDone = latestItems.every(i => Number(i.received_quantity || 0) >= Number(i.quantity))
-        const someDone = latestItems.some(i => Number(i.received_quantity || 0) > 0)
-        const newStatus = allDone ? "入荷済" : someDone ? "部分入荷" : po.status
-        await supabase.from("purchase_orders").update({ status: newStatus }).eq("id", po.id)
-        if (allDone) setPos(prev => prev.filter(p => p.id !== po.id))
-      }
+      // 3. PO ステータス更新（今回の更新分をそのまま反映した最新の受入数量で判定）
+      const mergedItems = allIts.map(i => ({
+        quantity: Number(i.quantity),
+        received_quantity: receivedQtyById.get(i.id) ?? Number(i.received_quantity || 0),
+      }))
+      const allDone = mergedItems.every(i => i.received_quantity >= i.quantity)
+      const someDone = mergedItems.some(i => i.received_quantity > 0)
+      const newStatus = allDone ? "入荷済" : someDone ? "部分入荷" : po.status
+      await supabase.from("purchase_orders").update({ status: newStatus }).eq("id", po.id)
+      if (allDone) setPos(prev => prev.filter(p => p.id !== po.id))
 
       // 4. 出荷可能注文を検索
       const { nowShippable, partiallyImpacted } = await findNowShippable(receivedProductIds)
@@ -434,7 +437,7 @@ export default function ReceivingFromPoPage() {
             const allChecked   = pendingIts.length > 0 && pendingIts.every(it => checked.has(it.id))
 
             return (
-              <div key={po.id} style={{
+              <div key={po.id} data-testid={`po-card-${po.id}`} style={{
                 background: "#fff",
                 border: `2px solid ${isPartial ? "#fde68a" : "#e5e7eb"}`,
                 borderRadius: 14, overflow: "hidden",
