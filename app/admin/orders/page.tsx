@@ -924,7 +924,7 @@ function AdminOrdersPage() {
                         const biz = businessState(o.id)
                         return (
                           <>
-                            <tr key={o.id} className={"border-b border-gray-100 " + (selectedOrderIds.has(o.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                            <tr key={o.id} data-testid={`order-row-${o.id}`} className={"border-b border-gray-100 " + (selectedOrderIds.has(o.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
                               <td className="px-2 py-1 text-center">
                                 <input type="checkbox" checked={selectedOrderIds.has(o.id)} onChange={() => toggleSelect(o.id)} />
                               </td>
@@ -1138,7 +1138,7 @@ function AdminOrdersPage() {
                 const biz = businessState(o.id)
                 return (
                   <>
-                    <tr key={o.id} className={"border-b border-gray-100 " + (selectedOrderIds.has(o.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                    <tr key={o.id} data-testid={`order-row-${o.id}`} className={"border-b border-gray-100 " + (selectedOrderIds.has(o.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
                       <td className="px-2 py-1 text-center">
                         <input type="checkbox" checked={selectedOrderIds.has(o.id)} onChange={() => toggleSelect(o.id)} />
                       </td>
