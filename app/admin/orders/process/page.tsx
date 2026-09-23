@@ -374,6 +374,7 @@ export default function OrderProcessPage() {
           </div>
         </div>
         <button
+          data-testid="sell-mode-toggle"
           onClick={() => setSellMode(v => !v)}
           style={{
             position: "relative", width: 52, height: 28,
@@ -468,7 +469,7 @@ export default function OrderProcessPage() {
           }[predictMode]
 
           return (
-            <div key={order.id} style={{
+            <div key={order.id} data-testid={`order-card-${order.id}`} style={{
               background: "#fff",
               border: `2px solid ${modeStyle.border}`,
               borderRadius: 14, overflow: "hidden",
