@@ -11,6 +11,7 @@ import Link from "next/link"
 type Quote = {
   id: string
   clinic_id: string | null
+  title: string | null
   quote_number: string
   issue_date: string
   expiry_date: string | null
@@ -366,7 +367,7 @@ export default function QuotesPage() {
       if (statusFilter !== "all" && statusFilter !== "active" && q.status !== statusFilter) return false
       if (clinicFilter !== "all" && q.clinic_id !== clinicFilter) return false
       if (!k) return true
-      const target = norm(`${q.quote_number} ${clinicName(q.clinic_id)}`)
+      const target = norm(`${q.quote_number} ${q.title || ""} ${clinicName(q.clinic_id)}`)
       return target.includes(k)
     })
   }, [quotes, search, statusFilter, clinicFilter])
@@ -492,7 +493,10 @@ export default function QuotesPage() {
                   <td className="px-2 py-1.5 text-center">
                     <input type="checkbox" checked={selectedIds.has(q.id)} onChange={() => toggleSelect(q.id)} className="cursor-pointer" />
                   </td>
-                  <td className="px-2 py-1.5 font-mono text-[12px] text-gray-700">{q.quote_number}</td>
+                  <td className="px-2 py-1.5">
+                    <div className="font-mono text-[12px] text-gray-700">{q.quote_number}</div>
+                    {q.title && <div className="text-[11px] text-gray-500 truncate max-w-[160px]">{q.title}</div>}
+                  </td>
                   <td className="px-2 py-1.5 text-center">
                     <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: sc.color + "22", color: sc.color }}>
                       {sc.label}

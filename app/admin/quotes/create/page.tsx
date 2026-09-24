@@ -46,6 +46,7 @@ function CreateQuotePage() {
   const [submitting, setSubmitting] = useState(false)
 
   const [clinicId, setClinicId] = useState("")
+  const [title, setTitle] = useState("")
   const [issueDate, setIssueDate] = useState(ymd(new Date()))
   const [expiryDate, setExpiryDate] = useState(defaultExpiryDate(new Date()))
   const [lines, setLines] = useState<Line[]>([{ productId: null, productName: "", quantity: 1, cost: 0, listPrice: 0, price: 0 }])
@@ -104,6 +105,7 @@ function CreateQuotePage() {
       const { data: its } = await supabase.from("quote_items").select("*").eq("quote_id", sourceQuoteId).order("sort_order")
       if (q) {
         setClinicId(q.clinic_id || "")
+        setTitle(q.title || "")
         setIssueDate((q.issue_date || "").slice(0, 10) || ymd(new Date()))
         setExpiryDate((q.expiry_date || "").slice(0, 10) || defaultExpiryDate(new Date()))
         setNotes(q.notes || "")
@@ -237,6 +239,7 @@ function CreateQuotePage() {
         // 編集: ヘッダーを更新し、明細は一旦全削除してから入れ直す（シンプルな方式）
         const { error: e1 } = await supabase.from("quotes").update({
           clinic_id: clinicId,
+          title: title || null,
           issue_date: issueDate,
           expiry_date: expiryDate || null,
           subtotal, tax, total,
@@ -269,6 +272,7 @@ function CreateQuotePage() {
         .from("quotes")
         .insert({
           clinic_id: clinicId,
+          title: title || null,
           quote_number,
           issue_date: issueDate,
           expiry_date: expiryDate || null,
@@ -330,6 +334,14 @@ function CreateQuotePage() {
           ⚠️ この見積は既に「売上化済み」です。ここで内容を変更しても、既に作成された注文・請求書には反映されません。
         </div>
       )}
+
+      {/* 題名 */}
+      <div className="bg-white rounded-lg p-3" style={{ border: "1px solid #e8eaed" }}>
+        <label className="block text-[11px] text-gray-700 font-bold mb-1">題名（任意）</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)}
+          placeholder="例）ユニット一式 御見積"
+          className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
+      </div>
 
       {/* 医院 + 日付 */}
       <div className="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-3 gap-3" style={{ border: "1px solid #e8eaed" }}>

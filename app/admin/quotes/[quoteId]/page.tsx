@@ -13,6 +13,7 @@ import Link from "next/link"
 type Quote = {
   id: string
   clinic_id: string | null
+  title: string | null
   quote_number: string
   issue_date: string
   expiry_date: string | null
@@ -289,6 +290,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
     <>
       <div style={toolbar} className="no-print">
         <Link href="/admin/quotes"><button style={btnGray}>← 一覧</button></Link>
+        {quote.title && <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{quote.title}</span>}
         <div style={{ flex: 1 }} />
         <span style={{ marginRight: 8, padding: "4px 12px", borderRadius: 99, background: status.color + "22", color: status.color, fontSize: 12, fontWeight: 700 }}>{status.label}</span>
         <Link href={`/admin/quotes/create?edit=${quote.id}`}><button style={btnGray}>✏️ 編集</button></Link>
@@ -321,6 +323,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
         <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
           <h1 style={{ fontSize: 28, letterSpacing: "0.3em", margin: "20px 0 4px", textAlign: "center" }}>御 見 積 書</h1>
           <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {quote.quote_number}</p>
+          {quote.title && <p style={{ textAlign: "center", margin: "6px 0 0", fontSize: 15, fontWeight: 700 }}>{quote.title}</p>}
         </header>
 
         <div style={{ display: "flex", gap: 20, marginTop: 24 }}>
