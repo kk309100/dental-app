@@ -9,6 +9,7 @@ export default function BarcodePage() {
   const [generating, setGenerating] = useState(false)
   const [genMsg, setGenMsg] = useState("")
   const [search, setSearch] = useState("")
+  const [managedOnly, setManagedOnly] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [printMode, setPrintMode] = useState(false)   // 印刷プレビュー中か
 
@@ -17,7 +18,7 @@ export default function BarcodePage() {
   async function fetchProducts() {
     const data = await fetchAll(
       "products",
-      "id,name,product_code,manufacturer,barcode,active",
+      "id,name,product_code,manufacturer,barcode,active,location",
       (q) => q.order("name", { ascending: true })
     )
     setProducts(data || [])
@@ -26,7 +27,7 @@ export default function BarcodePage() {
   async function autoGenerate() {
     setGenerating(true)
     setGenMsg("")
-    const noBarcode = products.filter(p => !p.barcode)
+    const noBarcode = scopedProducts.filter(p => !p.barcode)
     if (noBarcode.length === 0) {
       setGenMsg("すべての商品にバーコードが設定済みです")
       setGenerating(false)
@@ -45,10 +46,15 @@ export default function BarcodePage() {
     setGenerating(false)
   }
 
+  // 「自社管理在庫のみ」に絞った商品リスト（在庫管理画面と同じ location="自社管理" タグで判定）
+  const scopedProducts = useMemo(() => {
+    return managedOnly ? products.filter(p => p.location === "自社管理") : products
+  }, [products, managedOnly])
+
   // 検索フィルタ済み（バーコードあり商品のみ）
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase()
-    return products.filter(p => {
+    return scopedProducts.filter(p => {
       if (!p.barcode) return false
       if (!kw) return true
       return (
@@ -58,10 +64,10 @@ export default function BarcodePage() {
         (p.barcode || "").toLowerCase().includes(kw)
       )
     })
-  }, [products, search])
+  }, [scopedProducts, search])
 
-  const withBarcode = products.filter(p => p.barcode)
-  const withoutBarcode = products.filter(p => !p.barcode)
+  const withBarcode = scopedProducts.filter(p => p.barcode)
+  const withoutBarcode = scopedProducts.filter(p => !p.barcode)
 
   function toggleSelect(id: string) {
     setSelected(prev => {
@@ -148,7 +154,7 @@ export default function BarcodePage() {
         </div>
 
         {/* 検索 */}
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 14, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
           <input lang="ja"
             type="text"
             value={search}
@@ -159,8 +165,12 @@ export default function BarcodePage() {
               border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 14, outline: "none",
             }}
           />
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#374151", cursor: "pointer", userSelect: "none" }}>
+            <input type="checkbox" checked={managedOnly} onChange={e => setManagedOnly(e.target.checked)} />
+            🏷 自社管理在庫のみ
+          </label>
           {search && (
-            <span style={{ marginLeft: 10, fontSize: 13, color: "#64748b" }}>
+            <span style={{ fontSize: 13, color: "#64748b" }}>
               {filtered.length}件ヒット
             </span>
           )}
