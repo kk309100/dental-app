@@ -173,6 +173,12 @@ export default function InventoryPage() {
                     <input defaultValue={p.location || ""} placeholder="A1-3"
                       onBlur={(e) => { if (e.target.value !== (p.location || "")) updateLocation(p.id, e.target.value) }}
                       className="w-14 px-1 py-0.5 border border-gray-200 rounded text-[12px] font-mono text-gray-700" />
+                    <label className="flex items-center gap-0.5 mt-0.5 text-[10px] text-sky-700 cursor-pointer select-none whitespace-nowrap">
+                      <input type="checkbox" checked={p.location === "自社管理"}
+                        onChange={(e) => updateLocation(p.id, e.target.checked ? "自社管理" : "")}
+                        className="cursor-pointer" />
+                      🏷自社管理
+                    </label>
                   </td>
                   <td className="px-2 py-1 text-[12px]" style={td0}>{p.name}</td>
                   <td className="px-1 py-0.5" style={td0}>
