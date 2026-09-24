@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { poolFromOrders, forceAddOrderItemToPool } from "@/lib/po-pool"
 import { fmtYen, calcTax, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
+import ManagedBadge from "@/app/components/ManagedBadge"
 import Link from "next/link"
 
 // ─── 型定義 ───────────────────────────────────────────────
@@ -23,7 +24,7 @@ type OrderItem = {
   id: string; order_id: string; product_id: string | null
   product_name: string | null; quantity: number; price: number
 }
-type Product  = { id: string; name: string; stock: number | null }
+type Product  = { id: string; name: string; stock: number | null; location?: string | null }
 type Clinic   = { id: string; name: string; corporate_name: string | null }
 
 type ProcessResult = {
@@ -105,7 +106,7 @@ export default function OrderProcessPage() {
         .limit(200),
       supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price").limit(50000),
       // products は1万件超あるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
-      fetchAll("products", "id,name,stock"),
+      fetchAll("products", "id,name,stock,location"),
       supabase.from("clinics").select("id,name,corporate_name").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
@@ -538,7 +539,10 @@ export default function OrderProcessPage() {
                             ? (st.ok ? "#f0fdf4" : "#fff5f5")
                             : "transparent",
                         }}>
-                          <td style={{ padding: "6px 6px", color: "#111827" }}>{it.product_name || "(商品名なし)"}</td>
+                          <td style={{ padding: "6px 6px", color: "#111827" }}>
+                            {it.product_name || "(商品名なし)"}
+                            <ManagedBadge location={it.product_id ? productById.get(it.product_id)?.location : null} />
+                          </td>
                           <td style={{ padding: "6px 6px", textAlign: "right", fontWeight: 600 }}>{it.quantity}</td>
                           <td style={{ padding: "6px 6px", textAlign: "right", color: "#6b7280" }}>
                             {it.price > 0 ? fmtYen(it.price) : "—"}
