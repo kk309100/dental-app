@@ -133,10 +133,26 @@ export default function OrderProcessPage() {
     const need  = Number(item.quantity || 0)
     return { ok: stock >= need, stock, short: Math.max(0, need - stock) }
   }
+
+  // 在庫はあるが、今回はあえて納品したくない明細（社内判断・保留在庫など）。
+  // DBには保存せず、この画面での処理判断にのみ使う一時的なチェック。
+  const [excludedItemIds, setExcludedItemIds] = useState<Set<string>>(new Set())
+  function toggleExcluded(itemId: string) {
+    setExcludedItemIds(prev => {
+      const n = new Set(prev)
+      n.has(itemId) ? n.delete(itemId) : n.add(itemId)
+      return n
+    })
+  }
+  // 実際の処理判断に使う「在庫OKか」。在庫はあっても除外チェックが付いていれば不足扱いにする。
+  function effectiveOk(item: OrderItem) {
+    return stockStatus(item).ok && !excludedItemIds.has(item.id)
+  }
+
   function orderStockSummary(orderId: string) {
     const its = itemsByOrder.get(orderId) || []
     let inStock = 0, short = 0
-    for (const it of its) { stockStatus(it).ok ? inStock++ : short++ }
+    for (const it of its) { effectiveOk(it) ? inStock++ : short++ }
     return { inStock, short, total: its.length }
   }
 
@@ -180,8 +196,8 @@ export default function OrderProcessPage() {
     order: Order,
     its: OrderItem[]
   ): Promise<{ invoiceNumber: string; newOrderId: string; poolAdded: ProcessResult["poolAdded"]; skippedNoSupplier: number }> {
-    const inStockItems = its.filter(it => stockStatus(it).ok)
-    const shortItems   = its.filter(it => !stockStatus(it).ok)
+    const inStockItems = its.filter(it => effectiveOk(it))
+    const shortItems   = its.filter(it => !effectiveOk(it))
 
     // 1. 在庫あり品用の新規注文を作成
     const inStockSubtotal = inStockItems.reduce((s, it) => s + Number(it.price || 0) * Number(it.quantity || 0), 0)
@@ -532,12 +548,15 @@ export default function OrderProcessPage() {
                   <tbody>
                     {its.map(it => {
                       const st = stockStatus(it)
+                      const excluded = excludedItemIds.has(it.id)
+                      const effOk = st.ok && !excluded
                       return (
                         <tr key={it.id} style={{
                           borderBottom: "1px solid #f9fafb",
                           background: predictMode === "split"
-                            ? (st.ok ? "#f0fdf4" : "#fff5f5")
+                            ? (effOk ? "#f0fdf4" : "#fff5f5")
                             : "transparent",
+                          opacity: excluded ? 0.7 : 1,
                         }}>
                           <td style={{ padding: "6px 6px", color: "#111827" }}>
                             {it.product_name || "(商品名なし)"}
@@ -552,11 +571,19 @@ export default function OrderProcessPage() {
                               ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.green }}>✅ 在庫{st.stock}</span>
                               : <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.red }}>❌ {st.short}個不足</span>
                             }
+                            {st.ok && (
+                              <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, marginTop: 3, fontSize: 10, color: "#9a3412", cursor: "pointer", userSelect: "none" }}>
+                                <input type="checkbox" checked={excluded} onChange={() => toggleExcluded(it.id)} style={{ cursor: "pointer" }} />
+                                今回は見送る
+                              </label>
+                            )}
                           </td>
                           {predictMode === "split" && (
                             <td style={{ padding: "6px 6px", textAlign: "center" }}>
-                              {st.ok
+                              {effOk
                                 ? <span style={{ fontSize: 11, fontWeight: 700, color: "#0f766e" }}>今回納品 →</span>
+                                : excluded
+                                ? <span style={{ fontSize: 11, fontWeight: 700, color: "#9a3412" }}>見送り（在庫あり）</span>
                                 : <span style={{ fontSize: 11, fontWeight: 700, color: "#b91c1c" }}>発注後に納品</span>
                               }
                             </td>
