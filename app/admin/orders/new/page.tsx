@@ -6,6 +6,7 @@ import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { fetchAllClinicPrices, makeClinicPriceMap, clinicPriceKey, bulkUpsertClinicPrices, type ClinicPrice } from "@/lib/pricing"
+import ManagedBadge from "@/app/components/ManagedBadge"
 
 export default function NewOrderPageWrapper() {
   return (
@@ -16,7 +17,7 @@ export default function NewOrderPageWrapper() {
 }
 
 type Clinic = { id: string; name: string; corporate_name?: string | null; clinic_code?: string | null }
-type Product = { id: string; name: string; product_code: string | null; price: number | null; stock: number | null; manufacturer?: string | null; category?: string | null }
+type Product = { id: string; name: string; product_code: string | null; price: number | null; stock: number | null; manufacturer?: string | null; category?: string | null; location?: string | null }
 type Row = { product_id: string | null; product_name: string; quantity: number; price: number; note?: string }
 type RecentOrder = { id: string; clinic_id: string; created_at: string; total_price: number; delivery_number: string | null }
 type ProductHistory = { product_id: string | null; product_name: string; last_price: number; last_ordered_at: string; times: number }
@@ -69,7 +70,7 @@ function NewOrderPage() {
     (async () => {
       const [c, p, cp] = await Promise.all([
         supabase.from("clinics").select("id,name,corporate_name,clinic_code").order("name").limit(50000),
-        fetchAll("products", "id,name,product_code,price,stock,manufacturer,category", (q) => q.order("name", { ascending: true })),
+        fetchAll("products", "id,name,product_code,price,stock,manufacturer,category,location", (q) => q.order("name", { ascending: true })),
         fetchAllClinicPrices(),  // 医院別価格マスタ
       ])
       setClinics((c.data as Clinic[]) || [])
@@ -175,13 +176,19 @@ function NewOrderPage() {
   const productById = useMemo(() => new Map(products.map(p => [p.id, p])), [products])
 
   // 商品ピッカー: NFKC + カタカナ統一で検索
+  // 自社管理在庫の商品は、同名・類似商品が並ぶ中で選び間違えないよう検索結果の先頭に出す
+  const isManaged = (p: Product) => p.location === "自社管理"
   const filteredProducts = useMemo(() => {
-    if (!productSearch) return products.slice(0, 50)
-    const k = searchKey(productSearch)
-    return products.filter(p => {
-      const target = searchKey([p.name, p.product_code, p.manufacturer, p.category].filter(Boolean).join(" "))
-      return target.includes(k)
-    }).slice(0, 50)
+    const base = !productSearch
+      ? products.slice(0, 50)
+      : (() => {
+          const k = searchKey(productSearch)
+          return products.filter(p => {
+            const target = searchKey([p.name, p.product_code, p.manufacturer, p.category].filter(Boolean).join(" "))
+            return target.includes(k)
+          }).slice(0, 50)
+        })()
+    return [...base].sort((a, b) => Number(isManaged(b)) - Number(isManaged(a)))
   }, [products, productSearch])
 
   function pickClinic(name: string) {
@@ -217,7 +224,7 @@ function NewOrderPage() {
               onClick={() => { pickProduct(idx, p); setInlineOpenIdx(null) }}
               className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 border-b border-gray-50 last:border-b-0 block"
             >
-              <div className="text-sm text-gray-900">{p.name}</div>
+              <div className="text-sm text-gray-900">{p.name}<ManagedBadge location={p.location} /></div>
               <div className="text-gray-400 mt-0.5">
                 {p.product_code && <span className="mr-2">#{p.product_code}</span>}
                 {p.manufacturer && <span className="mr-2">{p.manufacturer}</span>}
@@ -720,7 +727,7 @@ function NewOrderPage() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div>
-                        <p className="text-sm font-bold text-gray-900">{p.name}</p>
+                        <p className="text-sm font-bold text-gray-900">{p.name}<ManagedBadge location={p.location} /></p>
                         <p className="text-xs text-gray-500">
                           {p.product_code && <span className="mr-2">#{p.product_code}</span>}
                           {p.manufacturer && <span className="mr-2">{p.manufacturer}</span>}
