@@ -265,8 +265,19 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
         sent_method: "メール",
         sent_at: new Date().toISOString(),
       }).eq("id", po.id)
+      await promoteStatusIfNeeded()
       fetchData({ silent: true })
     } catch { /* テーブル無くてもOK */ }
+  }
+
+  // 送付記録時、まだ「下書き」「未送付」のままなら「発注済」へ進める
+  // （発注済・部分入荷・入荷済・取消まで進んでいるものは巻き戻さない）
+  async function promoteStatusIfNeeded() {
+    if (!po) return
+    await supabase.from("purchase_orders")
+      .update({ status: "発注済", ordered_at: po.ordered_at || new Date().toISOString() })
+      .eq("id", po.id)
+      .not("status", "in", "(発注済,部分入荷,入荷済,取消)")
   }
 
   // FAXで送付した記録（実際の送信はアプリからはできないため、手動での記録用）
@@ -276,6 +287,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
       sent_method: "FAX",
       sent_at: new Date().toISOString(),
     }).eq("id", po.id)
+    await promoteStatusIfNeeded()
     fetchData({ silent: true })
   }
 
