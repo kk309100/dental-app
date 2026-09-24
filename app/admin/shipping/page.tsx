@@ -131,13 +131,19 @@ function ShippingPage() {
   const [forcingItemId, setForcingItemId] = useState<string | null>(null)
   // 在庫があっても、この商品だけ強制的に発注プールへ入れる
   // （在庫を持たず注文が来るたびに毎回仕入れる運用の医院向け）
-  async function forceOrderItem(itemId: string, productName: string) {
-    if (!confirm(`「${productName}」を在庫があっても強制的に発注プールへ追加しますか？`)) return
+  async function forceOrderItem(itemId: string, productName: string, defaultQty: number) {
+    const input = prompt(
+      `「${productName}」を在庫があっても強制的に発注プールへ追加します。\n発注する数量を入力してください（注文数量: ${defaultQty}個）`,
+      String(defaultQty)
+    )
+    if (input === null) return
+    const qty = Number(input)
+    if (!Number.isFinite(qty) || qty <= 0) { alert("正しい数量を入力してください"); return }
     setForcingItemId(itemId)
     try {
-      const r = await forceAddOrderItemToPool(itemId)
+      const r = await forceAddOrderItemToPool(itemId, undefined, qty)
       if (!r.ok) { alert("追加失敗: " + r.error); return }
-      alert(`✅ ${r.supplierName} の発注プールに追加しました。`)
+      alert(`✅ ${r.supplierName} の発注プールに ${qty}個 追加しました。`)
     } finally {
       setForcingItemId(null)
     }
@@ -557,7 +563,7 @@ function ShippingPage() {
                                 <span className="w-16 text-right">
                                   {it.product_id && (
                                     <button
-                                      onClick={() => forceOrderItem(it.id, it.product_name || "(不明)")}
+                                      onClick={() => forceOrderItem(it.id, it.product_name || "(不明)", Number(it.quantity || 0))}
                                       disabled={forcingItemId === it.id}
                                       className="text-[11px] px-1.5 py-0.5 rounded border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
                                       title="在庫があっても強制的に発注プールへ追加する">

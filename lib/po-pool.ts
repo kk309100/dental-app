@@ -251,10 +251,14 @@ export async function poolFromOrders(
  * 在庫が足りている（＝通常のプール処理では対象外になる）商品でも、
  * 強制的に1明細だけ発注プールへ追加する。
  * 「在庫を持たず、注文が来るたびに毎回仕入れる」運用の医院向け。
+ *
+ * quantityOverride を指定すると、注文数量ではなくその数量で発注する
+ * （通常の不足分自動追加は「不足分だけ」だが、まとめて多めに仕入れたい場合用）。
  */
 export async function forceAddOrderItemToPool(
   orderItemId: string,
   fallbackSupplierId?: string,
+  quantityOverride?: number,
 ): Promise<{ ok: boolean; error?: string; supplierName?: string }> {
   const { data: oi, error: oiErr } = await supabase
     .from("order_items")
@@ -286,7 +290,7 @@ export async function forceAddOrderItemToPool(
   const item: PoolItem = {
     product_id: oi.product_id,
     product_name: oi.product_name || "(商品名なし)",
-    quantity: Number(oi.quantity || 0),
+    quantity: quantityOverride != null ? Number(quantityOverride) : Number(oi.quantity || 0),
     unit_price: unitPrice,
     source_order_id: oi.order_id,
     source_order_item_id: oi.id,
