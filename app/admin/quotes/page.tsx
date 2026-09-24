@@ -475,6 +475,7 @@ export default function QuotesPage() {
             <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
               <th className="px-2 py-1.5 text-center w-8"></th>
               <th className="px-2 py-1.5 text-left w-32">見積書No</th>
+              <th className="px-2 py-1.5 text-left">題名</th>
               <th className="px-2 py-1.5 text-center w-24">状態</th>
               <th className="px-2 py-1.5 text-left">医院</th>
               <th className="px-2 py-1.5 text-center w-24">発行日</th>
@@ -485,7 +486,7 @@ export default function QuotesPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">該当見積書なし</td></tr>
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">該当見積書なし</td></tr>
             ) : filtered.map((q, i) => {
               const sc = QUOTE_STATUSES[q.status]
               return (
@@ -493,10 +494,8 @@ export default function QuotesPage() {
                   <td className="px-2 py-1.5 text-center">
                     <input type="checkbox" checked={selectedIds.has(q.id)} onChange={() => toggleSelect(q.id)} className="cursor-pointer" />
                   </td>
-                  <td className="px-2 py-1.5">
-                    <div className="font-mono text-[12px] text-gray-700">{q.quote_number}</div>
-                    {q.title && <div className="text-[11px] text-gray-500 truncate max-w-[160px]">{q.title}</div>}
-                  </td>
+                  <td className="px-2 py-1.5 font-mono text-[12px] text-gray-700">{q.quote_number}</td>
+                  <td className="px-2 py-1.5 text-[12px] text-gray-700">{q.title || <span className="text-gray-300">—</span>}</td>
                   <td className="px-2 py-1.5 text-center">
                     <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: sc.color + "22", color: sc.color }}>
                       {sc.label}
