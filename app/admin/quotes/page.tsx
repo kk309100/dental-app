@@ -36,6 +36,8 @@ export default function QuotesPage() {
   const [clinicFilter, setClinicFilter] = useState("all")
   const [groupView, setGroupView] = useGroupView()
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [merging, setMerging] = useState(false)
 
   useEffect(() => { fetchData() }, [])
 
@@ -52,6 +54,76 @@ export default function QuotesPage() {
       await fetchData({ silent: true })
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+  function clearSelection() { setSelectedIds(new Set()) }
+
+  // 選択した複数の見積書を1つにまとめる（同じ医院のものだけ）。
+  // 発行日が一番早い見積書を残し、他の明細をそちらへ移動、金額を合算して
+  // 残りの見積書は削除する。
+  async function mergeQuotes() {
+    const targets = quotes.filter(q => selectedIds.has(q.id))
+    if (targets.length < 2) { alert("2件以上選択してください"); return }
+
+    const clinicIds = new Set(targets.map(q => q.clinic_id))
+    if (clinicIds.size > 1) { alert("異なる医院の見積書は統合できません。同じ医院の見積書だけを選択してください。"); return }
+
+    const converted = targets.filter(q => q.status === "converted")
+    if (converted.length > 0) {
+      alert(`「売上化済み」の見積書（${converted.map(q => q.quote_number).join("、")}）が含まれているため統合できません。`)
+      return
+    }
+
+    const sorted = [...targets].sort((a, b) => (a.issue_date || "").localeCompare(b.issue_date || ""))
+    const keep = sorted[0]
+    const others = sorted.slice(1)
+
+    if (!confirm(
+      `${targets.length}件の見積書を統合します。\n\n` +
+      `残す見積書: ${keep.quote_number}（${fmtDate(keep.issue_date)}）\n` +
+      `統合して削除: ${others.map(q => q.quote_number).join("、")}\n\n` +
+      `明細はすべて ${keep.quote_number} にまとめられます。よろしいですか？`
+    )) return
+
+    setMerging(true)
+    try {
+      // 統合元の明細を残す見積書へ付け替え（sort_order が重複しないよう振り直す）
+      const keepItems = items.filter(it => it.quote_id === keep.id)
+      let nextSortOrder = keepItems.length
+      for (const q of others) {
+        const { data: qItems } = await supabase.from("quote_items").select("id").eq("quote_id", q.id).order("sort_order")
+        for (const it of qItems || []) {
+          await supabase.from("quote_items").update({ quote_id: keep.id, sort_order: nextSortOrder }).eq("id", it.id)
+          nextSortOrder++
+        }
+      }
+
+      // 金額を合算し直す
+      const mergedSubtotal = targets.reduce((s, q) => s + Number(q.subtotal || 0), 0)
+      const mergedTax = calcTax(mergedSubtotal)
+      const mergedNote = [keep.notes, `（${others.map(q => q.quote_number).join("、")} を統合）`].filter(Boolean).join(" ")
+      await supabase.from("quotes").update({
+        subtotal: mergedSubtotal,
+        tax: mergedTax,
+        total: mergedSubtotal + mergedTax,
+        notes: mergedNote,
+      }).eq("id", keep.id)
+
+      // 統合元の見積書を削除（明細は既に移動済み）
+      await supabase.from("quotes").delete().in("id", others.map(q => q.id))
+
+      clearSelection()
+      await fetchData({ silent: true })
+      alert(`✅ ${keep.quote_number} に統合しました。`)
+      router.push(`/admin/quotes/${keep.id}`)
+    } catch (e) {
+      alert("統合に失敗しました: " + (e as Error).message)
+    } finally {
+      setMerging(false)
     }
   }
 
@@ -379,12 +451,28 @@ export default function QuotesPage() {
         </select>
       </div>
 
+      {/* 一括操作バー */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+          <span className="text-[12px] text-indigo-900 font-bold">{selectedIds.size}件選択中</span>
+          <button
+            onClick={mergeQuotes}
+            disabled={merging || selectedIds.size < 2}
+            className="text-[12px] px-3 py-1.5 bg-indigo-600 text-white font-bold rounded hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {merging ? "統合中…" : "🔗 選択した見積書を1つに統合する"}
+          </button>
+          <button onClick={clearSelection} className="text-[12px] text-gray-500 underline">選択解除</button>
+        </div>
+      )}
+
       {/* テーブル */}
       <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 280px)" }}>
         <table className="w-full text-[13px]" style={{ borderCollapse: "collapse" }}>
           <thead className="sticky top-0 bg-gray-100">
             <tr className="text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-center w-8"></th>
               <th className="px-2 py-1.5 text-left w-32">見積書No</th>
               <th className="px-2 py-1.5 text-center w-24">状態</th>
               <th className="px-2 py-1.5 text-left">医院</th>
@@ -396,11 +484,14 @@ export default function QuotesPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">該当見積書なし</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">該当見積書なし</td></tr>
             ) : filtered.map((q, i) => {
               const sc = QUOTE_STATUSES[q.status]
               return (
-                <tr key={q.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                <tr key={q.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30") + (selectedIds.has(q.id) ? " bg-indigo-50/60" : "")}>
+                  <td className="px-2 py-1.5 text-center">
+                    <input type="checkbox" checked={selectedIds.has(q.id)} onChange={() => toggleSelect(q.id)} className="cursor-pointer" />
+                  </td>
                   <td className="px-2 py-1.5 font-mono text-[12px] text-gray-700">{q.quote_number}</td>
                   <td className="px-2 py-1.5 text-center">
                     <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: sc.color + "22", color: sc.color }}>
