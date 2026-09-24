@@ -137,12 +137,26 @@ export default function OrderProcessPage() {
   // 在庫はあるが、今回はあえて納品したくない明細（社内判断・保留在庫など）。
   // DBには保存せず、この画面での処理判断にのみ使う一時的なチェック。
   const [excludedItemIds, setExcludedItemIds] = useState<Set<string>>(new Set())
-  function toggleExcluded(itemId: string) {
+  // 「見送る」チェックで自動的に強制発注も行った明細（二重に発注プールへ追加しないためのガード）
+  const [autoForcedItemIds, setAutoForcedItemIds] = useState<Set<string>>(new Set())
+  async function toggleExcluded(itemId: string, productName: string) {
+    const willExclude = !excludedItemIds.has(itemId)
     setExcludedItemIds(prev => {
       const n = new Set(prev)
-      n.has(itemId) ? n.delete(itemId) : n.add(itemId)
+      willExclude ? n.add(itemId) : n.delete(itemId)
       return n
     })
+    // 見送るにチェックを入れた時だけ、在庫があっても自動で発注プールへ追加する
+    // （チェックを外しても、既に追加したプール明細は自動では取り消さない。
+    //   取り消したい場合は発注プール画面から手動で削除してもらう）
+    if (willExclude && !autoForcedItemIds.has(itemId)) {
+      setAutoForcedItemIds(prev => new Set(prev).add(itemId))
+      const r = await forceAddOrderItemToPool(itemId)
+      if (!r.ok) {
+        alert(`「${productName}」の自動発注に失敗しました: ${r.error}\nお手数ですが「強制発注」ボタンから手動で追加してください。`)
+        setAutoForcedItemIds(prev => { const n = new Set(prev); n.delete(itemId); return n })
+      }
+    }
   }
   // 実際の処理判断に使う「在庫OKか」。在庫はあっても除外チェックが付いていれば不足扱いにする。
   function effectiveOk(item: OrderItem) {
@@ -573,8 +587,8 @@ export default function OrderProcessPage() {
                             }
                             {st.ok && (
                               <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, marginTop: 3, fontSize: 10, color: "#9a3412", cursor: "pointer", userSelect: "none" }}>
-                                <input type="checkbox" checked={excluded} onChange={() => toggleExcluded(it.id)} style={{ cursor: "pointer" }} />
-                                今回は見送る
+                                <input type="checkbox" checked={excluded} onChange={() => toggleExcluded(it.id, it.product_name || "(不明)")} style={{ cursor: "pointer" }} />
+                                今回は見送る{excluded && autoForcedItemIds.has(it.id) && "（発注済）"}
                               </label>
                             )}
                           </td>
