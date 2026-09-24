@@ -82,11 +82,14 @@ export default function OrderProcessPage() {
 
   useEffect(() => { fetchData() }, [])
 
-  // 在庫があっても、この商品だけ強制的に発注プールへ入れる
-  // （在庫を持たず注文が来るたびに毎回仕入れる運用の医院向け）
+  // 手動・自動を問わず、この画面で既に発注プールへ追加した明細
+  // （「この注文を処理する」時の自動追加で二重に積まないためのガード）
+  const [forcedItemIds, setForcedItemIds] = useState<Set<string>>(new Set())
+
+  // 在庫があっても（不足していても）、この商品だけ個別に数量を指定して発注プールへ入れる
   async function forceOrderItem(itemId: string, productName: string, defaultQty: number) {
     const input = prompt(
-      `「${productName}」を在庫があっても強制的に発注プールへ追加します。\n発注する数量を入力してください（注文数量: ${defaultQty}個）`,
+      `「${productName}」を発注プールへ追加します。\n発注する数量を入力してください（注文数量: ${defaultQty}個）`,
       String(defaultQty)
     )
     if (input === null) return
@@ -96,7 +99,8 @@ export default function OrderProcessPage() {
     try {
       const r = await forceAddOrderItemToPool(itemId, undefined, qty)
       if (!r.ok) { alert("追加失敗: " + r.error); return }
-      alert(`✅ ${r.supplierName} の発注プールに ${qty}個 追加しました。`)
+      setForcedItemIds(prev => new Set(prev).add(itemId))
+      alert(`✅ ${r.supplierName} の発注プールに ${qty}個 追加しました。\nこの注文を後で処理しても、この明細は自動追加で重複しません。`)
     } finally {
       setForcingItemId(null)
     }
@@ -143,8 +147,6 @@ export default function OrderProcessPage() {
   // 在庫はあるが、今回はあえて納品したくない明細（社内判断・保留在庫など）。
   // DBには保存せず、この画面での処理判断にのみ使う一時的なチェック。
   const [excludedItemIds, setExcludedItemIds] = useState<Set<string>>(new Set())
-  // 「見送る」チェックで自動的に強制発注も行った明細（二重に発注プールへ追加しないためのガード）
-  const [autoForcedItemIds, setAutoForcedItemIds] = useState<Set<string>>(new Set())
   async function toggleExcluded(itemId: string, productName: string) {
     const willExclude = !excludedItemIds.has(itemId)
     setExcludedItemIds(prev => {
@@ -155,12 +157,12 @@ export default function OrderProcessPage() {
     // 見送るにチェックを入れた時だけ、在庫があっても自動で発注プールへ追加する
     // （チェックを外しても、既に追加したプール明細は自動では取り消さない。
     //   取り消したい場合は発注プール画面から手動で削除してもらう）
-    if (willExclude && !autoForcedItemIds.has(itemId)) {
-      setAutoForcedItemIds(prev => new Set(prev).add(itemId))
+    if (willExclude && !forcedItemIds.has(itemId)) {
+      setForcedItemIds(prev => new Set(prev).add(itemId))
       const r = await forceAddOrderItemToPool(itemId)
       if (!r.ok) {
         alert(`「${productName}」の自動発注に失敗しました: ${r.error}\nお手数ですが「強制発注」ボタンから手動で追加してください。`)
-        setAutoForcedItemIds(prev => { const n = new Set(prev); n.delete(itemId); return n })
+        setForcedItemIds(prev => { const n = new Set(prev); n.delete(itemId); return n })
       }
     }
   }
@@ -258,7 +260,7 @@ export default function OrderProcessPage() {
     let poolAdded: ProcessResult["poolAdded"] = []
     let skippedNoSupplier = 0
     if (shortItems.length > 0) {
-      const r = await poolFromOrders([order.id])
+      const r = await poolFromOrders([order.id], undefined, forcedItemIds)
       poolAdded = r.pos.map(p => ({ supplier_name: p.supplier_name, added_items: p.added_items }))
       skippedNoSupplier = r.skippedNoSupplier
     }
@@ -310,7 +312,7 @@ export default function OrderProcessPage() {
         // ── 準備中 + 発注プール ───────────────────────
         await supabase.from("orders").update({ status: "準備中" }).eq("id", order.id)
         if (hasShort) {
-          const r = await poolFromOrders([order.id])
+          const r = await poolFromOrders([order.id], undefined, forcedItemIds)
           poolAdded = r.pos.map(p => ({ supplier_name: p.supplier_name, added_items: p.added_items }))
           skippedNoSupplier = r.skippedNoSupplier
         }
@@ -594,7 +596,7 @@ export default function OrderProcessPage() {
                             {st.ok && (
                               <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, marginTop: 3, fontSize: 10, color: "#9a3412", cursor: "pointer", userSelect: "none" }}>
                                 <input type="checkbox" checked={excluded} onChange={() => toggleExcluded(it.id, it.product_name || "(不明)")} style={{ cursor: "pointer" }} />
-                                今回は見送る{excluded && autoForcedItemIds.has(it.id) && "（発注済）"}
+                                今回は見送る{excluded && forcedItemIds.has(it.id) && "（発注済）"}
                               </label>
                             )}
                           </td>
@@ -610,17 +612,23 @@ export default function OrderProcessPage() {
                           )}
                           <td style={{ padding: "6px 6px", textAlign: "center" }}>
                             {it.product_id && (
-                              <button
-                                onClick={() => forceOrderItem(it.id, it.product_name || "(不明)", Number(it.quantity || 0))}
-                                disabled={forcingItemId === it.id}
-                                style={{
-                                  fontSize: 11, padding: "3px 6px", borderRadius: 6,
-                                  border: "1px solid #fdba74", background: "#fff7ed", color: "#9a3412",
-                                  cursor: "pointer", opacity: forcingItemId === it.id ? 0.5 : 1,
-                                }}
-                                title="在庫があっても強制的に発注プールへ追加する">
-                                {forcingItemId === it.id ? "…" : "強制発注"}
-                              </button>
+                              forcedItemIds.has(it.id) ? (
+                                <span style={{ fontSize: 11, fontWeight: 700, color: "#0f766e" }} title="この明細は既に発注プールへ追加済みです。「この注文を処理する」時の自動追加とは重複しません。">
+                                  ✅ 発注済み
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => forceOrderItem(it.id, it.product_name || "(不明)", Number(it.quantity || 0))}
+                                  disabled={forcingItemId === it.id}
+                                  style={{
+                                    fontSize: 11, padding: "3px 6px", borderRadius: 6,
+                                    border: "1px solid #fdba74", background: "#fff7ed", color: "#9a3412",
+                                    cursor: "pointer", opacity: forcingItemId === it.id ? 0.5 : 1,
+                                  }}
+                                  title="数量を指定して発注プールへ追加する">
+                                  {forcingItemId === it.id ? "…" : "強制発注"}
+                                </button>
+                              )
                             )}
                           </td>
                         </tr>

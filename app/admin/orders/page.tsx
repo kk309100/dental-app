@@ -312,11 +312,12 @@ function AdminOrdersPage() {
   }
 
   const [forcingItemId, setForcingItemId] = useState<string | null>(null)
-  // 在庫が足りていても、この商品だけ強制的に発注プールへ入れる
-  // （在庫を持たず注文が来るたびに毎回仕入れる運用の医院向け）
+  // 既にこの画面で発注プールへ追加した明細（「プール追加」の自動追加で二重に積まないためのガード）
+  const [forcedItemIds, setForcedItemIds] = useState<Set<string>>(new Set())
+  // 在庫が足りていても、この商品だけ数量を指定して強制的に発注プールへ入れる
   async function forceOrderItem(itemId: string, productName: string, defaultQty: number) {
     const input = prompt(
-      `「${productName}」を在庫があっても強制的に発注プールへ追加します。\n発注する数量を入力してください（注文数量: ${defaultQty}個）`,
+      `「${productName}」を発注プールへ追加します。\n発注する数量を入力してください（注文数量: ${defaultQty}個）`,
       String(defaultQty)
     )
     if (input === null) return
@@ -326,7 +327,8 @@ function AdminOrdersPage() {
     try {
       const r = await forceAddOrderItemToPool(itemId, undefined, qty)
       if (!r.ok) { alert("追加失敗: " + r.error); return }
-      alert(`✅ ${r.supplierName} の発注プールに ${qty}個 追加しました。`)
+      setForcedItemIds(prev => new Set(prev).add(itemId))
+      alert(`✅ ${r.supplierName} の発注プールに ${qty}個 追加しました。\nこの注文を後で「プール追加」しても、この明細は自動追加で重複しません。`)
     } finally {
       setForcingItemId(null)
     }
@@ -418,7 +420,7 @@ function AdminOrdersPage() {
   // 注文の不足分を「発注プール」に追加（仕入先別の下書き発注書）
   async function addToPool(orderIds: string[], fallbackSupplierId?: string) {
     if (orderIds.length === 0) return
-    const r = await poolFromOrders(orderIds, fallbackSupplierId)
+    const r = await poolFromOrders(orderIds, fallbackSupplierId, forcedItemIds)
     if (!r.ok && r.errors.length > 0) {
       alert("一部失敗:\n" + r.errors.join("\n"))
     }
@@ -1083,12 +1085,14 @@ function AdminOrdersPage() {
                                                 )}
                                               </td>
                                               <td className="px-1 py-0.5 text-center">
-                                                {(
+                                                {forcedItemIds.has(it.id) ? (
+                                                  <span className="text-[11px] font-bold text-teal-700" title="この明細は既に発注プールへ追加済みです。「プール追加」の自動追加とは重複しません。">✅ 発注済み</span>
+                                                ) : (
                                                   <button
                                                     onClick={() => forceOrderItem(it.id, it.product_name || "(不明)", Number(it.quantity || 0))}
                                                     disabled={forcingItemId === it.id}
                                                     className="text-[11px] px-1.5 py-0.5 rounded border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
-                                                    title="在庫があっても強制的に発注プールへ追加する">
+                                                    title="数量を指定して発注プールへ追加する">
                                                     {forcingItemId === it.id ? "…" : "強制発注"}
                                                   </button>
                                                 )}
@@ -1298,12 +1302,14 @@ function AdminOrdersPage() {
                                       )}
                                     </td>
                                     <td className="px-1 py-0.5 text-center">
-                                      {(
+                                      {forcedItemIds.has(it.id) ? (
+                                        <span className="text-[11px] font-bold text-teal-700" title="この明細は既に発注プールへ追加済みです。「プール追加」の自動追加とは重複しません。">✅ 発注済み</span>
+                                      ) : (
                                         <button
                                           onClick={() => forceOrderItem(it.id, it.product_name || "(不明)", Number(it.quantity || 0))}
                                           disabled={forcingItemId === it.id}
                                           className="text-[11px] px-1.5 py-0.5 rounded border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 disabled:opacity-50"
-                                          title="在庫があっても強制的に発注プールへ追加する">
+                                          title="数量を指定して発注プールへ追加する">
                                           {forcingItemId === it.id ? "…" : "強制発注"}
                                         </button>
                                       )}

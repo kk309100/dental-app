@@ -139,6 +139,7 @@ export async function addItemsToPool(
 export async function poolFromOrders(
   orderIds: string[],
   fallbackSupplierId?: string,
+  excludeOrderItemIds?: Set<string>,
 ): Promise<PoolResult & { skippedNoSupplier: number; skippedNoShortage: number; productsNeedingSupplier: PoolItem[] }> {
   // 1. データ取得
   // products は件数が多い（1万件超）ため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
@@ -179,6 +180,8 @@ export async function poolFromOrders(
   const productsNeedingSupplier: PoolItem[] = []
 
   for (const oi of orderItems as any[]) {
+    // 既に「強制発注」等で個別に手当て済みの明細は、自動の不足分追加では二重に積まない
+    if (excludeOrderItemIds?.has(oi.id)) { skippedNoShortage++; continue }
     // 商品マスタと紐付いていない「手入力商品」（product_id が無い）は、
     // 在庫チェックができない代わりに「注文数＝そのまま不足数」として仕入先未定プールへ入れる
     if (!oi.product_id) {
