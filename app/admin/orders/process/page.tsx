@@ -106,6 +106,48 @@ export default function OrderProcessPage() {
     }
   }
 
+  // 1つの明細を「在庫から出す分」と「発注する分」に分割する（ワンタッチ）。
+  // 例: 注文8個・在庫6個のうち、1個だけ在庫から出荷し、残り7個は発注したい場合。
+  // 元の明細は発注分の数量に減らして強制発注し、在庫分は新しい明細として追加する。
+  async function splitStockAndOrder(item: OrderItem, productName: string) {
+    const st = stockStatus(item)
+    const suggested = Math.min(st.stock, item.quantity - 1)
+    const input = prompt(
+      `「${productName}」を在庫分と発注分に分割します。\n` +
+      `在庫から出荷する数量を入力してください（在庫: ${st.stock}個 / 注文: ${item.quantity}個）`,
+      String(Math.max(suggested, 0))
+    )
+    if (input === null) return
+    const stockQty = Number(input)
+    if (!Number.isFinite(stockQty) || stockQty <= 0 || stockQty >= item.quantity) {
+      alert("在庫から出す数量は「1以上、注文数量未満」で入力してください。")
+      return
+    }
+    if (stockQty > st.stock) {
+      alert(`在庫（${st.stock}個）を超える数量は指定できません。`)
+      return
+    }
+    const orderQty = item.quantity - stockQty
+    setForcingItemId(item.id)
+    try {
+      // 1. 元の明細は発注分の数量に減らす
+      const { error: e1 } = await supabase.from("order_items").update({ quantity: orderQty }).eq("id", item.id)
+      if (e1) { alert("分割に失敗しました: " + e1.message); return }
+      // 2. 在庫分の新しい明細を追加
+      const { error: e2 } = await supabase.from("order_items").insert({
+        order_id: item.order_id, product_id: item.product_id, product_name: item.product_name, quantity: stockQty, price: item.price,
+      })
+      if (e2) { alert("分割に失敗しました: " + e2.message); return }
+      // 3. 発注分（元の明細）を強制発注
+      const r = await forceAddOrderItemToPool(item.id, undefined, orderQty)
+      if (r.ok) setForcedItemIds(prev => new Set(prev).add(item.id))
+      await fetchData()
+      alert(`✅ 在庫分 ${stockQty}個／発注分 ${orderQty}個 に分割しました。${r.ok ? "発注分はプールに追加済みです。" : "\n⚠発注プールへの追加に失敗: " + r.error}`)
+    } finally {
+      setForcingItemId(null)
+    }
+  }
+
   async function fetchData() {
     setLoading(true)
     const [o, i, p, c] = await Promise.all([
@@ -629,6 +671,19 @@ export default function OrderProcessPage() {
                                   {forcingItemId === it.id ? "…" : "強制発注"}
                                 </button>
                               )
+                            )}
+                            {it.product_id && !st.ok && st.stock > 0 && !forcedItemIds.has(it.id) && (
+                              <button
+                                onClick={() => splitStockAndOrder(it, it.product_name || "(不明)")}
+                                disabled={forcingItemId === it.id}
+                                style={{
+                                  fontSize: 11, padding: "3px 6px", borderRadius: 6, marginTop: 3,
+                                  border: "1px solid #93c5fd", background: "#eff6ff", color: "#1d4ed8",
+                                  cursor: "pointer", opacity: forcingItemId === it.id ? 0.5 : 1, display: "block",
+                                }}
+                                title="在庫から一部だけ出荷し、残りを発注する">
+                                {forcingItemId === it.id ? "…" : "在庫/発注 分割"}
+                              </button>
                             )}
                           </td>
                         </tr>

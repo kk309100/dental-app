@@ -143,7 +143,7 @@ export async function poolFromOrders(
 ): Promise<PoolResult & { skippedNoSupplier: number; skippedNoShortage: number; productsNeedingSupplier: PoolItem[] }> {
   // 1. データ取得
   // products は件数が多い（1万件超）ため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
-  const [oRes, oiRes, products, sRes, srRes, cRes] = await Promise.all([
+  const [oRes, oiRes, products, sRes, srRes, cRes, poItemsRes, posRes] = await Promise.all([
     supabase.from("orders").select("id,clinic_id").in("id", orderIds),
     supabase.from("order_items").select("id,order_id,product_id,quantity,product_name,price").in("order_id", orderIds).limit(50000),
     fetchAll("products", "id,name,stock,cost,default_supplier_id"),
@@ -151,6 +151,9 @@ export async function poolFromOrders(
     // 過去仕入履歴（最新優先で仕入先決定）
     supabase.from("stock_receipts").select("product_id,supplier_id,unit_price,created_at").order("created_at", { ascending: false }).limit(50000),
     supabase.from("clinics").select("id,name").limit(50000),
+    // 既に発注プールへ追加済みの明細を検出するため（ページ再読み込み後の二重追加防止）
+    supabase.from("purchase_order_items").select("note,purchase_order_id").not("note", "is", null).limit(50000),
+    supabase.from("purchase_orders").select("id,status").limit(50000),
   ])
 
   const orders = oRes.data || []
@@ -158,6 +161,15 @@ export async function poolFromOrders(
   const suppliers = sRes.data || []
   const stockReceipts = srRes.data || []
   const clinics = cRes.data || []
+
+  // 既にプール済みの明細（note内の「明細xxxxxxxx」= order_item.id 先頭8桁）を、取消済み発注書を除いて集計
+  const cancelledPoIds = new Set((posRes.data || []).filter((p: any) => p.status === "取消").map((p: any) => p.id))
+  const alreadyPooledItemPrefixes = new Set<string>()
+  for (const it of poItemsRes.data || []) {
+    if (cancelledPoIds.has((it as any).purchase_order_id)) continue
+    const m = String((it as any).note || "").match(/明細([0-9a-f]{8})/i)
+    if (m) alreadyPooledItemPrefixes.add(m[1])
+  }
 
   const productById = new Map(products.map((p: any) => [p.id, p]))
   const supplierById = new Map<string, string>(suppliers.map((s: any) => [s.id, s.name]))
@@ -181,7 +193,8 @@ export async function poolFromOrders(
 
   for (const oi of orderItems as any[]) {
     // 既に「強制発注」等で個別に手当て済みの明細は、自動の不足分追加では二重に積まない
-    if (excludeOrderItemIds?.has(oi.id)) { skippedNoShortage++; continue }
+    // （今回の画面操作分に加え、ページ再読み込みをまたいでDB上に既にある分も含めて判定）
+    if (excludeOrderItemIds?.has(oi.id) || alreadyPooledItemPrefixes.has(String(oi.id).slice(0, 8))) { skippedNoShortage++; continue }
     // 商品マスタと紐付いていない「手入力商品」（product_id が無い）は、
     // 在庫チェックができない代わりに「注文数＝そのまま不足数」として仕入先未定プールへ入れる
     if (!oi.product_id) {
@@ -231,6 +244,7 @@ export async function poolFromOrders(
       quantity: shortBy,
       unit_price: unitPrice,
       source_order_id: oi.order_id,
+      source_order_item_id: oi.id,
       source_clinic_name: clinicName,
       source_clinic_id: order?.clinic_id || null,
     }
@@ -269,6 +283,22 @@ export async function forceAddOrderItemToPool(
     .eq("id", orderItemId)
     .single()
   if (oiErr || !oi) return { ok: false, error: oiErr?.message || "明細が見つかりません" }
+
+  // 既にこの明細が発注プールへ追加済みでないか確認する（ページ再読み込み後の二重クリックなどを防止）。
+  // note に「明細xxxxxxxx」(この order_item.id 先頭8桁) を含む、まだ取消でない発注書明細を探す。
+  const { data: dupItems } = await supabase
+    .from("purchase_order_items")
+    .select("id,quantity,received_quantity,purchase_order_id")
+    .ilike("note", `%明細${oi.id.slice(0, 8)}%`)
+  if (dupItems && dupItems.length > 0) {
+    const poIds = Array.from(new Set(dupItems.map((d: any) => d.purchase_order_id)))
+    const { data: pos } = await supabase.from("purchase_orders").select("id,status").in("id", poIds)
+    const cancelledIds = new Set((pos || []).filter((p: any) => p.status === "取消").map((p: any) => p.id))
+    const stillActive = dupItems.find((d: any) => !cancelledIds.has(d.purchase_order_id))
+    if (stillActive) {
+      return { ok: false, error: `この明細は既に発注プールに追加済みです（数量${stillActive.quantity}個）。重複を避けるため追加をスキップしました。` }
+    }
+  }
 
   const { data: order } = await supabase.from("orders").select("id,clinic_id").eq("id", oi.order_id).single()
   const clinicName = order?.clinic_id
