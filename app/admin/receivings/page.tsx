@@ -38,6 +38,7 @@ export default function ReceivingsListPage() {
   const [supplierFilter, setSupplierFilter] = useState<string>("all")
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")
+  const [noPoOnly, setNoPoOnly] = useState(false)
   const [sortBy, setSortBy] = useState<SortKey>("date_desc")
   const [groupView, setGroupView] = useGroupView()
 
@@ -68,6 +69,7 @@ export default function ReceivingsListPage() {
     const k = norm(search)
     return receipts.filter(r => {
       if (supplierFilter !== "all" && r.supplier_id !== supplierFilter) return false
+      if (noPoOnly && !(r.memo || "").includes("⚠発注記録なし")) return false
       const d = r.created_at.slice(0, 10)
       if (from && d < from) return false
       if (to && d > to) return false
@@ -75,7 +77,7 @@ export default function ReceivingsListPage() {
       const target = norm(`${productName(r.product_id)} ${supplierName(r.supplier_id)} ${r.memo || ""}`)
       return target.includes(k)
     })
-  }, [receipts, supplierFilter, from, to, search, suppliers, products])
+  }, [receipts, supplierFilter, from, to, search, suppliers, products, noPoOnly])
 
   const sorted = useMemo(() => {
     const arr = [...filtered]
@@ -102,6 +104,9 @@ export default function ReceivingsListPage() {
     const totalAmount = filtered.reduce((s, r) => s + Number(r.unit_price || 0) * Number(r.quantity), 0)
     return { count: filtered.length, totalAmount }
   }, [filtered])
+
+  // 「発注記録なし」で受け取った件数（紙注文などでデンハブ未入力だった可能性がある入荷）
+  const noPoCount = useMemo(() => receipts.filter(r => (r.memo || "").includes("⚠発注記録なし")).length, [receipts])
 
   // GroupViewTabs 用の行データ
   const groupRows: GroupableRow[] = useMemo(() => sorted.map(r => ({
@@ -148,6 +153,13 @@ export default function ReceivingsListPage() {
           <span className="ml-2 text-xs font-normal text-gray-400">
             該当 {totals.count} 件 ・ 合計 {fmtYen(totals.totalAmount)}
           </span>
+          {noPoCount > 0 && (
+            <button onClick={() => setNoPoOnly(v => !v)}
+              className={"ml-2 text-[11px] font-bold px-2 py-0.5 rounded-full align-middle " + (noPoOnly ? "bg-amber-500 text-white" : "bg-amber-50 text-amber-700 border border-amber-200")}
+              title="発注書に無い商品を受け取った入荷（紙注文などでデンハブに未入力だった可能性）のみ表示を切り替え">
+              ⚠ 発注記録なし {noPoCount}件
+            </button>
+          )}
         </h1>
         <div className="flex items-center gap-2">
           <button onClick={exportCSV}
@@ -214,8 +226,9 @@ export default function ReceivingsListPage() {
                 const p = r.product_id ? productMap.get(r.product_id) : null
                 const amount = Number(r.unit_price || 0) * Number(r.quantity)
                 const matched = !!r.supplier_invoice_item_id
+                const noOpenPO = (r.memo || "").includes("⚠発注記録なし")
                 return (
-                  <tr key={r.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/30")}>
+                  <tr key={r.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (noOpenPO ? "bg-amber-50/60" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
                     <td className="px-2 py-1.5 text-center text-[12px] text-gray-700">
                       {parseDbDate(r.created_at).toLocaleDateString("ja-JP", { year: "2-digit", month: "2-digit", day: "2-digit" })}
                     </td>
@@ -226,7 +239,10 @@ export default function ReceivingsListPage() {
                     <td className="px-2 py-1.5 text-right tabular-nums">{r.quantity}</td>
                     <td className="px-2 py-1.5 text-right text-[12px] text-gray-600 tabular-nums">{fmtYen(r.unit_price || 0)}</td>
                     <td className="px-2 py-1.5 text-right text-[12px] font-bold tabular-nums">{fmtYen(amount)}</td>
-                    <td className="px-2 py-1.5 text-[12px] text-gray-500">{r.memo || ""}</td>
+                    <td className="px-2 py-1.5 text-[12px] text-gray-500">
+                      {(r.memo || "").replace(/\s*\/?\s*⚠発注記録なし/, "")}
+                      {noOpenPO && <span className="ml-1 text-[11px] text-amber-700 bg-amber-100 px-1 py-0.5 rounded" title="受け取り時、この商品を含む未入荷の発注書が見つかりませんでした（紙注文などでデンハブに未入力だった可能性）">⚠ 発注記録なし</span>}
+                    </td>
                     <td className="px-2 py-1.5 text-center">
                       {matched ? (
                         <span className="text-[12px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">✅</span>

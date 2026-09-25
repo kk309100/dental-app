@@ -267,6 +267,30 @@ export default function ReceivingPage() {
       } catch { /* 失敗してもメイン処理は継続 */ }
     }
 
+    // 「発注書なしで届いた商品」を後から一覧で振り返れるようにするため、
+    // 未入荷・部分入荷の発注書に載っている商品IDを事前に集計しておく。
+    // ここに無い商品を受け取った場合、紙注文などでデンハブに未入力の
+    // 発注だった可能性が高いとみなし、メモにタグを付ける。
+    const productIdsWithOpenPO = new Set<string>()
+    try {
+      const { data: openPos } = await supabase
+        .from("purchase_orders")
+        .select("id")
+        .in("status", ["発注済", "発注済み", "部分入荷"])
+        .limit(50000)
+      const openPoIds = (openPos || []).map((po: any) => po.id)
+      if (openPoIds.length > 0) {
+        const { data: openItems } = await supabase
+          .from("purchase_order_items")
+          .select("product_id,purchase_order_id")
+          .in("purchase_order_id", openPoIds)
+          .limit(50000)
+        for (const it of openItems || []) {
+          if (it.product_id) productIdsWithOpenPO.add(it.product_id)
+        }
+      }
+    } catch { /* 取得失敗時はタグ付けをスキップして通常通り進める */ }
+
     for (let i = 0; i < validRows.length; i++) {
       const row = validRows[i]
       try {
@@ -303,9 +327,11 @@ export default function ReceivingPage() {
         const { error: pe } = await supabase.from("products").update(productUpdate).eq("id", product.id)
         if (pe) throw new Error(pe.message)
 
+        const noOpenPO = !productIdsWithOpenPO.has(product.id)
         const memoStr = [
           row.memo,
           parsedMeta?.invoice_number ? `伝票:${parsedMeta.invoice_number}` : "",
+          noOpenPO ? "⚠発注記録なし" : "",
         ].filter(Boolean).join(" / ")
         const { error: re } = await supabase.from("stock_receipts").insert({
           product_id: product.id,
