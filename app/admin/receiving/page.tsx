@@ -24,12 +24,14 @@ type Row = {
   unitPrice: string           // 単価（1個あたり）
   memo: string
   manufacturer: string        // 新規作成時用
+  productId: string           // 手動で選んだ商品マスタID（指定時はJAN/コード/名前の自動照合より優先）
+  pdfName: string             // PDF/写真から読み取った元の商品名（参考表示用）
 }
 
 const newRow = (): Row => ({
   productName: "", supplierJan: "", supplierCode: "",
   packSize: "", quantity: "", unitPrice: "",
-  memo: "", manufacturer: "",
+  memo: "", manufacturer: "", productId: "", pdfName: "",
 })
 
 const INITIAL_ROWS = 10
@@ -51,6 +53,7 @@ export default function ReceivingPage() {
   const [parseError, setParseError] = useState("")
   const [parsedMeta, setParsedMeta] = useState<{ supplier_name?: string; invoice_number?: string; invoice_date?: string; total?: number; itemCount?: number; rawJson?: string } | null>(null)
 
+  const [pickerRow, setPickerRow] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [logs, setLogs] = useState<string[]>([])
@@ -160,6 +163,8 @@ export default function ReceivingPage() {
         unitPrice: String(it.unit_price ?? it.price ?? it.単価 ?? ""),
         memo: "",
         manufacturer: it.manufacturer || it.maker || it.メーカー || "",
+        productId: "",
+        pdfName: it.supplier_product_name || it.product_name || it.name || it.商品名 || "",
       })).filter(r => r.productName)  // 商品名が空の行は除去
 
       // 常にrawJsonを保持（デバッグ用）
@@ -199,6 +204,10 @@ export default function ReceivingPage() {
     return String(s || "").normalize("NFKC").toLowerCase().trim().replace(/\s+/g, "")
   }
   function findProduct(row: Row): Product | undefined {
+    if (row.productId) {
+      const picked = products.find((p) => p.id === row.productId)
+      if (picked) return picked
+    }
     if (row.supplierJan) {
       const key = normKey(row.supplierJan)
       const m = products.find((p) => normKey(p.barcode) === key)
@@ -727,14 +736,34 @@ export default function ReceivingPage() {
               return (
                 <tr key={i} className={"border-b border-gray-100 " + (existing ? "bg-emerald-50/30" : isPdfRow && row.productName ? "bg-yellow-50/40" : "")}>
                   <td className="px-1.5 py-0.5 text-center text-gray-400">{i + 1}</td>
-                  <td className="px-1.5 py-0.5">
+                  <td className="px-1.5 py-0.5 relative">
                     <input
-                      list="products-list"
                       value={row.productName}
-                      onChange={(e) => updateRow(i, { productName: e.target.value })}
-                      placeholder="商品名"
+                      onChange={(e) => { updateRow(i, { productName: e.target.value, productId: "" }); setPickerRow(i) }}
+                      onFocus={() => setPickerRow(i)}
+                      onBlur={() => setTimeout(() => setPickerRow((cur) => cur === i ? null : cur), 150)}
+                      placeholder="商品名（入力して商品マスタから選択）"
                       className="w-full px-1.5 py-0.5 border border-gray-200 rounded text-[12px]"
                     />
+                    {pickerRow === i && row.productName.trim() && (() => {
+                      const k = normKey(row.productName)
+                      const cands = products.filter((p) => normKey(p.name).includes(k) || normKey(p.product_code).includes(k)).slice(0, 8)
+                      if (cands.length === 0) return null
+                      return (
+                        <div className="absolute z-20 left-0 right-0 mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-56 overflow-auto">
+                          {cands.map((p) => (
+                            <button key={p.id} type="button"
+                              onMouseDown={(e) => { e.preventDefault(); updateRow(i, { productName: p.name, productId: p.id }); setPickerRow(null) }}
+                              className="block w-full text-left px-2 py-1 text-[12px] hover:bg-blue-50 border-b border-gray-100">
+                              <div className="font-semibold">{p.name}</div>
+                              <div className="text-[11px] text-gray-400">{p.product_code || "コードなし"} ／ 在庫 {Number(p.stock || 0)}{p.manufacturer ? ` ／ ${p.manufacturer}` : ""}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )
+                    })()}
+                    {row.productId && <div className="text-[11px] text-emerald-700 mt-0.5">✓ 商品マスタを手動選択済み</div>}
+                    {row.pdfName && row.pdfName !== row.productName && <div className="text-[11px] text-gray-400 mt-0.5">読取名: {row.pdfName}</div>}
                     {row.packSize && <div className="text-[11px] text-gray-400 mt-0.5">入数: {row.packSize}</div>}
                     {row.productName && !existing && <div className="text-[11px] text-yellow-700 mt-0.5">⚡ 新規商品として登録されます</div>}
                     {similar.length > 0 && (
@@ -744,7 +773,7 @@ export default function ReceivingPage() {
                           <button
                             key={p.id}
                             type="button"
-                            onClick={() => updateRow(i, { productName: p.name })}
+                            onClick={() => updateRow(i, { productName: p.name, productId: p.id })}
                             className="underline hover:text-amber-900 mr-1.5"
                             title="クリックしてこの商品を選択（重複登録防止）"
                           >
@@ -804,10 +833,6 @@ export default function ReceivingPage() {
           </tfoot>
         </table>
       </div>
-
-      <datalist id="products-list">
-        {products.map((p) => <option key={p.id} value={p.name}>{p.product_code || ""} {p.manufacturer || ""}</option>)}
-      </datalist>
 
       {/* 凡例 + アクション */}
       <div className="bg-white rounded-lg p-3 sticky bottom-0" style={{ border: "1px solid #e8eaed" }}>
