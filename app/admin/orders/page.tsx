@@ -339,9 +339,11 @@ function AdminOrdersPage() {
   //   実態とズレて、他の注文が誤って発注不要と判定されてしまう。履歴だけ残す。
   // productId が null の場合（商品コードなし・商品マスタ未登録の手入力商品）は、
   // 商品マスタに新規登録してから入荷記録を残す
-  async function quickReceiveItem(itemId: string, productId: string | null, productName: string, shortfall: number) {
-    const qty = Number(receiveQtyFor(itemId, shortfall))
-    if (!qty || qty <= 0) { alert("正しい数量を入力してください"); return }
+  async function quickReceiveItem(itemId: string, productId: string | null, productName: string, remaining: number) {
+    const rawQty = Number(receiveQtyFor(itemId, remaining))
+    if (!rawQty || rawQty <= 0) { alert("正しい数量を入力してください"); return }
+    // 残数を超える入力は残数に丸める（入荷済み数の記録が発注数を超えてしまわないように）
+    const qty = remaining > 0 ? Math.min(rawQty, remaining) : rawQty
     setReceivingItemId(itemId)
     try {
       let pid = productId
@@ -360,8 +362,11 @@ function AdminOrdersPage() {
       if (sre) { alert("入荷記録に失敗しました: " + sre.message); return }
       // この注文明細は入荷済みとして扱う（在庫は増やさないため「在庫あり」表示は変わらないが、
       // このボタンは既に入荷対応済みであることが分かるよう「入荷済み」表示に切り替える）
+      // delivered_quantity は上書きではなく加算する（分割入荷で複数回に分けて届く場合に、
+      // 前回までの入荷済み数が消えてしまわないようにするため）
+      const currentDelivered = Number(orderItems.find(oi => oi.id === itemId)?.delivered_quantity || 0)
       const { error: oie } = await supabase.from("order_items")
-        .update({ delivered_quantity: qty }).eq("id", itemId)
+        .update({ delivered_quantity: currentDelivered + qty }).eq("id", itemId)
       if (oie) { alert("入荷記録は保存されましたが、明細の更新に失敗しました: " + oie.message) }
       alert(`✅ ${qty}個の入荷を記録しました（在庫には加算されません。医院へ直送扱いです）`)
       await fetchData({ silent: true })
@@ -389,12 +394,15 @@ function AdminOrdersPage() {
   function toggleReceiveSelect(itemId: string) {
     setReceiveSelectedIds(prev => { const n = new Set(prev); if (n.has(itemId)) n.delete(itemId); else n.add(itemId); return n })
   }
-  async function bulkReceiveItems(targets: { id: string; productId: string | null; productName: string; qty: number }[]) {
+  async function bulkReceiveItems(targets: { id: string; productId: string | null; productName: string; qty: number; max: number }[]) {
     if (targets.length === 0) return
     if (!confirm(`選択した${targets.length}件をまとめて入荷しますか？`)) return
     setReceivingItemId("__bulk__")
     try {
       for (const t of targets) {
+        // 残数を超える入力は残数に丸める（入荷済み数の記録が発注数を超えてしまわないように）
+        const qty = t.max > 0 ? Math.min(t.qty, t.max) : t.qty
+        if (!qty || qty <= 0) continue
         let pid = t.productId
         if (!pid) {
           const { data: newProd, error: cpe } = await supabase.from("products")
@@ -405,10 +413,12 @@ function AdminOrdersPage() {
           await supabase.from("order_items").update({ product_id: pid }).eq("id", t.id)
         }
         await supabase.from("stock_receipts").insert({
-          product_id: pid, quantity: t.qty,
+          product_id: pid, quantity: qty,
           memo: `注文管理から一括入荷・医院へ直送（在庫は加算せず）（${t.productName}）`,
         })
-        await supabase.from("order_items").update({ delivered_quantity: t.qty }).eq("id", t.id)
+        // delivered_quantity は上書きではなく加算する（分割入荷対応）
+        const currentDelivered = Number(orderItems.find(oi => oi.id === t.id)?.delivered_quantity || 0)
+        await supabase.from("order_items").update({ delivered_quantity: currentDelivered + qty }).eq("id", t.id)
       }
       setReceiveSelectedIds(prev => { const n = new Set(prev); targets.forEach(t => n.delete(t.id)); return n })
       await fetchData({ silent: true })
@@ -990,9 +1000,11 @@ function AdminOrdersPage() {
                                         const p = it.product_id ? productById.get(it.product_id) : null
                                         const stock = Number(p?.stock || 0)
                                         const qty = Number(it.quantity || 0)
+                                        const shortfall = qty - stock
+                                        const deliveredSoFar = Number(it.delivered_quantity || 0)
                                         const enough = stock >= qty
-                                        const delivered = Number(it.delivered_quantity || 0) >= (qty - stock)
-                                        return { it, enough, delivered, qty: qty - stock }
+                                        const delivered = deliveredSoFar >= shortfall
+                                        return { it, enough, delivered, qty: Math.max(0, shortfall - deliveredSoFar) }
                                       })
                                       .filter(x => !x.enough && !x.delivered)
                                     const selectedInOrder = receivableItems.filter(x => receiveSelectedIds.has(x.it.id))
@@ -1001,7 +1013,7 @@ function AdminOrdersPage() {
                                     {receivableItems.length > 0 && (
                                       <div className="flex items-center gap-2 mb-1">
                                         <button
-                                          onClick={() => bulkReceiveItems(selectedInOrder.map(x => ({ id: x.it.id, productId: x.it.product_id, productName: x.it.product_name || "(不明)", qty: Number(receiveQtyFor(x.it.id, x.qty)) })))}
+                                          onClick={() => bulkReceiveItems(selectedInOrder.map(x => ({ id: x.it.id, productId: x.it.product_id, productName: x.it.product_name || "(不明)", qty: Number(receiveQtyFor(x.it.id, x.qty)), max: x.qty })))}
                                           disabled={selectedInOrder.length === 0 || receivingItemId === "__bulk__"}
                                           className="text-[11px] px-2 py-1 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 font-bold">
                                           {receivingItemId === "__bulk__" ? "処理中…" : `☑ 選択した商品を一括入荷（${selectedInOrder.length}）`}
@@ -1062,27 +1074,30 @@ function AdminOrdersPage() {
                                                       className="text-[11px] px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                                                       title="間違えて入荷済みにした場合、取り消す">取消</button>
                                                   </div>
-                                                ) : !enough && (
+                                                ) : !enough && (() => {
+                                                  const remaining = Math.max(0, (qty - stock) - Number(it.delivered_quantity || 0))
+                                                  return (
                                                   <div className="flex items-center gap-1 justify-center">
                                                     <input type="checkbox"
                                                       checked={receiveSelectedIds.has(it.id)}
                                                       onChange={() => toggleReceiveSelect(it.id)}
                                                       onClick={e => e.stopPropagation()}
                                                       title="選択して一括入荷の対象にする" />
-                                                    <input type="number" min={1}
-                                                      value={receiveQtyFor(it.id, qty - stock)}
+                                                    <input type="number" min={1} max={remaining}
+                                                      value={receiveQtyFor(it.id, remaining)}
                                                       onChange={e => setReceiveQtyByItem(prev => ({ ...prev, [it.id]: e.target.value }))}
                                                       onClick={e => e.stopPropagation()}
                                                       className="w-12 px-1 py-0.5 border border-gray-200 rounded text-[11px] text-right" />
                                                     <button
-                                                      onClick={() => quickReceiveItem(it.id, it.product_id, it.product_name || "(不明)", qty - stock)}
+                                                      onClick={() => quickReceiveItem(it.id, it.product_id, it.product_name || "(不明)", remaining)}
                                                       disabled={receivingItemId === it.id}
                                                       className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                                                       title="この商品だけその場で入荷する">
                                                       {receivingItemId === it.id ? "…" : "＋入荷"}
                                                     </button>
                                                   </div>
-                                                )}
+                                                  )
+                                                })()}
                                               </td>
                                               <td className="px-1 py-0.5 text-center">
                                                 {forcedItemIds.has(it.id) ? (
@@ -1208,9 +1223,11 @@ function AdminOrdersPage() {
                                 const p = it.product_id ? productById.get(it.product_id) : null
                                 const stock = Number(p?.stock || 0)
                                 const qty = Number(it.quantity || 0)
+                                const shortfall = qty - stock
+                                const deliveredSoFar = Number(it.delivered_quantity || 0)
                                 const enough = stock >= qty
-                                const delivered = Number(it.delivered_quantity || 0) >= (qty - stock)
-                                return { it, enough, delivered, qty: qty - stock }
+                                const delivered = deliveredSoFar >= shortfall
+                                return { it, enough, delivered, qty: Math.max(0, shortfall - deliveredSoFar) }
                               })
                               .filter(x => !x.enough && !x.delivered)
                             const selectedInOrder = receivableItems.filter(x => receiveSelectedIds.has(x.it.id))
@@ -1219,7 +1236,7 @@ function AdminOrdersPage() {
                             {receivableItems.length > 0 && (
                               <div className="flex items-center gap-2 mb-1">
                                 <button
-                                  onClick={() => bulkReceiveItems(selectedInOrder.map(x => ({ id: x.it.id, productId: x.it.product_id, productName: x.it.product_name || "(不明)", qty: Number(receiveQtyFor(x.it.id, x.qty)) })))}
+                                  onClick={() => bulkReceiveItems(selectedInOrder.map(x => ({ id: x.it.id, productId: x.it.product_id, productName: x.it.product_name || "(不明)", qty: Number(receiveQtyFor(x.it.id, x.qty)), max: x.qty })))}
                                   disabled={selectedInOrder.length === 0 || receivingItemId === "__bulk__"}
                                   className="text-[11px] px-2 py-1 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 font-bold">
                                   {receivingItemId === "__bulk__" ? "処理中…" : `☑ 選択した商品を一括入荷（${selectedInOrder.length}）`}
@@ -1279,27 +1296,30 @@ function AdminOrdersPage() {
                                             className="text-[11px] px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                                             title="間違えて入荷済みにした場合、取り消す">取消</button>
                                         </div>
-                                      ) : !enough && (
+                                      ) : !enough && (() => {
+                                        const remaining = Math.max(0, (qty - stock) - Number(it.delivered_quantity || 0))
+                                        return (
                                         <div className="flex items-center gap-1 justify-center">
                                           <input type="checkbox"
                                             checked={receiveSelectedIds.has(it.id)}
                                             onChange={() => toggleReceiveSelect(it.id)}
                                             onClick={e => e.stopPropagation()}
                                             title="選択して一括入荷の対象にする" />
-                                          <input type="number" min={1}
-                                            value={receiveQtyFor(it.id, qty - stock)}
+                                          <input type="number" min={1} max={remaining}
+                                            value={receiveQtyFor(it.id, remaining)}
                                             onChange={e => setReceiveQtyByItem(prev => ({ ...prev, [it.id]: e.target.value }))}
                                             onClick={e => e.stopPropagation()}
                                             className="w-12 px-1 py-0.5 border border-gray-200 rounded text-[11px] text-right" />
                                           <button
-                                            onClick={() => quickReceiveItem(it.id, it.product_id, it.product_name || "(不明)", qty - stock)}
+                                            onClick={() => quickReceiveItem(it.id, it.product_id, it.product_name || "(不明)", remaining)}
                                             disabled={receivingItemId === it.id}
                                             className="text-[11px] px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                                             title="この商品だけその場で入荷する">
                                             {receivingItemId === it.id ? "…" : "＋入荷"}
                                           </button>
                                         </div>
-                                      )}
+                                        )
+                                      })()}
                                     </td>
                                     <td className="px-1 py-0.5 text-center">
                                       {forcedItemIds.has(it.id) ? (
