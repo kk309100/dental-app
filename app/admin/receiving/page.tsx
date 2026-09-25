@@ -216,12 +216,31 @@ export default function ReceivingPage() {
     return undefined
   }
 
+  // 完全一致する商品が無い場合、名前が部分一致する候補を提示する。
+  // 紙注文などで手入力した商品名が商品マスタと1文字でも違うと気づかず新規商品として
+  // 重複登録されてしまい在庫が2つのレコードに分かれてズレる事故を防ぐため。
+  function findSimilarProducts(row: Row): Product[] {
+    if (!row.productName.trim()) return []
+    const key = normKey(row.productName)
+    if (key.length < 2) return []
+    return products
+      .filter((p) => {
+        const pKey = normKey(p.name)
+        return pKey !== key && (pKey.includes(key) || key.includes(pKey))
+      })
+      .slice(0, 5)
+  }
+
   const validRows = rows.filter((r) => r.productName.trim() && Number(r.quantity) > 0)
   const totalAmount = validRows.reduce((s, r) => s + (Number(r.unitPrice) || 0) * Number(r.quantity), 0)
 
   async function submitAll() {
     if (validRows.length === 0) { alert("有効な行がありません"); return }
-    if (!confirm(`${validRows.length}行を仕入登録します。\n合計仕入額: ${fmtYen(totalAmount)}\n\n商品マスタに無い商品は自動で新規登録されます。\nよろしいですか？`)) return
+    const newProductNames = validRows.filter((r) => !findProduct(r)).map((r) => r.productName)
+    const newProductWarning = newProductNames.length > 0
+      ? `\n\n⚠ 以下は商品マスタに一致が無いため新規商品として登録されます（既存商品の表記ゆれの可能性があれば一旦キャンセルしてご確認ください）:\n${newProductNames.map((n) => "・" + n).join("\n")}`
+      : ""
+    if (!confirm(`${validRows.length}行を仕入登録します。\n合計仕入額: ${fmtYen(totalAmount)}${newProductWarning}\n\nよろしいですか？`)) return
 
     setSubmitting(true)
     setPostReceiveResult(null)  // 前回の結果をクリア
@@ -656,6 +675,7 @@ export default function ReceivingPage() {
               const price = Number(row.unitPrice || 0)
               const subtotal = price * qty
               const existing = findProduct(row)
+              const similar = existing ? [] : findSimilarProducts(row)
               const isPdfRow = !!(row.supplierJan || row.supplierCode)
 
               // 小計を直接編集 → 単価 = 小計 / 数量
@@ -691,6 +711,22 @@ export default function ReceivingPage() {
                     />
                     {row.packSize && <div className="text-[11px] text-gray-400 mt-0.5">入数: {row.packSize}</div>}
                     {row.productName && !existing && <div className="text-[11px] text-yellow-700 mt-0.5">⚡ 新規商品として登録されます</div>}
+                    {similar.length > 0 && (
+                      <div className="text-[11px] text-amber-700 mt-0.5">
+                        ⚠ もしかして:{" "}
+                        {similar.map((p, si) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => updateRow(i, { productName: p.name })}
+                            className="underline hover:text-amber-900 mr-1.5"
+                            title="クリックしてこの商品を選択（重複登録防止）"
+                          >
+                            {p.name}{si < similar.length - 1 ? "、" : ""}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="px-1.5 py-0.5 text-[12px] text-gray-500">
                     {row.supplierJan && <div>{row.supplierJan}</div>}
