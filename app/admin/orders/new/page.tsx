@@ -48,6 +48,8 @@ function NewOrderPage() {
   const [rows, setRows] = useState<Row[]>([{ product_id: null, product_name: "", quantity: 1, price: 0 }])
   const [status, setStatus] = useState<string>(paperMode ? "納品済み" : "注文受付")
   const [deductStock, setDeductStock] = useState(true)
+  const [backfill, setBackfill] = useState(false) // 過去分をまとめて登録する（納品書は開かず続けて入力）
+  const [savedMsg, setSavedMsg] = useState("")
   const [deliveredDate, setDeliveredDate] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10))
   const [note, setNote] = useState("")
   const [salesRep, setSalesRep] = useState("")
@@ -360,6 +362,15 @@ function NewOrderPage() {
   async function finishSave(orderId: string, deliveryNumber: string, extraMsg = "") {
     const willDeduct = paperMode && status === "納品済み" && deductStock
     if (willDeduct) await deductStockForOrder(orderId, deliveryNumber)
+    if (paperMode && backfill && status === "納品済み") {
+      // 医院・納品日・在庫設定は残し、明細だけ空にして次の伝票をすぐ入力できるようにする
+      setSavedMsg(`✓ 登録しました：${clinicQuery}／納品日 ${deliveredDate}／${deliveryNumber}${willDeduct ? "（在庫を引きました）" : "（在庫は引いていません）"}`)
+      setRows([{ product_id: null, product_name: "", quantity: 1, price: 0 }])
+      setNote("")
+      setSaving(false)
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" })
+      return
+    }
     alert(`注文を作成しました（${deliveryNumber}）${willDeduct ? "\n在庫を出庫処理しました。" : ""}${extraMsg}`)
     if (paperMode && status === "納品済み") router.push(`/admin/deliveries/print?ids=${orderId}`)
     else router.push("/admin/orders")
@@ -477,6 +488,9 @@ function NewOrderPage() {
             {["注文受付", "確認中", "準備中", "納品済み"].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
+        {savedMsg && (
+          <div className="text-xs rounded px-3 py-2 bg-emerald-50 text-emerald-800 font-bold" style={{ border: "1px solid #86efac" }}>{savedMsg}</div>
+        )}
         {paperMode && (
           <div className="text-xs rounded px-3 py-2 bg-amber-50 text-amber-900" style={{ border: "1px solid #fde68a" }}>
             <div className="font-bold mb-1">📝 紙・電話などで受けた注文の登録（納品書発行）</div>
@@ -488,6 +502,11 @@ function NewOrderPage() {
                   <input type="date" value={deliveredDate} onChange={e => setDeliveredDate(e.target.value)}
                     className="px-2 py-1 border border-amber-300 rounded bg-white font-normal" />
                   <span className="font-normal text-amber-800">※売上はこの日付で集計されます</span>
+                </label>
+                <label className="flex items-center gap-1.5 font-bold">
+                  <input type="checkbox" checked={backfill} onChange={e => setBackfill(e.target.checked)} />
+                  連続登録モード（納品書は開かず、続けて次の伝票を入力）
+                  <span className="font-normal text-amber-800">※過去分をまとめて登録するとき用</span>
                 </label>
                 <label className="flex items-center gap-1.5 font-bold">
                   <input type="checkbox" checked={deductStock} onChange={e => setDeductStock(e.target.checked)} />
@@ -711,7 +730,7 @@ function NewOrderPage() {
           disabled={saving || !clinicId || rows.filter(r => r.product_name && r.quantity > 0).length === 0}
           className="px-5 py-3 sm:py-2 text-sm font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
-          {saving ? "保存中…" : paperMode && status === "納品済み" ? "✓ 登録して納品書を発行" : "✓ 注文を作成"}
+          {saving ? "保存中…" : paperMode && status === "納品済み" ? (backfill ? "✓ 登録して次へ" : "✓ 登録して納品書を発行") : "✓ 注文を作成"}
         </button>
       </div>
 
