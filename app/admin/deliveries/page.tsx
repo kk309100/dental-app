@@ -138,6 +138,11 @@ export default function DeliveriesPage() {
             className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700">
             ＋ 出荷準備（在庫減算→納品書発行）
           </Link>
+          <Link href="/admin/orders/new?mode=paper"
+            className="px-3 py-2 bg-amber-100 text-amber-800 text-sm font-bold rounded hover:bg-amber-200"
+            title="紙・電話で受けてデントハブに未入力だった注文を登録し、その場で納品書を発行します">
+            📝 紙注文の納品書を作成
+          </Link>
           <button onClick={exportCSV} className="px-3 py-2 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📤 CSV</button>
           <label className="flex items-center gap-1.5 text-xs text-gray-600 px-2" title="同じ医院への複数の納品書を1枚にまとめて印刷します（紙の節約）">
             <input type="checkbox" checked={mergeByClinic} onChange={e => setMergeByClinic(e.target.checked)} />

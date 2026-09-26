@@ -36,6 +36,9 @@ function NewOrderPage() {
   const search = useSearchParams()
   const copyFromId = search.get("copy") // 過去注文コピー
   const initialClinicId = search.get("clinic")
+  // 紙・電話などデントハブ未入力で受けた注文を後から登録し、納品書を発行するモード
+  const paperMode = search.get("mode") === "paper"
+  const prefillItems = search.get("items") // "商品ID:数量;商品ID:数量"
 
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -43,7 +46,9 @@ function NewOrderPage() {
   const [clinicQuery, setClinicQuery] = useState("")
   const [clinicId, setClinicId] = useState("")
   const [rows, setRows] = useState<Row[]>([{ product_id: null, product_name: "", quantity: 1, price: 0 }])
-  const [status, setStatus] = useState<string>("注文受付")
+  const [status, setStatus] = useState<string>(paperMode ? "納品済み" : "注文受付")
+  const [deductStock, setDeductStock] = useState(true)
+  const [deliveredDate, setDeliveredDate] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10))
   const [note, setNote] = useState("")
   const [salesRep, setSalesRep] = useState("")
   const [saving, setSaving] = useState(false)
@@ -93,6 +98,21 @@ function NewOrderPage() {
             quantity: Number(it.quantity || 1),
             price: Number(it.price || 0),
           })))
+        }
+      } else if (prefillItems) {
+        // 仕入登録画面からの引き継ぎ（医院は未定のため標準価格を初期値にする）
+        const pmap = new Map(((p as Product[]) || []).map(x => [x.id, x]))
+        const rowsFromParam: Row[] = []
+        for (const s of prefillItems.split(";")) {
+          const [pid, q] = s.split(":")
+          const prod = pmap.get(pid)
+          if (prod) rowsFromParam.push({ product_id: prod.id, product_name: prod.name, quantity: Number(q) || 1, price: Number(prod.price || 0) })
+        }
+        if (rowsFromParam.length > 0) setRows(rowsFromParam)
+        const recent = typeof window !== "undefined" ? localStorage.getItem(RECENT_CLINIC_KEY) : null
+        if (recent) {
+          const cl = (c.data as Clinic[] | null)?.find(x => x.id === recent)
+          if (cl) { setClinicId(cl.id); setClinicQuery(cl.name) }
         }
       } else if (initialClinicId) {
         setClinicId(initialClinicId)
@@ -312,6 +332,39 @@ function NewOrderPage() {
     }
   }
 
+  // 紙注文モード: 納品済みで保存する場合、出荷準備と同じく在庫を出庫処理する。
+  // （仕入登録で在庫に加算済みのため、引かないと帳簿上の在庫が実物よりも多くなってしまう）
+  async function deductStockForOrder(orderId: string, slipNo: string) {
+    const { data: its } = await supabase.from("order_items").select("id,product_id,quantity").eq("order_id", orderId)
+    for (const it of its || []) {
+      if (!it.product_id) continue
+      const { data: p } = await supabase.from("products").select("stock").eq("id", it.product_id).single()
+      const before = Number(p?.stock || 0)
+      const after = before - Number(it.quantity)
+      await supabase.from("products").update({ stock: after }).eq("id", it.product_id)
+      try {
+        await supabase.from("stock_movements").insert({
+          product_id: it.product_id,
+          movement_type: "出庫",
+          quantity: -Number(it.quantity),
+          before_stock: before,
+          after_stock: after,
+          ref_type: "order_item",
+          ref_id: it.id,
+          reason: slipNo,
+        })
+      } catch { /* 履歴テーブルが無い環境ではスキップ */ }
+    }
+  }
+
+  async function finishSave(orderId: string, deliveryNumber: string, extraMsg = "") {
+    const willDeduct = paperMode && status === "納品済み" && deductStock
+    if (willDeduct) await deductStockForOrder(orderId, deliveryNumber)
+    alert(`注文を作成しました（${deliveryNumber}）${willDeduct ? "\n在庫を出庫処理しました。" : ""}${extraMsg}`)
+    if (paperMode && status === "納品済み") router.push(`/admin/deliveries/print?ids=${orderId}`)
+    else router.push("/admin/orders")
+  }
+
   async function save() {
     if (!clinicId) { alert("医院を選択してください"); return }
     const validRows = rows.filter(r => r.product_name && Number(r.quantity) > 0)
@@ -330,7 +383,16 @@ function NewOrderPage() {
     if (salesRep) orderInsert.sales_rep = salesRep
     if (note) orderInsert.note = note
     orderInsert.source = "admin"
-    if (status === "納品済み") orderInsert.delivered_at = new Date().toISOString()
+    if (status === "納品済み") {
+      if (paperMode && deliveredDate) {
+        // 過去の売りを後から登録する場合、売上は納品日で集計されるため実際の納品日を入れる
+        const iso = new Date(`${deliveredDate}T12:00:00+09:00`).toISOString()
+        orderInsert.delivered_at = iso
+        orderInsert.created_at = iso
+      } else {
+        orderInsert.delivered_at = new Date().toISOString()
+      }
+    }
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
@@ -356,8 +418,7 @@ function NewOrderPage() {
       if (ie) { alert("明細エラー: " + ie.message); setSaving(false); return }
       // ★ 医院別単価マスタを学習
       await bulkUpsertClinicPrices(clinicId, validRows.map(r => ({ product_id: r.product_id, price: Number(r.price) })))
-      alert(`注文を作成しました（${deliveryNumber}）※新スキーマ未適用のため、営業マン名等は保存されていません`)
-      router.push("/admin/orders"); return
+      await finishSave(order2.id, deliveryNumber, "\n※新スキーマ未適用のため、営業マン名等は保存されていません"); return
     }
 
     const items = validRows.map(r => ({
@@ -370,8 +431,7 @@ function NewOrderPage() {
     // ★ 医院別単価マスタを最新価格で学習（次回同じ医院×商品はこの単価が自動補完される）
     await bulkUpsertClinicPrices(clinicId, validRows.map(r => ({ product_id: r.product_id, price: Number(r.price) })))
 
-    alert(`注文を作成しました（${deliveryNumber}）`)
-    router.push("/admin/orders")
+    await finishSave(order.id, deliveryNumber)
   }
 
   return (
@@ -417,6 +477,27 @@ function NewOrderPage() {
             {["注文受付", "確認中", "準備中", "納品済み"].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
+        {paperMode && (
+          <div className="text-xs rounded px-3 py-2 bg-amber-50 text-amber-900" style={{ border: "1px solid #fde68a" }}>
+            <div className="font-bold mb-1">📝 紙・電話などで受けた注文の登録（納品書発行）</div>
+            <div>デントハブに未入力だった注文を登録し、納品済みとして売上に計上します。保存すると納品書の印刷画面が開きます。</div>
+            {status === "納品済み" && (
+              <div className="mt-1.5 space-y-1">
+                <label className="flex items-center gap-1.5 font-bold">
+                  納品日
+                  <input type="date" value={deliveredDate} onChange={e => setDeliveredDate(e.target.value)}
+                    className="px-2 py-1 border border-amber-300 rounded bg-white font-normal" />
+                  <span className="font-normal text-amber-800">※売上はこの日付で集計されます</span>
+                </label>
+                <label className="flex items-center gap-1.5 font-bold">
+                  <input type="checkbox" checked={deductStock} onChange={e => setDeductStock(e.target.checked)} />
+                  在庫から引く（出庫処理する）
+                  <span className="font-normal text-amber-800">※仕入登録で在庫に加算済みならON／棚卸しで在庫数を入力済みの期間の売りならOFF</span>
+                </label>
+              </div>
+            )}
+          </div>
+        )}
         {clinicId && recentOrders.length > 0 && (
           <div>
             <button onClick={() => setShowRecent(s => !s)} className="text-xs text-blue-600 hover:underline">
@@ -630,7 +711,7 @@ function NewOrderPage() {
           disabled={saving || !clinicId || rows.filter(r => r.product_name && r.quantity > 0).length === 0}
           className="px-5 py-3 sm:py-2 text-sm font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
         >
-          {saving ? "保存中…" : "✓ 注文を作成"}
+          {saving ? "保存中…" : paperMode && status === "納品済み" ? "✓ 登録して納品書を発行" : "✓ 注文を作成"}
         </button>
       </div>
 

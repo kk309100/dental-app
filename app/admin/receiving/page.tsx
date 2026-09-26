@@ -65,6 +65,7 @@ export default function ReceivingPage() {
     totalAmount: number
     nowShippable: { orderId: string; clinicId: string; clinicName: string; deliveryNumber: string; itemCount: number; totalPrice: number }[]
     partiallyImpacted: number  // 入庫商品を含むがまだ出荷不可な注文数
+    unregistered: { productId: string; name: string; qty: number }[]  // 待っている医院注文が無い入荷（紙注文などの入力漏れ候補）
   }>(null)
 
   useEffect(() => { fetchData() }, [])
@@ -257,6 +258,7 @@ export default function ReceivingPage() {
     setProgress({ done: 0, total: validRows.length })
     const newLogs: string[] = []
     const stockedProductIds: string[] = []  // 入庫した商品IDをループ内で蓄積
+    const receivedLines: { productId: string; name: string; qty: number }[] = []
 
     let invoiceId: string | null = null
     if (parsedMeta) {
@@ -366,6 +368,7 @@ export default function ReceivingPage() {
 
         newLogs.push(`✓ ${product.name} +${qty}`)
         stockedProductIds.push(product.id)  // 後の「出荷可能注文」判定で使用
+        receivedLines.push({ productId: product.id, name: product.name, qty })
       } catch (e) {
         newLogs.push(`✗ ${row.productName}: ${(e as Error).message}`)
       }
@@ -387,6 +390,8 @@ export default function ReceivingPage() {
     // 3) 全 items の在庫が足りる注文だけ "出荷可能" として通知
     let nowShippableList: typeof postReceiveResult extends infer T ? (T extends { nowShippable: infer L } ? L : never) : never = [] as any
     let partiallyImpacted = 0
+    const productIdsWithPendingOrder = new Set<string>()  // 未納品の医院注文が待っている商品ID
+    let pendingLookupOk = false
     if (stockedProductIds.length > 0) {
       try {
         // 未納品注文（表記ゆれ「納品済」も除外。完了系を除いた active のみ）
@@ -399,6 +404,7 @@ export default function ReceivingPage() {
         )
         const pendingOrderIds = pendingOrders.map((o: any) => o.id)
 
+        if (pendingOrderIds.length === 0) pendingLookupOk = true
         if (pendingOrderIds.length > 0) {
           // 入庫商品を含む注文だけに絞り込み
           const { data: hitItems } = await supabase
@@ -407,6 +413,8 @@ export default function ReceivingPage() {
             .in("order_id", pendingOrderIds)
             .in("product_id", stockedProductIds)
             .limit(50000)
+          ;(hitItems || []).forEach((it: any) => { if (it.product_id) productIdsWithPendingOrder.add(it.product_id) })
+          pendingLookupOk = true
           const affectedOrderIds = Array.from(new Set((hitItems || []).map((it: any) => it.order_id)))
 
           if (affectedOrderIds.length > 0) {
@@ -469,6 +477,8 @@ export default function ReceivingPage() {
       totalAmount,
       nowShippable: nowShippableList,
       partiallyImpacted,
+      // 照会に失敗した場合は誤案内を避けるため空にする
+      unregistered: pendingLookupOk ? receivedLines.filter((l) => !productIdsWithPendingOrder.has(l.productId)) : [],
     })
   }
 
@@ -660,6 +670,28 @@ export default function ReceivingPage() {
                   </div>
                 )
               })()}
+            </div>
+          )}
+
+          {postReceiveResult.unregistered.length > 0 && (
+            <div className="mt-3 rounded p-2" style={{ border: "1px solid #fde68a", background: "#fffbeb" }}>
+              <p className="text-xs font-bold text-amber-900 mb-1">
+                📝 待っている医院注文が見つからない入荷 {postReceiveResult.unregistered.length}品
+              </p>
+              <p className="text-[11px] text-amber-800 mb-1.5">
+                紙・電話で受けた注文でデントハブに未入力の場合は、ここから注文登録＋納品書発行ができます（自社在庫の補充分なら不要です）。
+              </p>
+              <ul className="text-[12px] text-gray-700 mb-2 space-y-0.5">
+                {postReceiveResult.unregistered.map((l) => (
+                  <li key={l.productId}>・{l.name} ×{l.qty}</li>
+                ))}
+              </ul>
+              <a
+                href={`/admin/orders/new?mode=paper&items=${postReceiveResult.unregistered.map((l) => `${l.productId}:${l.qty}`).join(";")}`}
+                className="inline-block px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded hover:bg-amber-600"
+              >
+                📝 紙注文として登録して納品書を作成
+              </a>
             </div>
           )}
 
