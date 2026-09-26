@@ -14,6 +14,7 @@ import { fmtYen } from "@/lib/invoice"
 type Line = {
   date: string; slip: string; clinicCode: string; clinicName: string
   productCode: string; productName: string; price: number; qty: number; note: string
+  discount: boolean // 区分「値引」の行（金額がマイナスの明細として取り込む）
 }
 type Product = { id: string; name: string; product_code: string | null; stock: number | null }
 type Clinic = { id: string; name: string; clinic_code: string | null }
@@ -82,16 +83,20 @@ export default function OrderCsvImportPage() {
       for (const r of rows.slice(1)) {
         const c = splitCsvRow(r)
         const kind = (c[idx("区分")] || "").trim()
-        if (kind !== "売上") { skip[kind || "(空)"] = (skip[kind || "(空)"] || 0) + 1; continue }
+        if (kind !== "売上" && kind !== "値引") { skip[kind || "(空)"] = (skip[kind || "(空)"] || 0) + 1; continue }
+        const discount = kind === "値引"
+        // 値引は数量0・単価0で金額だけがマイナスで入っているため、数量1・単価=金額の明細にする
+        const amount = idx("金額") >= 0 ? toNum(c[idx("金額")]) : 0
         parsed.push({
           date: normDate(c[idx("伝票日付")] || ""), slip: (c[idx("伝票番号")] || "").trim(),
           clinicCode: (c[idx("取引先コード")] || "").trim(), clinicName: (c[idx("取引先名")] || "").trim(),
           productCode: (c[idx("商品コード")] || "").trim(), productName: (c[idx("商品名")] || "").trim(),
-          price: toNum(c[idx("単価")]), qty: toNum(c[idx("数量")]),
+          price: discount ? amount : toNum(c[idx("単価")]), qty: discount ? 1 : toNum(c[idx("数量")]),
           note: idx("摘要") >= 0 ? (c[idx("摘要")] || "").trim() : "",
+          discount,
         })
       }
-      if (parsed.length === 0) throw new Error("「売上」の行がありません")
+      if (!parsed.some(l => !l.discount)) throw new Error("「売上」の行がありません")
       const [p, cl, ex] = await Promise.all([
         fetchAll("products", "id,name,product_code,stock"),
         supabase.from("clinics").select("id,name,clinic_code").limit(50000),
@@ -132,7 +137,11 @@ export default function OrderCsvImportPage() {
   }
 
   const groups: Group[] = useMemo(() => {
+    // 商品コードで照合。Excelで開いて保存されたCSVは JAN が「4.90184E+12」のように壊れるため、
+    // その場合（および未一致の場合）は商品名（全角半角・大小・空白を無視）で照合する
+    const normName = (s: string) => String(s || "").normalize("NFKC").toLowerCase().replace(/\s+/g, "")
     const byCode = new Map(products.filter(p => p.product_code).map(p => [p.product_code as string, p]))
+    const byNameKey = new Map(products.map(p => [normName(p.name), p]))
     const clinicByCode = new Map(clinics.filter(c => c.clinic_code).map(c => [c.clinic_code as string, c]))
     const clinicByName = new Map(clinics.map(c => [c.name, c]))
     const m = new Map<string, Group>()
@@ -145,13 +154,15 @@ export default function OrderCsvImportPage() {
         g = { key, date: l.date, slip: l.slip, deliveryNumber: dn, clinicCode: l.clinicCode, clinicName: l.clinicName, clinicId: cl?.id ?? null, lines: [], total: 0, existing: existingNumbers.has(dn), dup: null }
         m.set(key, g)
       }
-      const prod = byCode.get(l.productCode)
-      // 直送分は在庫を通らないため引かない／基準日以前の伝票は在庫数に反映済みとみなして引かない
+      const codeBroken = /e\+/i.test(l.productCode)
+      const prod = l.discount ? undefined : ((!codeBroken ? byCode.get(l.productCode) : undefined) ?? byNameKey.get(normName(l.productName)))
+      // 直送分は在庫を通らないため引かない／基準日以前の伝票は在庫数に反映済みとみなして引かない（値引は在庫と無関係）
       const deduct = !!prod && l.date > cutoff && !l.note.includes("直送")
       g.lines.push({ ...l, productId: prod?.id ?? null, deduct })
       g.total += l.price * l.qty
     }
-    const result = Array.from(m.values()).sort((a, b) => a.date.localeCompare(b.date) || a.slip.localeCompare(b.slip))
+    // 値引の行しかない伝票（売上明細が今回のCSVに無い）は取り込まない
+    const result = Array.from(m.values()).filter(g => g.lines.some(l => !l.discount)).sort((a, b) => a.date.localeCompare(b.date) || a.slip.localeCompare(b.slip))
     // 手入力済みの注文との重複判定: 同じ医院で、納品日が近く（CSV日の前日〜7日後）、
     // 金額または明細が一致すれば「重複の可能性が高い」、明細の一部だけ一致すれば「似た注文あり」
     for (const g of result) {
@@ -169,12 +180,28 @@ export default function OrderCsvImportPage() {
       }
       g.dup = best
     }
+    // 手入力側が複数の伝票を1件にまとめて登録している場合: 同じ既存注文に紐づく伝票の合計金額が
+    // 既存注文の金額と一致するなら、それらすべてを「重複の可能性が高い」とみなす
+    const byOrder = new Map<string, Group[]>()
+    for (const g of result) if (g.dup) { const arr = byOrder.get(g.dup.deliveryNumber) || []; arr.push(g); byOrder.set(g.dup.deliveryNumber, arr) }
+    for (const [dn, gs] of byOrder) {
+      const ex = existingOrders.find(o => o.deliveryNumber === dn)
+      if (ex && gs.length > 1 && gs.reduce((s, g) => s + g.total, 0) === ex.total) gs.forEach(g => { if (g.dup) g.dup = { ...g.dup, level: "strong" } })
+    }
     return result
   }, [lines, products, clinics, existingNumbers, existingOrders, cutoff])
 
   // 取り込むかどうか: 手動切替があればそれを優先、無ければ「取込済みでない・医院が分かる・重複の可能性が高くない」を初期値にする
-  const isOn = (g: Group) => overrides[g.key] ?? (!!g.clinicId && !g.existing && g.dup?.level !== "strong")
+  // 今日より先の日付の伝票は納品前（予定）の可能性が高いため、初期状態では取り込まない
+  const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+  const isFuture = (g: Group) => g.date > today
+  const isOn = (g: Group) => overrides[g.key] ?? (!!g.clinicId && !g.existing && g.dup?.level !== "strong" && !isFuture(g))
   const importable = groups.filter(g => g.clinicId && !g.existing && isOn(g))
+  // 値引の行だけで売上明細がCSVに無い伝票（除外した伝票）
+  const droppedDiscountSlips = useMemo(() => {
+    const withSales = new Set(lines.filter(l => !l.discount).map(l => `${l.slip}|${l.clinicCode}`))
+    return Array.from(new Set(lines.filter(l => l.discount && !withSales.has(`${l.slip}|${l.clinicCode}`)).map(l => `${l.slip}（${l.clinicName}）`)))
+  }, [lines])
 
   async function runImport() {
     if (importable.length === 0) return
@@ -257,6 +284,11 @@ export default function OrderCsvImportPage() {
               <span className="ml-2 text-amber-700">（取り込まない行: {Object.entries(skipped).map(([k, v]) => `${k} ${v}行`).join("、")}）</span>
             )}
           </div>
+          {droppedDiscountSlips.length > 0 && (
+            <div className="text-xs px-3 py-2 rounded bg-amber-50 text-amber-800" style={{ border: "1px solid #fde68a" }}>
+              値引だけで売上明細がCSVに無い伝票は取り込みません（売上明細を含めて出力し直してください）: {droppedDiscountSlips.join("、")}
+            </div>
+          )}
           <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
             <table className="w-full text-[12px]" style={{ borderCollapse: "collapse" }}>
               <thead className="bg-gray-100">
@@ -286,7 +318,7 @@ export default function OrderCsvImportPage() {
                       <td className="px-2 py-1.5">{g.clinicName}<span className="text-gray-400 ml-1">#{g.clinicCode}</span></td>
                       <td className="px-2 py-1.5">
                         {g.lines.map((l, i) => (
-                          <div key={i}>{l.productName} ×{l.qty} @{fmtYen(l.price)}{!l.productId && <span className="ml-1 text-amber-700">（商品マスタ未一致・手入力として登録）</span>}{l.note && <span className="ml-1 text-gray-400">［{l.note}］</span>}</div>
+                          <div key={i}>{l.productName} ×{l.qty} @{fmtYen(l.price)}{!l.productId && !l.discount && <span className="ml-1 text-amber-700">（商品マスタ未一致・手入力として登録）</span>}{l.note && <span className="ml-1 text-gray-400">［{l.note}］</span>}</div>
                         ))}
                       </td>
                       <td className="px-2 py-1.5 text-right font-bold">{fmtYen(g.total)}</td>
@@ -294,9 +326,10 @@ export default function OrderCsvImportPage() {
                       <td className="px-2 py-1.5 whitespace-nowrap">
                         {g.existing ? "取込済み" : !g.clinicId ? <span className="text-red-600 font-bold">医院が見つかりません</span> : (
                           <>
+                            {isFuture(g) && <div className="text-blue-700 font-bold">今日より先の日付（納品予定？）<div className="font-normal text-[11px]">納品済みにする場合のみチェック</div></div>}
                             {g.dup?.level === "strong" && <div className="text-amber-700 font-bold">手入力済みの可能性が高い<div className="font-normal text-[11px]">{g.dup.deliveryNumber}／{g.dup.date}／{fmtYen(g.dup.total)}</div></div>}
                             {g.dup?.level === "weak" && <div className="text-amber-700">似た注文あり（要確認）<div className="text-[11px]">{g.dup.deliveryNumber}／{g.dup.date}／{fmtYen(g.dup.total)}</div></div>}
-                            {!g.dup && <span className="text-emerald-700 font-bold">取り込めます</span>}
+                            {!g.dup && !isFuture(g) && <span className="text-emerald-700 font-bold">取り込めます</span>}
                           </>
                         )}
                       </td>
