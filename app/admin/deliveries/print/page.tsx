@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchInChunks } from "@/lib/supabase"
 import DeliveryNoteSheet from "@/app/components/DeliveryNoteSheet"
 
 type Order = { id: string; clinic_id: string; created_at: string; delivered_at: string | null; total_price: number; delivery_number: string | null; note: string | null }
@@ -46,8 +46,9 @@ function BulkPrint() {
     let cancelled = false
     let printTimer: ReturnType<typeof setTimeout> | null = null
     Promise.all([
-      supabase.from("orders").select("*").in("id", ids),
-      supabase.from("order_items").select("id,order_id,product_name,quantity,price,product_id,lot_number").in("order_id", ids),
+      // まとめて印刷すると数百件のIDになり、URLが長すぎる／明細が1000件を超えるため、分割して全件取得する
+      fetchInChunks("orders", "*", "id", ids),
+      fetchInChunks("order_items", "id,order_id,product_name,quantity,price,product_id,lot_number", "order_id", ids),
       supabase.from("clinics").select("*").limit(50000),
       fetchAll("products", "id,name,product_code,barcode", (q) => q.not("barcode", "is", null).neq("barcode", "")),
     ]).then(([o, i, c, p]) => {

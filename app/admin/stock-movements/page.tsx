@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchInChunks } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { downloadCSV, toCSV } from "@/lib/csv"
 
@@ -50,7 +50,8 @@ export default function StockMovementsPage() {
     setMvmts((m as Mvmt[]) || [])
     const ids = Array.from(new Set((m as Mvmt[] || []).map(x => x.product_id)))
     if (ids.length > 0) {
-      const { data: ps } = await supabase.from("products").select("id,name,product_code,cost").in("id", ids)
+      // 履歴に登場する商品が数百品あり、一度に検索するとURLが長すぎて失敗するため分割して取得する
+      const { data: ps } = await fetchInChunks("products", "id,name,product_code,cost", "id", ids)
       const map = new Map<string, Product>()
       ;(ps as Product[] | null)?.forEach(p => map.set(p.id, p))
       setProducts(map)

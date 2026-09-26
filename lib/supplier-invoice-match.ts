@@ -16,7 +16,7 @@
 //   - no_product: 自社商品マスタに該当無し
 //   - unmatched: stock_receipts に対応する入荷記録なし
 
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { parseDbDate } from "@/lib/invoice"
 
 export type SupplierInvoiceItem = {
@@ -254,14 +254,17 @@ export async function runAutoMatch(supplierInvoiceId: string): Promise<{
   const aliases = (aliasData as Alias[]) || []
 
   // 期間内の stock_receipts
-  let q = supabase.from("stock_receipts")
-    .select("id,supplier_id,product_id,quantity,unit_price,created_at,memo,supplier_invoice_item_id")
-    .eq("supplier_id", supplierId)
-    .limit(50000)
-  if (invHead.period_start) q = q.gte("created_at", invHead.period_start)
-  if (invHead.period_end) q = q.lte("created_at", invHead.period_end + "T23:59:59")
-  const { data: rcptData } = await q
-  const receipts = (rcptData as StockReceipt[]) || []
+  // 仕入先1社の入荷記録が1000件を超えると取りこぼすため、ページングで全件取得する
+  const receipts = (await fetchAll(
+    "stock_receipts",
+    "id,supplier_id,product_id,quantity,unit_price,created_at,memo,supplier_invoice_item_id",
+    (q: any) => {
+      let qq = q.eq("supplier_id", supplierId)
+      if (invHead.period_start) qq = qq.gte("created_at", invHead.period_start)
+      if (invHead.period_end) qq = qq.lte("created_at", invHead.period_end + "T23:59:59")
+      return qq.order("id", { ascending: true })
+    },
+  )) as StockReceipt[]
 
   // マッチング
   const counts = { matched: 0, qty_mismatch: 0, price_mismatch: 0, amount_mismatch: 0, no_product: 0, unmatched: 0 }
