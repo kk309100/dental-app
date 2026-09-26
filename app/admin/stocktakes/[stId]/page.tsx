@@ -139,8 +139,15 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
     }
   }
 
+  // 実地で数えやすいよう 棚 → メーカー → 商品名 の順に並べる
+  const sorted = useMemo(() => [...enriched].sort((a, b) =>
+    (a.product?.location || "￿").localeCompare(b.product?.location || "￿", "ja") ||
+    (a.product?.manufacturer || "").localeCompare(b.product?.manufacturer || "", "ja") ||
+    (a.product?.name || "").localeCompare(b.product?.name || "", "ja")
+  ), [enriched])
+
   const filtered = useMemo(() => {
-    return enriched.filter(i => {
+    return sorted.filter(i => {
       if (!i.product) return false
       if (filterMode === "uncounted" && i.counted_stock !== null) return false
       if (filterMode === "diff" && (i.counted_stock === null || i.counted_stock === i.system_stock)) return false
@@ -149,7 +156,7 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
       const target = norm([i.product.name, i.product.product_code, i.product.manufacturer, i.product.location].filter(Boolean).join(" "))
       return target.includes(norm(search))
     })
-  }, [enriched, filterMode, search])
+  }, [sorted, filterMode, search])
 
   const stats = useMemo(() => ({
     total: items.length,
@@ -317,6 +324,11 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
         )
       })()}
 
+      {/* 印刷時だけ出るタイトル（カウント用紙） */}
+      <div className="print-only" style={{ display: "none" }}>
+        <div style={{ fontSize: 16, fontWeight: 800 }}>棚卸表 {new Date(st.taken_on).toLocaleDateString("ja-JP")}{st.note ? `（${st.note}）` : ""}</div>
+        <div style={{ fontSize: 10, color: "#555", marginBottom: 6 }}>{filtered.length}品目　実数欄に数えた数を記入してください　担当：＿＿＿＿＿＿</div>
+      </div>
       <div className="bg-white rounded overflow-auto print-area" style={{ border: "1px solid #d0d0d0" }}>
         <table className="w-full text-xs">
           <thead className="bg-gray-100 sticky top-0">
@@ -377,7 +389,10 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
       <style jsx global>{`
         @media print {
           .no-print { display: none !important; }
-          .print-area { max-height: none !important; overflow: visible !important; }
+          .print-only { display: block !important; }
+          .print-area { max-height: none !important; overflow: visible !important; border: none !important; }
+          .print-area tr { break-inside: avoid; }
+          .print-area input[type=number] { border: 1px solid #999 !important; height: 22px; background: #fff !important; }
           @page { size: A4; margin: 10mm; }
         }
       `}</style>

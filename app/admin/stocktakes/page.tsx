@@ -30,17 +30,21 @@ export default function StocktakesPage() {
     setLoading(false)
   }
 
-  async function createNew() {
-    const today = new Date().toISOString().slice(0, 10)
-    const date = prompt("棚卸日 (YYYY-MM-DD)", today)
+  // scope: "all" = 全商品 / "managed" = 自社管理商品のみ（実地で数える対象が限られる場合の照合用）
+  async function createNew(scope: "all" | "managed" = "all") {
+    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+    const date = prompt(scope === "managed" ? "棚卸日 (YYYY-MM-DD)（自社管理商品のみ）" : "棚卸日 (YYYY-MM-DD)", today)
     if (!date) return
     // 1) 棚卸ヘッダ作成
     const { data: st, error: e1 } = await supabase.from("stocktakes")
-      .insert({ taken_on: date, status: "進行中" }).select().single()
+      .insert({ taken_on: date, status: "進行中", note: scope === "managed" ? "自社管理商品のみ" : null }).select().single()
     if (e1 || !st) { alert("作成失敗: " + (e1?.message || "")); return }
-    // 2) 全商品の現在在庫を初期値としてスナップショット
+    // 2) 対象商品の現在在庫を初期値としてスナップショット
     // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
-    const products = await fetchAll("products", "id,stock,active", (q: any) => q.or("active.is.null,active.eq.true"))
+    const products = await fetchAll("products", "id,stock,active", (q: any) => {
+      const base = q.or("active.is.null,active.eq.true")
+      return scope === "managed" ? base.eq("location", "自社管理") : base
+    })
     if (products && products.length > 0) {
       const items = (products as { id: string; stock: number | null }[]).map(p => ({
         stocktake_id: st.id,
@@ -79,9 +83,15 @@ export default function StocktakesPage() {
           棚卸
           <span className="ml-2 text-xs font-normal text-gray-400">{list.length} 回実施</span>
         </h1>
-        <button onClick={createNew} className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700">
-          ＋ 新規棚卸
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => createNew("managed")} className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700"
+            title="自社管理タグの付いた商品だけを対象にした棚卸表を作ります">
+            ＋ 新規棚卸（自社管理商品のみ）
+          </button>
+          <button onClick={() => createNew("all")} className="px-3 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-bold rounded hover:bg-gray-50">
+            ＋ 新規棚卸（全商品）
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0" }}>
