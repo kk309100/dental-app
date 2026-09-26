@@ -22,7 +22,15 @@ type Group = {
   clinicCode: string; clinicName: string; clinicId: string | null
   lines: (Line & { productId: string | null; deduct: boolean })[]
   total: number; existing: boolean
+  // すでにデントハブへ手入力されている注文と重複していそうか
+  dup: { level: "strong" | "weak"; deliveryNumber: string; date: string; total: number } | null
 }
+type ExistingOrder = {
+  id: string; clinic_id: string; date: string; total: number; deliveryNumber: string
+  items: { product_id: string | null; name: string; qty: number }[]
+}
+
+const dayDiff = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000)
 
 function splitCsvRow(row: string): string[] {
   const cols: string[] = []
@@ -47,6 +55,8 @@ export default function OrderCsvImportPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [existingNumbers, setExistingNumbers] = useState<Set<string>>(new Set())
+  const [existingOrders, setExistingOrders] = useState<ExistingOrder[]>([])
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({}) // 伝票ごとの取込ON/OFF（手動切替）
   const [cutoff, setCutoff] = useState("2026-09-22")
   const [fileName, setFileName] = useState("")
   const [error, setError] = useState("")
@@ -90,6 +100,30 @@ export default function OrderCsvImportPage() {
       setProducts((p as Product[]) || [])
       setClinics((cl.data as Clinic[]) || [])
       setExistingNumbers(new Set((ex.data || []).map((o: { delivery_number: string }) => o.delivery_number)))
+      // 手入力済みの注文との重複判定用に、CSVの最古日の前日以降の注文（取込分EXT-を除く）を取得
+      const minDate = parsed.map(l => l.date).filter(Boolean).sort()[0]
+      if (minDate) {
+        const since = new Date(`${minDate}T00:00:00+09:00`); since.setDate(since.getDate() - 1)
+        const { data: eo } = await supabase.from("orders")
+          .select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number")
+          .gte("created_at", since.toISOString()).limit(50000)
+        const eos = (eo || []).filter((o: { delivery_number: string | null; status: string }) =>
+          !String(o.delivery_number || "").startsWith("EXT-") && !["キャンセル", "取消"].includes(o.status))
+        const itemsByOrder = new Map<string, ExistingOrder["items"]>()
+        for (let i = 0; i < eos.length; i += 200) {
+          const ids = eos.slice(i, i + 200).map((o: { id: string }) => o.id)
+          const { data: its } = await supabase.from("order_items").select("order_id,product_id,product_name,quantity").in("order_id", ids)
+          for (const it of its || []) {
+            if (!itemsByOrder.has(it.order_id)) itemsByOrder.set(it.order_id, [])
+            itemsByOrder.get(it.order_id)!.push({ product_id: it.product_id, name: it.product_name || "", qty: Number(it.quantity || 0) })
+          }
+        }
+        setExistingOrders(eos.map((o: { id: string; clinic_id: string; created_at: string; delivered_at: string | null; total_price: number; delivery_number: string | null }) => ({
+          id: o.id, clinic_id: o.clinic_id, date: (o.delivered_at || o.created_at).slice(0, 10),
+          total: Number(o.total_price || 0), deliveryNumber: o.delivery_number || o.id.slice(0, 8), items: itemsByOrder.get(o.id) || [],
+        })))
+      }
+      setOverrides({})
       setSkipped(skip)
       setLines(parsed)
     } catch (e) {
@@ -108,7 +142,7 @@ export default function OrderCsvImportPage() {
       if (!g) {
         const cl = clinicByCode.get(l.clinicCode) || clinicByName.get(l.clinicName)
         const dn = `EXT-${l.slip}`
-        g = { key, date: l.date, slip: l.slip, deliveryNumber: dn, clinicCode: l.clinicCode, clinicName: l.clinicName, clinicId: cl?.id ?? null, lines: [], total: 0, existing: existingNumbers.has(dn) }
+        g = { key, date: l.date, slip: l.slip, deliveryNumber: dn, clinicCode: l.clinicCode, clinicName: l.clinicName, clinicId: cl?.id ?? null, lines: [], total: 0, existing: existingNumbers.has(dn), dup: null }
         m.set(key, g)
       }
       const prod = byCode.get(l.productCode)
@@ -117,10 +151,30 @@ export default function OrderCsvImportPage() {
       g.lines.push({ ...l, productId: prod?.id ?? null, deduct })
       g.total += l.price * l.qty
     }
-    return Array.from(m.values()).sort((a, b) => a.date.localeCompare(b.date) || a.slip.localeCompare(b.slip))
-  }, [lines, products, clinics, existingNumbers, cutoff])
+    const result = Array.from(m.values()).sort((a, b) => a.date.localeCompare(b.date) || a.slip.localeCompare(b.slip))
+    // 手入力済みの注文との重複判定: 同じ医院で、納品日が近く（CSV日の前日〜7日後）、
+    // 金額または明細が一致すれば「重複の可能性が高い」、明細の一部だけ一致すれば「似た注文あり」
+    for (const g of result) {
+      if (!g.clinicId || g.existing) continue
+      let best: Group["dup"] = null
+      for (const o of existingOrders) {
+        if (o.clinic_id !== g.clinicId) continue
+        const d = dayDiff(o.date, g.date)
+        if (d < -1 || d > 7) continue
+        const matched = g.lines.filter(l => o.items.some(x => (l.productId ? x.product_id === l.productId : x.name === l.productName) && x.qty === l.qty)).length
+        const strong = o.total === g.total || (matched === g.lines.length && g.lines.length > 0)
+        const level = strong ? "strong" : matched > 0 ? "weak" : null
+        if (!level) continue
+        if (!best || (level === "strong" && best.level === "weak")) best = { level, deliveryNumber: o.deliveryNumber, date: o.date, total: o.total }
+      }
+      g.dup = best
+    }
+    return result
+  }, [lines, products, clinics, existingNumbers, existingOrders, cutoff])
 
-  const importable = groups.filter(g => g.clinicId && !g.existing)
+  // 取り込むかどうか: 手動切替があればそれを優先、無ければ「取込済みでない・医院が分かる・重複の可能性が高くない」を初期値にする
+  const isOn = (g: Group) => overrides[g.key] ?? (!!g.clinicId && !g.existing && g.dup?.level !== "strong")
+  const importable = groups.filter(g => g.clinicId && !g.existing && isOn(g))
 
   async function runImport() {
     if (importable.length === 0) return
@@ -207,6 +261,7 @@ export default function OrderCsvImportPage() {
             <table className="w-full text-[12px]" style={{ borderCollapse: "collapse" }}>
               <thead className="bg-gray-100">
                 <tr className="text-gray-700 font-bold border-b-2 border-gray-300">
+                  <th className="px-2 py-1.5 text-center">取込</th>
                   <th className="px-2 py-1.5 text-left">納品日</th>
                   <th className="px-2 py-1.5 text-left">伝票No</th>
                   <th className="px-2 py-1.5 text-left">医院</th>
@@ -221,7 +276,11 @@ export default function OrderCsvImportPage() {
                   const dedCount = g.lines.filter(l => l.deduct).length
                   const unmatched = g.lines.filter(l => !l.productId).length
                   return (
-                    <tr key={g.key} className={"border-b border-gray-100 align-top " + (g.existing ? "bg-gray-50 text-gray-400" : !g.clinicId ? "bg-red-50" : "")}>
+                    <tr key={g.key} className={"border-b border-gray-100 align-top " + (g.existing ? "bg-gray-50 text-gray-400" : !g.clinicId ? "bg-red-50" : g.dup?.level === "strong" ? "bg-amber-50" : "")}>
+                      <td className="px-2 py-1.5 text-center">
+                        <input type="checkbox" checked={!g.existing && !!g.clinicId && isOn(g)} disabled={g.existing || !g.clinicId}
+                          onChange={e => setOverrides(prev => ({ ...prev, [g.key]: e.target.checked }))} />
+                      </td>
                       <td className="px-2 py-1.5 whitespace-nowrap">{g.date}</td>
                       <td className="px-2 py-1.5 font-mono">{g.slip}</td>
                       <td className="px-2 py-1.5">{g.clinicName}<span className="text-gray-400 ml-1">#{g.clinicCode}</span></td>
@@ -233,7 +292,13 @@ export default function OrderCsvImportPage() {
                       <td className="px-2 py-1.5 text-right font-bold">{fmtYen(g.total)}</td>
                       <td className="px-2 py-1.5 whitespace-nowrap">{dedCount > 0 ? `引く（${dedCount}行）` : "引かない"}{unmatched > 0 ? "" : ""}</td>
                       <td className="px-2 py-1.5 whitespace-nowrap">
-                        {g.existing ? "取込済み" : !g.clinicId ? <span className="text-red-600 font-bold">医院が見つかりません</span> : <span className="text-emerald-700 font-bold">取り込めます</span>}
+                        {g.existing ? "取込済み" : !g.clinicId ? <span className="text-red-600 font-bold">医院が見つかりません</span> : (
+                          <>
+                            {g.dup?.level === "strong" && <div className="text-amber-700 font-bold">手入力済みの可能性が高い<div className="font-normal text-[11px]">{g.dup.deliveryNumber}／{g.dup.date}／{fmtYen(g.dup.total)}</div></div>}
+                            {g.dup?.level === "weak" && <div className="text-amber-700">似た注文あり（要確認）<div className="text-[11px]">{g.dup.deliveryNumber}／{g.dup.date}／{fmtYen(g.dup.total)}</div></div>}
+                            {!g.dup && <span className="text-emerald-700 font-bold">取り込めます</span>}
+                          </>
+                        )}
                       </td>
                     </tr>
                   )
@@ -246,7 +311,7 @@ export default function OrderCsvImportPage() {
               className="px-5 py-2 text-sm font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-gray-300">
               {importing ? "取り込み中…" : `✓ ${importable.length}件の伝票を取り込む`}
             </button>
-            <span className="text-[11px] text-gray-500">医院が見つからない伝票・取込済みの伝票は取り込まれません</span>
+            <span className="text-[11px] text-gray-500">チェックの入った伝票だけ取り込みます。「手入力済みの可能性が高い」伝票は初期状態でチェックを外してあります（内容を見て切り替えできます）</span>
           </div>
         </>
       )}
