@@ -60,7 +60,7 @@ export default function PurchasePage() {
                 <p>商品名：{product.name}</p>
                 <p>現在庫：{product.stock}</p>
                 <p>発注基準：{product.reorder_level}</p>
-                <p>推奨発注数：{product.reorder_level * 2 - product.stock}</p>
+                <p>推奨発注数：{product.reorder_level * 2 - Math.max(0, product.stock)}</p>
                 <hr />
               </div>
             ))}

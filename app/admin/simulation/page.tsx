@@ -140,7 +140,7 @@ export default function SimulationPage() {
           const stock = stockMap.get(it.product_id) || 0
           if (stock < Number(it.quantity)) {
             canDeliverAll = false
-            shortItems.push({ product_id: it.product_id, quantity: Number(it.quantity) - stock, order_id: orderId })
+            shortItems.push({ product_id: it.product_id, quantity: Number(it.quantity) - Math.max(0, stock), order_id: orderId })
           }
         }
         if (canDeliverAll) {

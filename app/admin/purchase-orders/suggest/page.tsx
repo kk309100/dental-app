@@ -136,7 +136,8 @@ function SuggestPOPage() {
         const orderQty = orderQtyByProduct.get(p.id) || 0
         if (orderQty === 0) return
         const stock = Number(p.stock || 0)
-        const shortBy = Math.max(0, orderQty - stock)
+        // 在庫がマイナス（記録ズレ）でも実在庫は0未満にならないため、不足数は注文数を超えない
+        const shortBy = Math.max(0, orderQty - Math.max(0, stock))
         // ★ shortBy=0（在庫足りる）でも候補に含める。ただし初期選択はOFF
         //   ユーザーが「不足分だけ」「全商品」選べる柔軟性を確保
         const last = lastSupplier(p.id)
@@ -161,8 +162,10 @@ function SuggestPOPage() {
         const stock = Number(p.stock || 0)
         const reorderLv = Number(p.reorder_level || 0)
         const reservedQty = reserved.get(p.id) || 0
-        const effectiveStock = stock - reservedQty
-        const shortBy = Math.max(0, (reorderLv + reservedQty) - stock)
+        // 在庫がマイナス（記録ズレ）の場合は実在庫0として計算し、発注提案数が膨らまないようにする
+        const usableStock = Math.max(0, stock)
+        const effectiveStock = usableStock - reservedQty
+        const shortBy = Math.max(0, (reorderLv + reservedQty) - usableStock)
         const suggestQty = shortBy > 0 ? Math.max(shortBy, Math.ceil(reorderLv * 0.5)) : 0
         if (suggestQty > 0 || effectiveStock < 0) {
           const last = lastSupplier(p.id)
