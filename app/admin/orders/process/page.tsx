@@ -183,7 +183,7 @@ export default function OrderProcessPage() {
     const p = item.product_id ? productById.get(item.product_id) : null
     const stock = Number(p?.stock || 0)
     const need  = Number(item.quantity || 0)
-    return { ok: stock >= need, stock, short: Math.max(0, need - stock) }
+    return { ok: stock >= need, stock, short: Math.max(0, need - Math.max(0, stock)) }
   }
 
   // 在庫はあるが、今回はあえて納品したくない明細（社内判断・保留在庫など）。

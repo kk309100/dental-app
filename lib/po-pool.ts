@@ -227,7 +227,8 @@ export async function poolFromOrders(
     if (!product) { skippedNoShortage++; continue }
     const stock = Number(product.stock || 0)
     const orderQty = Number(oi.quantity || 0)
-    const shortBy = orderQty - stock
+    // 在庫がマイナス（記録ズレ）でも、実際の在庫は0以下にならないため、注文数を超えて発注しない
+    const shortBy = orderQty - Math.max(0, stock)
     if (shortBy <= 0) { skippedNoShortage++; continue }
 
     // 仕入先決定: default_supplier_id > 過去履歴 > fallbackSupplierId

@@ -1000,7 +1000,7 @@ function AdminOrdersPage() {
                                         const p = it.product_id ? productById.get(it.product_id) : null
                                         const stock = Number(p?.stock || 0)
                                         const qty = Number(it.quantity || 0)
-                                        const shortfall = qty - stock
+                                        const shortfall = qty - Math.max(0, stock)  // 在庫がマイナスでも不足数は注文数を超えない
                                         const deliveredSoFar = Number(it.delivered_quantity || 0)
                                         const enough = stock >= qty
                                         const delivered = deliveredSoFar >= shortfall
@@ -1065,7 +1065,7 @@ function AdminOrdersPage() {
                                               <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                               <td className="px-1 py-0.5 text-center">
-                                                {!enough && Number(it.delivered_quantity || 0) >= (qty - stock) ? (
+                                                {!enough && Number(it.delivered_quantity || 0) >= (qty - Math.max(0, stock)) ? (
                                                   <div className="flex items-center gap-1 justify-center">
                                                     <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
                                                     <button
@@ -1075,7 +1075,7 @@ function AdminOrdersPage() {
                                                       title="間違えて入荷済みにした場合、取り消す">取消</button>
                                                   </div>
                                                 ) : !enough && (() => {
-                                                  const remaining = Math.max(0, (qty - stock) - Number(it.delivered_quantity || 0))
+                                                  const remaining = Math.max(0, (qty - Math.max(0, stock)) - Number(it.delivered_quantity || 0))
                                                   return (
                                                   <div className="flex items-center gap-1 justify-center">
                                                     <input type="checkbox"
@@ -1223,7 +1223,7 @@ function AdminOrdersPage() {
                                 const p = it.product_id ? productById.get(it.product_id) : null
                                 const stock = Number(p?.stock || 0)
                                 const qty = Number(it.quantity || 0)
-                                const shortfall = qty - stock
+                                const shortfall = qty - Math.max(0, stock)  // 在庫がマイナスでも不足数は注文数を超えない
                                 const deliveredSoFar = Number(it.delivered_quantity || 0)
                                 const enough = stock >= qty
                                 const delivered = deliveredSoFar >= shortfall
@@ -1287,7 +1287,7 @@ function AdminOrdersPage() {
                                     <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                     <td className="px-1 py-0.5 text-center">
-                                      {!enough && Number(it.delivered_quantity || 0) >= (qty - stock) ? (
+                                      {!enough && Number(it.delivered_quantity || 0) >= (qty - Math.max(0, stock)) ? (
                                         <div className="flex items-center gap-1 justify-center">
                                           <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
                                           <button
@@ -1297,7 +1297,7 @@ function AdminOrdersPage() {
                                             title="間違えて入荷済みにした場合、取り消す">取消</button>
                                         </div>
                                       ) : !enough && (() => {
-                                        const remaining = Math.max(0, (qty - stock) - Number(it.delivered_quantity || 0))
+                                        const remaining = Math.max(0, (qty - Math.max(0, stock)) - Number(it.delivered_quantity || 0))
                                         return (
                                         <div className="flex items-center gap-1 justify-center">
                                           <input type="checkbox"
