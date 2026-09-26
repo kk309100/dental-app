@@ -21,6 +21,8 @@ export type PurchaseCsvRow = {
   quantity: number | null
   amount: number | null
   memo: string               // 摘要
+  supplierCode: string       // 行ごとの仕入先コード（仕入先コード / 取引先コード列）
+  supplierName: string       // 行ごとの仕入先名（仕入先名 / 取引先名列）
 }
 
 export type PurchaseCsvResult = {
@@ -54,7 +56,10 @@ function toNum(s: string | undefined): number | null {
 }
 
 function toISODate(s: string | undefined): string {
-  return String(s || "").trim().replace(/\//g, "-")
+  const t = String(s || "").trim()
+  // 「2026/9/21」のような月日が1桁の表記も「2026-09-21」に揃える（そのままでは日時として不正になる）
+  const m = t.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/)
+  return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : t.replace(/\//g, "-")
 }
 
 export function parsePurchaseCsv(text: string): PurchaseCsvResult {
@@ -74,7 +79,8 @@ export function parsePurchaseCsv(text: string): PurchaseCsvResult {
   let skipped = 0
   const rows: PurchaseCsvRow[] = []
   csvRows.forEach((row, i) => {
-    const kubun = (row["仕入区分"] || "").trim()
+    // 仕入日報は「仕入区分」、商品元帳は「区分」（売上・仕入・値引が混在）。どちらでも「仕入」以外は除外する
+    const kubun = (row["仕入区分"] || row["区分"] || "").trim()
     const productName = (row["商品名"] || "").trim()
     if (!productName) return
     if (kubun && kubun !== "仕入") { skipped++; return }
@@ -82,7 +88,7 @@ export function parsePurchaseCsv(text: string): PurchaseCsvResult {
     rows.push({
       lineNo: i + 2, // ヘッダ行を1行目とした実際のCSV行番号
       voucherDate: toISODate(row["伝票日付"]),
-      voucherNo: (row["伝票№"] || row["伝票No"] || "").trim(),
+      voucherNo: (row["伝票№"] || row["伝票No"] || row["伝票番号"] || "").trim(),
       kubun,
       productCode: (row["商品コード"] || "").trim(),
       productName,
@@ -91,6 +97,8 @@ export function parsePurchaseCsv(text: string): PurchaseCsvResult {
       quantity: toNum(row["数量"]),
       amount: toNum(row["金額"]),
       memo: (row["摘要"] || "").trim(),
+      supplierCode: (row["仕入先コード"] || row["取引先コード"] || "").trim(),
+      supplierName: (row["仕入先名"] || row["取引先名"] || "").trim(),
     })
   })
 
@@ -101,7 +109,7 @@ export function parsePurchaseCsv(text: string): PurchaseCsvResult {
   return {
     rows,
     skippedCount: skipped,
-    supplierCode: (csvRows[0]["仕入先コード"] || "").trim(),
-    supplierName: (csvRows[0]["仕入先名"] || "").trim(),
+    supplierCode: (csvRows[0]["仕入先コード"] || csvRows[0]["取引先コード"] || "").trim(),
+    supplierName: (csvRows[0]["仕入先名"] || csvRows[0]["取引先名"] || "").trim(),
   }
 }
