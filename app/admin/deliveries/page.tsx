@@ -143,6 +143,11 @@ export default function DeliveriesPage() {
             title="紙・電話で受けてデントハブに未入力だった注文を登録し、その場で納品書を発行します">
             📝 紙注文の納品書を作成
           </Link>
+          <Link href="/admin/orders/csv-import"
+            className="px-3 py-2 bg-white border border-gray-200 text-sm font-bold rounded hover:bg-gray-50"
+            title="他システムの商品元帳CSVから売上をまとめて取り込みます">
+            📥 売上CSV取り込み
+          </Link>
           <button onClick={exportCSV} className="px-3 py-2 bg-white border border-gray-200 rounded text-sm hover:bg-gray-50">📤 CSV</button>
           <label className="flex items-center gap-1.5 text-xs text-gray-600 px-2" title="同じ医院への複数の納品書を1枚にまとめて印刷します（紙の節約）">
             <input type="checkbox" checked={mergeByClinic} onChange={e => setMergeByClinic(e.target.checked)} />
