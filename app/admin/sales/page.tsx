@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import Link from "next/link"
 import { downloadCSV, toCSV } from "@/lib/csv"
 
@@ -38,7 +38,7 @@ export default function SalesPage() {
   async function fetchData() {
     // order_items・products は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [o, i, p, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep").limit(50000),
+      fetchAllData("orders", "id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep"),
       fetchAll("order_items", "id,order_id,product_id,product_name,quantity,price"),
       fetchAll("products", "id,name,cost"),
       supabase.from("clinics").select("id,name,sales_rep").limit(50000),

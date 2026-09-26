@@ -154,7 +154,7 @@ export async function poolFromOrders(
     supabase.from("clinics").select("id,name").limit(50000),
     // 既に発注プールへ追加済みの明細を検出するため（ページ再読み込み後の二重追加防止）
     fetchAllData("purchase_order_items", "id,note,purchase_order_id", (q: any) => q.not("note", "is", null)),
-    supabase.from("purchase_orders").select("id,status").limit(50000),
+    fetchAllData("purchase_orders", "id,status"),
   ])
 
   const orders = oRes.data || []

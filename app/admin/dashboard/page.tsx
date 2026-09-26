@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { fmtYen, fmtDate } from "@/lib/invoice"
 import Link from "next/link"
 import { Ic } from "../_lib/icons"
@@ -23,7 +23,7 @@ export default function AdminDashboard() {
   async function fetchData() {
     // products は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [o, i, p, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,invoice_id").limit(50000),
+      fetchAllData("orders", "id,clinic_id,status,created_at,total_price,invoice_id"),
       supabase.from("invoices").select("id,clinic_id,invoice_number,issue_date,total,status").order("issue_date", { ascending: false }).limit(50000),
       fetchAll("products", "id,name,stock,reorder_level"),
       supabase.from("clinics").select("id,name,corporate_name").limit(50000),

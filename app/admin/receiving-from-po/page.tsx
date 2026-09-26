@@ -5,7 +5,7 @@
 // 商品名の手入力・PDF読取不要。分割入荷・部分入荷に完全対応。
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
 import Link from "next/link"
 
@@ -70,7 +70,7 @@ export default function ReceivingFromPoPage() {
       fetchAll("purchase_order_items", "id,purchase_order_id,product_id,product_name,quantity,unit_price,received_quantity,note"),
       supabase.from("suppliers").select("id,name").limit(1000),
       fetchAll("products", "id,stock,price"),
-      supabase.from("orders").select("id,clinic_id,status,total_price,delivery_number").limit(50000),
+      fetchAllData("orders", "id,clinic_id,status,total_price,delivery_number"),
       fetchAll("order_items", "order_id,product_id,quantity"),
       supabase.from("clinics").select("id,name").limit(1000),
     ])

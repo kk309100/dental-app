@@ -37,7 +37,10 @@ const NAV = [
   { id: "invoices",       href: "/admin/invoices",            label: "請求",       icon: Ic.sales,     group: "納品・請求" },
   { id: "sales",          href: "/admin/sales",               label: "売上",       icon: Ic.sales,     group: "納品・請求" },
 
-  // ④在庫・その他
+  // ④訪問管理
+  { id: "route-planner",  href: "/admin/route-planner",        label: "訪問ルート", icon: Ic.truck,     group: "訪問管理" },
+
+  // ⑤在庫・その他
   { id: "inventory",      href: "/admin/inventory",           label: "在庫",       icon: Ic.product,   group: "在庫・その他" },
   { id: "masters",        href: "/admin/masters",             label: "マスター",   icon: Ic.dash,      group: "在庫・その他" },
   { id: "repair-orders",  href: "/admin/repair-orders",        label: "修理依頼",   icon: Ic.wrench,    group: "在庫・その他" },
@@ -65,6 +68,9 @@ const SUB = [
   { href: "/admin/product-images",        label: "🖼 商品画像管理" },
   { href: "/admin/feedback",              label: "📋 修正依頼一覧" },
   { href: "/admin/clinic-reset",          label: "🗑 医院データリセット" },
+  { href: "/admin/route-planner/staff",   label: "訪問スタッフ名簿" },
+  { href: "/admin/route-planner/actuals", label: "訪問実績一覧" },
+  { href: "/admin/route-planner/hours",   label: "スタッフ別稼働時間" },
 ]
 
 // アクセントカラー

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
 import { COMPANY } from "@/lib/company"
@@ -58,7 +58,7 @@ export default function PurchaseOrderPage() {
     if (!opts?.silent) setLoading(true)
     // order_items・products は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [o, i, p, c] = await Promise.all([
-      supabase.from("orders").select("id,clinic_id,created_at,delivery_number").limit(50000),
+      fetchAllData("orders", "id,clinic_id,created_at,delivery_number"),
       fetchAll("order_items", "*"),
       fetchAll("products", "id,name,manufacturer,unit,cost"),
       supabase.from("clinics").select("id,name").limit(50000),

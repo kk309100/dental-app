@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllData } from "@/lib/supabase"
 import { calcBillingPeriod, calcDueDate, calcTax, generateInvoiceNumber, fmtYen, fmtDate, ymd } from "@/lib/invoice"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -42,7 +42,7 @@ export default function CreateInvoicePage() {
     setLoading(true)
     const [c, o] = await Promise.all([
       supabase.from("clinics").select("id,name,corporate_name,closing_day").order("name").limit(50000),
-      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,invoice_id").limit(50000),
+      fetchAllData("orders", "id,clinic_id,status,created_at,total_price,delivery_number,invoice_id"),
     ])
     setClinics(c.data || [])
     setOrders((o.data as Order[]) || [])

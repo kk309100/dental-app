@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllData } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 
@@ -53,7 +53,7 @@ export default function PurchaseOrdersListPage() {
     setLoading(true)
     const { data: s } = await supabase.from("suppliers").select("id,name").order("name").limit(50000)
     setSuppliers((s as Supplier[]) || [])
-    const { data: p, error } = await supabase.from("purchase_orders").select("*").order("created_at", { ascending: false }).limit(50000)
+    const { data: p, error } = await fetchAllData("purchase_orders", "*", (q: any) => q.order("created_at", { ascending: false }))
     if (error) { setTableMissing(true); setPos([]) }
     else setPos((p as PO[]) || [])
     // 商品別集計用に明細も取得（テーブル無い時はスキップ）

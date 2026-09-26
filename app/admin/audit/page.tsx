@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 
 type Tab = "receiving" | "delivery" | "stock"
@@ -56,7 +56,7 @@ export default function AuditPage() {
       fetchAll("stock_receipts", "*", (q: any) => q.gte("created_at", sinceStr).order("created_at", { ascending: false })),
       supabase.from("supplier_invoices").select("id,supplier_id,invoice_date,invoice_number,total_amount,status").gte("invoice_date", sinceStr).order("invoice_date", { ascending: false }).limit(10000),
       fetchAll("supplier_invoice_items", "id,invoice_id,product_name,quantity,unit_price"),
-      supabase.from("orders").select("id,clinic_id,status,total_price,delivery_number,created_at").gte("created_at", sinceStr).limit(50000),
+      fetchAllData("orders", "id,clinic_id,status,total_price,delivery_number,created_at", (q: any) => q.gte("created_at", sinceStr)),
       fetchAll("order_items", "id,order_id,product_id,product_name,quantity,price"),
       supabase.from("clinics").select("id,name").limit(1000),
     ])

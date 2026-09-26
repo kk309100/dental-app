@@ -8,7 +8,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 
 type Line = {
@@ -100,7 +100,7 @@ export default function OrderCsvImportPage() {
       const [p, cl, ex] = await Promise.all([
         fetchAll("products", "id,name,product_code,stock"),
         supabase.from("clinics").select("id,name,clinic_code").limit(50000),
-        supabase.from("orders").select("delivery_number").like("delivery_number", "EXT-%").limit(50000),
+        fetchAllData("orders", "id,delivery_number", (q: any) => q.like("delivery_number", "EXT-%")),
       ])
       setProducts((p as Product[]) || [])
       setClinics((cl.data as Clinic[]) || [])
@@ -244,7 +244,7 @@ export default function OrderCsvImportPage() {
     }
     setImporting(false)
     // 取込済みの再判定
-    const ex = await supabase.from("orders").select("delivery_number").like("delivery_number", "EXT-%").limit(50000)
+    const ex = await fetchAllData("orders", "id,delivery_number", (q: any) => q.like("delivery_number", "EXT-%"))
     setExistingNumbers(new Set((ex.data || []).map((o: { delivery_number: string }) => o.delivery_number)))
   }
 

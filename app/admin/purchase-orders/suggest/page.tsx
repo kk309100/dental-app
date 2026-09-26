@@ -73,7 +73,7 @@ function SuggestPOPage() {
       fetchAllData("order_items", "id,product_id,quantity,order_id"),
       // 全件取得→クライアントで「納品済」「納品済み」「キャンセル」「取消」を除外
       // PostgREST .not in は日本語値で 400 エラーになるため
-      supabase.from("orders").select("id,status,clinic_id").limit(50000),
+      fetchAllData("orders", "id,status,clinic_id"),
       fetchAll("stock_receipts", "id,product_id,supplier_id,quantity,unit_price,created_at", (q: any) => q.order("created_at", { ascending: false }).order("id", { ascending: true })).then((data: any[]) => ({ data })),
       supabase.from("purchase_orders").select("id,po_number,supplier_id,total_amount").eq("status", "下書き"),
       supabase.from("clinics").select("id,name").limit(50000),

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 import { forceAddOrderItemToPool } from "@/lib/po-pool"
@@ -67,7 +67,7 @@ function ShippingPage() {
     // order_items・products は件数が多いため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [o, i, p, c] = await Promise.all([
       // 全件取得 → クライアント側で EXCLUDE_STATUSES を除外（PostgREST .not in は日本語値で壊れる + 表記ゆれ吸収）
-      supabase.from("orders").select("id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note").order("created_at").limit(50000),
+      fetchAllData("orders", "id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note", (q: any) => q.order("created_at")),
       fetchAll("order_items", "id,order_id,product_id,product_name,quantity,price"),
       fetchAll("products", "id,name,stock,location,cost,price"),
       supabase.from("clinics").select("id,name,corporate_name,sales_rep").limit(50000),

@@ -11,6 +11,12 @@ export default function LoginPage() {
   const [adminMode, setAdminMode]   = useState(false)
   const [adminEmail, setAdminEmail] = useState("")
 
+  function redirectByRole(role: string | undefined) {
+    if (role === "admin") { router.push("/admin"); return }
+    if (role === "field") { router.push("/visit"); return }
+    router.push("/menu")
+  }
+
   async function handleLogin() {
     if (!password) return
     setLoading(true)
@@ -21,11 +27,11 @@ export default function LoginPage() {
       const { data, error } = await supabase.auth.signInWithPassword({ email: adminEmail.trim(), password })
       if (error) { alert("メールアドレスまたはパスワードが正しくありません。"); setLoading(false); return }
       const { data: profile } = await supabase.from("profiles").select("role").eq("id", data.user.id).single()
-      router.push(profile?.role === "admin" ? "/admin" : "/menu")
+      redirectByRole(profile?.role)
       return
     }
 
-    // 医院：パスワードのみ（login_code でメールを逆引き）
+    // 医院・訪問チーム：パスワードのみ（login_code でメールを逆引き）
     const { data: email, error: rpcError } = await supabase.rpc("get_email_by_login_code", {
       p_code: password.trim(),
     })
@@ -40,7 +46,7 @@ export default function LoginPage() {
     if (error) { alert("パスワードが正しくありません。"); setLoading(false); return }
 
     const { data: profile } = await supabase.from("profiles").select("role").eq("id", data.user.id).single()
-    router.push(profile?.role === "admin" ? "/admin" : "/menu")
+    redirectByRole(profile?.role)
   }
 
   return (

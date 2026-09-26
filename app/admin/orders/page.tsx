@@ -62,14 +62,14 @@ function AdminOrdersPage() {
   async function fetchData(opts?: { silent?: boolean }) {
     if (!opts?.silent) setLoading(true)
     const [o, i, c, pData, ph, pi] = await Promise.all([
-      supabase.from("orders").select("*").order("created_at", { ascending: false }).limit(50000),
+      fetchAllData("orders", "*", (q: any) => q.order("created_at", { ascending: false })),
       // .limit(50000) を付けてもサーバー側の上限で1000件に切られる（注文明細は1000件超）ため、全件ページング取得する
       fetchAllData("order_items", "*"),
       supabase.from("clinics").select("id,name,corporate_name").limit(50000),
       // products は1万件超あるため .limit() だけでは1000件上限に引っかかる → fetchAll でページング取得
       fetchAll("products", "id,name,stock,cost,price,manufacturer,location"),
       // 業務状態判定用: 「未入荷の発注」を検出するため
-      supabase.from("purchase_orders").select("id,status").limit(50000),
+      fetchAllData("purchase_orders", "id,status"),
       fetchAllData("purchase_order_items", "id,purchase_order_id,product_id,quantity,received_quantity,note"),
     ])
     const orders = (o.data as Order[]) || []
