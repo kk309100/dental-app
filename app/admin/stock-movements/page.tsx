@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { downloadCSV, toCSV } from "@/lib/csv"
 
@@ -42,8 +42,11 @@ export default function StockMovementsPage() {
 
   async function fetchData() {
     setLoading(true)
-    const { data: m, error } = await supabase.from("stock_movements").select("*").order("occurred_at", { ascending: false }).limit(2000)
-    if (error) { setTableMissing(true); setLoading(false); return }
+    // .limit(2000) を付けてもサーバー側の上限で1000件に切られるため、ページングで取得する（新しい順に最大5000件）
+    const probe = await supabase.from("stock_movements").select("id").limit(1)
+    if (probe.error) { setTableMissing(true); setLoading(false); return }
+    const all = await fetchAll("stock_movements", "*", (q: any) => q.order("occurred_at", { ascending: false }).order("id", { ascending: true }))
+    const m = all.slice(0, 5000)
     setMvmts((m as Mvmt[]) || [])
     const ids = Array.from(new Set((m as Mvmt[] || []).map(x => x.product_id)))
     if (ids.length > 0) {

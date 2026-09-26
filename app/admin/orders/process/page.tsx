@@ -8,7 +8,7 @@
 // ・全在庫不足 or 売上モードOFF → 準備中 + 発注プール
 
 import { useEffect, useMemo, useState } from "react"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { poolFromOrders, forceAddOrderItemToPool } from "@/lib/po-pool"
 import { fmtYen, calcTax, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
 import ManagedBadge from "@/app/components/ManagedBadge"
@@ -156,7 +156,8 @@ export default function OrderProcessPage() {
         .in("status", ["注文受付", "確認中"])
         .order("created_at", { ascending: true })
         .limit(200),
-      supabase.from("order_items").select("id,order_id,product_id,product_name,quantity,price").limit(50000),
+      // 注文明細は1000件を超えるため、全件ページング取得する（.limit だけだと新しい注文の明細が欠ける）
+      fetchAllData("order_items", "id,order_id,product_id,product_name,quantity,price"),
       // products は1万件超あるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
       fetchAll("products", "id,name,stock,location"),
       supabase.from("clinics").select("id,name,corporate_name").limit(50000),

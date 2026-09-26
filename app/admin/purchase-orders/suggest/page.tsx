@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { fetchSuppliersByUsage, supplierOptionLabel, type Supplier } from "@/lib/supplier-sort"
 
@@ -70,11 +70,11 @@ function SuggestPOPage() {
     const [pData, sups, oi, o, sr, dr, cl] = await Promise.all([
       fetchAll("products", "id,name,product_code,manufacturer,stock,reorder_level,cost,default_supplier_id"),
       fetchSuppliersByUsage("id,name"),
-      supabase.from("order_items").select("product_id,quantity,order_id").limit(50000),
+      fetchAllData("order_items", "id,product_id,quantity,order_id"),
       // 全件取得→クライアントで「納品済」「納品済み」「キャンセル」「取消」を除外
       // PostgREST .not in は日本語値で 400 エラーになるため
       supabase.from("orders").select("id,status,clinic_id").limit(50000),
-      supabase.from("stock_receipts").select("id,product_id,supplier_id,quantity,unit_price,created_at").order("created_at", { ascending: false }).limit(50000),
+      fetchAll("stock_receipts", "id,product_id,supplier_id,quantity,unit_price,created_at", (q: any) => q.order("created_at", { ascending: false }).order("id", { ascending: true })).then((data: any[]) => ({ data })),
       supabase.from("purchase_orders").select("id,po_number,supplier_id,total_amount").eq("status", "下書き"),
       supabase.from("clinics").select("id,name").limit(50000),
     ])

@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllData } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { confirmPoolPO, discardPoolPO } from "@/lib/po-pool"
 
@@ -63,11 +63,8 @@ export default function POPoolPage() {
 
     if (draftPOs.length > 0) {
       const ids = draftPOs.map(p => p.id)
-      const { data: itms } = await supabase
-        .from("purchase_order_items")
-        .select("*")
-        .in("purchase_order_id", ids)
-        .limit(50000)
+      // 発注明細は1000件に迫るため、.limit ではなく全件ページング取得する
+      const { data: itms } = await fetchAllData("purchase_order_items", "*", (q: any) => q.in("purchase_order_id", ids))
       const itemsData = (itms as POItem[]) || []
       setItems(itemsData)
       const productIds = Array.from(new Set(itemsData.map(i => i.product_id).filter((id): id is string => !!id)))

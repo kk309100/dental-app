@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { supabase, fetchAllData } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { downloadCSV, toCSV } from "@/lib/csv"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
@@ -31,7 +31,7 @@ export default function DeliveriesPage() {
     setLoading(true)
     const [o, i, c] = await Promise.all([
       supabase.from("orders").select("id,clinic_id,status,created_at,delivered_at,total_price,delivery_number,sales_rep,invoice_id").in("status", ["納品済み", "納品済"]).order("delivered_at", { ascending: false }).limit(50000),
-      supabase.from("order_items").select("id,order_id,product_name,quantity,price").limit(50000),
+      fetchAllData("order_items", "id,order_id,product_name,quantity,price"),
       supabase.from("clinics").select("id,name,corporate_name,payment_method").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])

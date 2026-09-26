@@ -9,7 +9,7 @@
 // 既存の purchase_orders.status="下書き" を「プール」として活用
 // 各明細の note に「[医院名] from 注文ID」を記録 → 医院納品先の追跡用
 
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 
 export type PoolItem = {
   product_id: string | null
@@ -145,14 +145,15 @@ export async function poolFromOrders(
   // products は件数が多い（1万件超）ため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
   const [oRes, oiRes, products, sRes, srRes, cRes, poItemsRes, posRes] = await Promise.all([
     supabase.from("orders").select("id,clinic_id").in("id", orderIds),
-    supabase.from("order_items").select("id,order_id,product_id,quantity,product_name,price").in("order_id", orderIds).limit(50000),
+    fetchAllData("order_items", "id,order_id,product_id,quantity,product_name,price", (q: any) => q.in("order_id", orderIds)),
     fetchAll("products", "id,name,stock,cost,default_supplier_id"),
     supabase.from("suppliers").select("id,name").limit(50000),
     // 過去仕入履歴（最新優先で仕入先決定）
-    supabase.from("stock_receipts").select("product_id,supplier_id,unit_price,created_at").order("created_at", { ascending: false }).limit(50000),
+    // 入荷記録は1000件を超えるため全件取得する（新しい順。同時刻の並びが安定するよう id でも並べる）
+    fetchAll("stock_receipts", "id,product_id,supplier_id,unit_price,created_at", (q: any) => q.order("created_at", { ascending: false }).order("id", { ascending: true })).then((data: any[]) => ({ data })),
     supabase.from("clinics").select("id,name").limit(50000),
     // 既に発注プールへ追加済みの明細を検出するため（ページ再読み込み後の二重追加防止）
-    supabase.from("purchase_order_items").select("note,purchase_order_id").not("note", "is", null).limit(50000),
+    fetchAllData("purchase_order_items", "id,note,purchase_order_id", (q: any) => q.not("note", "is", null)),
     supabase.from("purchase_orders").select("id,status").limit(50000),
   ])
 
