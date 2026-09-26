@@ -72,6 +72,7 @@ export default function AdminHomePage() {
     { href: "/admin/simulation",          label: "シミュレーション" },
     { href: "/admin/notices",             label: "お知らせ管理" },
     { href: "/admin/dashboard",           label: "分析ダッシュボード" },
+    { href: "/admin/health",              label: "🩺 データ点検" },
   ]
 
   return (
