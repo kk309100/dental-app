@@ -753,7 +753,6 @@ function NewOrderPage() {
               <div className="p-3 border-b border-gray-100">
                 <h3 className="text-sm font-bold mb-2">🏥 医院を選択</h3>
                 <input lang="ja"
-                  autoFocus
                   value={clinicSearchInPicker}
                   onChange={e => setClinicSearchInPicker(e.target.value)}
                   placeholder="医院名・医院コード・法人名で検索（カナ/半角全角OK）"
@@ -804,7 +803,6 @@ function NewOrderPage() {
           >
             <div className="p-3 border-b border-gray-100">
               <input lang="ja"
-                autoFocus
                 value={productSearch}
                 onChange={e => setProductSearch(e.target.value)}
                 placeholder="商品名・コード・メーカー・カテゴリで検索（カナ/半角全角OK）"
