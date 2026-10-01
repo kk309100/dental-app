@@ -126,12 +126,12 @@ function BulkPrint() {
         return (
           <main key={po.id} className="bg-white max-w-3xl mx-auto p-8 mb-8 print-page" style={{ pageBreakAfter: isLast ? "auto" : "always", minHeight: isLast ? undefined : "27cm" }}>
             <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
-              <h1 style={{ fontSize: 22, letterSpacing: "0.3em", margin: "16px 0 4px", textAlign: "center" }}>発 注 書</h1>
+              <h1 style={{ fontSize: 25, letterSpacing: "0.3em", margin: "16px 0 4px", textAlign: "center" }}>発 注 書</h1>
               <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {po.po_number || po.id.slice(0, 8)}</p>
             </header>
             <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
               <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: 18, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
+                <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
                   {sup?.name || "(仕入先未設定)"} 御中
                 </p>
                 {sup?.address && <p style={{ margin: "6px 0 0", fontSize: 11, color: "#666" }}>{sup.address}</p>}
@@ -196,7 +196,7 @@ function BulkPrint() {
           line-height: 1.5 !important;
         }
         .print-page.print-page h1 {
-          font-size: 22px !important;
+          font-size: 25px !important;
         }
         @media print {
           .no-print { display: none !important; }
