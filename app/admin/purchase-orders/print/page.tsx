@@ -126,19 +126,19 @@ function BulkPrint() {
         return (
           <main key={po.id} className="bg-white max-w-3xl mx-auto p-8 mb-8 print-page" style={{ pageBreakAfter: isLast ? "auto" : "always", minHeight: isLast ? undefined : "27cm" }}>
             <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
-              <h1 style={{ fontSize: 28, letterSpacing: "0.3em", margin: "20px 0 4px", textAlign: "center" }}>発 注 書</h1>
-              <p style={{ textAlign: "center", margin: 0, fontSize: 14, color: "#666" }}>No. {po.po_number || po.id.slice(0, 8)}</p>
+              <h1 style={{ fontSize: 22, letterSpacing: "0.3em", margin: "16px 0 4px", textAlign: "center" }}>発 注 書</h1>
+              <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {po.po_number || po.id.slice(0, 8)}</p>
             </header>
-            <div style={{ display: "flex", gap: 20, marginTop: 24 }}>
+            <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
               <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: 24, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
+                <p style={{ margin: 0, fontSize: 18, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
                   {sup?.name || "(仕入先未設定)"} 御中
                 </p>
-                {sup?.address && <p style={{ margin: "6px 0 0", fontSize: 14, color: "#666" }}>{sup.address}</p>}
-                {sup?.phone && <p style={{ margin: "2px 0 0", fontSize: 14, color: "#666" }}>TEL {sup.phone}{sup.fax && ` / FAX ${sup.fax}`}</p>}
+                {sup?.address && <p style={{ margin: "6px 0 0", fontSize: 11, color: "#666" }}>{sup.address}</p>}
+                {sup?.phone && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#666" }}>TEL {sup.phone}{sup.fax && ` / FAX ${sup.fax}`}</p>}
               </div>
-              <div style={{ flexShrink: 0, fontSize: 14, lineHeight: 1.6, position: "relative", paddingRight: 70 }}>
-                <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{COMPANY.name}</p>
+              <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.5, position: "relative", paddingRight: 70 }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{COMPANY.name}</p>
                 <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
                 <p style={{ margin: 0 }}>{COMPANY.address}</p>
                 <p style={{ margin: 0 }}>TEL {COMPANY.phone}</p>
@@ -146,7 +146,7 @@ function BulkPrint() {
                 <div style={{ position: "absolute", top: 0, right: 0 }}><Seal size={64} /></div>
               </div>
             </div>
-            <table style={{ width: "100%", marginTop: 16, borderCollapse: "collapse", fontSize: 15 }}>
+            <table style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 12 }}>
               <tbody>
                 <tr>
                   <td style={tdL}>発注日</td><td style={tdR}>{po.ordered_at ? parseDbDate(po.ordered_at).toLocaleDateString("ja-JP") : "—"}</td>
@@ -154,7 +154,7 @@ function BulkPrint() {
                 </tr>
               </tbody>
             </table>
-            <table style={{ width: "100%", marginTop: 16, borderCollapse: "collapse", fontSize: 15 }}>
+            <table style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr style={{ background: "#f3f4f6" }}>
                   <th style={th}>商品名</th>
@@ -167,17 +167,17 @@ function BulkPrint() {
                     <td style={tdC}>
                       {i.product_name}
                       {i.product_id && manufacturerByProduct.has(i.product_id) && (
-                        <span style={{ marginLeft: 6, fontSize: 11, color: "#888" }}>［{manufacturerByProduct.get(i.product_id)}］</span>
+                        <span style={{ marginLeft: 6, fontSize: 10, color: "#888" }}>［{manufacturerByProduct.get(i.product_id)}］</span>
                       )}
-                      {i.note && <p style={{ margin: "3px 0 0", fontSize: 11, color: "#999" }}>{noteForPrint(i.note, clinicCodeByName)}</p>}
+                      {i.note && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#999" }}>{noteForPrint(i.note, clinicCodeByName)}</p>}
                     </td>
                     <td style={{ ...tdC, textAlign: "right" }}>{i.quantity}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <p style={{ marginTop: 12, fontSize: 13, color: "#666" }}>※ 単価・金額は貴社見積書にてご確認ください。</p>
-            {po.note && <div style={{ marginTop: 16, padding: 10, background: "#f9fafb", borderRadius: 4, fontSize: 14, color: "#555" }}>備考: {po.note}</div>}
+            <p style={{ marginTop: 10, fontSize: 11, color: "#666" }}>※ 単価・金額は貴社見積書にてご確認ください。</p>
+            {po.note && <div style={{ marginTop: 12, padding: 8, background: "#f9fafb", borderRadius: 4, fontSize: 11, color: "#555" }}>備考: {po.note}</div>}
           </main>
         )
       })}
@@ -185,18 +185,18 @@ function BulkPrint() {
         /* ── admin-base.css の table/h1 強制スタイルを発注書印刷ページ内で上書き ── */
         .print-page.print-page table td,
         .print-page.print-page table th {
-          padding: 10px 8px !important;
-          font-size: 15px !important;
-          line-height: 1.6 !important;
+          padding: 7px 8px !important;
+          font-size: 12px !important;
+          line-height: 1.5 !important;
         }
         .print-page.print-page table td div,
         .print-page.print-page table td span,
         .print-page.print-page table td p {
-          font-size: 14px !important;
-          line-height: 1.6 !important;
+          font-size: 11px !important;
+          line-height: 1.5 !important;
         }
         .print-page.print-page h1 {
-          font-size: 28px !important;
+          font-size: 22px !important;
         }
         @media print {
           .no-print { display: none !important; }
@@ -218,7 +218,7 @@ function BulkPrint() {
   )
 }
 
-const th: React.CSSProperties = { padding: "10px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 15, lineHeight: 1.6, color: "#555" }
-const tdL: React.CSSProperties = { padding: "10px 8px", background: "#f9fafb", fontSize: 15, lineHeight: 1.6, color: "#555", width: 80, borderRight: "1px solid #eee" }
-const tdR: React.CSSProperties = { padding: "10px 8px", fontSize: 15, lineHeight: 1.6, color: "#111", borderRight: "1px solid #eee" }
-const tdC: React.CSSProperties = { padding: "10px 8px", fontSize: 16, lineHeight: 1.6 }
+const th: React.CSSProperties = { padding: "7px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 12, lineHeight: 1.5, color: "#555" }
+const tdL: React.CSSProperties = { padding: "7px 8px", background: "#f9fafb", fontSize: 12, lineHeight: 1.5, color: "#555", width: 80, borderRight: "1px solid #eee" }
+const tdR: React.CSSProperties = { padding: "7px 8px", fontSize: 12, lineHeight: 1.5, color: "#111", borderRight: "1px solid #eee" }
+const tdC: React.CSSProperties = { padding: "7px 8px", fontSize: 13, lineHeight: 1.5 }
