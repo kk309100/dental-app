@@ -156,6 +156,13 @@ function BulkPrint() {
             </table>
             <table className="po-items-table" style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 15 }}>
               <thead>
+                {/* ページをまたぐと印刷時にthead部分が各ページ先頭へ自動で繰り返されるため、
+                    ここに発注書番号を入れておくと2ページ目以降にも番号が出る */}
+                <tr>
+                  <th colSpan={2} style={{ padding: "2px 8px", textAlign: "left", fontSize: 11, fontWeight: 400, color: "#999", border: "none" }}>
+                    発注書 No. {po.po_number || po.id.slice(0, 8)}
+                  </th>
+                </tr>
                 <tr style={{ background: "#f3f4f6" }}>
                   <th style={thBig}>商品名</th>
                   <th style={{ ...thBig, textAlign: "right", width: 80 }}>数量</th>
