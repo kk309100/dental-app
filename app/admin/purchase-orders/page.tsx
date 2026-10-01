@@ -20,7 +20,7 @@ type PO = {
   created_at: string
 }
 type Supplier = { id: string; name: string }
-type POItem = { id: string; po_id: string; product_name: string | null; quantity: number; unit_price: number | null }
+type POItem = { id: string; purchase_order_id: string; product_name: string | null; quantity: number; unit_price: number | null }
 
 const STATUSES = ["下書き", "未送付", "発注済", "部分入荷", "入荷済", "取消"] as const
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -58,7 +58,7 @@ export default function PurchaseOrdersListPage() {
     else setPos((p as PO[]) || [])
     // 商品別集計用に明細も取得（テーブル無い時はスキップ）
     try {
-      const { data: items } = await supabase.from("purchase_order_items").select("id,po_id,product_name,quantity,unit_price").limit(50000)
+      const { data: items } = await fetchAllData("purchase_order_items", "id,purchase_order_id,product_name,quantity,unit_price")
       setPoItems((items as POItem[]) || [])
     } catch { setPoItems([]) }
     setLoading(false)
@@ -66,7 +66,21 @@ export default function PurchaseOrdersListPage() {
 
   const supplierName = (id: string | null) => id ? suppliers.find(s => s.id === id)?.name || "(削除済み)" : "(未指定)"
 
+  // 半角・全角・カナ・大文字小文字を統一して検索可能にする（商品名検索用）
+  const norm = (v: string) => String(v || "").normalize("NFKC").toLowerCase().replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
+
+  // 明細を発注書IDでグループ化
+  const itemsByPo = useMemo(() => {
+    const m = new Map<string, POItem[]>()
+    poItems.forEach(it => {
+      if (!m.has(it.purchase_order_id)) m.set(it.purchase_order_id, [])
+      m.get(it.purchase_order_id)!.push(it)
+    })
+    return m
+  }, [poItems])
+
   const filtered = useMemo(() => {
+    const k = norm(search)
     return pos.filter(p => {
       if (statusFilter === "active" && (p.status === "入荷済" || p.status === "取消")) return false
       if (statusFilter !== "active" && statusFilter !== "all" && p.status !== statusFilter) return false
@@ -74,10 +88,11 @@ export default function PurchaseOrdersListPage() {
       const dateStr = (p.ordered_at || p.created_at).slice(0, 10)
       if (from && dateStr < from) return false
       if (to && dateStr > to) return false
-      if (!search) return true
-      const k = search.toLowerCase()
-      const target = `${p.po_number || ""} ${supplierName(p.supplier_id)} ${p.note || ""}`.toLowerCase()
-      return target.includes(k)
+      if (!k) return true
+      const target = norm(`${p.po_number || ""} ${supplierName(p.supplier_id)} ${p.note || ""}`)
+      if (target.includes(k)) return true
+      // 商品名でも検索できるようにする
+      return (itemsByPo.get(p.id) || []).some(it => norm(it.product_name || "").includes(k))
     }).sort((a, b) => {
       const ad = a.ordered_at || a.created_at
       const bd = b.ordered_at || b.created_at
@@ -87,17 +102,7 @@ export default function PurchaseOrdersListPage() {
       if (sortBy === "amount_asc") return Number(a.total_amount || 0) - Number(b.total_amount || 0)
       return 0
     })
-  }, [pos, statusFilter, supplierFilter, from, to, sortBy, search, suppliers])
-
-  // 明細を発注書IDでグループ化
-  const itemsByPo = useMemo(() => {
-    const m = new Map<string, POItem[]>()
-    poItems.forEach(it => {
-      if (!m.has(it.po_id)) m.set(it.po_id, [])
-      m.get(it.po_id)!.push(it)
-    })
-    return m
-  }, [poItems])
+  }, [pos, statusFilter, supplierFilter, from, to, sortBy, search, suppliers, itemsByPo])
 
   // GroupViewTabs 用の行データ
   const groupRows: GroupableRow[] = useMemo(() => filtered.map(p => ({
@@ -162,7 +167,7 @@ export default function PurchaseOrdersListPage() {
       </div>
 
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="発注書No・仕入先・備考"
+        <input lang="ja" value={search} onChange={e => setSearch(e.target.value)} placeholder="発注書No・仕入先・備考・商品名で検索"
           className="flex-1 min-w-[180px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white" />
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
           className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
@@ -209,11 +214,16 @@ export default function PurchaseOrdersListPage() {
               <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-400">該当なし</td></tr>
             ) : filtered.map(p => {
               const sc = STATUS_COLORS[p.status] || STATUS_COLORS["下書き"]
+              const searchK = norm(search)
+              const matchedProduct = searchK ? (itemsByPo.get(p.id) || []).find(it => norm(it.product_name || "").includes(searchK)) : null
               return (
                 <tr key={p.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (selected.has(p.id) ? "bg-blue-100" : "")}>
                   <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSel(p.id)} /></td>
                   <td className="px-3 py-1.5 font-mono text-[12px] text-gray-700">{p.po_number || p.id.slice(0, 8)}</td>
-                  <td className="px-3 py-1.5">{supplierName(p.supplier_id)}</td>
+                  <td className="px-3 py-1.5">
+                    {supplierName(p.supplier_id)}
+                    {matchedProduct && <div className="text-[11px] text-blue-600 mt-0.5">🔍 {matchedProduct.product_name}</div>}
+                  </td>
                   <td className="px-2 py-1.5 text-center">
                     <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: sc.bg, color: sc.color }}>{p.status}</span>
                   </td>
