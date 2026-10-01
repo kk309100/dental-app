@@ -126,7 +126,7 @@ function BulkPrint() {
         return (
           <main key={po.id} className="bg-white max-w-3xl mx-auto p-8 mb-8 print-page" style={{ pageBreakAfter: isLast ? "auto" : "always", minHeight: isLast ? undefined : "27cm" }}>
             <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
-              <h1 style={{ fontSize: 25, letterSpacing: "0.3em", margin: "16px 0 4px", textAlign: "center" }}>発 注 書</h1>
+              <h1 style={{ fontSize: 27, letterSpacing: "0.3em", margin: "16px 0 4px", textAlign: "center" }}>発 注 書</h1>
               <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {po.po_number || po.id.slice(0, 8)}</p>
             </header>
             <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
@@ -154,24 +154,24 @@ function BulkPrint() {
                 </tr>
               </tbody>
             </table>
-            <table style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 12 }}>
+            <table className="po-items-table" style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 15 }}>
               <thead>
                 <tr style={{ background: "#f3f4f6" }}>
-                  <th style={th}>商品名</th>
-                  <th style={{ ...th, textAlign: "right", width: 80 }}>数量</th>
+                  <th style={thBig}>商品名</th>
+                  <th style={{ ...thBig, textAlign: "right", width: 80 }}>数量</th>
                 </tr>
               </thead>
               <tbody>
                 {its.map(i => (
                   <tr key={i.id} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={tdC}>
+                    <td style={tdCBig}>
                       {i.product_name}
                       {i.product_id && manufacturerByProduct.has(i.product_id) && (
-                        <span style={{ marginLeft: 6, fontSize: 10, color: "#888" }}>［{manufacturerByProduct.get(i.product_id)}］</span>
+                        <span style={{ marginLeft: 6, fontSize: 11, color: "#888" }}>［{manufacturerByProduct.get(i.product_id)}］</span>
                       )}
-                      {i.note && <p style={{ margin: "3px 0 0", fontSize: 10, color: "#999" }}>{noteForPrint(i.note, clinicCodeByName)}</p>}
+                      {i.note && <p style={{ margin: "3px 0 0", fontSize: 11, color: "#999" }}>{noteForPrint(i.note, clinicCodeByName)}</p>}
                     </td>
-                    <td style={{ ...tdC, textAlign: "right" }}>{i.quantity}</td>
+                    <td style={{ ...tdCBig, textAlign: "right" }}>{i.quantity}</td>
                   </tr>
                 ))}
               </tbody>
@@ -196,7 +196,16 @@ function BulkPrint() {
           line-height: 1.5 !important;
         }
         .print-page.print-page h1 {
-          font-size: 25px !important;
+          font-size: 27px !important;
+        }
+        .print-page.print-page table.po-items-table td,
+        .print-page.print-page table.po-items-table th {
+          font-size: 15px !important;
+        }
+        .print-page.print-page table.po-items-table td div,
+        .print-page.print-page table.po-items-table td span,
+        .print-page.print-page table.po-items-table td p {
+          font-size: 13px !important;
         }
         @media print {
           .no-print { display: none !important; }
@@ -222,3 +231,5 @@ const th: React.CSSProperties = { padding: "7px 8px", textAlign: "left", borderB
 const tdL: React.CSSProperties = { padding: "7px 8px", background: "#f9fafb", fontSize: 12, lineHeight: 1.5, color: "#555", width: 80, borderRight: "1px solid #eee" }
 const tdR: React.CSSProperties = { padding: "7px 8px", fontSize: 12, lineHeight: 1.5, color: "#111", borderRight: "1px solid #eee" }
 const tdC: React.CSSProperties = { padding: "7px 8px", fontSize: 13, lineHeight: 1.5 }
+const thBig: React.CSSProperties = { padding: "9px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 15, lineHeight: 1.5, color: "#555" }
+const tdCBig: React.CSSProperties = { padding: "9px 8px", fontSize: 15, lineHeight: 1.5 }
