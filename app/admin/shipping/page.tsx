@@ -9,7 +9,11 @@ import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components
 import { forceAddOrderItemToPool } from "@/lib/po-pool"
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; sales_rep?: string | null; note?: string | null }
-type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number }
+type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null }
+
+// 入荷済み（直送）として受け取った数は、自社在庫を使わないので、出荷時に在庫から引く数・在庫が足りるかの判定から除く
+const stockNeedOf = (it: { quantity: number; delivered_quantity?: number | null }) =>
+  Math.max(0, Number(it.quantity || 0) - Math.min(Number(it.delivered_quantity || 0), Number(it.quantity || 0)))
 type Product = { id: string; name: string; stock: number | null; location: string | null; cost: number | null; price: number | null }
 type Clinic = { id: string; name: string; corporate_name?: string | null; sales_rep?: string | null }
 
@@ -68,7 +72,7 @@ function ShippingPage() {
     const [o, i, p, c] = await Promise.all([
       // 全件取得 → クライアント側で EXCLUDE_STATUSES を除外（PostgREST .not in は日本語値で壊れる + 表記ゆれ吸収）
       fetchAllData("orders", "id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note", (q: any) => q.order("created_at")),
-      fetchAll("order_items", "id,order_id,product_id,product_name,quantity,price"),
+      fetchAll("order_items", "id,order_id,product_id,product_name,quantity,price,delivered_quantity"),
       fetchAll("products", "id,name,stock,location,cost,price"),
       supabase.from("clinics").select("id,name,corporate_name,sales_rep").limit(50000),
     ])
@@ -106,7 +110,7 @@ function ShippingPage() {
         if (!it.product_id) continue
         const stock = Number(productById.get(it.product_id)?.stock || 0)
         const usedSoFar = usedByProduct.get(it.product_id) || 0
-        const qty = Number(it.quantity || 0)
+        const qty = stockNeedOf(it)  // 入荷済み（直送）の分は在庫を使わない
         const usedAfter = usedSoFar + qty
         usedByProduct.set(it.product_id, usedAfter)
         map.set(it.id, usedAfter <= stock)
@@ -263,17 +267,20 @@ function ShippingPage() {
       const itsToShip = items.filter(it => orderIds.includes(it.order_id))
       for (const it of itsToShip) {
         if (!it.product_id) continue
+        // 入荷済み（直送）として受け取った分は在庫を通っていないので、在庫からは引かない（引くとマイナス在庫になる）
+        const deduct = stockNeedOf(it)
+        if (deduct <= 0) continue
         // 今回のバッチ処理で既に減算した分を差し引いた「現在の正しい在庫」を算出
         const prevDeducted = deductedQty.get(it.product_id) || 0
         const before = Number(productById.get(it.product_id)?.stock || 0) - prevDeducted
-        const after = before - Number(it.quantity)
-        deductedQty.set(it.product_id, prevDeducted + Number(it.quantity))
+        const after = before - deduct
+        deductedQty.set(it.product_id, prevDeducted + deduct)
         await supabase.from("products").update({ stock: after }).eq("id", it.product_id)
         try {
           await supabase.from("stock_movements").insert({
             product_id: it.product_id,
             movement_type: "出庫",
-            quantity: -Number(it.quantity),
+            quantity: -deduct,
             before_stock: before,
             after_stock: after,
             ref_type: "order_item",

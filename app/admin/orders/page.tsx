@@ -185,6 +185,30 @@ function AdminOrdersPage() {
     return ids
   }, [poHeads, poItems])
 
+  // 「在庫を使わずに発注した」明細（強制発注など）の発注数。注文明細IDの先頭8桁 → 発注数（取消した発注書は除く）。
+  // 発注書の備考に「明細xxxxxxxx」の目印が入っていることを利用する（発注プールへの追加時に必ず付く）。
+  const orderedQtyByItemPrefix = useMemo(() => {
+    const live = new Set(poHeads.filter(p => p.status !== "取消").map(p => p.id))
+    const m = new Map<string, number>()
+    poItems.forEach(it => {
+      if (!live.has(it.purchase_order_id)) return
+      const t = String(it.note || "").match(/明細([0-9a-f]{8})/i)
+      if (t) m.set(t[1].toLowerCase(), (m.get(t[1].toLowerCase()) || 0) + Number(it.quantity || 0))
+    })
+    return m
+  }, [poHeads, poItems])
+
+  // この明細で、入荷（直送）として受け取る数。
+  // 在庫が足りない行 … 不足数。
+  // 在庫が足りていても、在庫を使わず発注した行（強制発注など）… その発注数。それ以外は 0（入荷の対象外）。
+  function receiveNeedFor(it: OrderItem, stock: number): number {
+    const qty = Number(it.quantity || 0)
+    const shortfall = qty - Math.max(0, stock)
+    if (shortfall > 0) return shortfall
+    const ordered = orderedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0
+    return ordered > 0 ? Math.min(qty, ordered) : 0
+  }
+
   // 業務状態（一目で「次にやること」が分かるバッジ用）
   // delivered  : 納品済み（完了）
   // cancelled  : キャンセル
@@ -1001,13 +1025,13 @@ function AdminOrdersPage() {
                                         const p = it.product_id ? productById.get(it.product_id) : null
                                         const stock = Number(p?.stock || 0)
                                         const qty = Number(it.quantity || 0)
-                                        const shortfall = qty - Math.max(0, stock)  // 在庫がマイナスでも不足数は注文数を超えない
+                                        const need = receiveNeedFor(it, stock)  // 在庫が足りない行は不足数、在庫を使わず発注した行は発注数
                                         const deliveredSoFar = Number(it.delivered_quantity || 0)
                                         const enough = stock >= qty
-                                        const delivered = deliveredSoFar >= shortfall
-                                        return { it, enough, delivered, qty: Math.max(0, shortfall - deliveredSoFar) }
+                                        const delivered = deliveredSoFar >= need
+                                        return { it, enough, delivered, need, qty: Math.max(0, need - deliveredSoFar) }
                                       })
-                                      .filter(x => !x.enough && !x.delivered)
+                                      .filter(x => x.need > 0 && !x.delivered)
                                     const selectedInOrder = receivableItems.filter(x => receiveSelectedIds.has(x.it.id))
                                     return (
                                     <div className="overflow-x-auto">
@@ -1066,7 +1090,7 @@ function AdminOrdersPage() {
                                               <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                               <td className="px-1 py-0.5 text-center">
-                                                {!enough && Number(it.delivered_quantity || 0) >= (qty - Math.max(0, stock)) ? (
+                                                {receiveNeedFor(it, stock) > 0 && Number(it.delivered_quantity || 0) >= receiveNeedFor(it, stock) ? (
                                                   <div className="flex items-center gap-1 justify-center">
                                                     <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
                                                     <button
@@ -1075,8 +1099,8 @@ function AdminOrdersPage() {
                                                       className="text-[11px] px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                                                       title="間違えて入荷済みにした場合、取り消す">取消</button>
                                                   </div>
-                                                ) : !enough && (() => {
-                                                  const remaining = Math.max(0, (qty - Math.max(0, stock)) - Number(it.delivered_quantity || 0))
+                                                ) : receiveNeedFor(it, stock) > 0 && (() => {
+                                                  const remaining = Math.max(0, receiveNeedFor(it, stock) - Number(it.delivered_quantity || 0))
                                                   return (
                                                   <div className="flex items-center gap-1 justify-center">
                                                     <input type="checkbox"
@@ -1224,13 +1248,13 @@ function AdminOrdersPage() {
                                 const p = it.product_id ? productById.get(it.product_id) : null
                                 const stock = Number(p?.stock || 0)
                                 const qty = Number(it.quantity || 0)
-                                const shortfall = qty - Math.max(0, stock)  // 在庫がマイナスでも不足数は注文数を超えない
+                                const need = receiveNeedFor(it, stock)  // 在庫が足りない行は不足数、在庫を使わず発注した行は発注数
                                 const deliveredSoFar = Number(it.delivered_quantity || 0)
                                 const enough = stock >= qty
-                                const delivered = deliveredSoFar >= shortfall
-                                return { it, enough, delivered, qty: Math.max(0, shortfall - deliveredSoFar) }
+                                const delivered = deliveredSoFar >= need
+                                return { it, enough, delivered, need, qty: Math.max(0, need - deliveredSoFar) }
                               })
-                              .filter(x => !x.enough && !x.delivered)
+                              .filter(x => x.need > 0 && !x.delivered)
                             const selectedInOrder = receivableItems.filter(x => receiveSelectedIds.has(x.it.id))
                             return (
                             <div className="overflow-x-auto">
@@ -1288,7 +1312,7 @@ function AdminOrdersPage() {
                                     <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                     <td className="px-1 py-0.5 text-center">
-                                      {!enough && Number(it.delivered_quantity || 0) >= (qty - Math.max(0, stock)) ? (
+                                      {receiveNeedFor(it, stock) > 0 && Number(it.delivered_quantity || 0) >= receiveNeedFor(it, stock) ? (
                                         <div className="flex items-center gap-1 justify-center">
                                           <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
                                           <button
@@ -1297,8 +1321,8 @@ function AdminOrdersPage() {
                                             className="text-[11px] px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                                             title="間違えて入荷済みにした場合、取り消す">取消</button>
                                         </div>
-                                      ) : !enough && (() => {
-                                        const remaining = Math.max(0, (qty - Math.max(0, stock)) - Number(it.delivered_quantity || 0))
+                                      ) : receiveNeedFor(it, stock) > 0 && (() => {
+                                        const remaining = Math.max(0, receiveNeedFor(it, stock) - Number(it.delivered_quantity || 0))
                                         return (
                                         <div className="flex items-center gap-1 justify-center">
                                           <input type="checkbox"
