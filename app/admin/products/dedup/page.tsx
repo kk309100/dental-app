@@ -60,8 +60,6 @@ export default function DedupPage() {
     if (!window.confirm(`${targets.length}グループの重複商品を統合します。\n\n・注文/発注/見積/入荷などの履歴は、残す商品へ付け替えます\n・在庫は合算します\n・統合した商品は削除され、元に戻せません\n\nよろしいですか？`)) return
     setMerging(true)
     setMergeLog([])
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token ?? ""
     let ok = 0, ng = 0
     // 同時に4グループずつ処理する（グループ同士は別の商品なので互いに干渉しない）
     let next = 0
@@ -71,6 +69,9 @@ export default function DedupPage() {
       const keepId = keepChoice[g.key] ?? defaultKeep(g.rows)
       const removeIds = g.rows.map(r => r.id).filter(id => id !== keepId)
       try {
+        // 長い処理の途中でログインの有効期限が切れないよう、グループごとに最新のトークンを取得する
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token ?? ""
         const res = await fetch("/api/admin/products/merge", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
