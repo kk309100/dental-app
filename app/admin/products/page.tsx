@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useMemo, useRef, useState } from "react"
-import { supabase, fetchAll } from "@/lib/supabase"
+import { supabase, fetchAll, fetchInChunks } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { parseCSV, toCSV, downloadCSV } from "@/lib/csv"
 import ProductPriceMatrix from "@/app/components/ProductPriceMatrix"
@@ -44,6 +44,8 @@ export default function AdminProductsPage() {
   const [importMsg, setImportMsg] = useState("")
   const [showInactive, setShowInactive] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deleting, setDeleting] = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
   const [linking, setLinking] = useState(false)
   const [linkMsg, setLinkMsg] = useState("")
@@ -231,6 +233,54 @@ export default function AdminProductsPage() {
       ["商品名", "商品コード", "メーカー", "カテゴリ", "仕入価格", "定価", "発注点", "在庫", "棚番号", "ﾒｰｶｰ", "active"]
     )
     downloadCSV(`商品マスタ_${new Date().toISOString().slice(0, 10)}.csv`, csv)
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }
+
+  // 選択した商品を削除する。
+  // 注文・発注・見積・入荷・在庫履歴・医院在庫に使われている商品は、履歴が壊れるため削除せず残す
+  // （残した分は、希望すれば「廃番」にして一覧・注文画面から非表示にできる）。
+  // 履歴のない商品は、付随する単価・お気に入り・棚卸明細などと一緒に削除する。
+  async function deleteSelected() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!confirm(`選択した ${ids.length} 件の商品を削除します。\n\n・注文/発注/見積/入荷などの履歴がある商品は削除せず残します\n・削除した商品は元に戻せません\n\nよろしいですか？`)) return
+    setDeleting(true)
+    try {
+      const used = new Set<string>()
+      for (const t of ["order_items", "purchase_order_items", "quote_items", "stock_receipts", "stock_movements", "clinic_inventory_items"]) {
+        const { data } = await fetchInChunks(t, "id,product_id", "product_id", ids)
+        ;(data as { product_id: string }[]).forEach(r => used.add(r.product_id))
+      }
+      const deletable = ids.filter(id => !used.has(id))
+      const kept = ids.filter(id => used.has(id))
+      const deletedIds: string[] = []
+      for (let i = 0; i < deletable.length; i += 100) {
+        const chunk = deletable.slice(i, i + 100)
+        for (const t of ["stocktake_items", "clinic_prices", "supplier_prices", "favorites", "supplier_product_aliases"]) {
+          await supabase.from(t).delete().in("product_id", chunk)
+        }
+        const { error } = await supabase.from("products").delete().in("id", chunk)
+        if (error) { kept.push(...chunk) } else { deletedIds.push(...chunk) }
+      }
+      let msg = `✅ ${deletedIds.length} 件を削除しました。`
+      if (kept.length > 0) {
+        msg += `\n\n履歴があるため削除できなかった商品が ${kept.length} 件あります。\nこれらを「廃番」にして非表示にしますか？`
+        if (confirm(msg)) {
+          for (let i = 0; i < kept.length; i += 100) {
+            await supabase.from("products").update({ active: false }).in("id", kept.slice(i, i + 100))
+          }
+        }
+      } else {
+        alert(msg)
+      }
+      setSelectedIds(new Set())
+      await fetchProducts({ silent: true })
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function toggleActive(p: Product) {
@@ -441,11 +491,28 @@ export default function AdminProductsPage() {
         </label>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-3 py-2 rounded bg-red-50 text-sm" style={{ border: "1px solid #fecaca" }}>
+          <span className="font-bold text-red-700">{selectedIds.size} 件選択中</span>
+          <button onClick={deleteSelected} disabled={deleting}
+            className="px-3 py-1 rounded bg-red-600 text-white text-xs font-bold disabled:opacity-50">
+            {deleting ? "削除中…" : "選択した商品を削除"}
+          </button>
+          <button onClick={() => setSelectedIds(new Set(filtered.map(p => p.id)))} disabled={deleting} className="text-xs text-blue-700 underline">絞り込み中の全{filtered.length}件を選択</button>
+          <button onClick={() => setSelectedIds(new Set())} disabled={deleting} className="text-xs text-gray-600 underline">選択を解除</button>
+        </div>
+      )}
+
       {/* テーブル */}
       <div className="bg-white rounded overflow-auto" style={{ border: "1px solid #d0d0d0", maxHeight: "calc(100vh - 240px)" }}>
         <table className="w-full" style={{ borderCollapse: "collapse", fontSize: 13, minWidth: 900 }}>
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-100 text-[12px] text-gray-700 font-bold border-b-2 border-gray-300">
+              <th className="px-2 py-1.5 text-center w-8" style={td0}>
+                <input type="checkbox" title="表示中の商品をすべて選択（現在のページ）"
+                  checked={pageItems.length > 0 && pageItems.every(p => selectedIds.has(p.id))}
+                  onChange={(e) => setSelectedIds(prev => { const n = new Set(prev); pageItems.forEach(p => e.target.checked ? n.add(p.id) : n.delete(p.id)); return n })} />
+              </th>
               <th className="px-2 py-1.5 text-left" style={{ ...td0, minWidth: 160 }}>商品名</th>
               <th className="px-2 py-1.5 text-left w-24" style={td0}>コード</th>
               <th className="px-2 py-1.5 text-left w-28" style={td0}>メーカー</th>
@@ -461,10 +528,13 @@ export default function AdminProductsPage() {
           </thead>
           <tbody>
             {pageItems.length === 0 ? (
-              <tr><td colSpan={11} className="px-4 py-6 text-center text-gray-400">該当商品なし</td></tr>
+              <tr><td colSpan={12} className="px-4 py-6 text-center text-gray-400">該当商品なし</td></tr>
             ) : pageItems.map((p, i) => (
               <React.Fragment key={p.id}>
                 <tr className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/40") + (p.active === false ? " opacity-40" : "")}>
+                  <td className="px-2 py-1 text-center" style={td0}>
+                    <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
+                  </td>
                   <td className="px-2 py-1 text-[12px]" style={td0}>{p.name}</td>
                   <td className="px-2 py-1 text-[12px] text-gray-500 font-mono" style={td0}>{p.product_code || ""}</td>
                   <td className="px-2 py-1 text-[12px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
@@ -505,7 +575,7 @@ export default function AdminProductsPage() {
                 </tr>
                 {expandedPriceId === p.id && (
                   <tr>
-                    <td colSpan={11} className="p-0">
+                    <td colSpan={12} className="p-0">
                       <ProductPriceMatrix productId={p.id} productName={p.name} standardCost={p.cost} standardPrice={p.price} />
                     </td>
                   </tr>
