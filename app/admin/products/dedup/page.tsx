@@ -63,7 +63,11 @@ export default function DedupPage() {
     const { data: { session } } = await supabase.auth.getSession()
     const token = session?.access_token ?? ""
     let ok = 0, ng = 0
-    for (const g of targets) {
+    // 同時に4グループずつ処理する（グループ同士は別の商品なので互いに干渉しない）
+    let next = 0
+    const worker = async () => {
+    while (next < targets.length) {
+      const g = targets[next++]
       const keepId = keepChoice[g.key] ?? defaultKeep(g.rows)
       const removeIds = g.rows.map(r => r.id).filter(id => id !== keepId)
       try {
@@ -81,7 +85,11 @@ export default function DedupPage() {
         ng++
         setMergeLog(l => [...l, `❌ ${g.rows[0].name}: ${e.message}`])
       }
+      setMergeLog(l => l.filter(x => !x.startsWith("⏳")).concat(`⏳ 処理中… ${ok + ng}/${targets.length}`))
     }
+    }
+    await Promise.all([worker(), worker(), worker(), worker()])
+    setMergeLog(l => l.filter(x => !x.startsWith("⏳")))
     setMergeLog(l => [...l, ``, `✅ 完了: ${ok}グループ統合 / ${ng}グループエラー`])
     setMerging(false)
     await analyze()

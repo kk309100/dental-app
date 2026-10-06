@@ -49,23 +49,31 @@ export async function POST(request: NextRequest) {
     const { data: rem } = await admin.from("products").select("*").eq("id", rid).single()
     if (!rem) { errors.push(`${rid}: 統合元が見つかりません`); continue }
     try {
-      // 1) 履歴系は付け替え
-      for (const [t, col] of REPOINT_TABLES) {
+      // 1) 履歴系は付け替え（テーブルごとに並行して一括更新）
+      const repointErrors = await Promise.all(REPOINT_TABLES.map(async ([t, col]) => {
         const { error } = await admin.from(t).update({ [col]: keepId }).eq(col, rid)
-        if (error) throw new Error(`${t}: ${error.message}`)
-      }
-      // 2) 一意制約がありうるテーブルは行ごとに付け替え、衝突したら統合元の行を捨てる
-      for (const [t, col] of MERGE_ROWS_TABLES) {
+        return error ? `${t}: ${error.message}` : null
+      }))
+      const re = repointErrors.find(Boolean)
+      if (re) throw new Error(re)
+      // 2) 一意制約がありうるテーブルは、まず一括で付け替える。
+      //    一意制約に当たって失敗したテーブルだけ、行ごとに付け替え、衝突した行(keep側に同じものがある)は捨てる
+      const mergeErrors = await Promise.all(MERGE_ROWS_TABLES.map(async ([t, col]) => {
+        const bulk = await admin.from(t).update({ [col]: keepId }).eq(col, rid)
+        if (!bulk.error) return null
         const { data: rows, error: se } = await admin.from(t).select("id").eq(col, rid)
-        if (se) throw new Error(`${t}: ${se.message}`)
+        if (se) return `${t}: ${se.message}`
         for (const r of rows ?? []) {
           const { error } = await admin.from(t).update({ [col]: keepId }).eq("id", r.id)
           if (error) {
             const { error: de } = await admin.from(t).delete().eq("id", r.id)
-            if (de) throw new Error(`${t}: ${de.message}`)
+            if (de) return `${t}: ${de.message}`
           }
         }
-      }
+        return null
+      }))
+      const me = mergeErrors.find(Boolean)
+      if (me) throw new Error(me)
       // 3) 在庫を合算し、残す側が空の項目だけ統合元の値で補う
       const patch: Record<string, unknown> = { stock: Number(keep.stock || 0) + Number(rem.stock || 0) }
       for (const k of ["manufacturer", "category", "cost", "price", "reorder_level", "location", "purchase_maker", "default_supplier_id", "image_url"]) {
