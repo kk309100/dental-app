@@ -7,13 +7,18 @@ import { NextRequest, NextResponse } from "next/server"
 
 const SUPABASE_URL = "https://alcetorurdocopxatego.supabase.co"
 
-// 付け替えるだけでよいテーブル（重複して困る一意制約が無い履歴系）
-const REPOINT_TABLES = [
-  "order_items", "purchase_order_items", "quote_items", "stock_receipts",
-  "stock_movements", "clinic_inventory_items",
+// 付け替えるだけでよいテーブル（重複して困る一意制約が無い履歴系）。[テーブル, 商品IDの列]
+const REPOINT_TABLES: [string, string][] = [
+  ["order_items", "product_id"], ["purchase_order_items", "product_id"], ["quote_items", "product_id"],
+  ["stock_receipts", "product_id"], ["stock_movements", "product_id"], ["clinic_inventory_items", "product_id"],
+  ["inventory_logs", "product_id"], ["supplier_invoice_items", "matched_product_id"],
 ]
 // 一意制約がありうるテーブル: 付け替えを試み、keep 側に同じ行が既にあって失敗したら統合元の行は捨てる
-const MERGE_ROWS_TABLES = ["clinic_prices", "supplier_prices", "favorites", "supplier_product_aliases", "stocktake_items"]
+const MERGE_ROWS_TABLES: [string, string][] = [
+  ["clinic_prices", "product_id"], ["clinic_product_prices", "product_id"], ["supplier_prices", "product_id"],
+  ["product_suppliers", "product_id"], ["supplier_product_mappings", "product_id"], ["supplier_product_aliases", "product_id"],
+  ["favorites", "product_id"], ["stocktake_items", "product_id"], ["tooth_chart_template_items", "product_id"],
+]
 
 export async function POST(request: NextRequest) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -45,16 +50,16 @@ export async function POST(request: NextRequest) {
     if (!rem) { errors.push(`${rid}: 統合元が見つかりません`); continue }
     try {
       // 1) 履歴系は付け替え
-      for (const t of REPOINT_TABLES) {
-        const { error } = await admin.from(t).update({ product_id: keepId }).eq("product_id", rid)
+      for (const [t, col] of REPOINT_TABLES) {
+        const { error } = await admin.from(t).update({ [col]: keepId }).eq(col, rid)
         if (error) throw new Error(`${t}: ${error.message}`)
       }
       // 2) 一意制約がありうるテーブルは行ごとに付け替え、衝突したら統合元の行を捨てる
-      for (const t of MERGE_ROWS_TABLES) {
-        const { data: rows, error: se } = await admin.from(t).select("id").eq("product_id", rid)
+      for (const [t, col] of MERGE_ROWS_TABLES) {
+        const { data: rows, error: se } = await admin.from(t).select("id").eq(col, rid)
         if (se) throw new Error(`${t}: ${se.message}`)
         for (const r of rows ?? []) {
-          const { error } = await admin.from(t).update({ product_id: keepId }).eq("id", r.id)
+          const { error } = await admin.from(t).update({ [col]: keepId }).eq("id", r.id)
           if (error) {
             const { error: de } = await admin.from(t).delete().eq("id", r.id)
             if (de) throw new Error(`${t}: ${de.message}`)
@@ -70,6 +75,8 @@ export async function POST(request: NextRequest) {
       if (ue) throw new Error(`products更新: ${ue.message}`)
       keep.stock = patch.stock
       Object.assign(keep, patch)
+      // 途中で失敗して再実行になっても在庫が二重に加算されないよう、統合元の在庫は0にしておく
+      await admin.from("products").update({ stock: 0 }).eq("id", rid)
       // 4) 統合元を削除
       const { error: de } = await admin.from("products").delete().eq("id", rid)
       if (de) throw new Error(`削除: ${de.message}`)
