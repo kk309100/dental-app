@@ -358,6 +358,51 @@ function AdminOrdersPage() {
       setForcingItemId(null)
     }
   }
+  // 注文明細の入荷（直送）を、紐づく発注書の明細にも反映する。
+  // 発注書の明細は note に「明細xxxxxxxx」（注文明細IDの先頭8桁）を持っているので、それで紐づける。
+  // delta>0 … 入荷分を発注書の入荷数に加算 / delta<0 … 入荷の取消で減算。
+  // 発注書の状態（発注済 / 部分入荷 / 入荷済）も入荷数から再判定する。
+  async function syncPurchaseOrderReceipt(orderItemId: string, delta: number) {
+    if (!delta) return
+    const prefix = orderItemId.slice(0, 8).toLowerCase()
+    const { data: lines, error } = await supabase.from("purchase_order_items")
+      .select("id,purchase_order_id,quantity,received_quantity,note")
+      .ilike("note", `%明細${prefix}%`)
+    if (error || !lines || lines.length === 0) return
+    const { data: heads } = await supabase.from("purchase_orders")
+      .select("id,status").in("id", Array.from(new Set(lines.map(l => l.purchase_order_id))))
+    const liveIds = new Set((heads || []).filter(h => h.status !== "取消").map(h => h.id))
+    const targets = lines
+      .filter(l => liveIds.has(l.purchase_order_id))
+      .sort((a, b) => (delta > 0
+        ? (Number(a.received_quantity || 0) - Number(a.quantity)) - (Number(b.received_quantity || 0) - Number(b.quantity))
+        : Number(b.received_quantity || 0) - Number(a.received_quantity || 0)))
+    let left = Math.abs(delta)
+    const touched = new Set<string>()
+    for (const l of targets) {
+      if (left <= 0) break
+      const cur = Number(l.received_quantity || 0)
+      const room = delta > 0 ? Number(l.quantity) - cur : cur
+      const step = Math.min(left, Math.max(0, room))
+      if (step <= 0) continue
+      const next = delta > 0 ? cur + step : cur - step
+      const { error: ue } = await supabase.from("purchase_order_items").update({ received_quantity: next }).eq("id", l.id)
+      if (ue) continue
+      l.received_quantity = next
+      left -= step
+      touched.add(l.purchase_order_id)
+    }
+    for (const poId of touched) {
+      const { data: re } = await supabase.from("purchase_order_items").select("quantity,received_quantity").eq("purchase_order_id", poId)
+      if (!re || re.length === 0) continue
+      const all = re.every(r => Number(r.received_quantity || 0) >= Number(r.quantity))
+      const some = re.some(r => Number(r.received_quantity || 0) > 0)
+      const status = all ? "入荷済" : some ? "部分入荷" : "発注済"
+      const cur = heads?.find(h => h.id === poId)?.status
+      if (cur !== status && cur !== "未送付") await supabase.from("purchase_orders").update({ status }).eq("id", poId)
+    }
+  }
+
   // 明細行から直接その場で入荷。
   // ★在庫数は増やさない（素通り扱い）: この入荷はこの注文向けに個別発注したものを
   //   受け取ってそのまま医院へ渡す運用のため、共有の在庫数に足すと「在庫あり」判定が
@@ -393,6 +438,7 @@ function AdminOrdersPage() {
       const { error: oie } = await supabase.from("order_items")
         .update({ delivered_quantity: currentDelivered + qty }).eq("id", itemId)
       if (oie) { alert("入荷記録は保存されましたが、明細の更新に失敗しました: " + oie.message) }
+      else await syncPurchaseOrderReceipt(itemId, qty)
       alert(`✅ ${qty}個の入荷を記録しました（在庫には加算されません。医院へ直送扱いです）`)
       await fetchData({ silent: true })
     } finally {
@@ -406,8 +452,10 @@ function AdminOrdersPage() {
     if (!confirm("入荷済みを取り消しますか？")) return
     setReceivingItemId(itemId)
     try {
+      const prevDelivered = Number(orderItems.find(oi => oi.id === itemId)?.delivered_quantity || 0)
       const { error } = await supabase.from("order_items").update({ delivered_quantity: 0 }).eq("id", itemId)
       if (error) { alert("取消に失敗しました: " + error.message); return }
+      await syncPurchaseOrderReceipt(itemId, -prevDelivered)
       await fetchData({ silent: true })
     } finally {
       setReceivingItemId(null)
@@ -443,7 +491,8 @@ function AdminOrdersPage() {
         })
         // delivered_quantity は上書きではなく加算する（分割入荷対応）
         const currentDelivered = Number(orderItems.find(oi => oi.id === t.id)?.delivered_quantity || 0)
-        await supabase.from("order_items").update({ delivered_quantity: currentDelivered + qty }).eq("id", t.id)
+        const { error: boe } = await supabase.from("order_items").update({ delivered_quantity: currentDelivered + qty }).eq("id", t.id)
+        if (!boe) await syncPurchaseOrderReceipt(t.id, qty)
       }
       setReceiveSelectedIds(prev => { const n = new Set(prev); targets.forEach(t => n.delete(t.id)); return n })
       await fetchData({ silent: true })
