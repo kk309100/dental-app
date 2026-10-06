@@ -13,7 +13,11 @@ type Product = {
   cost: number | null
   active: boolean | null
   image_url: string | null
+  stock: number | null
 }
+
+// 商品名（全角半角・空白・大文字小文字の違いを無視）が同じで、コードだけ違う商品のグループ
+type MergeGroup = { key: string; rows: Product[] }
 
 type DupGroup = {
   name: string
@@ -35,8 +39,53 @@ export default function DedupPage() {
   const [fixLog, setFixLog]         = useState<string[]>([])
   const [done, setDone]             = useState(false)
   const [deleteIds, setDeleteIds]   = useState<Set<string>>(new Set())
+  const [mergeGroups, setMergeGroups] = useState<MergeGroup[]>([])
+  const [keepChoice, setKeepChoice]   = useState<Record<string, string>>({})   // group key → 残す商品ID
+  const [skipKeys, setSkipKeys]       = useState<Set<string>>(new Set())        // 統合しないグループ
+  const [merging, setMerging]         = useState(false)
+  const [mergeLog, setMergeLog]       = useState<string[]>([])
 
   useEffect(() => { analyze() }, [])
+
+  // 残す商品の初期候補: 自社発番(9999...)でない正規コード → 販売中 → 在庫が多い順
+  function defaultKeep(rows: Product[]): string {
+    const score = (p: Product) =>
+      (p.product_code && !/^9999/.test(p.product_code) ? 4 : p.product_code ? 2 : 0) + (p.active === false ? 0 : 1)
+    return rows.slice().sort((a, b) => score(b) - score(a) || Number(b.stock || 0) - Number(a.stock || 0))[0].id
+  }
+
+  async function runMerge(groups: MergeGroup[]) {
+    const targets = groups.filter(g => !skipKeys.has(g.key))
+    if (targets.length === 0) return
+    if (!window.confirm(`${targets.length}グループの重複商品を統合します。\n\n・注文/発注/見積/入荷などの履歴は、残す商品へ付け替えます\n・在庫は合算します\n・統合した商品は削除され、元に戻せません\n\nよろしいですか？`)) return
+    setMerging(true)
+    setMergeLog([])
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token ?? ""
+    let ok = 0, ng = 0
+    for (const g of targets) {
+      const keepId = keepChoice[g.key] ?? defaultKeep(g.rows)
+      const removeIds = g.rows.map(r => r.id).filter(id => id !== keepId)
+      try {
+        const res = await fetch("/api/admin/products/merge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ keepId, removeIds }),
+        })
+        const json = await res.json()
+        if (!res.ok || json.failed > 0) {
+          ng++
+          setMergeLog(l => [...l, `❌ ${g.rows[0].name}: ${json.error ?? (json.errors || []).join(" / ")}`])
+        } else ok++
+      } catch (e: any) {
+        ng++
+        setMergeLog(l => [...l, `❌ ${g.rows[0].name}: ${e.message}`])
+      }
+    }
+    setMergeLog(l => [...l, ``, `✅ 完了: ${ok}グループ統合 / ${ng}グループエラー`])
+    setMerging(false)
+    await analyze()
+  }
 
   async function analyze() {
     setLoading(true)
@@ -49,7 +98,7 @@ export default function DedupPage() {
     while (true) {
       const { data } = await supabase
         .from("products")
-        .select("id,name,product_code,manufacturer,category,price,cost,active,image_url")
+        .select("id,name,product_code,manufacturer,category,price,cost,active,image_url,stock")
         .range(from, from + 999)
         .order("name")
       if (!data || data.length === 0) break
@@ -87,6 +136,21 @@ export default function DedupPage() {
         odds.push({ name, rows })
       }
     }
+
+    // 名前の表記ゆれ（全角半角・空白）を無視した同名グループ → 統合候補
+    const nkey = (n: string) => n.normalize("NFKC").replace(/\s+/g, "").toLowerCase()
+    const nmap = new Map<string, Product[]>()
+    for (const p of all) {
+      if (!p.name) continue
+      const k = nkey(p.name)
+      if (!nmap.has(k)) nmap.set(k, [])
+      nmap.get(k)!.push(p)
+    }
+    const mgs: MergeGroup[] = []
+    nmap.forEach((rows, key) => { if (rows.length >= 2) mgs.push({ key, rows }) })
+    setMergeGroups(mgs)
+    setKeepChoice(Object.fromEntries(mgs.map(g => [g.key, defaultKeep(g.rows)])))
+    setSkipKeys(new Set())
 
     setDupGroups(dupes)
     setOddGroups(odds)
@@ -182,6 +246,75 @@ export default function DedupPage() {
           ))}
         </div>
       )}
+
+      {/* ── 統合（同名・コード違い。履歴は残す商品へ付け替え） ── */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 12, flexWrap: "wrap" }}>
+          <h2 style={{ fontSize: 16, fontWeight: "bold", color: "#111" }}>
+            🔗 同名・コード違いの商品を統合（{mergeGroups.length}グループ）
+          </h2>
+          {mergeGroups.length > 0 && (
+            <button
+              onClick={() => runMerge(mergeGroups)}
+              disabled={merging || mergeGroups.every(g => skipKeys.has(g.key))}
+              style={{
+                padding: "9px 22px", borderRadius: 8, border: "none",
+                background: merging ? "#d1d5db" : "#2563eb", color: "#fff", fontWeight: "bold", fontSize: 14,
+                cursor: merging ? "not-allowed" : "pointer",
+              }}
+            >
+              {merging ? "統合中…" : `選択した${mergeGroups.filter(g => !skipKeys.has(g.key)).length}グループをすべて統合`}
+            </button>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+          ● の商品を残し、ほかの商品の注文・発注・見積・入荷などの履歴を付け替えて、在庫を合算します。統合しないグループは「統合しない」にチェックしてください。
+        </div>
+
+        {mergeLog.length > 0 && (
+          <div style={{ background: "#111", borderRadius: 10, padding: "12px 14px", marginBottom: 12, fontFamily: "monospace", fontSize: 12, maxHeight: 160, overflowY: "auto" }}>
+            {mergeLog.map((l, i) => (
+              <div key={i} style={{ color: l.startsWith("❌") ? "#fca5a5" : l.startsWith("✅") ? "#86efac" : "#d1fae5", marginBottom: 2 }}>{l || " "}</div>
+            ))}
+          </div>
+        )}
+
+        {mergeGroups.length === 0 ? (
+          <div style={{ fontSize: 13, color: "#059669" }}>統合できる重複はありません。</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {mergeGroups.map((g, i) => {
+              const skipped = skipKeys.has(g.key)
+              const keepId = keepChoice[g.key] ?? defaultKeep(g.rows)
+              return (
+                <div key={g.key} style={{ background: "#fff", border: "1px solid #bfdbfe", borderRadius: 12, overflow: "hidden", opacity: skipped ? 0.5 : 1 }}>
+                  <div style={{ background: "#eff6ff", borderBottom: "1px solid #bfdbfe", padding: "8px 16px", fontSize: 12, fontWeight: 700, color: "#1e40af", display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <span>#{i + 1}　{g.rows[0].name}（{g.rows.length}件）</span>
+                    <label style={{ fontWeight: 400, cursor: "pointer" }}>
+                      <input type="checkbox" checked={skipped}
+                        onChange={() => setSkipKeys(prev => { const n = new Set(prev); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n })} />
+                      {" "}統合しない
+                    </label>
+                  </div>
+                  {g.rows.map(r => (
+                    <label key={r.id} style={{ display: "flex", alignItems: "center", padding: "8px 16px", gap: 12, fontSize: 12, borderBottom: "1px solid #f3f4f6", cursor: "pointer", background: r.id === keepId ? "#f0fdf4" : "#fff" }}>
+                      <input type="radio" name={`keep-${g.key}`} checked={r.id === keepId}
+                        onChange={() => setKeepChoice(prev => ({ ...prev, [g.key]: r.id }))} />
+                      <span style={{ background: r.id === keepId ? "#dcfce7" : "#f3f4f6", color: r.id === keepId ? "#166534" : "#6b7280", padding: "1px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700 }}>
+                        {r.id === keepId ? "残す" : "統合して削除"}
+                      </span>
+                      <span>コード: <strong>{r.product_code ?? "なし"}</strong></span>
+                      <span style={{ color: "#6b7280" }}>仕入 {r.cost?.toLocaleString() ?? "—"} / 定価 {r.price?.toLocaleString() ?? "—"}</span>
+                      <span style={{ color: "#6b7280" }}>在庫 {Number(r.stock || 0)}</span>
+                      <span style={{ color: r.active === false ? "#dc2626" : "#059669" }}>{r.active === false ? "廃番" : "販売中"}</span>
+                    </label>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {/* ── 重複グループ一覧 ── */}
       {dupGroups.length > 0 && (
