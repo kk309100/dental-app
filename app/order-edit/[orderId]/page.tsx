@@ -127,6 +127,68 @@ export default function OrderEditPage() {
     setSaving(false)
   }
 
+  // ─── 備考の編集 ───────────────────────────────────────────
+  const [noteDraft, setNoteDraft] = useState<string | null>(null)
+  const noteText = noteDraft ?? (order?.note || "")
+  const noteDirty = noteDraft !== null && noteDraft !== (order?.note || "")
+
+  async function saveNote() {
+    if (!canEditNow() || noteDraft === null) return
+    const tag = isAdmin ? "【担当者修正】" : "【医院修正】"
+    let text = noteDraft.trim()
+    if (!text.includes(tag)) text = tag + (text ? " " + text : "")
+    setSaving(true)
+    const { error } = await supabase.from("orders").update({ note: text }).eq("id", orderId)
+    setSaving(false)
+    if (error) { alert("備考の保存に失敗しました: " + error.message); return }
+    setOrder((prev: any) => ({ ...prev, note: text }))
+    setNoteDraft(null)
+  }
+
+  // ─── 商品違いの訂正（管理者のみ） ───────────────────────────
+  const [swapItemId, setSwapItemId] = useState<string | null>(null)
+  const [swapQuery, setSwapQuery]   = useState("")
+  const [swapResults, setSwapResults] = useState<any[]>([])
+  const [swapSearching, setSwapSearching] = useState(false)
+
+  useEffect(() => {
+    const q = swapQuery.trim().replace(/[%,()]/g, " ")
+    if (!swapItemId || q.length < 1) { setSwapResults([]); return }
+    const t = setTimeout(async () => {
+      setSwapSearching(true)
+      const { data } = await supabase.from("products")
+        .select("id,name,product_code,manufacturer,price")
+        .or(`name.ilike.%${q}%,product_code.ilike.%${q}%`)
+        .order("name").limit(20)
+      setSwapResults(data || [])
+      setSwapSearching(false)
+    }, 250)
+    return () => clearTimeout(t)
+  }, [swapQuery, swapItemId])
+
+  async function swapProduct(item: any, p: any) {
+    if (!canEditNow()) return
+    if (item.product_id === p.id) { setSwapItemId(null); return }
+    if (!confirm(`「${item.product_name || "商品名なし"}」を\n「${p.name}」に変更します。よろしいですか？`)) return
+    setSaving(true)
+    // 医院別単価があれば優先、無ければ商品の標準価格
+    let price = Number(p.price || 0)
+    if (order?.clinic_id) {
+      const { data: cp } = await supabase.from("clinic_prices").select("unit_price")
+        .eq("clinic_id", order.clinic_id).eq("product_id", p.id).maybeSingle()
+      if (cp && cp.unit_price != null) price = Number(cp.unit_price)
+    }
+    const { error } = await supabase.from("order_items")
+      .update({ product_id: p.id, product_name: p.name, price }).eq("id", item.id)
+    if (error) { setSaving(false); alert("商品の変更に失敗しました: " + error.message); return }
+    const updatedItems = items.map((i) => i.id === item.id ? { ...i, product_id: p.id, product_name: p.name, price } : i)
+    setItems(updatedItems)
+    await recalculateTotal(updatedItems)
+    await tagEditNote()
+    setSwapItemId(null); setSwapQuery(""); setSwapResults([])
+    setSaving(false)
+  }
+
   const totalPrice = items.reduce(
     (sum, i) => sum + Number(i.price || 0) * Number(i.quantity || 0), 0
   )
@@ -282,12 +344,11 @@ export default function OrderEditPage() {
           ) : (
             <div>
               {items.map((item, idx) => (
+                <div key={item.id} style={{ borderBottom: idx < items.length - 1 ? `1px solid ${C.border}` : "none" }}>
                 <div
-                  key={item.id}
                   style={{
                     display: "flex", alignItems: "center",
                     padding: "12px 16px",
-                    borderBottom: idx < items.length - 1 ? `1px solid ${C.border}` : "none",
                     gap: 12,
                   }}
                 >
@@ -308,6 +369,17 @@ export default function OrderEditPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* 商品違いの訂正（管理者のみ） */}
+                  {editable && isAdmin && (
+                    <button
+                      onClick={() => { setSwapItemId(swapItemId === item.id ? null : item.id); setSwapQuery(""); setSwapResults([]) }}
+                      disabled={saving}
+                      style={{ ...qBtn, width: "auto", padding: "0 8px", fontSize: 11, fontWeight: 700, color: C.accent, flexShrink: 0 }}
+                    >
+                      商品変更
+                    </button>
+                  )}
 
                   {/* 数量コントロール */}
                   {editable ? (
@@ -352,13 +424,40 @@ export default function OrderEditPage() {
                     </span>
                   )}
                 </div>
+                {swapItemId === item.id && (
+                  <div style={{ padding: "0 16px 14px" }}>
+                    <input
+                      type="text" autoComplete="off" value={swapQuery}
+                      onChange={(e) => setSwapQuery(e.target.value)}
+                      placeholder="正しい商品名・商品コードで検索"
+                      style={{ width: "100%", height: 38, padding: "0 10px", borderRadius: 8, border: `1.5px solid ${C.borderMid}`, fontSize: 14 }}
+                    />
+                    {swapSearching && <p style={{ margin: "6px 0 0", fontSize: 12, color: C.sub }}>検索中…</p>}
+                    {!swapSearching && swapQuery.trim() && swapResults.length === 0 && (
+                      <p style={{ margin: "6px 0 0", fontSize: 12, color: C.sub }}>該当する商品がありません</p>
+                    )}
+                    {swapResults.map((p) => (
+                      <button
+                        key={p.id} onClick={() => swapProduct(item, p)} disabled={saving}
+                        style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 10px", marginTop: 4, borderRadius: 8, border: `1px solid ${C.borderMid}`, background: "#fff", cursor: "pointer" }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{p.name}</span>
+                        <span style={{ display: "block", fontSize: 11, color: C.sub }}>
+                          {p.product_code ? `#${p.product_code} ` : ""}{p.manufacturer || ""}　標準 ¥{Number(p.price || 0).toLocaleString()}
+                        </span>
+                      </button>
+                    ))}
+                    <p style={{ margin: "8px 0 0", fontSize: 11, color: C.sub }}>※ 数量はそのまま、単価は医院別単価（無ければ標準価格）に更新されます。</p>
+                  </div>
+                )}
+                </div>
               ))}
             </div>
           )}
         </div>
 
         {/* ── 備考 ── */}
-        {order.note && (
+        {(order.note || editable) && (
           <div style={{
             background: "#fff", borderRadius: 12,
             border: `1px solid ${C.borderMid}`,
@@ -366,7 +465,31 @@ export default function OrderEditPage() {
             animation: "fadeUp 0.2s ease 0.1s both",
           }}>
             <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 700, color: C.sub }}>備考</p>
-            <p style={{ margin: 0, fontSize: 13, color: C.text, lineHeight: 1.6 }}>{order.note}</p>
+            {editable ? (
+              <>
+                <textarea
+                  value={noteText}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  disabled={saving}
+                  rows={3}
+                  placeholder="備考を入力"
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1.5px solid ${C.borderMid}`, fontSize: 14, lineHeight: 1.6, resize: "vertical" }}
+                />
+                <button
+                  onClick={saveNote}
+                  disabled={saving || !noteDirty}
+                  style={{
+                    marginTop: 8, padding: "9px 16px", borderRadius: 10, border: "none",
+                    background: noteDirty ? C.primary : "#d1d5db", color: "#fff",
+                    fontSize: 13, fontWeight: 700, cursor: noteDirty ? "pointer" : "default",
+                  }}
+                >
+                  備考を保存
+                </button>
+              </>
+            ) : (
+              <p style={{ margin: 0, fontSize: 13, color: C.text, lineHeight: 1.6 }}>{order.note}</p>
+            )}
           </div>
         )}
 
