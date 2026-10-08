@@ -194,6 +194,8 @@ export default function OrderEditPage() {
   )
   const totalQty   = items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
   const editable   = canEditNow()
+  // 管理者は注文管理へ、医院は注文履歴へ戻る（管理者が医院用の履歴画面に飛ばされてホームに戻される不具合の対策）
+  const backPath   = isAdmin ? "/admin/orders" : "/history"
 
   // ─── ローディング ──────────────────────────────────────────
   if (loading) return (
@@ -209,9 +211,9 @@ export default function OrderEditPage() {
   if (!order) return (
     <main style={{ padding: 20 }}>
       <p style={{ color: C.sub }}>注文が見つかりません。</p>
-      <button onClick={() => router.push("/history")} style={backBtnStyle}>
+      <button onClick={() => router.push(backPath)} style={backBtnStyle}>
         <ChevronLeft size={15} color={C.primary} strokeWidth={2.5} />
-        注文履歴へ戻る
+        {isAdmin ? "注文管理へ戻る" : "注文履歴へ戻る"}
       </button>
     </main>
   )
@@ -239,9 +241,9 @@ export default function OrderEditPage() {
         boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
       }}>
         <div style={{ display: "flex", alignItems: "center", padding: "10px 14px", gap: 8 }}>
-          <button onClick={() => router.push("/history")} style={backBtnStyle}>
+          <button onClick={() => router.push(backPath)} style={backBtnStyle}>
             <ChevronLeft size={15} color={C.primary} strokeWidth={2.5} />
-            履歴
+            {isAdmin ? "注文管理" : "履歴"}
           </button>
 
           <span style={{
@@ -495,7 +497,7 @@ export default function OrderEditPage() {
 
         {/* ── 戻るボタン ── */}
         <button
-          onClick={() => router.push("/history")}
+          onClick={() => router.push(backPath)}
           style={{
             width: "100%", padding: 14, borderRadius: 14,
             background: "#fff", color: C.sub,
@@ -505,7 +507,7 @@ export default function OrderEditPage() {
           }}
         >
           <ChevronLeft size={15} color={C.sub} strokeWidth={2.5} />
-          注文履歴へ戻る
+          {isAdmin ? "注文管理へ戻る" : "注文履歴へ戻る"}
         </button>
       </div>
     </main>
