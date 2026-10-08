@@ -70,6 +70,7 @@ export default function OrderEditPage() {
       alert("この注文は編集できません")
       return
     }
+    if (type === "minus" && Number(item.quantity || 0) <= 1 && !confirm(`「${item.product_name || "商品名なし"}」を注文から削除します。よろしいですか？`)) return
     setSaving(true)
 
     const newQuantity = type === "plus"
@@ -107,8 +108,11 @@ export default function OrderEditPage() {
 
   async function setQuantityDirect(item: any, val: string) {
     if (!canEditNow()) return
+    if (val.trim() === "") return
     const q = Number(val)
     if (isNaN(q) || q < 0) return
+    if (q === Number(item.quantity)) return
+    if (q === 0 && !confirm(`「${item.product_name || "商品名なし"}」を注文から削除します（数量0）。よろしいですか？`)) return
 
     setSaving(true)
     if (q === 0) {
@@ -399,8 +403,10 @@ export default function OrderEditPage() {
                       <input
                         type="number"
                         min="0"
-                        value={item.quantity}
-                        onChange={(e) => setQuantityDirect(item, e.target.value)}
+                        key={item.id + "-" + item.quantity}
+                        defaultValue={item.quantity}
+                        onBlur={(e) => { const v = e.target.value; if (v.trim() === "") e.target.value = String(item.quantity); else setQuantityDirect(item, v) }}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur() }}
                         disabled={saving}
                         style={{
                           width: 44, height: 36, textAlign: "center",
