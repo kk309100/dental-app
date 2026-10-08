@@ -105,13 +105,19 @@ function NewOrderPage() {
         // 仕入登録画面からの引き継ぎ（医院は未定のため標準価格を初期値にする）
         const pmap = new Map(((p as Product[]) || []).map(x => [x.id, x]))
         const rowsFromParam: Row[] = []
+        // 医院が指定されているとき（過去実績画面からの注文）は、医院別単価 → 指定単価(3つ目の値) → 標準価格の順で単価を決める
+        const cpmap = makeClinicPriceMap(cp)
         for (const s of prefillItems.split(";")) {
-          const [pid, q] = s.split(":")
+          const [pid, q, pr] = s.split(":")
           const prod = pmap.get(pid)
-          if (prod) rowsFromParam.push({ product_id: prod.id, product_name: prod.name, quantity: Number(q) || 1, price: Number(prod.price || 0) })
+          if (prod) {
+            const clinicPrice = initialClinicId ? cpmap.get(clinicPriceKey(initialClinicId, prod.id)) : undefined
+            const price = clinicPrice !== undefined ? clinicPrice : (pr && Number(pr) > 0 ? Number(pr) : Number(prod.price || 0))
+            rowsFromParam.push({ product_id: prod.id, product_name: prod.name, quantity: Number(q) || 1, price })
+          }
         }
         if (rowsFromParam.length > 0) setRows(rowsFromParam)
-        const recent = typeof window !== "undefined" ? localStorage.getItem(RECENT_CLINIC_KEY) : null
+        const recent = initialClinicId ? initialClinicId : (typeof window !== "undefined" ? localStorage.getItem(RECENT_CLINIC_KEY) : null)
         if (recent) {
           const cl = (c.data as Clinic[] | null)?.find(x => x.id === recent)
           if (cl) { setClinicId(cl.id); setClinicQuery(cl.name) }

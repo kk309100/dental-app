@@ -4,13 +4,14 @@
 // データは history_lines（今の注文・請求・売上集計とは別）。何も書き換えない。
 
 import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 
 type Clinic = { id: string; name: string }
 type Line = {
   id: number; slip_date: string; slip_no: string | null; kind: string
-  partner_name: string | null; item_code: string | null; item_name: string | null
+  partner_name: string | null; product_id: string | null; item_code: string | null; item_name: string | null
   unit_price: number | null; quantity: number | null; amount: number | null; memo: string | null
 }
 type Mode = "lines" | "products"
@@ -21,6 +22,8 @@ const today = () => new Date().toISOString().slice(0, 10)
 const yearsAgo = (n: number) => { const d = new Date(); d.setFullYear(d.getFullYear() - n); return d.toISOString().slice(0, 10) }
 
 export default function HistoryPage() {
+  const router = useRouter()
+  const [picked, setPicked] = useState<Record<string, number>>({})   // 注文に入れる商品ID → 数量
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [clinicId, setClinicId] = useState("")
   const [clinicSearch, setClinicSearch] = useState("")
@@ -47,10 +50,10 @@ export default function HistoryPage() {
 
   async function load() {
     if (!clinicId && !partnerText.trim()) { alert("医院を選ぶか、取引先名を入力してください"); return }
-    setLoading(true); setLoaded(false); setPage(1)
+    setLoading(true); setLoaded(false); setPage(1); setPicked({})
     const data = await fetchAll(
       "history_lines",
-      "id,slip_date,slip_no,kind,partner_name,item_code,item_name,unit_price,quantity,amount,memo",
+      "id,slip_date,slip_no,kind,partner_name,product_id,item_code,item_name,unit_price,quantity,amount,memo",
       (q: any) => {
         let b = q.gte("slip_date", from).lte("slip_date", to)
         if (kind !== "すべて") b = b.eq("kind", kind)
@@ -70,12 +73,12 @@ export default function HistoryPage() {
 
   // 商品別まとめ: 最終購入日・最終単価・回数・合計数量・合計金額
   const products = useMemo(() => {
-    const m = new Map<string, { name: string; code: string; last: string; lastPrice: number | null; count: number; qty: number; amount: number }>()
+    const m = new Map<string, { pid: string | null; name: string; code: string; last: string; lastPrice: number | null; count: number; qty: number; amount: number }>()
     for (const r of filtered) {
       const key = r.item_code || r.item_name || "?"
       const e = m.get(key)
       if (!e) {
-        m.set(key, { name: r.item_name || "", code: r.item_code || "", last: r.slip_date, lastPrice: r.unit_price, count: 1, qty: Number(r.quantity || 0), amount: Number(r.amount || 0) })
+        m.set(key, { pid: r.product_id, name: r.item_name || "", code: r.item_code || "", last: r.slip_date, lastPrice: r.unit_price, count: 1, qty: Number(r.quantity || 0), amount: Number(r.amount || 0) })
       } else {
         e.count++; e.qty += Number(r.quantity || 0); e.amount += Number(r.amount || 0)
         if (r.slip_date > e.last) { e.last = r.slip_date; e.lastPrice = r.unit_price }   // 行は日付降順なので通常は最初の行が最新
@@ -83,6 +86,14 @@ export default function HistoryPage() {
     }
     return Array.from(m.values()).sort((a, b) => b.last.localeCompare(a.last) || b.amount - a.amount)
   }, [filtered])
+
+  const pickedCount = Object.keys(picked).length
+  const prodByPid = useMemo(() => new Map(products.filter(p => p.pid).map(p => [p.pid as string, p])), [products])
+  function startOrder() {
+    if (!clinicId) return
+    const items = Object.entries(picked).map(([pid, q]) => `${pid}:${q}:${prodByPid.get(pid)?.lastPrice ?? ""}`).join(";")
+    router.push(`/admin/orders/new?clinic=${clinicId}&items=${encodeURIComponent(items)}`)
+  }
 
   const list = mode === "lines" ? filtered : products
   const pageItems = list.slice((page - 1) * PAGE, page * PAGE)
@@ -137,12 +148,23 @@ export default function HistoryPage() {
             <span className="text-xs text-gray-600">{filtered.length.toLocaleString()}行 ／ 商品 {products.length.toLocaleString()}種類 ／ 合計 {fmtYen(total)}</span>
           </div>
 
+          {mode === "products" && clinicId && kind === "売上" && (
+            <div className="flex flex-wrap items-center gap-3 px-3 py-2 rounded bg-emerald-50 text-sm" style={{ border: "1px solid #a7f3d0" }}>
+              <span className="text-xs text-gray-600">注文する商品にチェックを入れてください（DentHubの商品と照合できているものだけ選べます）</span>
+              <span className="font-bold text-emerald-700">{pickedCount} 商品選択中</span>
+              <button onClick={startOrder} disabled={pickedCount === 0}
+                className="px-3 py-1 rounded bg-emerald-600 text-white text-xs font-bold disabled:opacity-40">🛒 選んだ商品で注文を作成</button>
+              {pickedCount > 0 && <button onClick={() => setPicked({})} className="text-xs underline text-gray-600">選択を解除</button>}
+            </div>
+          )}
+
           <div className="bg-white border border-gray-300 rounded overflow-auto" style={{ maxHeight: "calc(100vh - 340px)" }}>
             {list.length === 0 ? (
               <div className="p-6 text-center text-gray-400 text-sm">該当する履歴がありません（期間や区分を変えてみてください）</div>
             ) : mode === "products" ? (
               <table className="w-full text-[12px]" style={{ borderCollapse: "collapse" }}>
                 <thead><tr>
+                  {clinicId && kind === "売上" && <th className={th + " w-28"}>注文</th>}
                   <th className={th}>商品名</th><th className={th + " w-32"}>コード</th><th className={th + " w-24"}>最終日</th>
                   <th className={th + " w-20 text-right"}>最終単価</th><th className={th + " w-14 text-right"}>回数</th>
                   <th className={th + " w-16 text-right"}>数量計</th><th className={th + " w-24 text-right"}>金額計</th>
@@ -150,6 +172,21 @@ export default function HistoryPage() {
                 <tbody>
                   {(pageItems as typeof products).map((p, i) => (
                     <tr key={p.code + p.name + i} className="border-b border-gray-100 hover:bg-blue-50/40">
+                      {clinicId && kind === "売上" && (
+                        <td className="px-2 py-1">
+                          {p.pid ? (
+                            <span className="inline-flex items-center gap-1">
+                              <input type="checkbox" checked={p.pid in picked}
+                                onChange={e => setPicked(prev => { const n = { ...prev }; if (e.target.checked) n[p.pid as string] = 1; else delete n[p.pid as string]; return n })} />
+                              {p.pid in picked && (
+                                <input type="number" min={1} value={picked[p.pid]}
+                                  onChange={e => setPicked(prev => ({ ...prev, [p.pid as string]: Math.max(1, Number(e.target.value) || 1) }))}
+                                  className="w-14 px-1 py-0.5 border border-gray-300 rounded text-right" />
+                              )}
+                            </span>
+                          ) : <span className="text-gray-300" title="DentHubの商品と照合できていません">—</span>}
+                        </td>
+                      )}
                       <td className="px-2 py-1">{p.name}</td>
                       <td className="px-2 py-1 font-mono text-gray-500">{p.code}</td>
                       <td className="px-2 py-1">{p.last}</td>
