@@ -583,20 +583,22 @@ function AdminOrdersPage() {
   // 納品済み・キャンセル以外の注文が対象。医院の絞り込みと検索ワードは反映する（状態の絞り込みは無視して常に未納品）。
   function exportUndeliveredCSV() {
     const k = norm(search)
+    // 検索ワードが納品書NO・医院名に当たった注文は全明細を出す。商品名・コードに当たった場合は、その商品の明細だけを出す
+    // （同じ注文の関係ない商品まで付いてきて邪魔にならないように）
+    const orderMatches = (o: Order) => norm(`${o.delivery_number || ""} ${clinicById.get(o.clinic_id)?.name || ""}`).includes(k)
+    const itemMatches = (it: OrderItem) => norm(`${it.product_name || ""} ${(it.product_id ? productById.get(it.product_id)?.product_code : "") || ""}`).includes(k)
     const jst = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
     const targets = orders
       .filter(o => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status))
       .filter(o => clinicFilter === "all" || o.clinic_id === clinicFilter)
-      .filter(o => {
-        if (!k) return true
-        const items = itemsByOrder.get(o.id) || []
-        return norm(`${o.delivery_number || ""} ${clinicById.get(o.clinic_id)?.name || ""} ${items.map(i => i.product_name || "").join(" ")}`).includes(k)
-      })
+      .filter(o => !k || orderMatches(o) || (itemsByOrder.get(o.id) || []).some(itemMatches))
       .slice()
       .sort((a, b) => (clinicById.get(a.clinic_id)?.name || "").localeCompare(clinicById.get(b.clinic_id)?.name || "", "ja") || a.created_at.localeCompare(b.created_at))
     const rows: Record<string, unknown>[] = []
     for (const o of targets) {
+      const orderHit = !k || orderMatches(o)
       for (const it of itemsByOrder.get(o.id) || []) {
+        if (!orderHit && !itemMatches(it)) continue
         const p = it.product_id ? productById.get(it.product_id) : null
         const qty = Number(it.quantity || 0)
         const price = Number(it.price || 0)
@@ -822,7 +824,7 @@ function AdminOrdersPage() {
         <Link href="/admin/shipping" className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">
           🚚 出荷準備
         </Link>
-        <button onClick={exportUndeliveredCSV} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded hover:bg-gray-50" title="未納品の注文明細をCSVに書き出します（医院・検索の絞り込みを反映）">
+        <button onClick={exportUndeliveredCSV} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded hover:bg-gray-50" title="未納品の注文明細をCSVに書き出します（医院の絞り込みと検索を反映。商品名で検索したときは、その商品の明細だけ）">
           📥 未納品CSV
         </button>
         {/* ビュー切替 */}
