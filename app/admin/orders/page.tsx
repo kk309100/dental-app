@@ -7,6 +7,7 @@ import Link from "next/link"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 import ManagedBadge from "@/app/components/ManagedBadge"
+import { toCSV, downloadCSV } from "@/lib/csv"
 import { poolFromOrders, addItemsToPool, removeFromUnassignedPool, forceAddOrderItemToPool, type PoolItem } from "@/lib/po-pool"
 
 export default function AdminOrdersPageWrapper() {
@@ -20,7 +21,7 @@ export default function AdminOrdersPageWrapper() {
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; invoice_id: string | null; source?: string | null; note?: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null }
 type Clinic = { id: string; name: string; corporate_name?: string | null }
-type Product = { id: string; name: string; stock: number | null; cost: number | null; price: number | null; manufacturer?: string | null; location?: string | null }
+type Product = { id: string; name: string; stock: number | null; cost: number | null; price: number | null; manufacturer?: string | null; product_code?: string | null; location?: string | null }
 type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null; note?: string | null }
 type POHead = { id: string; status: string }
 
@@ -67,7 +68,7 @@ function AdminOrdersPage() {
       fetchAllData("order_items", "*"),
       supabase.from("clinics").select("id,name,corporate_name").limit(50000),
       // products は1万件超あるため .limit() だけでは1000件上限に引っかかる → fetchAll でページング取得
-      fetchAll("products", "id,name,stock,cost,price,manufacturer,location"),
+      fetchAll("products", "id,name,product_code,stock,cost,price,manufacturer,location"),
       // 業務状態判定用: 「未入荷の発注」を検出するため
       fetchAllData("purchase_orders", "id,status"),
       fetchAllData("purchase_order_items", "id,purchase_order_id,product_id,quantity,received_quantity,note"),
@@ -578,6 +579,51 @@ function AdminOrdersPage() {
     })
   }, [orders, itemsByOrder, clinicById, search, statusFilter, clinicFilter, bizStateFilter, productById, orderedAwaitingReceipt, orderedAwaitingReceiptByItemId, orderedAwaitingReceiptByOrderId])
 
+  // 未納品の注文明細をCSVに書き出す（医院ごとに「何がまだ納品されていないか」を確認する用）。
+  // 納品済み・キャンセル以外の注文が対象。医院の絞り込みと検索ワードは反映する（状態の絞り込みは無視して常に未納品）。
+  function exportUndeliveredCSV() {
+    const k = norm(search)
+    const jst = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+    const targets = orders
+      .filter(o => !["納品済み", "納品済", "キャンセル", "取消"].includes(o.status))
+      .filter(o => clinicFilter === "all" || o.clinic_id === clinicFilter)
+      .filter(o => {
+        if (!k) return true
+        const items = itemsByOrder.get(o.id) || []
+        return norm(`${o.delivery_number || ""} ${clinicById.get(o.clinic_id)?.name || ""} ${items.map(i => i.product_name || "").join(" ")}`).includes(k)
+      })
+      .slice()
+      .sort((a, b) => (clinicById.get(a.clinic_id)?.name || "").localeCompare(clinicById.get(b.clinic_id)?.name || "", "ja") || a.created_at.localeCompare(b.created_at))
+    const rows: Record<string, unknown>[] = []
+    for (const o of targets) {
+      for (const it of itemsByOrder.get(o.id) || []) {
+        const p = it.product_id ? productById.get(it.product_id) : null
+        const qty = Number(it.quantity || 0)
+        const price = Number(it.price || 0)
+        let state = "在庫不足"
+        if (!it.product_id) state = "商品未登録"
+        else if (itemAvailability.get(it.id)) state = "在庫あり"
+        else if (orderedAwaitingReceipt.has(it.product_id)) state = "発注済・入荷待ち"
+        rows.push({
+          "医院名": clinicById.get(o.clinic_id)?.name || "",
+          "納品書NO": o.delivery_number || "",
+          "注文日": jst(o.created_at),
+          "注文状態": o.status,
+          "商品コード": p?.product_code || "",
+          "商品名": it.product_name || p?.name || "",
+          "数量": qty,
+          "単価": price,
+          "金額": qty * price,
+          "在庫": p ? Number(p.stock || 0) : "",
+          "状況": state,
+        })
+      }
+    }
+    if (rows.length === 0) { alert("書き出す未納品の明細がありません"); return }
+    const cols = ["医院名", "納品書NO", "注文日", "注文状態", "商品コード", "商品名", "数量", "単価", "金額", "在庫", "状況"]
+    downloadCSV(`未納品明細_${new Date().toISOString().slice(0, 10)}.csv`, toCSV(rows, cols))
+  }
+
   // 医院別グループ
   const byClinic = useMemo(() => {
     const m = new Map<string, Order[]>()
@@ -776,6 +822,9 @@ function AdminOrdersPage() {
         <Link href="/admin/shipping" className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700">
           🚚 出荷準備
         </Link>
+        <button onClick={exportUndeliveredCSV} className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-bold rounded hover:bg-gray-50" title="未納品の注文明細をCSVに書き出します（医院・検索の絞り込みを反映）">
+          📥 未納品CSV
+        </button>
         {/* ビュー切替 */}
         <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs">
           <button onClick={() => setView("byClinic")} className={"px-3 py-1.5 rounded font-bold " + (view === "byClinic" ? "bg-white shadow text-gray-900" : "text-gray-500")}>
