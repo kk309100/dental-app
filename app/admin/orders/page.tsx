@@ -622,8 +622,7 @@ function AdminOrdersPage() {
       }
     }
     if (rows.length === 0) { alert("書き出す未納品の明細がありません"); return }
-    // 確認用に必要な4項目だけを出す（商品名・注文日・数量・医院名）
-    const cols = ["商品名", "注文日", "数量", "医院名"]
+    const cols = ["医院名", "納品書NO", "注文日", "注文状態", "商品コード", "商品名", "数量", "単価", "金額", "在庫", "状況"]
     downloadCSV(`未納品明細_${new Date().toISOString().slice(0, 10)}.csv`, toCSV(rows, cols))
   }
 
