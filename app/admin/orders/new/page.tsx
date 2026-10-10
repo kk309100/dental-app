@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
@@ -75,13 +75,12 @@ function NewOrderPage() {
 
   useEffect(() => {
     (async () => {
-      const [c, p, cp] = await Promise.all([
+      const [c, cp] = await Promise.all([
         supabase.from("clinics").select("id,name,corporate_name,clinic_code").order("name").limit(50000),
-        fetchAll("products", "id,name,product_code,price,stock,manufacturer,category,location", (q) => q.order("name", { ascending: true })),
         fetchAllClinicPrices(),  // 医院別価格マスタ
       ])
+      const p: Product[] = []   // 商品は読み込まない（検索で取得し、products に溜める）
       setClinics((c.data as Clinic[]) || [])
-      setProducts((p as Product[]) || [])
       setClinicPrices(cp)
 
       // 過去注文コピー処理
@@ -217,18 +216,43 @@ function NewOrderPage() {
   // 商品ピッカー: NFKC + カタカナ統一で検索
   // 自社管理在庫の商品は、同名・類似商品が並ぶ中で選び間違えないよう検索結果の先頭に出す
   const isManaged = (p: Product) => p.location === "自社管理"
-  const filteredProducts = useMemo(() => {
-    const base = !productSearch
-      ? products.slice(0, 50)
-      : (() => {
-          const k = searchKey(productSearch)
-          return products.filter(p => {
-            const target = searchKey([p.name, p.product_code, p.manufacturer, p.category].filter(Boolean).join(" "))
-            return target.includes(k)
-          }).slice(0, 50)
-        })()
-    return [...base].sort((a, b) => Number(isManaged(b)) - Number(isManaged(a)))
-  }, [products, productSearch])
+  const PCOLS = "id,name,product_code,price,stock,manufacturer,category,location"
+  const [searchResults, setSearchResults] = useState<Product[]>([])
+  const searchSeq = useRef(0)
+  const searchActive = showProductPicker !== null || inlineOpenIdx !== null
+  useEffect(() => {
+    if (!searchActive) return
+    const seq = ++searchSeq.current
+    const t = setTimeout(async () => {
+      const tokens = nfkc(productSearch).split(/\s+/).map(x => x.replace(/[%,()]/g, "")).filter(Boolean)
+      let data: Product[] | null = null
+      if (tokens.length === 0) {
+        // 入力が無いときは、自社管理の商品を先頭に、名前順で50件
+        const r = await supabase.from("products").select(PCOLS).order("location", { ascending: false, nullsFirst: false }).order("name").limit(50)
+        data = r.error ? null : (r.data as Product[])
+      } else {
+        let q = supabase.from("products").select(PCOLS)
+        for (const tk of tokens) q = q.ilike("search_key", `%${kata(tk).replace(/\s+/g, "")}%`)
+        const r = await q.order("name").limit(50)
+        if (!r.error) data = r.data as Product[]
+        else {
+          // 検索用の列がまだ無い場合の代替（素の部分一致）
+          const raw0 = productSearch.trim().split(/s+/)[0].replace(/[%,()]/g, "")   // 入力そのまま（半角カナ等）と、正規化したものの両方で探す
+          const conds = Array.from(new Set([raw0, tokens[0]])).flatMap(t => [`name.ilike.%${t}%`, `product_code.ilike.%${t}%`, `manufacturer.ilike.%${t}%`]).join(",")
+          const r2 = await supabase.from("products").select(PCOLS).or(conds).order("name").limit(50)
+          data = r2.error ? [] : (r2.data as Product[])
+        }
+      }
+      if (seq !== searchSeq.current) return   // 古い検索結果は捨てる
+      const list = data || []
+      setSearchResults(list)
+      setProducts(prev => { const have = new Set(prev.map(x => x.id)); const add = list.filter(x => !have.has(x.id)); return add.length ? [...prev, ...add] : prev })
+    }, 220)
+    return () => clearTimeout(t)
+  }, [productSearch, searchActive])
+  const filteredProducts = useMemo(
+    () => [...searchResults].sort((a, b) => Number(isManaged(b)) - Number(isManaged(a))),
+    [searchResults])
 
   function pickClinic(name: string) {
     setClinicQuery(name)
