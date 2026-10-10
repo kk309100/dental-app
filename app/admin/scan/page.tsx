@@ -31,8 +31,25 @@ const FORMATS = [
 async function findProducts(code: string): Promise<Product[]> {
   const c = code.trim().replace(/[%,()]/g, "")
   if (!c) return []
-  const { data } = await supabase.from("products").select(COLS)
-    .or(`barcode.eq.${c},product_code.eq.${c}`).limit(5)
+  // 在庫ラベルのQR（inv:在庫品目ID）→ 在庫品目から商品を逆引き
+  if (c.startsWith("inv:")) {
+    const { data: it } = await supabase.from("clinic_inventory_items").select("product_id,barcode,product_name").eq("id", c.slice(4)).maybeSingle()
+    if (!it) return []
+    if (it.product_id) {
+      const { data } = await supabase.from("products").select(COLS).eq("id", it.product_id).limit(1)
+      if (data && data.length) return data as Product[]
+    }
+    if (it.barcode) return findProducts(String(it.barcode))
+    if (it.product_name) {
+      const { data } = await supabase.from("products").select(COLS).eq("name", it.product_name).limit(1)
+      return (data as Product[]) || []
+    }
+    return []
+  }
+  // 商品に登録したコード（barcode）を優先し、無ければ商品コード（JANなど）で探す
+  const { data: byBarcode } = await supabase.from("products").select(COLS).eq("barcode", c).limit(5)
+  if (byBarcode && byBarcode.length) return byBarcode as Product[]
+  const { data } = await supabase.from("products").select(COLS).eq("product_code", c).limit(5)
   return (data as Product[]) || []
 }
 
@@ -42,6 +59,7 @@ export default function AdminScanPage() {
   const [camError, setCamError] = useState("")
   const [last, setLast] = useState<Product | null>(null)
   const [notFound, setNotFound] = useState("")
+  const [misses, setMisses] = useState<string[]>([])   // 見つからなかったコード（原因調べ用に残す）
   const [rows, setRows] = useState<Row[]>([])
   const [manual, setManual] = useState("")
   const [results, setResults] = useState<Product[]>([])
@@ -59,12 +77,13 @@ export default function AdminScanPage() {
 
   async function handleCode(code: string) {
     const now = Date.now()
-    if (code === lastScan.current.code && now - lastScan.current.time < 2000) return   // 同じコードの連続読み取りを防ぐ
+    if (code === lastScan.current.code && now - lastScan.current.time < 3000) return   // 同じコードの連続読み取りを防ぐ
     lastScan.current = { code, time: now }
     const found = await findProducts(code)
     if (found.length === 0) {
       playBeep("error"); if (navigator.vibrate) navigator.vibrate([80, 50, 80])
       setNotFound(code); setLast(null)
+      setMisses(prev => prev.includes(code) ? prev : [code, ...prev].slice(0, 8))
       return
     }
     playBeep("success"); if (navigator.vibrate) navigator.vibrate(60)
@@ -137,6 +156,13 @@ export default function AdminScanPage() {
       {camError && <p className="text-sm text-red-600">{camError}</p>}
 
       {/* 読み取り結果 */}
+      {misses.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-2 text-[12px] text-amber-800">
+          <div className="font-bold">見つからなかったコード（{misses.length}件）</div>
+          <div className="font-mono break-all">{misses.join("　/　")}</div>
+          <button onClick={() => setMisses([])} className="underline mt-1">消す</button>
+        </div>
+      )}
       {notFound && (
         <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-700">
           ⚠ 「{notFound}」に一致する商品が見つかりません。
