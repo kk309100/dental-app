@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── スマホ（管理画面）: 入力欄を押しやすく・iOSの自動拡大を防ぐ ── */
+@media (max-width: 767px) {
+  .admin-main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  .admin-main select,
+  .admin-main textarea {
+    font-size: 16px;      /* 16px未満だと iPhone で入力時に画面が勝手に拡大される */
+    min-height: 40px;
+  }
+  .admin-main input[type="checkbox"],
+  .admin-main input[type="radio"] {
+    width: 20px;
+    height: 20px;
+  }
+  .admin-main { -webkit-text-size-adjust: 100%; }
+}

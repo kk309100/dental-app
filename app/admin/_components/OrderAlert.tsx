@@ -114,7 +114,17 @@ export default function OrderAlert() {
   return (
     <>
       {/* ON/OFF トグルボタン（フィードバックボタンの上に配置） */}
-      <div className="no-print" style={{ position: "fixed", right: 16, bottom: 138, zIndex: 40 }}>
+      <style>{`
+        @media (max-width: 767px) {
+          .fab { right: 10px !important; }
+          .fab-alert { bottom: calc(64px + env(safe-area-inset-bottom) + 62px) !important; }
+          .fab-fb { bottom: calc(64px + env(safe-area-inset-bottom) + 12px) !important; }
+          .fab button { width: 44px; height: 44px; padding: 0 !important; justify-content: center; opacity: 0.92; position: relative; }
+          .fab-label { display: none; }
+          .fab button span:not(.fab-label) { position: absolute; top: -4px; right: -4px; }
+        }
+      `}</style>
+      <div className="no-print fab fab-alert" style={{ position: "fixed", right: 16, bottom: 138, zIndex: 40 }}>
         <button
           onClick={toggleEnabled}
           title={enabled ? "新着注文アラート：ON（クリックでOFF）" : "新着注文アラート：OFF（クリックでON）"}
@@ -126,7 +136,7 @@ export default function OrderAlert() {
             fontSize: 13, fontWeight: 700,
             boxShadow: enabled ? "0 4px 16px rgba(5,150,105,0.4)" : "0 4px 16px rgba(0,0,0,0.15)",
           }}>
-          {enabled ? "🔔 注文アラートON" : "🔕 注文アラートOFF"}
+          {enabled ? "🔔" : "🔕"}<span className="fab-label">{enabled ? " 注文アラートON" : " 注文アラートOFF"}</span>
         </button>
       </div>
 

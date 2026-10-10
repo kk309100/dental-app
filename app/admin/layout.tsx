@@ -390,7 +390,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <OrderAlert />
 
       {/* ── フィードバックボタン（固定・印刷時非表示） ── */}
-      <div className="no-print" style={{ position: "fixed", right: 16, bottom: 80, zIndex: 40 }}>
+      <div className="no-print fab fab-fb" style={{ position: "fixed", right: 16, bottom: 80, zIndex: 40 }}>
         {!feedbackOpen && (
           <button
             onClick={() => { setFeedbackOpen(true); setFeedbackText(""); setFeedbackPriority("中"); setFeedbackSaved(false) }}
@@ -403,7 +403,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               fontSize: 13, fontWeight: 700,
               boxShadow: "0 4px 16px rgba(124,58,237,0.4)",
             }}>
-            📝 修正メモ
+            📝<span className="fab-label"> 修正メモ</span>
             {feedbackPendingCount > 0 && (
               <span style={{ background: "#ef4444", color: "#fff", borderRadius: 999, fontSize: 11, fontWeight: 800, padding: "1px 6px", marginLeft: 2 }}>
                 {feedbackPendingCount}
