@@ -75,6 +75,7 @@ export default function AdminHomePage() {
     { href: "/admin/health",              label: "🩺 データ点検" },
     { href: "/admin/history",             label: "📚 過去実績" },
     { href: "/admin/billing/seishin",     label: "🧾 清新への請求書" },
+    { href: "/admin/scan",                label: "📷 スキャン" },
   ]
 
   return (

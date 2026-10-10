@@ -400,7 +400,7 @@ function ScanReceive() {
         >
           ← メニュー
         </button>
-        <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>📷 バーコードスキャン</h1>
+        <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>📷 QRコード・バーコードスキャン</h1>
       </div>
 
       {/* モード切替 */}

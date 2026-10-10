@@ -39,6 +39,7 @@ const NAV = [
 
   // ④在庫・その他
   { id: "inventory",      href: "/admin/inventory",           label: "在庫",       icon: Ic.product,   group: "在庫・その他" },
+  { id: "scan",           href: "/admin/scan",                label: "📷 スキャン", icon: Ic.product,   group: "在庫・その他" },
   { id: "masters",        href: "/admin/masters",             label: "マスター",   icon: Ic.dash,      group: "在庫・その他" },
   { id: "repair-orders",  href: "/admin/repair-orders",        label: "修理依頼",   icon: Ic.wrench,    group: "在庫・その他" },
   { id: "notices",        href: "/admin/notices",             label: "お知らせ",   icon: Ic.dash,      group: "在庫・その他" },
