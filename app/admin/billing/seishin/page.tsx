@@ -31,7 +31,7 @@ export default function SeishinBillingPage() {
   const [orders, setOrders] = useState<Ord[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [loading, setLoading] = useState(true)
-  const [basis, setBasis] = useState<"all" | "app">("all")          // 全注文 / 医院アプリ経由のみ（source が admin 以外）
+  const [basis, setBasis] = useState<"all" | "app">("app")          // 全注文 / 医院アプリ経由のみ（source が admin 以外）
   const [unit, setUnit] = useState(2400)
   const [maint, setMaint] = useState(5000)
   const [excluded, setExcluded] = useState<Set<string>>(new Set())   // 請求に含めない医院
@@ -109,8 +109,8 @@ export default function SeishinBillingPage() {
           <label>医院ごとの月額 <input value={unit} onChange={e => setUnit(num(e.target.value))} className={inp + " w-24 text-right"} />円</label>
           <label>稼働の判定
             <select value={basis} onChange={e => setBasis(e.target.value as "all" | "app")} className={inp + " ml-1"}>
+              <option value="app">医院アプリから注文した医院のみ（通常はこちら）</option>
               <option value="all">注文が1件でもある医院（スタッフ入力も含む）</option>
-              <option value="app">医院アプリから注文した医院のみ</option>
             </select>
           </label>
         </div>
