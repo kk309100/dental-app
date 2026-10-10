@@ -59,6 +59,15 @@ export default function AdminProductsPage() {
   const [dupInfo, setDupInfo] = useState<{ dupCodes: number; dupNames: number } | null>(null)
   const [checkingDup, setCheckingDup] = useState(false)
   const allCache = useRef<Product[] | null>(null)
+  // 商品マスター（データランド）から、使う商品に追加する
+  type MasterItem = { id: string; item_code: string; jan: string | null; maker_kana: string | null; name: string; list_price: number | null }
+  const [showMaster, setShowMaster] = useState(false)
+  const [masterQ, setMasterQ] = useState("")
+  const [masterResults, setMasterResults] = useState<MasterItem[]>([])
+  const [masterLoading, setMasterLoading] = useState(false)
+  const [addedMasterIds, setAddedMasterIds] = useState<Set<string>>(new Set())   // 追加済みのマスター品目
+  const [adding, setAdding] = useState<string | null>(null)
+  const masterSeq = useRef(0)
   const querySeq = useRef(0)
 
   // 全商品が必要な機能（CSV取込・出力、仕入先の自動リンク、重複チェック）用。使うときだけ読み込む
@@ -77,6 +86,54 @@ export default function AdminProductsPage() {
       setCategories(["すべて", ...Array.from(new Set(rows.map(r => r.category).filter(c => c && c.trim() !== "")))])
     })
   }, [])
+
+  // マスター検索（入力が止まってから、サーバーで検索）
+  useEffect(() => {
+    if (!showMaster) return
+    const seq = ++masterSeq.current
+    const t = setTimeout(async () => {
+      const kataOf = (x: string) => x.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
+      const tokens = String(masterQ).normalize("NFKC").toLowerCase().split(/\s+/).map(x => x.replace(/[%,()]/g, "")).filter(Boolean)
+      if (tokens.length === 0) { setMasterResults([]); return }
+      setMasterLoading(true)
+      let q = supabase.from("master_products").select("id,item_code,jan,maker_kana,name,list_price")
+      for (const tk of tokens) q = q.ilike("search_key", `%${kataOf(tk)}%`)
+      const { data } = await q.order("name").limit(40)
+      if (seq !== masterSeq.current) return
+      const list = (data as MasterItem[]) || []
+      setMasterResults(list)
+      // すでに使う商品へ追加済み（紐づいている）品目を調べる
+      if (list.length > 0) {
+        const { data: linked } = await supabase.from("products").select("master_product_id").in("master_product_id", list.map(x => x.id))
+        if (seq === masterSeq.current) setAddedMasterIds(new Set(((linked as { master_product_id: string }[]) || []).map(x => x.master_product_id)))
+      }
+      setMasterLoading(false)
+    }, 250)
+    return () => clearTimeout(t)
+  }, [masterQ, showMaster])
+
+  async function addFromMaster(m: MasterItem) {
+    setAdding(m.id)
+    // 同じ商品コードの商品がすでにある場合は、二重に登録せず、その商品にマスターを紐づける
+    const { data: dup } = await supabase.from("products").select("id,name").eq("product_code", m.item_code).limit(1)
+    if (dup && dup.length > 0) {
+      if (confirm(`商品コード ${m.item_code} の商品「${dup[0].name}」がすでにあります。\nこの商品に、マスターの品目を紐づけますか？（新しくは追加しません）`)) {
+        await supabase.from("products").update({ master_product_id: m.id }).eq("id", dup[0].id)
+        setAddedMasterIds(prev => new Set(prev).add(m.id))
+      }
+      setAdding(null)
+      return
+    }
+    const { error } = await supabase.from("products").insert({
+      name: m.name, product_code: m.item_code, manufacturer: m.maker_kana || null,
+      price: m.list_price && m.list_price > 0 ? m.list_price : null,
+      stock: 0, active: true, master_product_id: m.id,
+    })
+    if (error) { alert("追加に失敗しました: " + error.message); setAdding(null); return }
+    setAddedMasterIds(prev => new Set(prev).add(m.id))
+    setAdding(null)
+    fetchProducts({ silent: true })
+  }
 
   // 絞り込み条件が変わったら、1ページ目から取り直す（検索は入力が止まってから）
   useEffect(() => {
@@ -469,6 +526,12 @@ export default function AdminProductsPage() {
             style={{ background: "#2563eb", color: "#fff", border: "1px solid #2563eb" }}>
             ＋ 新規追加
           </button>
+          <button onClick={() => { setShowMaster(true); setMasterQ("") }}
+            className="text-sm px-3 py-1.5 rounded font-bold"
+            style={{ background: "#fff7ed", color: "#9a3412", border: "1px solid #fed7aa" }}
+            title="データランドの商品マスターから探して、使う商品に追加します">
+            📚 マスターから追加
+          </button>
           <button onClick={autoLinkSuppliers} disabled={linking}
             className="text-sm px-3 py-1.5 rounded font-bold"
             style={{ background: linking ? "#d1fae5" : "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0", cursor: linking ? "not-allowed" : "pointer" }}
@@ -639,6 +702,46 @@ export default function AdminProductsPage() {
       )}
 
       {/* 編集モーダル */}
+      {showMaster && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-2" onClick={() => setShowMaster(false)}>
+          <div className="bg-white w-full max-w-2xl rounded-t-2xl sm:rounded-lg flex flex-col h-[88vh] sm:h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="p-3 border-b border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-sm">📚 商品マスター（データランド）から追加</h3>
+                <button onClick={() => setShowMaster(false)} className="text-xs text-gray-500 underline">閉じる</button>
+              </div>
+              <input autoFocus value={masterQ} onChange={e => setMasterQ(e.target.value)} lang="ja"
+                placeholder="商品名・品目コード・JANで検索（ひらがな・全角・半角OK）"
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm" />
+              <p className="text-[11px] text-gray-500 mt-1">約25.7万品目から探せます。「追加」を押すと、使う商品（在庫0）として登録され、マスターと紐づきます。</p>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {masterLoading && <p className="p-3 text-xs text-gray-400">検索中…</p>}
+              {!masterLoading && masterQ.trim() && masterResults.length === 0 && <p className="p-6 text-center text-sm text-gray-400">該当するマスター品目がありません</p>}
+              {masterResults.map(m => {
+                const added = addedMasterIds.has(m.id)
+                return (
+                  <div key={m.id} className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-gray-900">{m.name}</div>
+                      <div className="text-[11px] text-gray-500 font-mono">{m.item_code}{m.jan ? `　JAN ${m.jan}` : ""}　{m.maker_kana || ""}　{m.list_price ? `定価 ¥${Number(m.list_price).toLocaleString()}` : ""}</div>
+                    </div>
+                    {added ? (
+                      <span className="text-[11px] font-bold px-2 py-1 rounded bg-gray-100 text-gray-500 shrink-0">追加済み</span>
+                    ) : (
+                      <button onClick={() => addFromMaster(m)} disabled={adding === m.id}
+                        className="shrink-0 text-xs font-bold px-3 rounded bg-emerald-600 text-white disabled:opacity-50" style={{ minHeight: 40 }}>
+                        {adding === m.id ? "追加中…" : "＋ 追加"}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {editProduct && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 50,
