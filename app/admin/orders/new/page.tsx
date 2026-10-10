@@ -546,6 +546,20 @@ function NewOrderPage() {
           </div>
         )}
         {clinicId && productHistory.length > 0 && (
+          <div className="sm:hidden mt-1">
+            <div className="text-[12px] font-bold text-gray-600 mb-1">⭐ よく注文する商品（タップで追加）</div>
+            <div className="flex gap-2 overflow-x-auto pb-1" style={{ WebkitOverflowScrolling: "touch" }}>
+              {productHistory.slice().sort((a, b) => b.times - a.times).slice(0, 12).map((h, idx) => (
+                <button key={h.product_id || `chip-${idx}`} onClick={() => addProductFromHistory(h)}
+                  className="shrink-0 rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 text-[13px] font-bold px-3"
+                  style={{ minHeight: 40, maxWidth: 220 }} title={h.product_name}>
+                  <span className="block truncate">＋ {h.product_name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {clinicId && productHistory.length > 0 && (
           <div className="mt-1">
             <button onClick={() => setShowHistory(s => !s)} className="text-xs text-blue-600 hover:underline">
               {showHistory ? "▼" : "▶"} この医院の商品注文履歴から検索・追加（{productHistory.length}品目）
@@ -683,12 +697,18 @@ function NewOrderPage() {
               {r.product_id && productById.get(r.product_id)?.manufacturer && (
                 <p className="text-xs text-gray-400 -mt-1">［{productById.get(r.product_id)!.manufacturer}］</p>
               )}
-              <div className="grid grid-cols-3 gap-2">
-                <div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="col-span-2">
                   <label style={{ fontSize: 12 }} className="text-gray-500">数量</label>
-                  <input type="number" value={r.quantity}
-                    onChange={e => updateRow(idx, { quantity: Number(e.target.value) })}
-                    className="w-full px-2 py-2 border border-gray-200 rounded text-base text-right" min={0} />
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => updateRow(idx, { quantity: Math.max(0, Number(r.quantity || 0) - 1) })}
+                      className="rounded-lg border border-gray-300 bg-white text-xl font-bold" style={{ width: 52, height: 48 }}>−</button>
+                    <input type="number" inputMode="numeric" value={r.quantity}
+                      onChange={e => updateRow(idx, { quantity: Number(e.target.value) })}
+                      className="flex-1 min-w-0 px-2 border border-gray-200 rounded-lg text-xl font-bold text-center" style={{ height: 48 }} min={0} />
+                    <button type="button" onClick={() => updateRow(idx, { quantity: Number(r.quantity || 0) + 1 })}
+                      className="rounded-lg border border-gray-300 bg-white text-xl font-bold" style={{ width: 52, height: 48 }}>＋</button>
+                  </div>
                 </div>
                 <div>
                   <label style={{ fontSize: 12 }} className="text-gray-500">単価</label>
@@ -729,12 +749,16 @@ function NewOrderPage() {
       </div>
 
       {/* 保存 */}
-      <div className="flex items-center justify-end gap-2 pt-2 sticky bottom-2 bg-gray-50/80 backdrop-blur p-2 rounded-lg">
+      <div className="flex items-center justify-end gap-2 pt-2 sticky bottom-[72px] sm:bottom-2 z-20 bg-gray-50/90 backdrop-blur p-2 rounded-lg">
+        <div className="sm:hidden mr-auto leading-tight">
+          <div className="text-[11px] text-gray-500">合計</div>
+          <div className="text-lg font-bold tabular-nums">{fmtYen(total)}</div>
+        </div>
         <Link href="/admin/orders" className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">キャンセル</Link>
         <button
           onClick={save}
           disabled={saving || !clinicId || rows.filter(r => r.product_name && r.quantity > 0).length === 0}
-          className="px-5 py-3 sm:py-2 text-sm font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          className="px-5 py-3 sm:py-2 text-sm font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed" style={{ minHeight: 48 }}
         >
           {saving ? "保存中…" : paperMode && status === "納品済み" ? (backfill ? "✓ 登録して次へ" : "✓ 登録して納品書を発行") : "✓ 注文を作成"}
         </button>
@@ -753,7 +777,7 @@ function NewOrderPage() {
             onClick={() => setShowClinicPicker(false)}
           >
             <div
-              className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col"
+              className="bg-white rounded-t-2xl sm:rounded-lg w-full max-w-2xl max-h-[92vh] sm:max-h-[80vh] h-[88vh] sm:h-auto flex flex-col"
               onClick={e => e.stopPropagation()}
             >
               <div className="p-3 border-b border-gray-100">
@@ -780,7 +804,7 @@ function NewOrderPage() {
                         setClinicSearchInPicker("")
                         if (typeof window !== "undefined") localStorage.setItem(RECENT_CLINIC_KEY, c.id)
                       }}
-                      className={"w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100 " + (clinicId === c.id ? "bg-blue-100" : "")}
+                      className={"w-full text-left px-3 py-3 sm:py-2 hover:bg-blue-50 border-b border-gray-100 " + (clinicId === c.id ? "bg-blue-100" : "")}
                     >
                       <p className="text-sm font-bold text-gray-900">{c.name}{c.clinic_code && <span className="text-xs font-normal text-gray-400 ml-1">#{c.clinic_code}</span>}</p>
                       {c.corporate_name && <p className="text-xs text-gray-500">{c.corporate_name}</p>}
@@ -804,7 +828,7 @@ function NewOrderPage() {
           onClick={() => setShowProductPicker(null)}
         >
           <div
-            className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col"
+            className="bg-white rounded-t-2xl sm:rounded-lg w-full max-w-2xl max-h-[92vh] sm:max-h-[80vh] h-[88vh] sm:h-auto flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <div className="p-3 border-b border-gray-100">
@@ -827,7 +851,7 @@ function NewOrderPage() {
                   <button
                     key={p.id}
                     onClick={() => pickProduct(showProductPicker, p)}
-                    className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100"
+                    className="w-full text-left px-3 py-3 sm:py-2 hover:bg-blue-50 border-b border-gray-100"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div>
