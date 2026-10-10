@@ -104,6 +104,16 @@ function NewOrderPage() {
       } else if (prefillItems) {
         // 仕入登録画面からの引き継ぎ（医院は未定のため標準価格を初期値にする）
         const pmap = new Map(((p as Product[]) || []).map(x => [x.id, x]))
+        // 全商品の読み込みが途中で失敗・欠けた場合（回線が遅いスマホなど）でも、引き継いだ商品を取りこぼさないよう、
+        // 引き継ぎ対象の商品はIDで直接取得して補う
+        const wantIds = prefillItems.split(";").map(x => x.split(":")[0]).filter(Boolean)
+        const missing = wantIds.filter(id => !pmap.has(id))
+        if (missing.length > 0) {
+          const { data: extra } = await supabase.from("products")
+            .select("id,name,product_code,price,stock,manufacturer,category,location").in("id", missing)
+          ;((extra as Product[]) || []).forEach(x => pmap.set(x.id, x))
+          if (extra && extra.length > 0) setProducts(prev => [...prev, ...(extra as Product[]).filter(x => !prev.some(y => y.id === x.id))])
+        }
         const rowsFromParam: Row[] = []
         // 医院が指定されているとき（過去実績画面からの注文）は、医院別単価 → 指定単価(3つ目の値) → 標準価格の順で単価を決める
         const cpmap = makeClinicPriceMap(cp)
@@ -117,6 +127,7 @@ function NewOrderPage() {
           }
         }
         if (rowsFromParam.length > 0) setRows(rowsFromParam)
+        if (rowsFromParam.length < wantIds.length) alert(`引き継いだ商品のうち ${wantIds.length - rowsFromParam.length} 件は、商品が見つからず追加できませんでした。`)
         const recent = initialClinicId ? initialClinicId : (typeof window !== "undefined" ? localStorage.getItem(RECENT_CLINIC_KEY) : null)
         if (recent) {
           const cl = (c.data as Clinic[] | null)?.find(x => x.id === recent)
