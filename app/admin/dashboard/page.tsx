@@ -187,7 +187,7 @@ export default function AdminDashboard() {
             { href: "/admin/purchase-order", label: "発注書" },
             { href: "/admin/products", label: "商品編集" },
             { href: "/admin/inventory", label: "在庫管理" },
-            { href: "/admin/barcodes", label: "バーコード" },
+            { href: "/admin/barcodes", label: "QRコード" },
           ].map((l) => (
             <Link key={l.href} href={l.href} className="px-3 py-2 rounded text-gray-600 hover:bg-gray-50 hover:text-gray-900">
               {l.label}

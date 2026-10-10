@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
-import Barcode from "react-barcode"
+import { QRCodeSVG } from "qrcode.react"   // 商品コード（products.barcode の値）をQRコードにする。スキャン画面は QR 読み取りに対応済み
 
 export default function BarcodePage() {
   const [products, setProducts] = useState<any[]>([])
@@ -29,7 +29,7 @@ export default function BarcodePage() {
     setGenMsg("")
     const noBarcode = scopedProducts.filter(p => !p.barcode)
     if (noBarcode.length === 0) {
-      setGenMsg("すべての商品にバーコードが設定済みです")
+      setGenMsg("すべての商品にQRコードが設定済みです")
       setGenerating(false)
       return
     }
@@ -41,7 +41,7 @@ export default function BarcodePage() {
       const { error } = await supabase.from("products").update({ barcode: code }).eq("id", p.id)
       if (!error) success++
     }
-    setGenMsg(`${success}件のバーコードを生成しました`)
+    setGenMsg(`${success}件のQRコードを生成しました`)
     await fetchProducts()
     setGenerating(false)
   }
@@ -51,7 +51,7 @@ export default function BarcodePage() {
     return managedOnly ? products.filter(p => p.location === "自社管理") : products
   }, [products, managedOnly])
 
-  // 検索フィルタ済み（バーコードあり商品のみ）
+  // 検索フィルタ済み（QRコードあり商品のみ）
   const filtered = useMemo(() => {
     const kw = search.trim().toLowerCase()
     return scopedProducts.filter(p => {
@@ -103,7 +103,8 @@ export default function BarcodePage() {
             <div key={p.id} style={{ width: 180, border: "1px solid #ccc", padding: "6px 4px", textAlign: "center", pageBreakInside: "avoid" }}>
               <p style={{ fontSize: 10, margin: "0 0 2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</p>
               {p.product_code && <p style={{ fontSize: 9, margin: "0 0 2px", color: "#666" }}>{p.product_code}</p>}
-              <Barcode value={p.barcode} width={1.1} height={40} fontSize={8} margin={1} />
+              <QRCodeSVG value={String(p.barcode)} size={84} level="M" />
+              <p style={{ fontSize: 8, margin: "2px 0 0", fontFamily: "monospace", wordBreak: "break-all" }}>{p.barcode}</p>
             </div>
           ))}
         </div>
@@ -111,7 +112,7 @@ export default function BarcodePage() {
 
       {/* ===== 通常表示（no-print） ===== */}
       <div className="no-print">
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>バーコード管理</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>QRコード管理</h1>
 
         {/* ステータス */}
         <div style={{ display: "flex", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
@@ -159,7 +160,7 @@ export default function BarcodePage() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="商品名・商品コード・メーカー・バーコードで検索…"
+            placeholder="商品名・商品コード・メーカー・QRコードで検索…"
             style={{
               width: "100%", maxWidth: 480, padding: "8px 12px",
               border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 14, outline: "none",
@@ -176,7 +177,7 @@ export default function BarcodePage() {
           )}
         </div>
 
-        {/* バーコード一覧 */}
+        {/* QRコード一覧 */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
           {filtered.map((p) => {
             const isSelected = selected.has(p.id)
@@ -210,19 +211,16 @@ export default function BarcodePage() {
                 {p.product_code && (
                   <p style={{ fontSize: 9, marginBottom: 2, color: "#888" }}>{p.product_code}</p>
                 )}
-                <Barcode
-                  value={p.barcode}
-                  width={1.1}
-                  height={42}
-                  fontSize={8}
-                  margin={1}
-                />
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <QRCodeSVG value={String(p.barcode)} size={84} level="M" />
+                  <p style={{ fontSize: 9, margin: "2px 0 0", fontFamily: "monospace", color: "#555", wordBreak: "break-all" }}>{p.barcode}</p>
+                </div>
               </div>
             )
           })}
           {filtered.length === 0 && (
             <p style={{ color: "#94a3b8", fontSize: 14, padding: 20 }}>
-              {search ? "検索結果がありません" : "バーコード設定済みの商品がありません"}
+              {search ? "検索結果がありません" : "QRコード設定済みの商品がありません"}
             </p>
           )}
         </div>

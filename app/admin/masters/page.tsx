@@ -20,7 +20,7 @@ const ITEMS: MasterItem[] = [
   { href: "/admin/products", label: "商品", desc: "商品マスタ・原価・定価", icon: Ic.product, color: "#3b82f6", group: "商品" },
   { href: "/admin/product-images", label: "商品画像", desc: "楽天APIで画像を一括取得", icon: Ic.product, color: "#f08c00", group: "商品" },
   { href: "/admin/palladium", label: "パラ価格", desc: "パラジウム価格管理", icon: Ic.product, color: "#a855f7", group: "商品" },
-  { href: "/admin/barcodes", label: "バーコード", desc: "商品バーコード一覧", icon: Ic.csv, color: "#f59e0b", group: "商品" },
+  { href: "/admin/barcodes", label: "QRコード", desc: "商品QRコード一覧・印刷", icon: Ic.csv, color: "#f59e0b", group: "商品" },
   // 医院在庫
   { href: "/admin/clinic-items", label: "医院在庫", desc: "置き場所・最低在庫の設定", icon: Ic.product, color: "#22a648", group: "医院在庫" },
   // 設定
