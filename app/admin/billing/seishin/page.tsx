@@ -85,6 +85,10 @@ export default function SeishinBillingPage() {
       setSavedAt(savedAtNow)
     } catch { alert("保存できませんでした（ブラウザの保存が無効になっている可能性があります）") }
   }
+  // Gmailのリンクが別アカウントで開いてしまう場合に備え、件名・本文をコピーして自分のメールに貼れるようにする
+  async function copy(text: string, what: string) {
+    try { await navigator.clipboard.writeText(text); alert(`${what}をコピーしました`) } catch { alert("コピーできませんでした。手で選択してコピーしてください") }
+  }
   function clearSaved() {
     if (!confirm(`${ym} の保存内容を消して、初期の内容に戻します。よろしいですか？`)) return
     try { localStorage.removeItem(`${LS}_inv_${ym}`) } catch { /* 無視 */ }
@@ -174,6 +178,8 @@ export default function SeishinBillingPage() {
           {savedAt && <button onClick={clearSaved} className="text-xs underline text-gray-500">保存内容を消す</button>}
           {savedAt && <span className="text-[11px] text-emerald-700">保存済み {savedAt}</span>}
           <button onClick={() => window.print()} className="px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-bold">🖨 印刷 / PDF保存</button>
+          <button onClick={() => copy(`【請求書】DentHub利用料 ${range.label}`, "件名")} className="px-3 py-1.5 rounded border border-gray-400 text-xs font-bold">📋 件名をコピー</button>
+          <button onClick={() => copy(mailBody, "本文")} className="px-3 py-1.5 rounded border border-gray-400 text-xs font-bold">📋 本文をコピー</button>
           <a href={gmailUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded bg-emerald-600 text-white text-xs font-bold">✉ Gmailで下書きを作る</a>
           <span className="text-[11px] text-gray-400">※ PDFは自動では添付されません。保存したPDFを、Gmailの下書きに添付してください。「送信に使うGmail」に、あなたのアドレスを入れると、そのアカウントで下書きが開きます（別のアカウントでログインしていても取り違えません）。</span>
         </div>
