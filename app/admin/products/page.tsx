@@ -52,17 +52,76 @@ export default function AdminProductsPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const imgFileRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { fetchProducts(); fetchSuppliers() }, [])
+  const COLS = "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id,image_url,stocktake_exclude"
+  const [totalCount, setTotalCount] = useState(0)        // 絞り込み後の件数
+  const [grandTotal, setGrandTotal] = useState(0)        // 全商品の件数
+  const [categories, setCategories] = useState<string[]>(["すべて"])
+  const [dupInfo, setDupInfo] = useState<{ dupCodes: number; dupNames: number } | null>(null)
+  const [checkingDup, setCheckingDup] = useState(false)
+  const allCache = useRef<Product[] | null>(null)
+  const querySeq = useRef(0)
+
+  // 全商品が必要な機能（CSV取込・出力、仕入先の自動リンク、重複チェック）用。使うときだけ読み込む
+  async function getAllProducts(): Promise<Product[]> {
+    if (allCache.current) return allCache.current
+    const data = await fetchAll("products", COLS, (q) => q.order("name", { ascending: true }))
+    allCache.current = (data as Product[]) || []
+    return allCache.current
+  }
+
+  useEffect(() => {
+    fetchSuppliers()
+    // 全体件数とカテゴリ一覧は、一覧の表示をじゃましないよう、あとから読む
+    supabase.from("products").select("id", { count: "exact", head: true }).then(r => setGrandTotal(r.count || 0))
+    fetchAll("products", "category", (q) => q.not("category", "is", null).order("id")).then((rows: { category: string }[]) => {
+      setCategories(["すべて", ...Array.from(new Set(rows.map(r => r.category).filter(c => c && c.trim() !== "")))])
+    })
+  }, [])
+
+  // 絞り込み条件が変わったら、1ページ目から取り直す（検索は入力が止まってから）
+  useEffect(() => {
+    const t = setTimeout(() => { setPage(1); fetchProducts() }, 250)
+    return () => clearTimeout(t)
+  }, [search, maker, category, supplierFilter, showInactive, suppliers])
+  useEffect(() => { fetchProducts({ silent: true }) }, [page])
+
+  // 検索・絞り込み条件を、クエリに当てはめる（一覧の取得と「絞り込み中の全件を選択」で共通）
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function applyFilters(q: any) {
+    const kataOf = (t: string) => t.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
+    const nfkcOf = (t: string) => String(t || "").normalize("NFKC").toLowerCase()
+    for (const tk of nfkcOf(search).split(/\s+/).map(x => x.replace(/[%,()]/g, "")).filter(Boolean)) {
+      q = q.ilike("search_key", `%${kataOf(tk)}%`)
+    }
+    const mk = maker.trim().replace(/[%,()]/g, "")
+    if (mk) q = q.or(Array.from(new Set([mk, nfkcOf(mk)])).map(t => `manufacturer.ilike.%${t}%`).join(","))
+    if (category !== "すべて") q = q.eq("category", category)
+    if (supplierFilter === "(未設定)") q = q.is("default_supplier_id", null)
+    else if (supplierFilter !== "すべて") {
+      const ids = suppliers.filter(x => x.name === supplierFilter).map(x => x.id)
+      q = ids.length ? q.in("default_supplier_id", ids) : q.eq("id", "00000000-0000-0000-0000-000000000000")
+    }
+    if (!showInactive) q = q.or("active.is.null,active.eq.true")
+    return q
+  }
+
+  // 絞り込み中の商品を、全ページ分選択する（IDだけを取得）
+  async function selectAllFiltered() {
+    const rows = await fetchAll("products", "id", (q) => applyFilters(q).order("id"))
+    setSelectedIds(new Set((rows as { id: string }[]).map(r => r.id)))
+  }
 
   async function fetchProducts(opts?: { silent?: boolean }) {
+    const seq = ++querySeq.current
+    allCache.current = null    // 商品を更新したあとは、全件のキャッシュを捨てる
     if (!opts?.silent) setLoading(true)
-    const data = await fetchAll(
-      "products",
-      "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id,image_url,stocktake_exclude",
-      (q) => q.order("name", { ascending: true })
-    )
+    const q = applyFilters(supabase.from("products").select(COLS, { count: "exact" }))
+    const { data, count, error } = await q.order("name", { ascending: true }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1)
+    if (seq !== querySeq.current) return   // 古い結果は捨てる
+    if (error) { console.error("商品の取得に失敗:", error.message) }
     setProducts((data as Product[]) || [])
-    if (!opts?.silent) setLoading(false)
+    setTotalCount(count || 0)
+    setLoading(false)
   }
 
   async function fetchSuppliers() {
@@ -172,8 +231,9 @@ export default function AdminProductsPage() {
         for (const k of keys) if (r[k] !== undefined && r[k] !== "") return r[k]
         return ""
       }
-      const byCode = new Map(products.filter(p => p.product_code).map(p => [norm(p.product_code!), p]))
-      const byName = new Map(products.map(p => [norm(p.name), p]))
+      const all = await getAllProducts()
+      const byCode = new Map(all.filter(p => p.product_code).map(p => [norm(p.product_code!), p]))
+      const byName = new Map(all.map(p => [norm(p.name), p]))
 
       let created = 0, updated = 0, skipped = 0
       const errors: string[] = []
@@ -215,9 +275,10 @@ export default function AdminProductsPage() {
     }
   }
 
-  function exportProductsCSV() {
+  async function exportProductsCSV() {
+    const all = await getAllProducts()
     const csv = toCSV(
-      products.map(p => ({
+      all.map(p => ({
         商品名: p.name,
         商品コード: p.product_code || "",
         メーカー: p.manufacturer || "",
@@ -329,7 +390,7 @@ export default function AdminProductsPage() {
   }
 
   async function autoLinkSuppliers() {
-    const unlinked = products.filter(p => p.purchase_maker && !p.default_supplier_id)
+    const unlinked = (await getAllProducts()).filter(p => p.purchase_maker && !p.default_supplier_id)
     if (unlinked.length === 0) { setLinkMsg("⚠ リンク対象の商品がありません（全商品に仕入先が設定済み）"); return }
 
     // マッチング結果をプレビュー
@@ -368,57 +429,31 @@ export default function AdminProductsPage() {
   const supplierName = (id: string | null | undefined) =>
     id ? suppliers.find(s => s.id === id)?.name || "" : ""
 
-  const categories = useMemo(() => {
-    const list = products.map((p) => p.category).filter((c): c is string => !!c && c.trim() !== "")
-    return ["すべて", ...Array.from(new Set(list))]
-  }, [products])
+  const supplierOptions = useMemo(
+    () => ["すべて", "(未設定)", ...Array.from(new Set(suppliers.map(x => x.name)))],
+    [suppliers])
 
-  const supplierOptions = useMemo(() => {
-    const names = Array.from(new Set(
-      products.map(p => p.default_supplier_id ? supplierName(p.default_supplier_id) : "").filter(Boolean)
-    ))
-    return ["すべて", "(未設定)", ...names]
-  }, [products, suppliers])
-
-  const filtered = useMemo(() => {
-    const k = norm(search)
-    const m = norm(maker)
-    return products.filter((p) => {
-      if (!showInactive && p.active === false) return false
-      if (category !== "すべて" && p.category !== category) return false
-      if (supplierFilter === "(未設定)" && p.default_supplier_id) return false
-      if (supplierFilter !== "すべて" && supplierFilter !== "(未設定)") {
-        if (supplierName(p.default_supplier_id) !== supplierFilter) return false
-      }
-      if (m && !norm(p.manufacturer || "").includes(m)) return false
-      if (!k) return true
-      const target = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""} ${p.purchase_maker || ""}`)
-      return target.includes(k)
-    })
-  }, [products, search, maker, category, supplierFilter, showInactive, suppliers])
-
-  const duplicates = useMemo(() => {
-    const codeMap = new Map<string, number>()
-    const nameMap = new Map<string, number>()
-    products.forEach(p => {
-      if (p.product_code) {
-        const k = norm(p.product_code)
-        codeMap.set(k, (codeMap.get(k) || 0) + 1)
-      }
+  // 重複チェック（全商品を読み込むので、押したときだけ実行する）
+  async function checkDuplicates() {
+    setCheckingDup(true)
+    const all = await getAllProducts()
+    const codeMap = new Map<string, number>(), nameMap = new Map<string, number>()
+    all.forEach(p => {
+      if (p.product_code) { const k = norm(p.product_code); codeMap.set(k, (codeMap.get(k) || 0) + 1) }
       const n = norm(p.name)
       if (n) nameMap.set(n, (nameMap.get(n) || 0) + 1)
     })
-    const dupCodes = Array.from(codeMap.entries()).filter(([, n]) => n >= 2).length
-    const dupNames = Array.from(nameMap.entries()).filter(([, n]) => n >= 2).length
-    return { dupCodes, dupNames }
-  }, [products])
+    setDupInfo({
+      dupCodes: Array.from(codeMap.values()).filter(n => n >= 2).length,
+      dupNames: Array.from(nameMap.values()).filter(n => n >= 2).length,
+    })
+    setCheckingDup(false)
+  }
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const pageItems = products   // サーバーから取得した、今のページの分
 
-  useEffect(() => { if (page > totalPages) setPage(1) }, [totalPages, page])
-
-  if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
+  if (loading && products.length === 0) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   return (
     <div className="space-y-2">
@@ -426,7 +461,7 @@ export default function AdminProductsPage() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-lg font-bold text-gray-900" style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>
           商品マスタ
-          <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全{products.length}件</span>
+          <span className="ml-2 text-xs font-normal text-gray-400">該当 {totalCount.toLocaleString()}/全{grandTotal.toLocaleString()}件</span>
         </h1>
         <div className="flex items-center gap-2">
           <button onClick={openNew}
@@ -467,9 +502,15 @@ export default function AdminProductsPage() {
         </div>
       )}
 
-      {(duplicates.dupCodes > 0 || duplicates.dupNames > 0) && (
+      <div className="flex items-center gap-2 text-xs">
+        <button onClick={checkDuplicates} disabled={checkingDup} className="px-2 py-1 rounded border border-gray-200 bg-white hover:bg-gray-50">
+          {checkingDup ? "チェック中…" : "🔍 重複をチェック"}
+        </button>
+        <a href="/admin/products/dedup" className="text-blue-700 underline">商品重複管理へ</a>
+      </div>
+      {dupInfo && (dupInfo.dupCodes > 0 || dupInfo.dupNames > 0) && (
         <div className="text-xs px-3 py-2 rounded bg-amber-50 text-amber-700" style={{ border: "1px solid #fde68a" }}>
-          ⚠ 重複検出: 商品コード重複 {duplicates.dupCodes}組 / 商品名重複 {duplicates.dupNames}組
+          ⚠ 重複検出: 商品コード重複 {dupInfo?.dupCodes}組 / 商品名重複 {dupInfo?.dupNames}組
         </div>
       )}
 
@@ -498,7 +539,7 @@ export default function AdminProductsPage() {
             className="px-3 py-1 rounded bg-red-600 text-white text-xs font-bold disabled:opacity-50">
             {deleting ? "削除中…" : "選択した商品を削除"}
           </button>
-          <button onClick={() => setSelectedIds(new Set(filtered.map(p => p.id)))} disabled={deleting} className="text-xs text-blue-700 underline">絞り込み中の全{filtered.length}件を選択</button>
+          <button onClick={selectAllFiltered} disabled={deleting} className="text-xs text-blue-700 underline">絞り込み中の全{totalCount.toLocaleString()}件を選択</button>
           <button onClick={() => setSelectedIds(new Set())} disabled={deleting} className="text-xs text-gray-600 underline">選択を解除</button>
         </div>
       )}
@@ -591,7 +632,7 @@ export default function AdminProductsPage() {
         <div className="flex items-center justify-center gap-2 py-2 text-xs">
           <button onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-30">«</button>
           <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-30">‹</button>
-          <span className="px-2 text-gray-500">{page} / {totalPages} ({filtered.length}件)</span>
+          <span className="px-2 text-gray-500">{page} / {totalPages} ({totalCount.toLocaleString()}件)</span>
           <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-30">›</button>
           <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-30">»</button>
         </div>
