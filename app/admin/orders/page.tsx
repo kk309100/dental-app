@@ -48,6 +48,7 @@ function AdminOrdersPage() {
   const [poItems, setPoItems] = useState<POItem[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<ViewMode>("byClinic")
+  const [mobileLimit, setMobileLimit] = useState(30)   // スマホのカード表示件数（「もっと見る」で増やす）
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"undelivered" | "delivered" | "all" | string>(initialStatus)
   const [clinicFilter, setClinicFilter] = useState("all")
@@ -828,7 +829,7 @@ function AdminOrdersPage() {
           📥 未納品CSV
         </button>
         {/* ビュー切替 */}
-        <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs">
+        <div className="hidden md:flex bg-gray-100 rounded-lg p-0.5 text-xs">
           <button onClick={() => setView("byClinic")} className={"px-3 py-1.5 rounded font-bold " + (view === "byClinic" ? "bg-white shadow text-gray-900" : "text-gray-500")}>
             🏥 医院別
           </button>
@@ -839,15 +840,15 @@ function AdminOrdersPage() {
       </div>
 
       {/* フィルタ */}
-      <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
+      <div className="grid grid-cols-2 gap-1.5 md:flex md:items-center bg-gray-50 p-2 rounded-lg md:flex-wrap" style={{ border: "1px solid #e8eaed" }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="納品書No・医院・商品で検索"
           lang="ja"
-          className="flex-1 min-w-[180px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
+          className="col-span-2 md:flex-1 md:min-w-[180px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white"
         />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full md:w-auto px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
           <option value="undelivered">未納品のみ ({counts.undelivered})</option>
           <option value="delivered">納品済のみ ({counts.delivered})</option>
           <option value="all">すべて ({counts.total})</option>
@@ -855,11 +856,11 @@ function AdminOrdersPage() {
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </optgroup>
         </select>
-        <select value={clinicFilter} onChange={(e) => setClinicFilter(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white max-w-[200px]">
+        <select value={clinicFilter} onChange={(e) => setClinicFilter(e.target.value)} className="col-span-2 md:col-span-1 order-last md:order-none w-full md:w-auto px-2 py-1.5 border border-gray-200 rounded text-sm bg-white md:max-w-[200px]">
           <option value="all">全医院</option>
           {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select value={bizStateFilter} onChange={(e) => setBizStateFilter(e.target.value as "all" | BizState)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
+        <select value={bizStateFilter} onChange={(e) => setBizStateFilter(e.target.value as "all" | BizState)} className="w-full md:w-auto px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
           <option value="all">業務状態すべて</option>
           {(Object.keys(BIZ_BADGES) as BizState[]).map((s) => (
             <option key={s} value={s}>{BIZ_BADGES[s].icon} {BIZ_BADGES[s].label} ({bizStateCounts[s]})</option>
@@ -921,6 +922,84 @@ function AdminOrdersPage() {
         )
       })()}
 
+      {/* ── スマホ専用: 注文カード（パソコンでは表示しない） ── */}
+      <div className="md:hidden space-y-2">
+        {filtered.length === 0 ? (
+          <p className="text-center text-gray-400 py-8">該当注文なし</p>
+        ) : (
+          filtered.slice().sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, mobileLimit).map((o) => {
+            const clinic = clinicById.get(o.clinic_id)
+            const items = itemsByOrder.get(o.id) || []
+            const biz = businessState(o.id)
+            const ss = stockState(o.id)
+            const sc = STATUS_COLORS[o.status] || STATUS_COLORS["キャンセル"]
+            const isOpen = openOrderIds.has(o.id)
+            const shown = isOpen ? items : items.slice(0, 2)
+            return (
+              <div key={o.id} className="bg-white rounded-xl p-3 shadow-sm" style={{ border: "1px solid #e5e7eb" }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-bold text-[15px] text-gray-900 truncate">{clinic?.name || "医院不明"}</div>
+                    <div className="text-[11px] text-gray-500 font-mono">{o.delivery_number || o.id.slice(0, 8)}　{parseDbDate(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-bold text-[15px]">{fmtYen(o.total_price || 0)}</div>
+                    <select value={o.status} onChange={(e) => updateStatus(o.id, e.target.value)} className="mt-0.5 rounded text-[11px] font-bold border-0" style={{ background: sc.bg, color: sc.color, minHeight: 28, fontSize: 12 }}>
+                      {STATUSES.map((st) => <option key={st}>{st}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <BizBadgeWithCount state={biz} shortCount={ss.short} />
+                  <SourceBadge source={o.source} />
+                  {o.note?.includes("【医院修正】") && <ClinicEditBadge />}
+                  {o.note && <span className="bg-slate-100 text-red-600 font-medium border border-slate-300 px-1.5 py-0.5 rounded text-[11px]">{o.note.length > 24 ? o.note.slice(0, 24) + "…" : o.note}</span>}
+                </div>
+
+                {items.length > 0 && (
+                  <div className="mt-2 rounded-lg bg-gray-50 px-2 py-1.5 space-y-1">
+                    {shown.map((it) => {
+                      const ok = it.product_id ? (itemAvailability.get(it.id) ?? false) : false
+                      return (
+                        <div key={it.id} className="flex items-center gap-2 text-[13px]">
+                          <span title={ok ? "在庫あり" : "在庫不足"}>{ok ? "🟢" : "🔴"}</span>
+                          <span className="flex-1 min-w-0 truncate">{it.product_name || "(商品名なし)"}</span>
+                          <span className="font-bold shrink-0">×{it.quantity}</span>
+                        </div>
+                      )
+                    })}
+                    {items.length > 2 && (
+                      <button onClick={() => toggleOrderOpen(o.id)} className="w-full text-center text-[12px] text-blue-700 py-1">
+                        {isOpen ? "▲ 閉じる" : `▼ 他${items.length - 2}件を表示`}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                  <Link href={`/order-edit/${o.id}`} className="flex items-center justify-center rounded-lg border border-gray-300 text-[13px] font-bold text-gray-700" style={{ minHeight: 44 }}>✏️ 編集</Link>
+                  {biz === "ready" ? (
+                    <Link href={`/admin/shipping?orders=${o.id}`} className="flex items-center justify-center rounded-lg bg-emerald-600 text-white text-[13px] font-bold" style={{ minHeight: 44 }}>→ 納品</Link>
+                  ) : ss.short > 0 ? (
+                    <Link href="/admin/receiving-from-po" className="flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[13px] font-bold" style={{ minHeight: 44 }}>📦 入荷</Link>
+                  ) : (
+                    <span className="flex items-center justify-center rounded-lg bg-gray-100 text-gray-400 text-[13px]" style={{ minHeight: 44 }}>—</span>
+                  )}
+                  <Link href={`/admin/quotes/create?from_order=${o.id}`} className="flex items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-[13px] font-bold" style={{ minHeight: 44 }}>📋 見積</Link>
+                </div>
+              </div>
+            )
+          })
+        )}
+        {filtered.length > mobileLimit && (
+          <button onClick={() => setMobileLimit((n) => n + 30)} className="w-full rounded-xl border border-gray-300 bg-white text-[14px] font-bold text-gray-700" style={{ minHeight: 48 }}>
+            もっと見る（残り {filtered.length - mobileLimit} 件）
+          </button>
+        )}
+      </div>
+
+      <div className="hidden md:block">
       <GroupViewTabs value={groupView} onChange={setGroupView} rows={groupRows} partyLabel="医院">
       {/* 医院別ビュー */}
       {view === "byClinic" && (
@@ -1478,6 +1557,7 @@ function AdminOrdersPage() {
         </div>
       )}
       </GroupViewTabs>
+      </div>
 
       {/* 仕入先未設定商品のフォールバック選択モーダル */}
       {fallbackPickerOrderIds && (
