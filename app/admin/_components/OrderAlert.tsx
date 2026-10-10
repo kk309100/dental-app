@@ -120,7 +120,7 @@ export default function OrderAlert() {
       <style>{`
         @media (max-width: 767px) {
           .fab { right: 10px !important; }
-          .fab-scan { right: 10px !important; bottom: calc(64px + env(safe-area-inset-bottom) + 114px) !important; }
+          .fab-scan { right: 10px !important; bottom: calc(64px + env(safe-area-inset-bottom) + 112px) !important; }
           .fab-alert { bottom: calc(64px + env(safe-area-inset-bottom) + 62px) !important; }
           .fab-fb { bottom: calc(64px + env(safe-area-inset-bottom) + 12px) !important; }
           .fab button { width: 44px; height: 44px; padding: 0 !important; justify-content: center; opacity: 0.92; position: relative; }
@@ -131,15 +131,15 @@ export default function OrderAlert() {
       {/* スキャンボタン（修正メモのボタンと同じ位置の並びに固定。スキャン画面では非表示） */}
       {!pathname?.startsWith("/admin/scan") && (
         <div className="no-print fab-scan" style={{ position: "fixed", right: 16, bottom: 196, zIndex: 40 }}>
-          <Link href="/admin/scan" title="QRコード・バーコードを読み取る"
+          <Link href="/admin/scan" title="QRコード・バーコードを読み取る（スキャン）" aria-label="スキャン"
             style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "10px 16px", borderRadius: 999,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 52, height: 52, borderRadius: 999,
               background: "#2563eb", color: "#fff", textDecoration: "none",
-              fontSize: 14, fontWeight: 800,
+              fontSize: 24,
               boxShadow: "0 4px 16px rgba(37,99,235,0.45)",
             }}>
-            📷 スキャン
+            📷
           </Link>
         </div>
       )}
