@@ -43,11 +43,13 @@ export default function SeishinBillingPage() {
   const [bank, setBank] = useState("")                              // 振込先
   const [to, setTo] = useState("株式会社清新　御中")
   const [mailTo, setMailTo] = useState("")
+  const [authUser, setAuthUser] = useState("")                      // メールを作るGoogleアカウント（複数ログイン時の取り違え防止）
+  const [savedAt, setSavedAt] = useState("")
 
   useEffect(() => {
     try {
       const s = JSON.parse(localStorage.getItem(LS) || "{}")
-      if (s.from) setFrom(s.from); if (s.bank) setBank(s.bank); if (s.mailTo) setMailTo(s.mailTo)
+      if (s.from) setFrom(s.from); if (s.bank) setBank(s.bank); if (s.mailTo) setMailTo(s.mailTo); if (s.authUser) setAuthUser(s.authUser)
     } catch { /* 保存データが無くても動く */ }
     Promise.all([
       fetchAll("orders", "id,clinic_id,source,created_at", (q: any) => q.order("id")),
@@ -55,11 +57,39 @@ export default function SeishinBillingPage() {
     ]).then(([o, c]) => { setOrders(o as Ord[]); setClinics(c as Clinic[]); setLoading(false) })
   }, [])
   useEffect(() => {
-    try { localStorage.setItem(LS, JSON.stringify({ from, bank, mailTo })) } catch { /* 保存できなくても使える */ }
-  }, [from, bank, mailTo])
+    try { localStorage.setItem(LS, JSON.stringify({ from, bank, mailTo, authUser })) } catch { /* 保存できなくても使える */ }
+  }, [from, bank, mailTo, authUser])
 
   const range = useMemo(() => monthRange(ym), [ym])
-  useEffect(() => { setInvNo(`INV-${ym.replace("-", "")}-001`) }, [ym])
+  useEffect(() => {
+    setInvNo(`INV-${ym.replace("-", "")}-001`)
+    // 保存済みの請求書があれば、その月の内容を復元する
+    setSavedAt(""); setOver({}); setRemoved(new Set()); setExtra([]); setExcluded(new Set()); setTo("株式会社清新　御中")
+    try {
+      const raw = localStorage.getItem(`${LS}_inv_${ym}`)
+      if (!raw) return
+      const d = JSON.parse(raw)
+      if (d.invNo) setInvNo(d.invNo)
+      if (d.to) setTo(d.to)
+      if (typeof d.maint === "number") setMaint(d.maint)
+      if (typeof d.unit === "number") setUnit(d.unit)
+      if (d.basis) setBasis(d.basis)
+      setOver(d.over || {}); setRemoved(new Set(d.removed || [])); setExtra(d.extra || []); setExcluded(new Set(d.excluded || []))
+      setSavedAt(d.savedAt || "")
+    } catch { /* 読めなければ初期内容のまま */ }
+  }, [ym])
+  function saveInvoice() {
+    try {
+      const savedAtNow = new Date().toLocaleString("ja-JP")
+      localStorage.setItem(`${LS}_inv_${ym}`, JSON.stringify({ invNo, to, maint, unit, basis, over, removed: Array.from(removed), extra, excluded: Array.from(excluded), savedAt: savedAtNow }))
+      setSavedAt(savedAtNow)
+    } catch { alert("保存できませんでした（ブラウザの保存が無効になっている可能性があります）") }
+  }
+  function clearSaved() {
+    if (!confirm(`${ym} の保存内容を消して、初期の内容に戻します。よろしいですか？`)) return
+    try { localStorage.removeItem(`${LS}_inv_${ym}`) } catch { /* 無視 */ }
+    setSavedAt(""); setOver({}); setRemoved(new Set()); setExtra([]); setExcluded(new Set()); setTo("株式会社清新　御中"); setInvNo(`INV-${ym.replace("-", "")}-001`)
+  }
 
   // 医院ごとの「初めて注文が入った日」（JST）
   const firstOrder = useMemo(() => {
@@ -92,7 +122,7 @@ export default function SeishinBillingPage() {
   const total = sub + tax
 
   const mailBody = `株式会社清新　御中\n\nお世話になっております。松浦です。\n${range.label}のDentHub利用料のご請求書をお送りします。\n\n・請求番号：${invNo}\n・ご請求金額（税込）：${yen(total)}円\n・お支払期限：${range.due}\n\nご確認のほど、よろしくお願いいたします。\n\n（請求書のPDFを添付してください）`
-  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(mailTo)}&su=${encodeURIComponent(`【請求書】DentHub利用料 ${range.label}`)}&body=${encodeURIComponent(mailBody)}`
+  const gmailUrl = `https://mail.google.com/mail/${authUser.trim() ? `?authuser=${encodeURIComponent(authUser.trim())}&` : "?"}view=cm&fs=1&to=${encodeURIComponent(mailTo)}&su=${encodeURIComponent(`【請求書】DentHub利用料 ${range.label}`)}&body=${encodeURIComponent(mailBody)}`
 
   const inp = "px-2 py-1.5 border border-gray-300 rounded text-sm bg-white"
 
@@ -139,9 +169,13 @@ export default function SeishinBillingPage() {
         </div>
         <div className="flex flex-wrap gap-2 items-center">
           <label className="text-xs">宛先メール <input value={mailTo} onChange={e => setMailTo(e.target.value)} className={inp + " w-64"} placeholder="（任意）清新のメールアドレス" /></label>
+          <label className="text-xs">送信に使うGmail <input value={authUser} onChange={e => setAuthUser(e.target.value)} className={inp + " w-52"} placeholder="あなたのGmailアドレス" /></label>
+          <button onClick={saveInvoice} className="px-3 py-1.5 rounded bg-slate-700 text-white text-xs font-bold">💾 この月の内容を保存</button>
+          {savedAt && <button onClick={clearSaved} className="text-xs underline text-gray-500">保存内容を消す</button>}
+          {savedAt && <span className="text-[11px] text-emerald-700">保存済み {savedAt}</span>}
           <button onClick={() => window.print()} className="px-3 py-1.5 rounded bg-blue-600 text-white text-xs font-bold">🖨 印刷 / PDF保存</button>
           <a href={gmailUrl} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded bg-emerald-600 text-white text-xs font-bold">✉ Gmailで下書きを作る</a>
-          <span className="text-[11px] text-gray-400">※ PDFは自動では添付されません。保存したPDFを、Gmailの下書きに添付してください。</span>
+          <span className="text-[11px] text-gray-400">※ PDFは自動では添付されません。保存したPDFを、Gmailの下書きに添付してください。「送信に使うGmail」に、あなたのアドレスを入れると、そのアカウントで下書きが開きます（別のアカウントでログインしていても取り違えません）。</span>
         </div>
       </div>
 
