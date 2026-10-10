@@ -36,6 +36,8 @@ export default function SeishinBillingPage() {
   const [maint, setMaint] = useState(5000)
   const [excluded, setExcluded] = useState<Set<string>>(new Set())   // 請求に含めない医院
   const [extra, setExtra] = useState<Line[]>([])
+  const [over, setOver] = useState<Record<string, Partial<Line>>>({})   // 行ごとの品名・数量・単価などの手直し
+  const [removed, setRemoved] = useState<Set<string>>(new Set())        // 請求書から消した行
   const [invNo, setInvNo] = useState("")
   const [from, setFrom] = useState("")                              // 請求元
   const [bank, setBank] = useState("")                              // 振込先
@@ -82,7 +84,8 @@ export default function SeishinBillingPage() {
     { key: "maint", label: "月額保守料", note: range.label, qty: 1, price: maint },
     ...live.filter(c => !excluded.has(c.id)).map(c => ({ key: c.id, label: `${c.name}　月額利用料`, note: `初回注文 ${c.first}`, qty: 1, price: unit })),
     ...extra,
-  ], [live, excluded, unit, maint, range, extra])
+  ].filter(l => !removed.has(l.key)).map(l => ({ ...l, ...(over[l.key] || {}) })), [live, excluded, unit, maint, range, extra, over, removed])
+  const setLine = (key: string, patch: Partial<Line>) => setOver(p => ({ ...p, [key]: { ...(p[key] || {}), ...patch } }))
 
   const sub = lines.reduce((s, l) => s + l.qty * l.price, 0)
   const tax = Math.floor(sub * 0.1)
@@ -176,25 +179,22 @@ export default function SeishinBillingPage() {
             <tbody>
               {lines.map(l => (
                 <tr key={l.key} className="border-b border-gray-200">
-                  <td className="px-3 py-2"><span className="font-semibold">{l.label}</span> <span className="text-xs text-gray-500">{l.note}</span></td>
-                  <td className="px-3 py-2 text-right">{l.qty}</td>
-                  <td className="px-3 py-2 text-right">¥{yen(l.price)}</td>
-                  <td className="px-3 py-2 text-right">¥{yen(l.qty * l.price)}</td>
+                  <td className="px-3 py-2">
+                    <input value={l.label} onChange={e => setLine(l.key, { label: e.target.value })} className="font-semibold bg-transparent outline-none w-full hover:bg-yellow-50 focus:bg-yellow-50" />
+                    <input value={l.note} onChange={e => setLine(l.key, { note: e.target.value })} className="text-xs text-gray-500 bg-transparent outline-none w-full hover:bg-yellow-50 focus:bg-yellow-50" placeholder="（補足：任意）" />
+                  </td>
+                  <td className="px-3 py-2 text-right"><input value={l.qty} onChange={e => setLine(l.key, { qty: num(e.target.value) })} className="w-12 text-right bg-transparent outline-none hover:bg-yellow-50 focus:bg-yellow-50" /></td>
+                  <td className="px-3 py-2 text-right">¥<input value={yen(l.price)} onChange={e => setLine(l.key, { price: num(e.target.value) })} className="w-20 text-right bg-transparent outline-none hover:bg-yellow-50 focus:bg-yellow-50" /></td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">¥{yen(l.qty * l.price)} <button onClick={() => setRemoved(p => new Set(p).add(l.key))} className="no-print ml-1 text-xs text-gray-400 hover:text-red-600" title="この行を請求書から消す">✕</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
 
           <div className="no-print mt-2">
-            <button onClick={() => setExtra(p => [...p, { key: "x" + p.length, label: "追加項目", note: "", qty: 1, price: 0 }])} className="text-xs px-2 py-1 border rounded">＋ 項目を追加</button>
-            {extra.map((l, i) => (
-              <div key={l.key} className="flex gap-2 mt-1 text-xs items-center">
-                <input value={l.label} onChange={e => setExtra(p => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} className={inp + " flex-1"} />
-                <input value={l.qty} onChange={e => setExtra(p => p.map((x, j) => j === i ? { ...x, qty: num(e.target.value) } : x))} className={inp + " w-14 text-right"} />
-                <input value={l.price} onChange={e => setExtra(p => p.map((x, j) => j === i ? { ...x, price: num(e.target.value) } : x))} className={inp + " w-24 text-right"} />
-                <button onClick={() => setExtra(p => p.filter((_, j) => j !== i))} className="px-2 py-1 border rounded">✕</button>
-              </div>
-            ))}
+            <button onClick={() => setExtra(p => [...p, { key: "x" + Date.now(), label: "追加項目", note: "", qty: 1, price: 0 }])} className="text-xs px-2 py-1 border rounded">＋ 項目を追加</button>
+            {removed.size > 0 && <button onClick={() => setRemoved(new Set())} className="ml-2 text-xs px-2 py-1 border rounded">消した行を元に戻す</button>}
+            <span className="ml-2 text-[11px] text-gray-400">※ 表の品名・補足・数量・単価は、クリックして直接書き換えられます。</span>
           </div>
 
           <div className="mt-4 ml-auto w-72 text-sm">
