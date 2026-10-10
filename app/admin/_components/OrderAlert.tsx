@@ -6,11 +6,14 @@
 // - ブラウザ通知は初回、ユーザーの許可が必要（🔔ボタンから許可をリクエスト）
 
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
 const PERMISSION_KEY = "denthub_order_alert_enabled"
 
 export default function OrderAlert() {
+  const pathname = usePathname()
   const [enabled, setEnabled] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
@@ -117,6 +120,7 @@ export default function OrderAlert() {
       <style>{`
         @media (max-width: 767px) {
           .fab { right: 10px !important; }
+          .fab-scan { right: 10px !important; bottom: calc(64px + env(safe-area-inset-bottom) + 114px) !important; }
           .fab-alert { bottom: calc(64px + env(safe-area-inset-bottom) + 62px) !important; }
           .fab-fb { bottom: calc(64px + env(safe-area-inset-bottom) + 12px) !important; }
           .fab button { width: 44px; height: 44px; padding: 0 !important; justify-content: center; opacity: 0.92; position: relative; }
@@ -124,6 +128,21 @@ export default function OrderAlert() {
           .fab button span:not(.fab-label) { position: absolute; top: -4px; right: -4px; }
         }
       `}</style>
+      {/* スキャンボタン（修正メモのボタンと同じ位置の並びに固定。スキャン画面では非表示） */}
+      {!pathname?.startsWith("/admin/scan") && (
+        <div className="no-print fab-scan" style={{ position: "fixed", right: 16, bottom: 196, zIndex: 40 }}>
+          <Link href="/admin/scan" title="QRコード・バーコードを読み取る"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "10px 16px", borderRadius: 999,
+              background: "#2563eb", color: "#fff", textDecoration: "none",
+              fontSize: 14, fontWeight: 800,
+              boxShadow: "0 4px 16px rgba(37,99,235,0.45)",
+            }}>
+            📷 スキャン
+          </Link>
+        </div>
+      )}
       <div className="no-print fab fab-alert" style={{ position: "fixed", right: 16, bottom: 138, zIndex: 40 }}>
         <button
           onClick={toggleEnabled}
