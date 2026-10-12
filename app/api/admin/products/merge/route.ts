@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server"
 // 注文・発注・見積・入荷・在庫履歴などの product_id を keepId に付け替え、在庫を合算してから removeIds を削除する。
 // 管理者のみ。
 
-const SUPABASE_URL = "https://alcetorurdocopxatego.supabase.co"
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://alcetorurdocopxatego.supabase.co"
 
 // 付け替えるだけでよいテーブル（重複して困る一意制約が無い履歴系）。[テーブル, 商品IDの列]
 const REPOINT_TABLES: [string, string][] = [

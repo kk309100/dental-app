@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
 
-const SUPABASE_URL         = "https://alcetorurdocopxatego.supabase.co"
+const SUPABASE_URL         = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://alcetorurdocopxatego.supabase.co"
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
 
 // サービスロールクライアント（RLS をバイパス）

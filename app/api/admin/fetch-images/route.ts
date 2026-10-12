@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
 
-const SUPABASE_URL = "https://alcetorurdocopxatego.supabase.co"
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://alcetorurdocopxatego.supabase.co"
 const RAKUTEN_URL  = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
 const BATCH_SIZE   = 25 // 25件 × 1秒 = 約25秒/バッチ
 
