@@ -1,6 +1,7 @@
 import './globals.css'
 import TopNav from './components/TopNav'
 import VersionCheckBanner from './components/VersionCheckBanner'
+import DemoBanner from './components/DemoBanner'
 
 export const metadata = {
   title: 'DentHub',
@@ -11,6 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja">
       <body>
+        <DemoBanner />
         <VersionCheckBanner />
         <TopNav />
         {children}
