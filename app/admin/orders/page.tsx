@@ -36,6 +36,24 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 
 type ViewMode = "flat" | "byClinic"
 
+// 医院名の末尾が「個人分」「個人」のものは、名前から外してバッジで見せる（注文管理の画面の表示だけ）。
+// 同じ医院の「個人分」が、名前の途中の省略(…)で本体と同じに見えてしまうのを防ぐ。納品書・請求書の名前や医院データは変えない。
+function splitIndividual(name: string): { base: string; individual: boolean } {
+  const m = String(name || "").match(/^(.*?)[s　・-]*(個人分|個人)s*$/)
+  return m && m[1].trim() ? { base: m[1].trim(), individual: true } : { base: name, individual: false }
+}
+function ClinicName({ name, fallback }: { name?: string | null; fallback: string }) {
+  const { base, individual } = splitIndividual(name || fallback)
+  return (
+    <span className="flex items-center gap-1 min-w-0">
+      <span className="truncate">{base}</span>
+      {individual && (
+        <span className="shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#ede9fe", color: "#6d28d9", border: "1px solid #c4b5fd" }}>👤 個人分</span>
+      )}
+    </span>
+  )
+}
+
 function AdminOrdersPage() {
   const sp = useSearchParams()
   // デフォルトは「すべて」表示（過去含む）。URLパラメータで filter 切替可能
@@ -939,7 +957,7 @@ function AdminOrdersPage() {
               <div key={o.id} className="bg-white rounded-xl p-3 shadow-sm" style={{ border: "1px solid #e5e7eb" }}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="font-bold text-[15px] text-gray-900 truncate">{clinic?.name || "医院不明"}</div>
+                    <div className="font-bold text-[15px] text-gray-900 min-w-0" title={clinic?.name || "医院不明"}><ClinicName name={clinic?.name} fallback="医院不明" /></div>
                     <div className="text-[11px] text-gray-500 font-mono">{o.delivery_number || o.id.slice(0, 8)}　{parseDbDate(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>
                   </div>
                   <div className="text-right shrink-0">
@@ -1039,8 +1057,8 @@ function AdminOrdersPage() {
                   <span className="text-base" style={{ width: 14, flexShrink: 0 }}>{open ? "▼" : "▶"}</span>
                   {/* 医院名は長さがバラバラだと後ろのバッジ列がずれるため、幅を固定してはみ出し部分は省略表示にする */}
                   <span className="font-bold text-gray-900" title={clinic?.name || "医院不明"}
-                    style={{ width: 220, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {clinic?.name || "医院不明"}
+                    style={{ width: 290, flexShrink: 0, overflow: "hidden", whiteSpace: "nowrap" }}>
+                    <ClinicName name={clinic?.name} fallback="医院不明" />
                   </span>
                   <span className="text-xs text-gray-500" style={{ width: 32, flexShrink: 0 }}>{clinicOrders.length}件</span>
                   {/* 業務状態サマリー */}
@@ -1385,7 +1403,7 @@ function AdminOrdersPage() {
                         {o.note?.includes("【医院修正】") && <ClinicEditBadge />}
                       </td>
                       <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
-                      <td className="px-2 py-1 whitespace-nowrap">{clinicById.get(o.clinic_id)?.name || "—"}</td>
+                      <td className="px-2 py-1 whitespace-nowrap" title={clinicById.get(o.clinic_id)?.name || ""}><ClinicName name={clinicById.get(o.clinic_id)?.name} fallback="—" /></td>
                       <td className="px-2 py-1 text-[11px] text-gray-500">{parseDbDate(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                       <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
