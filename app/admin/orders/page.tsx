@@ -20,7 +20,7 @@ export default function AdminOrdersPageWrapper() {
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; invoice_id: string | null; source?: string | null; note?: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null }
-type Clinic = { id: string; name: string; corporate_name?: string | null }
+type Clinic = { id: string; name: string; corporate_name?: string | null; badge_label?: string | null }
 type Product = { id: string; name: string; stock: number | null; cost: number | null; price: number | null; manufacturer?: string | null; product_code?: string | null; location?: string | null }
 type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null; note?: string | null }
 type POHead = { id: string; status: string }
@@ -42,13 +42,16 @@ function splitIndividual(name: string): { base: string; individual: boolean } {
   const m = String(name || "").match(/^(.*?)[s　・-]*(個人分|個人)s*$/)
   return m && m[1].trim() ? { base: m[1].trim(), individual: true } : { base: name, individual: false }
 }
-function ClinicName({ name, fallback }: { name?: string | null; fallback: string }) {
+// badge: 医院マスターで設定した「バッジの文字」。あればそれを、無ければ末尾が「個人分」の場合だけ自動で「個人分」を出す。
+function ClinicName({ name, badge, fallback }: { name?: string | null; badge?: string | null; fallback: string }) {
   const { base, individual } = splitIndividual(name || fallback)
+  const custom = (badge || "").trim()
+  const text = custom || (individual ? "個人分" : "")
   return (
     <span className="flex items-center gap-1 min-w-0">
       <span className="truncate">{base}</span>
-      {individual && (
-        <span className="shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#ede9fe", color: "#6d28d9", border: "1px solid #c4b5fd" }}>👤 個人分</span>
+      {text && (
+        <span className="shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#ede9fe", color: "#6d28d9", border: "1px solid #c4b5fd" }}>{custom ? text : `👤 ${text}`}</span>
       )}
     </span>
   )
@@ -85,7 +88,7 @@ function AdminOrdersPage() {
       fetchAllData("orders", "*", (q: any) => q.order("created_at", { ascending: false })),
       // .limit(50000) を付けてもサーバー側の上限で1000件に切られる（注文明細は1000件超）ため、全件ページング取得する
       fetchAllData("order_items", "*"),
-      supabase.from("clinics").select("id,name,corporate_name").limit(50000),
+      supabase.from("clinics").select("id,name,corporate_name,badge_label").limit(50000).then(async (r: any) => r.error ? await supabase.from("clinics").select("id,name,corporate_name").limit(50000) : r),
       // products は1万件超あるため .limit() だけでは1000件上限に引っかかる → fetchAll でページング取得
       fetchAll("products", "id,name,product_code,stock,cost,price,manufacturer,location"),
       // 業務状態判定用: 「未入荷の発注」を検出するため
@@ -957,7 +960,7 @@ function AdminOrdersPage() {
               <div key={o.id} className="bg-white rounded-xl p-3 shadow-sm" style={{ border: "1px solid #e5e7eb" }}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="font-bold text-[15px] text-gray-900 min-w-0" title={clinic?.name || "医院不明"}><ClinicName name={clinic?.name} fallback="医院不明" /></div>
+                    <div className="font-bold text-[15px] text-gray-900 min-w-0" title={clinic?.name || "医院不明"}><ClinicName name={clinic?.name} badge={clinic?.badge_label} fallback="医院不明" /></div>
                     <div className="text-[11px] text-gray-500 font-mono">{o.delivery_number || o.id.slice(0, 8)}　{parseDbDate(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</div>
                   </div>
                   <div className="text-right shrink-0">
@@ -1058,7 +1061,7 @@ function AdminOrdersPage() {
                   {/* 医院名は長さがバラバラだと後ろのバッジ列がずれるため、幅を固定してはみ出し部分は省略表示にする */}
                   <span className="font-bold text-gray-900" title={clinic?.name || "医院不明"}
                     style={{ width: 290, flexShrink: 0, overflow: "hidden", whiteSpace: "nowrap" }}>
-                    <ClinicName name={clinic?.name} fallback="医院不明" />
+                    <ClinicName name={clinic?.name} badge={clinic?.badge_label} fallback="医院不明" />
                   </span>
                   <span className="text-xs text-gray-500" style={{ width: 32, flexShrink: 0 }}>{clinicOrders.length}件</span>
                   {/* 業務状態サマリー */}
@@ -1403,7 +1406,7 @@ function AdminOrdersPage() {
                         {o.note?.includes("【医院修正】") && <ClinicEditBadge />}
                       </td>
                       <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
-                      <td className="px-2 py-1 whitespace-nowrap" title={clinicById.get(o.clinic_id)?.name || ""}><ClinicName name={clinicById.get(o.clinic_id)?.name} fallback="—" /></td>
+                      <td className="px-2 py-1 whitespace-nowrap" title={clinicById.get(o.clinic_id)?.name || ""}><ClinicName name={clinicById.get(o.clinic_id)?.name} badge={clinicById.get(o.clinic_id)?.badge_label} fallback="—" /></td>
                       <td className="px-2 py-1 text-[11px] text-gray-500">{parseDbDate(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
                       <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">

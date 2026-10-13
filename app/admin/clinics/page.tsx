@@ -19,6 +19,7 @@ type Clinic = {
   closing_day?: string | null
   clinic_type?: string | null
   payment_method?: string | null
+  badge_label?: string | null
   created_at?: string
 }
 
@@ -34,6 +35,7 @@ type Form = {
   closing_day: string
   clinic_type: string
   payment_method: string
+  badge_label: string
 }
 
 const empty: Form = {
@@ -48,6 +50,7 @@ const empty: Form = {
   closing_day: "月末",
   clinic_type: "",
   payment_method: "振込",
+  badge_label: "",
 }
 
 const CLOSING_DAYS = ["月末", "20日", "15日", "10日", "5日", "その他"]
@@ -61,6 +64,7 @@ const CLINIC_TYPES = [
 
 export default function AdminClinicsPage() {
   const [clinics, setClinics] = useState<Clinic[]>([])
+  const hasBadgeCol = clinics.length > 0 && "badge_label" in (clinics[0] as object)   // 列が追加済みか（SQL実行済みか）
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [showForm, setShowForm] = useState(false)
@@ -153,6 +157,7 @@ export default function AdminClinicsPage() {
       closing_day: c.closing_day || "月末",
       clinic_type: c.clinic_type || "",
       payment_method: c.payment_method || "振込",
+      badge_label: c.badge_label || "",
     })
     setEditId(c.id)
     setErrMsg("")
@@ -172,11 +177,13 @@ export default function AdminClinicsPage() {
     setSaving(true)
     setErrMsg("")
     try {
+      const { badge_label, ...formNoBadge } = form
+      const payload = hasBadgeCol ? { ...formNoBadge, badge_label: badge_label.trim() || null } : formNoBadge
       if (editId) {
-        const { error } = await supabase.from("clinics").update(form).eq("id", editId)
+        const { error } = await supabase.from("clinics").update(payload).eq("id", editId)
         if (error) throw error
       } else {
-        const { data: inserted, error } = await supabase.from("clinics").insert(form).select("id").single()
+        const { data: inserted, error } = await supabase.from("clinics").insert(payload).select("id").single()
         if (error) throw error
 
         // ログインパスワードが指定されていればアカウント作成
@@ -540,6 +547,28 @@ export default function AdminClinicsPage() {
                 >
                   {CLINIC_TYPES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
                 </select>
+              </div>
+
+              <div style={fieldWrap}>
+                <label style={fieldLabel}>バッジの文字（注文管理の医院名の隣に、紫色で出ます）</label>
+                {hasBadgeCol ? (
+                  <>
+                    <input
+                      value={form.badge_label}
+                      onChange={(e) => setForm((f) => ({ ...f, badge_label: e.target.value }))}
+                      placeholder="例: 個人分 ／ 要注意 ／ 至急対応 ／ 月末締め"
+                      maxLength={20}
+                      style={fieldInput}
+                    />
+                    <div style={{ fontSize: 11, color: "#6b7280", marginTop: 3 }}>
+                      空欄のときは、医院名の末尾が「個人分」の場合だけ、自動で「個人分」と出ます。納品書・請求書には出ません。
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "6px 10px" }}>
+                    この機能を使うには、データベースの設定（SQL）を、1回実行する必要があります。
+                  </div>
+                )}
               </div>
 
               <div style={fieldWrap}>
