@@ -93,7 +93,7 @@ export default function AdminProductsPage() {
     const seq = ++masterSeq.current
     const t = setTimeout(async () => {
       const kataOf = (x: string) => x.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
-      const tokens = String(masterQ).normalize("NFKC").toLowerCase().split(/\s+/).map(x => x.replace(/[%,()]/g, "")).filter(Boolean)
+      const tokens = String(masterQ).normalize("NFKC").toLowerCase().split(/\s+/).map(x => x.replace(/%/g, "")).filter(Boolean)
       if (tokens.length === 0) { setMasterResults([]); return }
       setMasterLoading(true)
       let q = supabase.from("master_products").select("id,item_code,jan,maker_kana,name,list_price")
@@ -147,7 +147,7 @@ export default function AdminProductsPage() {
   function applyFilters(q: any) {
     const kataOf = (t: string) => t.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
     const nfkcOf = (t: string) => String(t || "").normalize("NFKC").toLowerCase()
-    for (const tk of nfkcOf(search).split(/\s+/).map(x => x.replace(/[%,()]/g, "")).filter(Boolean)) {
+    for (const tk of nfkcOf(search).split(/\s+/).map(x => x.replace(/%/g, "")).filter(Boolean)) {
       q = q.ilike("search_key", `%${kataOf(tk)}%`)
     }
     const mk = maker.trim().replace(/[%,()]/g, "")

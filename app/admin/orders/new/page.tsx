@@ -224,7 +224,7 @@ function NewOrderPage() {
     if (!searchActive) return
     const seq = ++searchSeq.current
     const t = setTimeout(async () => {
-      const tokens = nfkc(productSearch).split(/\s+/).map(x => x.replace(/[%,()]/g, "")).filter(Boolean)
+      const tokens = nfkc(productSearch).split(/\s+/).map(x => x.replace(/%/g, "")).filter(Boolean)   // 括弧は商品名・検索用の列に残っているので消さない
       let data: Product[] | null = null
       if (tokens.length === 0) {
         // 入力が無いときは、自社管理の商品を先頭に、名前順で50件
@@ -238,7 +238,7 @@ function NewOrderPage() {
         else {
           // 検索用の列がまだ無い場合の代替（素の部分一致）
           const raw0 = productSearch.trim().split(/s+/)[0].replace(/[%,()]/g, "")   // 入力そのまま（半角カナ等）と、正規化したものの両方で探す
-          const conds = Array.from(new Set([raw0, tokens[0]])).flatMap(t => [`name.ilike.%${t}%`, `product_code.ilike.%${t}%`, `manufacturer.ilike.%${t}%`]).join(",")
+          const conds = Array.from(new Set([raw0, tokens[0].replace(/[,()]/g, "")])).flatMap(t => [`name.ilike.%${t}%`, `product_code.ilike.%${t}%`, `manufacturer.ilike.%${t}%`]).join(",")
           const r2 = await supabase.from("products").select(PCOLS).or(conds).order("name").limit(50)
           data = r2.error ? [] : (r2.data as Product[])
         }
