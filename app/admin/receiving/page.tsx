@@ -167,6 +167,38 @@ export default function ReceivingPage() {
     try {
       const isPdf = target.type === "application/pdf" || target.name.toLowerCase().endsWith(".pdf")
 
+      const isSheet = /.(xlsx|xls|csv)$/i.test(target.name)
+      if (isSheet) {
+        // Excel / CSV の納品明細: AIは使わず、列名で読み取り、納品書No.ごとに1伝票へまとめる
+        const XLSX = await import("xlsx")
+        const wb = XLSX.read(await target.arrayBuffer(), { type: "array", cellDates: false })
+        const grid: any[][] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" })
+        const hi = grid.findIndex(r => r.some(c => String(c).includes("商品名")))
+        if (hi < 0) throw new Error("「商品名」の列が見つかりません。1行目に列名（納品日・納品書No.・品番・商品名・数量・単価・金額）がある表にしてください")
+        const head = grid[hi].map(c => String(c).trim())
+        const col = (...names: string[]) => head.findIndex(h => names.some(n => h.includes(n)))
+        const cDate = col("納品日", "伝票日付", "日付"), cNo = col("納品書No", "伝票№", "伝票No", "伝票番号"), cMemo = col("摘要")
+        const cCode = col("品番", "商品コード", "コード"), cName = col("商品名"), cQty = col("数量"), cUnit = col("単価"), cAmt = col("金額")
+        const num = (v: any) => { const x = Number(String(v ?? "").replace(/[¥,\s]/g, "")); return Number.isFinite(x) ? x : 0 }
+        const dateOf = (v: any) => { const m = String(v || "").match(/(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/); return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : "" }
+        const groups = new Map<string, any>()
+        for (const r of grid.slice(hi + 1)) {
+          const name = String(r[cName] ?? "").trim()
+          if (!name) continue
+          const no = cNo >= 0 ? String(r[cNo] ?? "").trim() : ""
+          const date = cDate >= 0 ? dateOf(r[cDate]) : ""
+          const key = no + "|" + date
+          if (!groups.has(key)) groups.set(key, { invoice_number: no, invoice_date: date, memo: cMemo >= 0 ? String(r[cMemo] ?? "") : "", items: [] as any[] })
+          const qty = num(r[cQty]); const up = num(r[cUnit]); const amt = cAmt >= 0 ? num(r[cAmt]) : qty * up
+          const unit = qty > 0 && amt > 0 && Math.abs(qty * up - amt) > 1 ? amt / qty : up   // 割引後の金額が正
+          groups.get(key).items.push({ supplier_product_code: cCode >= 0 ? String(r[cCode] ?? "").trim() : "", supplier_product_name: name, quantity: qty, unit_price: unit, amount: amt })
+        }
+        const sheetSlips = Array.from(groups.values()).map(g => ({ ...g, total: g.items.reduce((t: number, i: any) => t + (i.amount || 0), 0) }))
+        if (sheetSlips.length === 0) throw new Error("明細が見つかりませんでした")
+        if (sheetSlips.length > 1) { setSlipQueue(sheetSlips); setSlipIdx(0) } else setSlipQueue([])
+        applySlip(sheetSlips[0], false, "")
+        return
+      }
       const toB64 = (blob: Blob) => new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload  = () => resolve((reader.result as string).split(",")[1])
@@ -580,12 +612,12 @@ export default function ReceivingPage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          {parsing ? `AI解析中…${parseProgress ? " " + parseProgress : ""}` : "📄 PDF / 📷 写真から読込"}
+          {parsing ? `AI解析中…${parseProgress ? " " + parseProgress : ""}` : "📄 PDF / 📷 写真 / Excel から読込"}
         </label>
         <input
           id="pdf-upload"
           type="file"
-          accept="application/pdf,image/*"
+          accept="application/pdf,image/*,.xlsx,.xls,.csv"
           onChange={(e) => {
             const f = e.target.files?.[0]
             if (f) uploadAndParse(f)
