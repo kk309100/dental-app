@@ -64,8 +64,9 @@ export default function ClinicInventoryPage() {
   const [items, setItems]         = useState<Item[]>([])
   const [logs, setLogs]           = useState<Log[]>([])
   // 二重発注防止: 未納品の注文に含まれる商品（product_id / 手入力の場合は商品名）
-  const [orderedProductIds, setOrderedProductIds]     = useState<Set<string>>(new Set())
-  const [orderedProductNames, setOrderedProductNames] = useState<Set<string>>(new Set())
+  // 発注中の商品 → 注文の状況（商品カードに「注文受付・10/14注文」のように出す）
+  const [orderedProductIds, setOrderedProductIds]     = useState<Map<string, OrderInfo>>(new Map())
+  const [orderedProductNames, setOrderedProductNames] = useState<Map<string, OrderInfo>>(new Map())
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState("")
   const [searchFocused, setSearchFocused] = useState(false)
@@ -241,22 +242,28 @@ export default function ClinicInventoryPage() {
   async function fetchOpenOrderedProducts(clinicIdToUse: string) {
     const { data: openOrders } = await supabase
       .from("orders")
-      .select("id")
+      .select("id,status,created_at")
       .eq("clinic_id", clinicIdToUse)
       .not("status", "in", '("納品済み","納品済","キャンセル","取消")')
+      .order("created_at", { ascending: false })
       .limit(500)
     const orderIds = (openOrders || []).map((o: any) => o.id)
-    if (orderIds.length === 0) { setOrderedProductIds(new Set()); setOrderedProductNames(new Set()); return }
+    if (orderIds.length === 0) { setOrderedProductIds(new Map()); setOrderedProductNames(new Map()); return }
+    const orderById = new Map((openOrders || []).map((o: any) => [o.id, o]))
     const { data: openItems } = await supabase
       .from("order_items")
-      .select("product_id,product_name")
+      .select("order_id,product_id,product_name,quantity")
       .in("order_id", orderIds)
       .limit(5000)
-    const ids = new Set<string>()
-    const names = new Set<string>()
-    ;(openItems || []).forEach((it: any) => {
-      if (it.product_id) ids.add(it.product_id)
-      else if (it.product_name) names.add(it.product_name)
+    const ids = new Map<string, OrderInfo>()
+    const names = new Map<string, OrderInfo>()
+    // 新しい注文の状況を優先して残す（注文は新しい順に並んでいる）
+    const sorted = [...(openItems || [])].sort((a: any, b: any) => String(orderById.get(b.order_id)?.created_at || "").localeCompare(String(orderById.get(a.order_id)?.created_at || "")))
+    sorted.forEach((it: any) => {
+      const o: any = orderById.get(it.order_id)
+      const info: OrderInfo = { status: o?.status || "", date: String(o?.created_at || "").slice(0, 10), qty: Number(it.quantity || 0) }
+      if (it.product_id) { if (!ids.has(it.product_id)) ids.set(it.product_id, info) }
+      else if (it.product_name) { if (!names.has(it.product_name)) names.set(it.product_name, info) }
     })
     setOrderedProductIds(ids)
     setOrderedProductNames(names)
@@ -830,8 +837,8 @@ export default function ClinicInventoryPage() {
     onFocusModal: (item: Item, type: "use" | "restock") => setFocusModal({ item, type }),
     onOpenOptions: (item: Item) => setOptionsMenu(item),
     onOrder: (item: Item) => {
-      const alreadyOrdered = item.product_id ? orderedProductIds.has(item.product_id) : orderedProductNames.has(item.product_name)
-      if (alreadyOrdered && !confirm("この商品はすでに発注済み（未納品）です。\n重複して発注しますか？")) return
+      const info = item.product_id ? orderedProductIds.get(item.product_id) : orderedProductNames.get(item.product_name)
+      if (info && !confirm(`この商品はすでに発注中です（${orderStatusText(info)}）。\n重複して発注しますか？`)) return
       const qty = item.units_per_package ?? 1
       if (item.product_id) {
         router.push(`/order?order_product_id=${item.product_id}&order_qty=${qty}`)
@@ -840,7 +847,8 @@ export default function ClinicInventoryPage() {
         router.push(`/order?manual_name=${encodeURIComponent(item.product_name)}&order_qty=${qty}`)
       }
     },
-    alreadyOrdered: item.product_id ? orderedProductIds.has(item.product_id) : orderedProductNames.has(item.product_name),
+    alreadyOrdered: !!(item.product_id ? orderedProductIds.get(item.product_id) : orderedProductNames.get(item.product_name)),
+    orderInfo: (item.product_id ? orderedProductIds.get(item.product_id) : orderedProductNames.get(item.product_name)) ?? null,
     onEditStock: startEditStock,
     editStockId,
     editStockValue,
@@ -1864,13 +1872,21 @@ export default function ClinicInventoryPage() {
 }
 
 // ── 商品カード ──
-function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFocusModal, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, alreadyOrdered, processing, flash, setRef, bulkDeleteMode, bulkSelected, onBulkToggle, onPhotoCapture, onDeletePhoto, uploadingPhoto }: {
+type OrderInfo = { status: string; date: string; qty: number }
+// 発注中の商品に出す文言。例: 「注文受付・10/14注文 ×3」
+function orderStatusText(info: OrderInfo): string {
+  const m = info.date ? `${Number(info.date.slice(5, 7))}/${Number(info.date.slice(8, 10))}注文` : ""
+  return [info.status || "発注中", m, info.qty ? `×${info.qty}` : ""].filter(Boolean).join("・").replace("・×", " ×")
+}
+
+function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFocusModal, editStockId, editStockValue, setEditStockValue, onConfirmEdit, onCancelEdit, onEditMin, editMinId, editMinValue, setEditMinValue, onConfirmEditMin, onCancelEditMin, onDelete, onOrder, alreadyOrdered, orderInfo, processing, flash, setRef, bulkDeleteMode, bulkSelected, onBulkToggle, onPhotoCapture, onDeletePhoto, uploadingPhoto }: {
   item: Item
   onQuick: (item: Item, delta: number) => void
   onOpenModal: (item: Item, type: "use" | "restock") => void
   onOpenOptions: (item: Item) => void
   onOrder: (item: Item) => void
   alreadyOrdered: boolean
+  orderInfo?: OrderInfo | null
   onEditStock: (item: Item) => void
   onFocusModal: (item: Item, type: "use" | "restock") => void
   editStockId: string | null
@@ -1926,7 +1942,7 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
             <span style={{ fontSize: 10, fontWeight: "bold", background: "#fee2e2", color: "#b91c1c", padding: "1px 6px", borderRadius: 999, marginRight: 5 }}>発注必要</span>
           )}
           {alreadyOrdered && (
-            <span style={{ fontSize: 10, fontWeight: "bold", background: "#fff7ed", color: "#c2410c", padding: "1px 6px", borderRadius: 999, marginRight: 5 }}>🕓 発注済み・未納品</span>
+            <span style={{ fontSize: 10, fontWeight: "bold", background: "#fff7ed", color: "#c2410c", padding: "1px 6px", borderRadius: 999, marginRight: 5 }}>🕓 {orderInfo ? orderStatusText(orderInfo) : "発注済み・未納品"}</span>
           )}
           {isNew && (
             <span style={{ fontSize: 10, fontWeight: "bold", background: "#dbeafe", color: "#1d4ed8", padding: "1px 6px", borderRadius: 999, marginRight: 5 }}>NEW</span>
