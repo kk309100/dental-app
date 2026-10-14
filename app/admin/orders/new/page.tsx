@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { romajiToKatakana } from "@/lib/romaji"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
@@ -234,10 +235,23 @@ function NewOrderPage() {
         let q = supabase.from("products").select(PCOLS)
         for (const tk of tokens) q = q.ilike("search_key", `%${kata(tk).replace(/\s+/g, "")}%`)
         const r = await q.order("name").limit(50)
-        if (!r.error) data = r.data as Product[]
+        if (!r.error) {
+          data = r.data as Product[]
+          // 日本語入力に切り替えず、ローマ字（wantafuto など）で打った場合も探せるように、カタカナに直した検索も行って足す
+          const alt = tokens.map(tk => romajiToKatakana(tk) ?? tk)
+          if (alt.some((x, i) => x !== tokens[i])) {
+            let q2 = supabase.from("products").select(PCOLS)
+            for (const tk of alt) q2 = q2.ilike("search_key", `%${kata(tk).replace(/s+/g, "")}%`)
+            const r2 = await q2.order("name").limit(50)
+            if (!r2.error && r2.data?.length) {
+              const have = new Set(data.map(x => x.id))
+              data = [...data, ...(r2.data as Product[]).filter(x => !have.has(x.id))].slice(0, 50)
+            }
+          }
+        }
         else {
           // 検索用の列がまだ無い場合の代替（素の部分一致）
-          const raw0 = productSearch.trim().split(/s+/)[0].replace(/[%,()]/g, "")   // 入力そのまま（半角カナ等）と、正規化したものの両方で探す
+          const raw0 = productSearch.trim().split(/\s+/)[0].replace(/[%,()]/g, "")   // 入力そのまま（半角カナ等）と、正規化したものの両方で探す
           const conds = Array.from(new Set([raw0, tokens[0].replace(/[,()]/g, "")])).flatMap(t => [`name.ilike.%${t}%`, `product_code.ilike.%${t}%`, `manufacturer.ilike.%${t}%`]).join(",")
           const r2 = await supabase.from("products").select(PCOLS).or(conds).order("name").limit(50)
           data = r2.error ? [] : (r2.data as Product[])
