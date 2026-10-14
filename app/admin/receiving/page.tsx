@@ -293,6 +293,18 @@ export default function ReceivingPage() {
       const m = products.find((p) => normKey(p.product_code) === key)
       if (m) return m
     }
+    if (row.supplierCode) {
+      // 仕入先の品番を、自社の商品名の先頭に付けて登録している商品（例: 「A957-22-1610H ｴﾝﾊﾟﾜｰ2…」）に一致させる。
+      // 品番の直後が英数字・ハイフンなら別の品番の一部なので除く。1件に決まるときだけ採用。
+      const key = normKey(row.supplierCode)
+      if (key.length >= 4) {
+        const hits = products.filter((p) => {
+          const n = normKey(p.name)
+          return n.startsWith(key) && !/[a-z0-9\-]/.test(n.charAt(key.length))
+        })
+        if (hits.length === 1) return hits[0]
+      }
+    }
     if (row.productName) {
       const key = normKey(row.productName)
       return products.find((p) => normKey(p.name) === key)
