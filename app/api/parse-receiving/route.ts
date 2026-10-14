@@ -4,7 +4,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 export const runtime = "nodejs"
-export const maxDuration = 60
+export const maxDuration = 180   // 明細が多い納品書でも、読み取りが終わるまで待てるようにする
 
 type ParsedItem = {
   supplier_jan?: string
@@ -47,6 +47,38 @@ const SYSTEM_PROMPT = `あなたは歯科材料の仕入納品書を構造化デ
 
 出力は JSON のみ。説明文・マークダウン記号 (\`\`\`) は不要。`
 
+// 途中で切れた返事から、ヘッダー情報と、最後まで書かれている明細だけを取り出す
+function salvageItems(text: string): ParsedInvoice | null {
+  const start = text.indexOf('"items"')
+  if (start < 0) return null
+  const arr = text.indexOf("[", start)
+  if (arr < 0) return null
+  const items: ParsedItem[] = []
+  let depth = 0, objStart = -1, inStr = false, esc = false
+  for (let i = arr + 1; i < text.length; i++) {
+    const ch = text[i]
+    if (inStr) {
+      if (esc) esc = false
+      else if (ch === "\\") esc = true
+      else if (ch === '"') inStr = false
+      continue
+    }
+    if (ch === '"') { inStr = true; continue }
+    if (ch === "{") { if (depth === 0) objStart = i; depth++ }
+    else if (ch === "}") {
+      depth--
+      if (depth === 0 && objStart >= 0) {
+        try { items.push(JSON.parse(text.slice(objStart, i + 1))) } catch { /* 壊れた1件は捨てる */ }
+        objStart = -1
+      }
+    } else if (ch === "]" && depth === 0) break
+  }
+  if (items.length === 0) return null
+  const head = text.slice(0, start)
+  const pick = (k: string) => { const m = head.match(new RegExp('"' + k + '"\\s*:\\s*"([^"]*)"')); return m ? m[1] : undefined }
+  return { supplier_name: pick("supplier_name"), invoice_number: pick("invoice_number"), invoice_date: pick("invoice_date"), items }
+}
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
@@ -75,7 +107,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: "claude-opus-4-5",
-        max_tokens: 4096,
+        max_tokens: 16000,   // 明細が多いと、4096では、JSONの後ろが切れて「JSON解析失敗」になっていた
         system: SYSTEM_PROMPT,
         messages: [
           {
@@ -104,21 +136,32 @@ export async function POST(req: NextRequest) {
     const result = await r.json()
     const text = result.content?.[0]?.text || ""
 
-    // JSON 部分を抽出（マークダウンに包まれている場合の保険）
+    // JSON 部分を抽出（マークダウンや説明文に包まれている場合の保険）
     let jsonText = text.trim()
-    const fence = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/)
+    const fence = jsonText.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/)
     if (fence) jsonText = fence[1].trim()
+    const first = jsonText.indexOf("{"), last = jsonText.lastIndexOf("}")
+    if (first >= 0 && last > first) jsonText = jsonText.slice(first, last + 1)
 
     let parsed: ParsedInvoice
+    let partial = false
     try {
       parsed = JSON.parse(jsonText)
     } catch (e) {
-      return NextResponse.json({ error: "JSON 解析失敗", raw: text.slice(0, 1000) }, { status: 502 })
+      // 返事が途中で切れた場合: 読み取れた「完全な明細」だけを救い出す
+      const salvaged = salvageItems(text)
+      if (!salvaged) {
+        return NextResponse.json({ error: "JSON 解析失敗", detail: `stop_reason=${result.stop_reason}\n${text.slice(0, 600)}` }, { status: 502 })
+      }
+      parsed = salvaged
+      partial = true
     }
+    if (result.stop_reason === "max_tokens") partial = true
 
     return NextResponse.json({
       ok: true,
       data: parsed,
+      partial,
       usage: result.usage,
     })
   } catch (e) {

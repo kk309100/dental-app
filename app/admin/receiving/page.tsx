@@ -147,7 +147,7 @@ export default function ReceivingPage() {
           : (resJson.error || "解析失敗")
         throw new Error(msg)
       }
-      const { data } = resJson
+      const { data, partial } = resJson
 
       // items 配列を正規化（Claudeがフィールド名をずらして返す場合に対応）
       const rawItems: any[] = Array.isArray(data.items) ? data.items
@@ -191,6 +191,7 @@ export default function ReceivingPage() {
         ? newRows
         : [...newRows, ...Array.from({ length: INITIAL_ROWS - newRows.length }, newRow)]
       setRows(padded)
+      if (partial) setParseError(`⚠ 書類が長いため、途中までの ${newRows.length} 件しか読み取れていません。残りの明細は、ファイルを分けて（ページごとに）取り込み直すか、手で追加してください。`)
       setTimeout(() => document.getElementById("receiving-table")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200)
     } catch (e) {
       setParseError((e as Error).message)
