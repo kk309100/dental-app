@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import { romajiAlt } from "@/lib/romaji"
 import { supabase, fetchAll as fetchAllRows } from "@/lib/supabase"
 import { parseDbDate } from "@/lib/invoice"
@@ -760,23 +760,39 @@ export default function ClinicInventoryPage() {
     return ["すべて", ...Array.from(new Set(locs)).sort()]
   }, [items])
 
+  // 商品ごとの検索用の文字列（項目を「|」でつなぐ）。商品の一覧が変わったときだけ作り直す
+  const searchIndex = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const i of items) m.set(i.id, [i.product_name, i.maker, i.barcode, i.location, i.shelf_no, i.category].map(v => norm(v || "")).join("|"))
+    return m
+  }, [items])
+  // 入力のたびに、画面全体を作り直さないよう、検索語の反映を少し後回しにする（入力は軽いまま）
+  const deferredSearch = useDeferredValue(search)
+
   const filtered = useMemo(() => {
-    const k = norm(search)
-    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
-    const hit = (t: string) => t.includes(k) || (!!k2 && t.includes(k2))
+    const k = norm(deferredSearch)
+    const k2 = romajiAlt(deferredSearch) ? norm(romajiAlt(deferredSearch)!) : ""   // ローマ字入力でもカタカナ名を探せるように
     return items.filter((i) => {
-      const matchSearch = !k ||
-        hit(norm(i.product_name)) ||
-        hit(norm(i.maker || "")) ||
-        hit(norm(i.barcode || "")) ||
-        hit(norm(i.location || "")) ||
-        hit(norm(i.shelf_no || "")) ||
-        hit(norm(i.category || ""))
+      const t = searchIndex.get(i.id) || ""
+      const matchSearch = !k || t.includes(k) || (!!k2 && t.includes(k2))
       const matchLoc = locationFilter === "すべて" || i.location === locationFilter
       const matchCat = categoryFilter === "すべて" || i.category === categoryFilter
       return matchSearch && matchLoc && matchCat
     })
-  }, [items, search, locationFilter, categoryFilter])
+  }, [items, searchIndex, deferredSearch, locationFilter, categoryFilter])
+
+  // 商品が多いときは、最初の40件だけ描画し、下までスクロールしたら続きを足す（スマホで開くのが軽くなる）
+  const PAGE = 40
+  const [visibleCount, setVisibleCount] = useState(PAGE)
+  useEffect(() => { setVisibleCount(PAGE) }, [deferredSearch, locationFilter, categoryFilter])
+  const moreRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = moreRef.current
+    if (!el || typeof IntersectionObserver === "undefined") return
+    const io = new IntersectionObserver((es) => { if (es[0]?.isIntersecting) setVisibleCount(c => c + PAGE) }, { rootMargin: "400px" })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [visibleCount, filtered.length])
 
   // units_per_package が設定されている場合、stock_quantity×units_per_package で本数換算して比較
   function effectiveStock(i: Item) {
@@ -1107,14 +1123,22 @@ export default function ClinicInventoryPage() {
                   border: "none", fontSize: 12, fontWeight: "bold", cursor: "pointer",
                 }}>注文画面へ →</button>
               </div>
-              {needsReorder.map((item) => <ItemCard key={item.id} {...itemCardProps(item)} />)}
+              {needsReorder.slice(0, visibleCount).map((item) => <ItemCard key={item.id} {...itemCardProps(item)} />)}
             </section>
           )}
 
           {/* 場所別グループ表示（すべて選択時） */}
           {locationFilter === "すべて" && locationGroups ? (
             locationGroups.length === 0 ? null : (
-              locationGroups.map(({ loc, items: groupItems }) => (
+              (() => {
+                let budget = Math.max(0, visibleCount - needsReorder.length)
+                return locationGroups.map(({ loc, items: allGroupItems }) => {
+                  if (budget <= 0) return null
+                  const groupItems = allGroupItems.slice(0, budget)
+                  budget -= groupItems.length
+                  return { loc, groupItems, total: allGroupItems.length }
+                }).filter((x): x is { loc: string; groupItems: Item[]; total: number } => !!x)
+              })().map(({ loc, groupItems, total }) => (
                 <section key={loc} style={{ marginBottom: 16 }}>
                   <div style={{
                     display: "flex", alignItems: "center", gap: 6, marginBottom: 6,
@@ -1126,7 +1150,7 @@ export default function ClinicInventoryPage() {
                       {loc}
                     </span>
                     <span style={{ fontSize: 12, color: C.sub, marginLeft: "auto" }}>
-                      {groupItems.length}点
+                      {total}点
                     </span>
                   </div>
                   {groupItems.map((item) => <ItemCard key={item.id} {...itemCardProps(item)} />)}
@@ -1136,8 +1160,17 @@ export default function ClinicInventoryPage() {
           ) : (
             /* 場所指定フィルター時は単純リスト */
             <>
-              {normalItems.map((item) => <ItemCard key={item.id} {...itemCardProps(item)} />)}
+              {normalItems.slice(0, Math.max(0, visibleCount - needsReorder.length)).map((item) => <ItemCard key={item.id} {...itemCardProps(item)} />)}
             </>
+          )}
+
+          {visibleCount < filtered.length && (
+            <div ref={moreRef} style={{ textAlign: "center", padding: "12px 0 24px" }}>
+              <button onClick={() => setVisibleCount(c => c + PAGE)}
+                style={{ padding: "10px 24px", borderRadius: 10, border: `1.5px solid ${C.primary}`, background: "#fff", color: C.primary, fontWeight: "bold", fontSize: 13, cursor: "pointer" }}>
+                もっと見る（残り {filtered.length - visibleCount} 件）
+              </button>
+            </div>
           )}
 
           {filtered.length === 0 && (
@@ -2013,6 +2046,7 @@ function ItemCard({ item, onQuick, onOpenModal, onOpenOptions, onEditStock, onFo
           <img
             src={item.item_image_url}
             alt={item.product_name}
+            loading="lazy" decoding="async"
             style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1.5px solid #e5e7eb", display: "block" }}
           />
           <button
