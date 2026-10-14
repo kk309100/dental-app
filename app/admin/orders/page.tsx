@@ -221,6 +221,18 @@ function AdminOrdersPage() {
     return m
   }, [poHeads, poItems])
 
+  // 発注書の入荷（在庫に加算される入荷）で受け取り済みの数。注文明細IDの先頭8桁 → 入荷数。
+  const receivedQtyByItemPrefix = useMemo(() => {
+    const live = new Set(poHeads.filter(p => p.status !== "取消").map(p => p.id))
+    const m = new Map<string, number>()
+    poItems.forEach(it => {
+      if (!live.has(it.purchase_order_id)) return
+      const t = String(it.note || "").match(/明細([0-9a-f]{8})/i)
+      if (t) m.set(t[1].toLowerCase(), (m.get(t[1].toLowerCase()) || 0) + Number(it.received_quantity || 0))
+    })
+    return m
+  }, [poHeads, poItems])
+
   // この明細で、入荷（直送）として受け取る数。
   // 在庫が足りない行 … 不足数。
   // 在庫が足りていても、在庫を使わず発注した行（強制発注など）… その発注数。それ以外は 0（入荷の対象外）。
@@ -229,7 +241,11 @@ function AdminOrdersPage() {
     const shortfall = qty - Math.max(0, stock)
     if (shortfall > 0) return shortfall
     const ordered = orderedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0
-    return ordered > 0 ? Math.min(qty, ordered) : 0
+    if (ordered <= 0) return 0
+    // 発注書の入荷で在庫に加算済みの分（直送ボタンで記録した分 = 納品済みの数 は除く）は、直送の対象にしない
+    const recv = receivedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0
+    const viaStock = Math.max(0, recv - Number(it.delivered_quantity || 0))
+    return Math.max(0, Math.min(qty, ordered) - viaStock)
   }
 
   // 業務状態（一目で「次にやること」が分かるバッジ用）
