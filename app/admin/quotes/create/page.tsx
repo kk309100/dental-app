@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { calcTax, fmtYen, ymd } from "@/lib/invoice"
 import { generateQuoteNumber, defaultExpiryDate } from "@/lib/quote"
@@ -350,8 +351,9 @@ function CreateQuotePage() {
           {(() => {
             const selected = clinics.find(c => c.id === clinicId)
             const k = searchKey(clinicSearch)
+            const k2 = romajiAlt(clinicSearch) ? searchKey(romajiAlt(clinicSearch)!) : ""   // ローマ字入力でもカタカナ名を探せるように
             const filtered = k
-              ? clinics.filter(c => searchKey(`${c.name} ${c.corporate_name || ""} ${c.clinic_code || ""}`).includes(k)).slice(0, 50)
+              ? clinics.filter(c => { const t = searchKey(`${c.name} ${c.corporate_name || ""} ${c.clinic_code || ""}`); return t.includes(k) || (!!k2 && t.includes(k2)) }).slice(0, 50)
               : clinics.slice(0, 50)
             return (
               <>

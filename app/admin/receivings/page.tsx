@@ -7,6 +7,7 @@
 // - フィルタ: 期間 / 仕入先 / 商品名
 
 import { useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
@@ -142,6 +143,7 @@ export default function ReceivingsListPage() {
 
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
     return receipts.filter(r => {
       if (supplierFilter !== "all" && r.supplier_id !== supplierFilter) return false
       if (noPoOnly && !(r.memo || "").includes("⚠発注記録なし")) return false
@@ -150,7 +152,7 @@ export default function ReceivingsListPage() {
       if (to && d > to) return false
       if (!k) return true
       const target = norm(`${productName(r.product_id)} ${supplierName(r.supplier_id)} ${r.memo || ""}`)
-      return target.includes(k)
+      return target.includes(k) || (!!k2 && target.includes(k2))
     })
   }, [receipts, supplierFilter, from, to, search, suppliers, products, noPoOnly])
 

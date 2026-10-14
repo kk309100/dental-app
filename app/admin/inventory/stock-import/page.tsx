@@ -7,6 +7,7 @@
 // こちらはファイルに載っている商品だけをピンポイントで更新する軽量版。
 
 import { useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
 
@@ -273,7 +274,8 @@ function UnmatchedRow({ outcome, products, onChoose }: {
   const results = useMemo(() => {
     if (!q.trim()) return []
     const k = norm(q)
-    return products.filter(p => norm(p.name).includes(k)).slice(0, 15)
+    const k2 = romajiAlt(q) ? norm(romajiAlt(q)!) : ""   // ローマ字入力でもカタカナ名を探せるように
+    return products.filter(p => { const t = norm(p.name); return t.includes(k) || (!!k2 && t.includes(k2)) }).slice(0, 15)
   }, [q, products])
 
   return (

@@ -4,6 +4,7 @@
 // データは history_lines（今の注文・請求・売上集計とは別）。何も書き換えない。
 
 import { useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { useRouter } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
@@ -45,7 +46,8 @@ export default function HistoryPage() {
 
   const clinicOptions = useMemo(() => {
     const k = norm(clinicSearch)
-    return clinics.filter(c => !k || norm(c.name).includes(k))
+    const k2 = romajiAlt(clinicSearch) ? norm(romajiAlt(clinicSearch)!) : ""   // ローマ字入力でもカタカナ名を探せるように
+    return clinics.filter(c => !k || norm(c.name).includes(k) || (!!k2 && norm(c.name).includes(k2)))
   }, [clinics, clinicSearch])
 
   async function load() {
@@ -68,7 +70,8 @@ export default function HistoryPage() {
 
   const filtered = useMemo(() => {
     const k = norm(search)
-    return k ? rows.filter(r => norm(`${r.item_name || ""} ${r.item_code || ""}`).includes(k)) : rows
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
+    return k ? rows.filter(r => { const t = norm(`${r.item_name || ""} ${r.item_code || ""}`); return t.includes(k) || (!!k2 && t.includes(k2)) }) : rows
   }, [rows, search])
 
   // 商品別まとめ: 最終購入日・最終単価・回数・合計数量・合計金額

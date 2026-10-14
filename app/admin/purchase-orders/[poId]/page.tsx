@@ -1,6 +1,7 @@
 "use client"
 
 import { use, useEffect, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
@@ -473,9 +474,11 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
                           disabled={savingField === i.id}
                           className="w-full px-1.5 py-1 border border-gray-200 rounded text-xs" />
                         {productSuggestOpenId === i.id && (() => {
-                          const q = searchKey(productQuery[i.id] ?? (i.product_name || ""))
+                          const qRaw = productQuery[i.id] ?? (i.product_name || "")
+                          const q = searchKey(qRaw)
+                          const q2 = romajiAlt(qRaw) ? searchKey(romajiAlt(qRaw)!) : ""
                           const matches = q
-                            ? allProducts.filter(p => searchKey(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""}`).includes(q)).slice(0, 30)
+                            ? allProducts.filter(p => { const t = searchKey(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""}`); return t.includes(q) || (!!q2 && t.includes(q2)) }).slice(0, 30)
                             : []
                           if (!q) return null
                           return (

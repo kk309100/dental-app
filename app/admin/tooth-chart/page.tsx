@@ -12,6 +12,7 @@
 // の32区分とする。
 
 import { useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { supabase, fetchAll as fetchAllRows } from "@/lib/supabase"
@@ -189,7 +190,8 @@ export default function ToothChartPage() {
   const filteredClinics = useMemo(() => {
     const k = searchKey(clinicQuery)
     if (!k) return clinics.slice(0, 50)
-    return clinics.filter(c => searchKey(`${c.name} ${c.corporate_name || ""} ${c.clinic_code || ""}`).includes(k)).slice(0, 50)
+    const k2 = romajiAlt(clinicQuery) ? searchKey(romajiAlt(clinicQuery)!) : ""   // ローマ字入力でもカタカナ名を探せるように
+    return clinics.filter(c => { const t = searchKey(`${c.name} ${c.corporate_name || ""} ${c.clinic_code || ""}`); return t.includes(k) || (!!k2 && t.includes(k2)) }).slice(0, 50)
   }, [clinics, clinicQuery])
 
   async function generateDeliveryNumber() {
@@ -459,7 +461,8 @@ function TemplateEditor({
   const filtered = useMemo(() => {
     const k = searchKey(query)
     if (!k) return products.slice(0, 50)
-    return products.filter(p => searchKey(`${p.name} ${p.product_code || ""}`).includes(k)).slice(0, 50)
+    const k2 = romajiAlt(query) ? searchKey(romajiAlt(query)!) : ""   // ローマ字入力でもカタカナ名を探せるように
+    return products.filter(p => { const t = searchKey(`${p.name} ${p.product_code || ""}`); return t.includes(k) || (!!k2 && t.includes(k2)) }).slice(0, 50)
   }, [products, query])
 
   return (

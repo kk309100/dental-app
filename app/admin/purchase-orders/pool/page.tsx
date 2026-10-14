@@ -7,6 +7,7 @@
 //   このページで仕入先ごとに「発注確定」して発注書を発行する
 
 import { useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { supabase, fetchAllData } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
@@ -390,7 +391,8 @@ function SupplierSearchSelect({
   const [open, setOpen] = useState(false)
   const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC")
   const k = norm(q)
-  const filtered = k ? suppliers.filter(s => norm(s.name).includes(k)).slice(0, 30) : suppliers.slice(0, 30)
+  const k2 = romajiAlt(q) ? norm(romajiAlt(q)!) : ""   // ローマ字入力でもカタカナ名を探せるように
+  const filtered = k ? suppliers.filter(s => norm(s.name).includes(k) || (!!k2 && norm(s.name).includes(k2))).slice(0, 30) : suppliers.slice(0, 30)
 
   return (
     <div style={{ position: "relative" }}>

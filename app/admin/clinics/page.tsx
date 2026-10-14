@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { parseCSV } from "@/lib/csv"
@@ -105,6 +106,7 @@ export default function AdminClinicsPage() {
   // 半角全角統一の検索
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
     if (!k) return clinics
     // 数字だけの検索は「医院コード」の前方一致とみなす
     // （そうしないと "1" が "21"「31" 等どこかに"1"を含むコード全部にヒットして絞り込めない）
@@ -113,7 +115,7 @@ export default function AdminClinicsPage() {
     }
     return clinics.filter((c) => {
       const target = norm(`${c.name} ${c.clinic_code || ""} ${c.corporate_name || ""} ${c.contact || ""} ${c.sales_rep || ""}`)
-      return target.includes(k)
+      return target.includes(k) || (!!k2 && target.includes(k2))
     })
   }, [clinics, search])
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { supabase, fetchAllData } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
@@ -51,6 +52,7 @@ export default function DeliveriesPage() {
 
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
     return orders
       .filter(o => {
         const cl = clinicById.get(o.clinic_id)
@@ -60,7 +62,7 @@ export default function DeliveriesPage() {
         if (clinicFilter !== "all" && o.clinic_id !== clinicFilter) return false
         if (!k) return true
         const target = norm(`${o.delivery_number || ""} ${cl?.name || ""}`)
-        return target.includes(k)
+        return target.includes(k) || (!!k2 && target.includes(k2))
       })
       .sort((a, b) => {
         const ad = a.delivered_at || a.created_at

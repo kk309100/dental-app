@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { supabase, fetchAll as fetchAllRows } from "@/lib/supabase"
 import { parseDbDate } from "@/lib/invoice"
 import { Html5Qrcode } from "html5-qrcode"
@@ -754,14 +755,16 @@ export default function ClinicInventoryPage() {
 
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
+    const hit = (t: string) => t.includes(k) || (!!k2 && t.includes(k2))
     return items.filter((i) => {
       const matchSearch = !k ||
-        norm(i.product_name).includes(k) ||
-        norm(i.maker || "").includes(k) ||
-        norm(i.barcode || "").includes(k) ||
-        norm(i.location || "").includes(k) ||
-        norm(i.shelf_no || "").includes(k) ||
-        norm(i.category || "").includes(k)
+        hit(norm(i.product_name)) ||
+        hit(norm(i.maker || "")) ||
+        hit(norm(i.barcode || "")) ||
+        hit(norm(i.location || "")) ||
+        hit(norm(i.shelf_no || "")) ||
+        hit(norm(i.category || ""))
       const matchLoc = locationFilter === "すべて" || i.location === locationFilter
       const matchCat = categoryFilter === "すべて" || i.category === categoryFilter
       return matchSearch && matchLoc && matchCat

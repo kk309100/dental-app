@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
-import { romajiToKatakana } from "@/lib/romaji"
+import { romajiToKatakana, romajiAlt } from "@/lib/romaji"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
@@ -816,9 +816,10 @@ function NewOrderPage() {
       {/* 医院ピッカー モーダル */}
       {showClinicPicker && (() => {
         const k = searchKey(clinicSearchInPicker)
+        const k2 = romajiAlt(clinicSearchInPicker) ? searchKey(romajiAlt(clinicSearchInPicker)!) : ""   // ローマ字入力でもカタカナ名を探せるように
         const filteredClinics = !k ? clinics : clinics.filter(c => {
           const target = searchKey(`${c.name} ${c.corporate_name || ""} ${c.clinic_code || ""}`)
-          return target.includes(k)
+          return target.includes(k) || (!!k2 && target.includes(k2))
         })
         return (
           <div

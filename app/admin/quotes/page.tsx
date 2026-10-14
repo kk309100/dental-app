@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { supabase } from "@/lib/supabase"
 import { fmtYen, fmtDate, calcTax } from "@/lib/invoice"
 import { QUOTE_STATUSES, generateQuoteNumber, defaultExpiryDate, type QuoteStatus } from "@/lib/quote"
@@ -361,6 +362,7 @@ export default function QuotesPage() {
   const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC")
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
     return quotes.filter((q) => {
       // active = draft / sent / accepted（売上化前）
       if (statusFilter === "active" && (q.status === "converted" || q.status === "rejected" || q.status === "cancelled")) return false
@@ -368,7 +370,7 @@ export default function QuotesPage() {
       if (clinicFilter !== "all" && q.clinic_id !== clinicFilter) return false
       if (!k) return true
       const target = norm(`${q.quote_number} ${q.title || ""} ${clinicName(q.clinic_id)}`)
-      return target.includes(k)
+      return target.includes(k) || (!!k2 && target.includes(k2))
     })
   }, [quotes, search, statusFilter, clinicFilter])
 

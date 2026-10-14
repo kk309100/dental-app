@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { supabase, fetchAllData } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
@@ -91,6 +92,7 @@ export default function PurchaseOrdersListPage() {
 
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
     return pos.filter(p => {
       if (statusFilter === "active" && (p.status === "入荷済" || p.status === "取消")) return false
       if (statusFilter !== "active" && statusFilter !== "all" && p.status !== statusFilter) return false
@@ -100,9 +102,9 @@ export default function PurchaseOrdersListPage() {
       if (to && dateStr > to) return false
       if (!k) return true
       const target = norm(`${p.po_number || ""} ${supplierName(p.supplier_id)} ${p.note || ""}`)
-      if (target.includes(k)) return true
+      if (target.includes(k) || (!!k2 && target.includes(k2))) return true
       // 商品名でも検索できるようにする
-      return (itemsByPo.get(p.id) || []).some(it => norm(it.product_name || "").includes(k))
+      return (itemsByPo.get(p.id) || []).some(it => { const t = norm(it.product_name || ""); return t.includes(k) || (!!k2 && t.includes(k2)) })
     }).sort((a, b) => {
       const ad = a.ordered_at || a.created_at
       const bd = b.ordered_at || b.created_at

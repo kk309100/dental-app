@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode"
@@ -158,9 +159,10 @@ function OrderPageInner() {
 
   const filteredProducts = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
     return products.filter((p) => {
       const t = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""} ${p.barcode || ""} ${p.purchase_maker || ""}`)
-      return (!k || t.includes(k)) && (category === "すべて" || p.category === category)
+      return (!k || t.includes(k) || (!!k2 && t.includes(k2))) && (category === "すべて" || p.category === category)
     })
   }, [products, search, category])
 

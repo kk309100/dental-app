@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { parseDbDate } from "@/lib/invoice"
@@ -87,6 +88,7 @@ export default function HistoryPage() {
 
   const filteredOrders = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
     const from = dateFrom ? new Date(dateFrom + "T00:00:00") : null
     const to   = dateTo   ? new Date(dateTo   + "T23:59:59") : null
     return orders.filter((order) => {
@@ -94,7 +96,7 @@ export default function HistoryPage() {
       const target = norm(`${order.delivery_number || ""} ${order.status || ""} ${itemNames} ${order.orderer_name || ""}`)
       const d = parseDbDate(order.created_at)
       return (
-        (!k || target.includes(k)) &&
+        (!k || target.includes(k) || (!!k2 && target.includes(k2))) &&
         (statusFilter === "すべて" || order.status === statusFilter) &&
         (!from || d >= from) &&
         (!to   || d <= to)

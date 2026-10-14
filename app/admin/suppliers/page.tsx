@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
 import { parseCSV } from "@/lib/csv"
@@ -56,10 +57,11 @@ export default function AdminSuppliersPage() {
 
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
     if (!k) return suppliers
     return suppliers.filter((s) => {
       const target = norm(`${s.name} ${s.supplier_code || ""} ${s.maker_name || ""} ${s.contact || ""}`)
-      return target.includes(k)
+      return target.includes(k) || (!!k2 && target.includes(k2))
     })
   }, [suppliers, search])
 

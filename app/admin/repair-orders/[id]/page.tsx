@@ -1,6 +1,7 @@
 "use client"
 
 import { use, useEffect, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { COMPANY } from "@/lib/company"
@@ -328,7 +329,8 @@ function ClinicSearchSelect({ clinics, value, onChange }: { clinics: Clinic[]; v
   const norm = (v: string) => String(v || "").toLowerCase().normalize("NFKC")
   const selected = clinics.find(c => c.id === value)
   const k = norm(q)
-  const filtered = k ? clinics.filter(c => norm(c.name).includes(k)).slice(0, 50) : clinics.slice(0, 50)
+  const k2 = romajiAlt(q) ? norm(romajiAlt(q)!) : ""   // ローマ字入力でもカタカナ名を探せるように
+  const filtered = k ? clinics.filter(c => norm(c.name).includes(k) || (!!k2 && norm(c.name).includes(k2))).slice(0, 50) : clinics.slice(0, 50)
 
   return (
     <div style={{ position: "relative" }}>

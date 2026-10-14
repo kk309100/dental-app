@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { supabase } from "@/lib/supabase"
 import { parseCSV, toCSV, downloadCSV } from "@/lib/csv"
 
@@ -174,8 +175,10 @@ export default function ClinicItemsPage() {
 
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ名を探せるように
+    const hit = (t: string) => t.includes(k) || (!!k2 && t.includes(k2))
     return items.filter((i) => {
-      const matchSearch = !k || norm(i.product_name).includes(k) || norm(i.maker || "").includes(k) || norm(i.location || "").includes(k)
+      const matchSearch = !k || hit(norm(i.product_name)) || hit(norm(i.maker || "")) || hit(norm(i.location || ""))
       const matchClinic = clinicFilter === "すべて" || i.clinic_name === clinicFilter
       return matchSearch && matchClinic
     })
