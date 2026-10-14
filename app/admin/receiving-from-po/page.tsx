@@ -55,6 +55,9 @@ export default function ReceivingFromPoPage() {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   // 商品名検索
   const [search, setSearch] = useState("")
+  // 発注書の詳細に入って戻ってきても、検索語を保ったままにする（タブを閉じるまで）
+  useEffect(() => { try { const v = sessionStorage.getItem("receivingFromPo.search"); if (v) setSearch(v) } catch { /* 保存できない環境では無視 */ } }, [])
+  useEffect(() => { try { sessionStorage.setItem("receivingFromPo.search", search) } catch { /* 無視 */ } }, [search])
 
   useEffect(() => { fetchData() }, [])
 
