@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 
@@ -46,6 +47,7 @@ export default function InventoryPage() {
 
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ商品を探せるように
     const m = norm(maker)
     return products.filter((p) => {
       if (filter === "stocked" && (p.stock ?? 0) <= 0) return false
@@ -55,7 +57,7 @@ export default function InventoryPage() {
       if (m && !norm(p.manufacturer || "").includes(m)) return false
       if (!k) return true
       const target = norm(`${p.name} ${p.product_code || ""} ${p.manufacturer || ""} ${p.location || ""}`)
-      return target.includes(k)
+      return target.includes(k) || (!!k2 && target.includes(k2))
     })
   }, [products, search, maker, filter])
 

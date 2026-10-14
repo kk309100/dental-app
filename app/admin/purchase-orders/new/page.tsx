@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
@@ -80,8 +81,9 @@ function NewPOPage() {
     const raw = productQuery[idx] ?? ""
     const k = searchKey(raw)
     if (!k) return products.slice(0, 30)
+    const k2 = romajiAlt(raw) ? searchKey(romajiAlt(raw)!) : ""
     return products
-      .filter(p => searchKey([p.name, p.product_code, p.manufacturer].filter(Boolean).join(" ")).includes(k))
+      .filter(p => { const t = searchKey([p.name, p.product_code, p.manufacturer].filter(Boolean).join(" ")); return t.includes(k) || (!!k2 && t.includes(k2)) })
       .slice(0, 30)
   }
 

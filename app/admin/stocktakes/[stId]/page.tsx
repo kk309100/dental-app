@@ -1,6 +1,7 @@
 "use client"
 
 import { use, useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
@@ -154,7 +155,8 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
       if (filterMode === "match" && (i.counted_stock === null || i.counted_stock !== i.system_stock)) return false
       if (!search) return true
       const target = norm([i.product.name, i.product.product_code, i.product.manufacturer, i.product.location].filter(Boolean).join(" "))
-      return target.includes(norm(search))
+      const k2 = romajiAlt(search)
+      return target.includes(norm(search)) || (!!k2 && target.includes(norm(k2)))
     })
   }, [sorted, filterMode, search])
 
@@ -426,7 +428,8 @@ function UnmatchedRow({ outcome, productList, itemIdByProductId, norm, onChoose 
   const results = useMemo(() => {
     if (!q.trim()) return []
     const k = norm(q)
-    return productList.filter(p => norm(p.name).includes(k)).slice(0, 15)
+    const k2 = romajiAlt(q) ? norm(romajiAlt(q)!) : ""
+    return productList.filter(p => { const n = norm(p.name); return n.includes(k) || (!!k2 && n.includes(k2)) }).slice(0, 15)
   }, [q, productList, norm])
 
   function pick(p: { id: string; name: string }) {

@@ -1,5 +1,6 @@
 "use client"
 
+import { romajiToKatakana } from "@/lib/romaji"
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { supabase, fetchAll, fetchInChunks } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
@@ -148,7 +149,11 @@ export default function AdminProductsPage() {
     const kataOf = (t: string) => t.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
     const nfkcOf = (t: string) => String(t || "").normalize("NFKC").toLowerCase()
     for (const tk of nfkcOf(search).split(/\s+/).map(x => x.replace(/%/g, "")).filter(Boolean)) {
-      q = q.ilike("search_key", `%${kataOf(tk)}%`)
+      // ローマ字の語（wantafuto など）は、カタカナに直した形でも探す（英字だけの語なので or() に入れて安全）
+      const alt = romajiToKatakana(tk)
+      q = alt && alt !== tk
+        ? q.or(`search_key.ilike.%${kataOf(tk)}%,search_key.ilike.%${alt}%`)
+        : q.ilike("search_key", `%${kataOf(tk)}%`)
     }
     const mk = maker.trim().replace(/[%,()]/g, "")
     if (mk) q = q.or(Array.from(new Set([mk, nfkcOf(mk)])).map(t => `manufacturer.ilike.%${t}%`).join(","))

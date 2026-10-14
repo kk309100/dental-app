@@ -55,3 +55,16 @@ export function romajiToKatakana(word: string): string | null {
   }
   return out
 }
+
+// 検索語の中のローマ字の語だけをカタカナに直した検索語を返す（直す語が無ければ null）。
+export function romajiAlt(query: string): string | null {
+  const parts = String(query || "").split(/(\s+)/)
+  let changed = false
+  const out = parts.map(p => {
+    if (!p || /^\s+$/.test(p)) return p
+    const k = romajiToKatakana(p)
+    if (k && k !== p) { changed = true; return k }
+    return p
+  })
+  return changed ? out.join("") : null
+}

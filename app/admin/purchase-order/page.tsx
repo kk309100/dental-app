@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
@@ -100,12 +101,14 @@ export default function PurchaseOrderPage() {
 
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ商品を探せるように
     return allRows.filter((r) => {
       if (statusFilter === "unbought" && r.purchase_status !== "未発注") return false
       if (statusFilter === "bought" && r.purchase_status !== "発注済み") return false
       if (makerFilter !== "all" && r.manufacturer !== makerFilter) return false
       if (!k) return true
-      return norm(`${r.product_name} ${r.manufacturer} ${r.clinic_name} ${r.delivery_number}`).includes(k)
+      const t = norm(`${r.product_name} ${r.manufacturer} ${r.clinic_name} ${r.delivery_number}`)
+      return t.includes(k) || (!!k2 && t.includes(k2))
     }).sort((a, b) => b.created_at.localeCompare(a.created_at))
   }, [allRows, search, statusFilter, makerFilter])
 

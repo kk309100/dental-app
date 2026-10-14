@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
+import { romajiAlt } from "@/lib/romaji"
 import { useSearchParams } from "next/navigation"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import Link from "next/link"
@@ -601,11 +602,12 @@ function AdminOrdersPage() {
 
   const filtered = useMemo(() => {
     const k = norm(search)
+    const k2 = romajiAlt(search) ? norm(romajiAlt(search)!) : ""   // ローマ字入力でもカタカナ商品を探せるように
     return orders.filter((o) => {
       const items = itemsByOrder.get(o.id) || []
       const clinic = clinicById.get(o.clinic_id)
       const target = norm(`${o.delivery_number || ""} ${o.status} ${clinic?.name || ""} ${items.map((i) => i.product_name || "").join(" ")}`)
-      const matchSearch = !k || target.includes(k)
+      const matchSearch = !k || target.includes(k) || (!!k2 && target.includes(k2))
 
       if (statusFilter === "undelivered" && ["納品済み", "納品済", "キャンセル", "取消"].includes(o.status)) return false
       if (statusFilter === "delivered" && !["納品済み", "納品済"].includes(o.status)) return false
