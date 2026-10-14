@@ -372,18 +372,11 @@ export default function ReceivingPage() {
     // 発注だった可能性が高いとみなし、メモにタグを付ける。
     const productIdsWithOpenPO = new Set<string>()
     try {
-      const { data: openPos } = await supabase
-        .from("purchase_orders")
-        .select("id")
-        .in("status", ["発注済", "発注済み", "部分入荷"])
-        .limit(50000)
+      // 1000件の上限に切られないよう、ページングで全件取得する（発注書の明細は1000行を超える）
+      const openPos = await fetchAll("purchase_orders", "id", (q: any) => q.in("status", ["発注済", "発注済み", "部分入荷"]).order("id"))
       const openPoIds = (openPos || []).map((po: any) => po.id)
-      if (openPoIds.length > 0) {
-        const { data: openItems } = await supabase
-          .from("purchase_order_items")
-          .select("product_id,purchase_order_id")
-          .in("purchase_order_id", openPoIds)
-          .limit(50000)
+      for (let i = 0; i < openPoIds.length; i += 100) {
+        const openItems = await fetchAll("purchase_order_items", "id,product_id,purchase_order_id", (q: any) => q.in("purchase_order_id", openPoIds.slice(i, i + 100)).order("id"))
         for (const it of openItems || []) {
           if (it.product_id) productIdsWithOpenPO.add(it.product_id)
         }
