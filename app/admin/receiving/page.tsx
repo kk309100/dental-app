@@ -52,6 +52,8 @@ export default function ReceivingPage() {
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState("")
   const [parseProgress, setParseProgress] = useState("")
+  const [slipQueue, setSlipQueue] = useState<any[]>([])
+  const [slipIdx, setSlipIdx] = useState(0)
   const [parsedMeta, setParsedMeta] = useState<{ supplier_name?: string; invoice_number?: string; invoice_date?: string; total?: number; itemCount?: number; rawJson?: string } | null>(null)
 
   const [pickerRow, setPickerRow] = useState<number | null>(null)
@@ -101,8 +103,58 @@ export default function ReceivingPage() {
     setLogs([])
     setParsedMeta(null)
     setPdfFile(null)
+    setSlipQueue([])
     setParseError("")
     setPostReceiveResult(null)
+  }
+
+  // 読み取った1枚の伝票を、入力表に反映する
+  function applySlip(data: any, partial: boolean, pageWarn: string) {
+    // items 配列を正規化（Claudeがフィールド名をずらして返す場合に対応）
+    const rawItems: any[] = Array.isArray(data.items) ? data.items
+      : Array.isArray(data.line_items) ? data.line_items
+      : Array.isArray(data.products) ? data.products
+      : []
+
+    const newRows: Row[] = rawItems.map((it: any) => ({
+      productName: it.supplier_product_name || it.product_name || it.name || it.商品名 || "",
+      supplierJan: it.supplier_jan || it.jan || it.jan_code || it.barcode || "",
+      supplierCode: it.supplier_product_code || it.product_code || it.code || it.品番 || "",
+      packSize: it.pack_size || it.quantity_per_pack || it.入数 || "",
+      quantity: String(it.quantity ?? it.qty ?? it.数量 ?? ""),
+      unitPrice: String(it.unit_price ?? it.price ?? it.単価 ?? ""),
+      memo: "",
+      manufacturer: it.manufacturer || it.maker || it.メーカー || "",
+      productId: "",
+      pdfName: it.supplier_product_name || it.product_name || it.name || it.商品名 || "",
+    })).filter(r => r.productName)  // 商品名が空の行は除去
+
+    // 常にrawJsonを保持（デバッグ用）
+    const rawJsonStr = JSON.stringify(data, null, 2)
+    setParsedMeta({
+      supplier_name: data.supplier_name,
+      invoice_number: data.invoice_number,
+      invoice_date: data.invoice_date,
+      total: data.total,
+      itemCount: newRows.length,
+      rawJson: rawJsonStr,
+    })
+
+    if (data.invoice_date) setDate(data.invoice_date)
+    if (!supplierId && data.supplier_name) {
+      const matched = suppliers.find((s) =>
+        data.supplier_name.includes(s.name) || s.name.includes(data.supplier_name.split(/\s+/)[0])
+      )
+      if (matched) setSupplierId(matched.id)
+    }
+
+    const padded = newRows.length >= INITIAL_ROWS
+      ? newRows
+      : [...newRows, ...Array.from({ length: INITIAL_ROWS - newRows.length }, newRow)]
+    setRows(padded)
+    if (pageWarn) setParseError(pageWarn)
+    else if (partial) setParseError(`⚠ 書類が長いため、途中までの ${newRows.length} 件しか読み取れていません。残りの明細は、ファイルを分けて（ページごとに）取り込み直すか、手で追加してください。`)
+    setTimeout(() => document.getElementById("receiving-table")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200)
   }
 
   async function uploadAndParse(file?: File) {
@@ -137,6 +189,7 @@ export default function ReceivingPage() {
       let data: any
       let partial = false
       let pageWarn = ""
+      let slips: any[] = []
       if (isPdf) {
         // 複数ページ（スキャンした納品書の束）は、1ページずつ分けて読み取り、明細を1つにまとめる
         const { PDFDocument } = await import("pdf-lib")
@@ -168,9 +221,9 @@ export default function ReceivingPage() {
           }))
           const ok = results.filter(Boolean)
           if (ok.length === 0) throw new Error("どのページも読み取れませんでした")
-          const items = ok.flatMap(r => Array.isArray(r.data?.items) ? r.data.items : [])
-          const head = ok.find(r => r.data?.invoice_date)?.data || ok[0].data
-          data = { ...head, items }
+          // 伝票ごと（ページごと）に分ける。日付・伝票番号が違うので、1枚ずつ確認して入荷確定する
+          slips = ok.map(r => r.data)
+          data = slips[0]
           if (failed.length) { failed.sort((x, y) => x - y); pageWarn = `⚠ 読み取れなかったページがあります（${failed.join(", ")} ページ目）。そのページだけ別に取り込み直してください。` }
         }
       } else {
@@ -178,55 +231,13 @@ export default function ReceivingPage() {
         data = res.data; partial = !!res.partial
       }
 
-      // items 配列を正規化（Claudeがフィールド名をずらして返す場合に対応）
-      const rawItems: any[] = Array.isArray(data.items) ? data.items
-        : Array.isArray(data.line_items) ? data.line_items
-        : Array.isArray(data.products) ? data.products
-        : []
-
-      const newRows: Row[] = rawItems.map((it: any) => ({
-        productName: it.supplier_product_name || it.product_name || it.name || it.商品名 || "",
-        supplierJan: it.supplier_jan || it.jan || it.jan_code || it.barcode || "",
-        supplierCode: it.supplier_product_code || it.product_code || it.code || it.品番 || "",
-        packSize: it.pack_size || it.quantity_per_pack || it.入数 || "",
-        quantity: String(it.quantity ?? it.qty ?? it.数量 ?? ""),
-        unitPrice: String(it.unit_price ?? it.price ?? it.単価 ?? ""),
-        memo: "",
-        manufacturer: it.manufacturer || it.maker || it.メーカー || "",
-        productId: "",
-        pdfName: it.supplier_product_name || it.product_name || it.name || it.商品名 || "",
-      })).filter(r => r.productName)  // 商品名が空の行は除去
-
-      // 常にrawJsonを保持（デバッグ用）
-      const rawJsonStr = JSON.stringify(data, null, 2)
-      setParsedMeta({
-        supplier_name: data.supplier_name,
-        invoice_number: data.invoice_number,
-        invoice_date: data.invoice_date,
-        total: data.total,
-        itemCount: newRows.length,
-        rawJson: rawJsonStr,
-      })
-
-      if (data.invoice_date) setDate(data.invoice_date)
-      if (!supplierId && data.supplier_name) {
-        const matched = suppliers.find((s) =>
-          data.supplier_name.includes(s.name) || s.name.includes(data.supplier_name.split(/\s+/)[0])
-        )
-        if (matched) setSupplierId(matched.id)
-      }
-
-      const padded = newRows.length >= INITIAL_ROWS
-        ? newRows
-        : [...newRows, ...Array.from({ length: INITIAL_ROWS - newRows.length }, newRow)]
-      setRows(padded)
-      if (pageWarn) setParseError(pageWarn)
-      else if (partial) setParseError(`⚠ 書類が長いため、途中までの ${newRows.length} 件しか読み取れていません。残りの明細は、ファイルを分けて（ページごとに）取り込み直すか、手で追加してください。`)
-      setTimeout(() => document.getElementById("receiving-table")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200)
+      if (slips.length > 1) { setSlipQueue(slips); setSlipIdx(0); applySlip(slips[0], false, pageWarn) }
+      else applySlip(data, partial, pageWarn)
     } catch (e) {
       setParseError((e as Error).message)
     } finally {
       setParsing(false)
+      setParseProgress("")
     }
   }
 
@@ -590,6 +601,17 @@ export default function ReceivingPage() {
         <div className="rounded-lg p-3" style={{ border: "1px solid #fca5a5", background: "#fff1f2" }}>
           <p className="text-sm font-bold text-red-700 mb-1">⚠ PDF解析失敗</p>
           <pre className="text-xs text-red-600 whitespace-pre-wrap break-all max-h-40 overflow-auto">{parseError}</pre>
+        </div>
+      )}
+      {slipQueue.length > 1 && (
+        <div className="rounded-lg p-3 flex items-center gap-2 flex-wrap" style={{ border: "1px solid #93c5fd", background: "#eff6ff" }}>
+          <span className="text-sm font-bold text-blue-800">伝票 {slipIdx + 1} / {slipQueue.length} 枚目</span>
+          <span className="text-xs text-blue-700">確認して「仕入登録」したら、次の伝票を読み込みます</span>
+          <button className="ml-auto px-3 py-1.5 rounded-lg text-sm font-bold bg-blue-600 text-white disabled:opacity-40"
+            disabled={slipIdx + 1 >= slipQueue.length}
+            onClick={() => { const i = slipIdx + 1; setSlipIdx(i); setPostReceiveResult(null); applySlip(slipQueue[i], false, "") }}>
+            次の伝票へ →
+          </button>
         </div>
       )}
       {parsedMeta && (
