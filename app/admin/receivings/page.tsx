@@ -58,6 +58,81 @@ export default function ReceivingsListPage() {
     setLoading(false)
   }
 
+  // ── 入荷の取消・修正 ──────────────────────────────────────────
+  // 元の入荷記録は在庫の動き（stock_movements）に「入庫取消」「入庫修正」として残る。
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [editing, setEditing] = useState<{ id: string; qty: string; price: string } | null>(null)
+
+  // 発注書から入荷した記録なら、発注書の入荷数も同じだけ戻す（状態も判定し直す）
+  async function revertPurchaseOrderReceipt(r: Receipt, delta: number) {
+    const m = String(r.memo || "").match(/^発注書\s+(\S+)/)
+    if (!m || !r.product_id || delta <= 0) return
+    const { data: heads } = await supabase.from("purchase_orders").select("id,po_number,status").neq("status", "取消")
+    const po = (heads || []).find(h => String(h.po_number || h.id.slice(0, 8)) === m[1])
+    if (!po) return
+    const { data: lines } = await supabase.from("purchase_order_items").select("id,product_id,quantity,received_quantity").eq("purchase_order_id", po.id)
+    let left = delta
+    for (const l of (lines || []).filter(l => l.product_id === r.product_id).sort((a, b) => Number(b.received_quantity || 0) - Number(a.received_quantity || 0))) {
+      if (left <= 0) break
+      const cur = Number(l.received_quantity || 0)
+      const step = Math.min(left, cur)
+      if (step <= 0) continue
+      await supabase.from("purchase_order_items").update({ received_quantity: cur - step }).eq("id", l.id)
+      l.received_quantity = cur - step
+      left -= step
+    }
+    const all = (lines || []).every(l => Number(l.received_quantity || 0) >= Number(l.quantity))
+    const some = (lines || []).some(l => Number(l.received_quantity || 0) > 0)
+    const status = all ? "入荷済" : some ? "部分入荷" : "発注済"
+    if (po.status !== status && po.status !== "未送付") await supabase.from("purchase_orders").update({ status }).eq("id", po.id)
+  }
+
+  // 在庫を delta だけ増減し、動きを記録する（在庫がマイナスになる場合は確認）
+  async function adjustStock(productId: string, delta: number, type: string, reason: string): Promise<boolean> {
+    const { data: p, error } = await supabase.from("products").select("stock").eq("id", productId).single()
+    if (error || !p) { alert("商品の在庫を読み取れませんでした: " + (error?.message || "")); return false }
+    const before = Number(p.stock || 0), after = before + delta
+    if (after < 0 && !confirm(`在庫が ${before} → ${after} とマイナスになります（すでに出荷・納品した分が含まれている可能性があります）。続けますか？`)) return false
+    const { error: ue } = await supabase.from("products").update({ stock: after }).eq("id", productId)
+    if (ue) { alert("在庫の更新に失敗: " + ue.message); return false }
+    try { await supabase.from("stock_movements").insert({ product_id: productId, movement_type: type, quantity: delta, before_stock: before, after_stock: after, ref_type: "stock_receipt", reason }) } catch { /* 記録のみ */ }
+    return true
+  }
+
+  async function cancelReceipt(r: Receipt) {
+    if (r.supplier_invoice_item_id) { alert("月次請求書と付け合わせ済みの入荷は、取り消せません。先に付け合わせを外してください。"); return }
+    if (!confirm(`この入荷を取り消しますか？\n\n${productName(r.product_id)}  数量 ${r.quantity}\n在庫が ${r.quantity} 減ります。`)) return
+    setBusyId(r.id)
+    try {
+      if (r.product_id && Number(r.quantity) !== 0) {
+        if (!(await adjustStock(r.product_id, -Number(r.quantity), "入庫取消", `入荷取消（${r.created_at.slice(0, 10)} ${r.memo || ""}）`))) return
+        await revertPurchaseOrderReceipt(r, Number(r.quantity))
+      }
+      const { error } = await supabase.from("stock_receipts").delete().eq("id", r.id)
+      if (error) { alert("取消に失敗しました（在庫は戻っています。もう一度お試しください）: " + error.message); return }
+      await fetchData()
+    } finally { setBusyId(null) }
+  }
+
+  async function saveEdit(r: Receipt) {
+    if (!editing) return
+    const qty = Number(editing.qty), price = editing.price === "" ? null : Number(editing.price)
+    if (!Number.isFinite(qty) || qty <= 0 || (price !== null && (!Number.isFinite(price) || price < 0))) { alert("数量は1以上、単価は0以上の数字で入力してください"); return }
+    if (r.supplier_invoice_item_id && (qty !== Number(r.quantity) || price !== (r.unit_price ?? null))) { alert("月次請求書と付け合わせ済みの入荷は、修正できません。先に付け合わせを外してください。"); return }
+    setBusyId(r.id)
+    try {
+      const delta = qty - Number(r.quantity)
+      if (delta !== 0 && r.product_id) {
+        if (!(await adjustStock(r.product_id, delta, "入庫修正", `入荷修正 数量 ${r.quantity}→${qty}（${r.created_at.slice(0, 10)}）`))) return
+        if (delta < 0) await revertPurchaseOrderReceipt(r, -delta)
+      }
+      const { error } = await supabase.from("stock_receipts").update({ quantity: qty, unit_price: price }).eq("id", r.id)
+      if (error) { alert("修正に失敗しました: " + error.message); return }
+      setEditing(null)
+      await fetchData()
+    } finally { setBusyId(null) }
+  }
+
   const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s])), [suppliers])
   const productMap = useMemo(() => new Map(products.map(p => [p.id, p])), [products])
   const supplierName = (id: string | null) => id ? (supplierMap.get(id)?.name || "(削除済み)") : "(未指定)"
@@ -217,11 +292,12 @@ export default function ReceivingsListPage() {
                 <th className="px-2 py-1.5 text-right w-24">金額</th>
                 <th className="px-2 py-1.5 text-left w-32">メモ</th>
                 <th className="px-2 py-1.5 text-center w-16">付け合わせ</th>
+                <th className="px-2 py-1.5 text-center w-28">操作</th>
               </tr>
             </thead>
             <tbody>
               {sorted.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-12 text-center text-gray-400">該当する入荷記録なし</td></tr>
+                <tr><td colSpan={11} className="px-4 py-12 text-center text-gray-400">該当する入荷記録なし</td></tr>
               ) : sorted.map((r, i) => {
                 const p = r.product_id ? productMap.get(r.product_id) : null
                 const amount = Number(r.unit_price || 0) * Number(r.quantity)
@@ -236,8 +312,16 @@ export default function ReceivingsListPage() {
                     <td className="px-2 py-1.5 text-[12px] text-gray-500 font-mono">{p?.product_code || "—"}</td>
                     <td className="px-2 py-1.5">{productName(r.product_id)}</td>
                     <td className="px-2 py-1.5 text-[12px] text-gray-500">{p?.manufacturer || "—"}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{r.quantity}</td>
-                    <td className="px-2 py-1.5 text-right text-[12px] text-gray-600 tabular-nums">{fmtYen(r.unit_price || 0)}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {editing?.id === r.id
+                        ? <input type="number" min={1} value={editing.qty} onChange={e => setEditing({ ...editing, qty: e.target.value })} className="w-16 px-1 py-0.5 border border-gray-300 rounded text-right" />
+                        : r.quantity}
+                    </td>
+                    <td className="px-2 py-1.5 text-right text-[12px] text-gray-600 tabular-nums">
+                      {editing?.id === r.id
+                        ? <input type="number" min={0} step="any" value={editing.price} onChange={e => setEditing({ ...editing, price: e.target.value })} className="w-20 px-1 py-0.5 border border-gray-300 rounded text-right" />
+                        : fmtYen(r.unit_price || 0)}
+                    </td>
                     <td className="px-2 py-1.5 text-right text-[12px] font-bold tabular-nums">{fmtYen(amount)}</td>
                     <td className="px-2 py-1.5 text-[12px] text-gray-500">
                       {(r.memo || "").replace(/\s*\/?\s*⚠発注記録なし/, "")}
@@ -250,6 +334,19 @@ export default function ReceivingsListPage() {
                         <span className="text-[12px] text-gray-400">—</span>
                       )}
                     </td>
+                    <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                      {editing?.id === r.id ? (
+                        <>
+                          <button disabled={busyId === r.id} onClick={() => saveEdit(r)} className="text-[11px] px-2 py-0.5 rounded bg-blue-600 text-white font-bold mr-1 disabled:opacity-50">保存</button>
+                          <button onClick={() => setEditing(null)} className="text-[11px] px-2 py-0.5 rounded border border-gray-300 text-gray-600">戻る</button>
+                        </>
+                      ) : (
+                        <>
+                          <button disabled={busyId === r.id} onClick={() => setEditing({ id: r.id, qty: String(r.quantity), price: r.unit_price == null ? "" : String(r.unit_price) })} className="text-[11px] px-2 py-0.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 mr-1 disabled:opacity-50">修正</button>
+                          <button disabled={busyId === r.id} onClick={() => cancelReceipt(r)} className="text-[11px] px-2 py-0.5 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50">取消</button>
+                        </>
+                      )}
+                    </td>
                   </tr>
                 )
               })}
@@ -258,7 +355,7 @@ export default function ReceivingsListPage() {
               <tr className="border-t-2 border-gray-300">
                 <td colSpan={7} className="px-2 py-2 text-right text-xs font-bold text-gray-700">合計</td>
                 <td className="px-2 py-2 text-right text-base font-bold text-gray-900 tabular-nums">{fmtYen(totals.totalAmount)}</td>
-                <td colSpan={2}></td>
+                <td colSpan={3}></td>
               </tr>
             </tfoot>
           </table>

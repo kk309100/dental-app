@@ -342,6 +342,8 @@ export default function ReceivingPage() {
     setPostReceiveResult(null)  // 前回の結果をクリア
     setLogs([])
     setProgress({ done: 0, total: validRows.length })
+    const backdated = !!date && date !== ymd(new Date())
+    const receivedAt = `${date}T12:00:00`
     const newLogs: string[] = []
     const stockedProductIds: string[] = []  // 入庫した商品IDをループ内で蓄積
     const receivedLines: { productId: string; name: string; qty: number }[] = []
@@ -436,6 +438,7 @@ export default function ReceivingPage() {
           memo: memoStr || null,
           supplier_id: supplierId || null,
           unit_price: price,
+          ...(backdated ? { created_at: receivedAt } : {}),   // 過去の日付で入荷登録したときは、その日付を入荷日にする
         })
         if (re) throw new Error(re.message)
 
@@ -449,6 +452,7 @@ export default function ReceivingPage() {
             after_stock: after,
             ref_type: "stock_receipt",
             reason: parsedMeta?.invoice_number ? `仕入伝票 ${parsedMeta.invoice_number}` : "仕入入力",
+            ...(backdated ? { occurred_at: receivedAt } : {}),
           })
         } catch { /* スキップ */ }
 
