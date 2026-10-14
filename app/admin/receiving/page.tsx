@@ -51,6 +51,7 @@ export default function ReceivingPage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState("")
+  const [parseProgress, setParseProgress] = useState("")
   const [parsedMeta, setParsedMeta] = useState<{ supplier_name?: string; invoice_number?: string; invoice_date?: string; total?: number; itemCount?: number; rawJson?: string } | null>(null)
 
   const [pickerRow, setPickerRow] = useState<number | null>(null)
@@ -114,40 +115,68 @@ export default function ReceivingPage() {
     try {
       const isPdf = target.type === "application/pdf" || target.name.toLowerCase().endsWith(".pdf")
 
-      let body: Record<string, any>
-      if (isPdf) {
-        // PDF → base64 に変換してそのまま送信（claude-opus-4-5 がネイティブ対応）
-        const b64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload  = () => resolve((reader.result as string).split(",")[1])
-          reader.onerror = () => reject(new Error("ファイル読み込み失敗"))
-          reader.readAsDataURL(target)
+      const toB64 = (blob: Blob) => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload  = () => resolve((reader.result as string).split(",")[1])
+        reader.onerror = () => reject(new Error("ファイル読み込み失敗"))
+        reader.readAsDataURL(blob)
+      })
+      const callParse = async (body: Record<string, any>) => {
+        const r = await fetch("/api/parse-receiving", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
         })
-        body = { pdfBase64: b64 }
-      } else {
-        // 画像ファイル: FileReader で確実にbase64変換（大ファイル対応）
-        const b64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload  = () => resolve((reader.result as string).split(",")[1])
-          reader.onerror = () => reject(new Error("ファイル読み込み失敗"))
-          reader.readAsDataURL(target)
-        })
-        body = { imageBase64: b64, mediaType: target.type || "image/jpeg" }
+        const j = await r.json()
+        if (!r.ok) throw new Error(j.detail ? `${j.error}
+
+【詳細】${j.detail}` : (j.error || "解析失敗"))
+        return j as { data: any; partial?: boolean }
       }
 
-      const r = await fetch("/api/parse-receiving", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      const resJson = await r.json()
-      if (!r.ok) {
-        const msg = resJson.detail
-          ? `${resJson.error}\n\n【詳細】${resJson.detail}`
-          : (resJson.error || "解析失敗")
-        throw new Error(msg)
+      let data: any
+      let partial = false
+      let pageWarn = ""
+      if (isPdf) {
+        // 複数ページ（スキャンした納品書の束）は、1ページずつ分けて読み取り、明細を1つにまとめる
+        const { PDFDocument } = await import("pdf-lib")
+        const src = await PDFDocument.load(await target.arrayBuffer(), { ignoreEncryption: true })
+        const n = src.getPageCount()
+        if (n <= 1) {
+          ;({ data, partial = false } = await callParse({ pdfBase64: await toB64(target) }))
+        } else {
+          const results: any[] = new Array(n)
+          const failed: number[] = []
+          let next = 0, done = 0
+          setParseProgress(`0 / ${n} ページ`)
+          await Promise.all(Array.from({ length: Math.min(3, n) }, async () => {
+            while (next < n) {
+              const i = next++
+              try {
+                const doc = await PDFDocument.create()
+                ;(await doc.copyPages(src, [i])).forEach(p => doc.addPage(p))
+                const b64 = await toB64(new Blob([await doc.save() as BlobPart], { type: "application/pdf" }))
+                let res: { data: any; partial?: boolean } | null = null
+                for (let t = 0; t < 3 && !res; t++) {
+                  try { res = await callParse({ pdfBase64: b64 }) } catch { await new Promise(r => setTimeout(r, 1500 * (t + 1))) }
+                }
+                if (res) { results[i] = res; if (res.partial) partial = true } else failed.push(i + 1)
+              } catch { failed.push(i + 1) }
+              done++
+              setParseProgress(`${done} / ${n} ページ`)
+            }
+          }))
+          const ok = results.filter(Boolean)
+          if (ok.length === 0) throw new Error("どのページも読み取れませんでした")
+          const items = ok.flatMap(r => Array.isArray(r.data?.items) ? r.data.items : [])
+          const head = ok.find(r => r.data?.invoice_date)?.data || ok[0].data
+          data = { ...head, items }
+          if (failed.length) { failed.sort((x, y) => x - y); pageWarn = `⚠ 読み取れなかったページがあります（${failed.join(", ")} ページ目）。そのページだけ別に取り込み直してください。` }
+        }
+      } else {
+        const res = await callParse({ imageBase64: await toB64(target), mediaType: target.type || "image/jpeg" })
+        data = res.data; partial = !!res.partial
       }
-      const { data, partial } = resJson
 
       // items 配列を正規化（Claudeがフィールド名をずらして返す場合に対応）
       const rawItems: any[] = Array.isArray(data.items) ? data.items
@@ -191,7 +220,8 @@ export default function ReceivingPage() {
         ? newRows
         : [...newRows, ...Array.from({ length: INITIAL_ROWS - newRows.length }, newRow)]
       setRows(padded)
-      if (partial) setParseError(`⚠ 書類が長いため、途中までの ${newRows.length} 件しか読み取れていません。残りの明細は、ファイルを分けて（ページごとに）取り込み直すか、手で追加してください。`)
+      if (pageWarn) setParseError(pageWarn)
+      else if (partial) setParseError(`⚠ 書類が長いため、途中までの ${newRows.length} 件しか読み取れていません。残りの明細は、ファイルを分けて（ページごとに）取り込み直すか、手で追加してください。`)
       setTimeout(() => document.getElementById("receiving-table")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200)
     } catch (e) {
       setParseError((e as Error).message)
@@ -539,7 +569,7 @@ export default function ReceivingPage() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          {parsing ? "AI解析中…" : "📄 PDF / 📷 写真から読込"}
+          {parsing ? `AI解析中…${parseProgress ? " " + parseProgress : ""}` : "📄 PDF / 📷 写真から読込"}
         </label>
         <input
           id="pdf-upload"
