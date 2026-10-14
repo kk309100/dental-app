@@ -45,6 +45,16 @@ export default function PurchaseOrdersListPage() {
   const [to, setTo] = useState("")
   const [sortBy, setSortBy] = useState<"date_desc" | "date_asc" | "amount_desc" | "amount_asc">("date_desc")
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  // 発注書の詳細を開いて戻っても、検索・絞り込み・並び順を保つ（タブを閉じるまで）
+  useEffect(() => {
+    try {
+      const v = JSON.parse(sessionStorage.getItem("purchaseOrders.filters") || "null")
+      if (v) { setSearch(v.search || ""); setStatusFilter(v.statusFilter || "all"); setSupplierFilter(v.supplierFilter || "all"); setFrom(v.from || ""); setTo(v.to || ""); if (v.sortBy) setSortBy(v.sortBy) }
+    } catch { /* 無視 */ }
+  }, [])
+  useEffect(() => {
+    try { sessionStorage.setItem("purchaseOrders.filters", JSON.stringify({ search, statusFilter, supplierFilter, from, to, sortBy })) } catch { /* 無視 */ }
+  }, [search, statusFilter, supplierFilter, from, to, sortBy])
   const [groupView, setGroupView] = useGroupView()
 
   useEffect(() => { fetchData() }, [])
