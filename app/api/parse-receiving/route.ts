@@ -79,6 +79,14 @@ function salvageItems(text: string): ParsedInvoice | null {
   return { supplier_name: pick("supplier_name"), invoice_number: pick("invoice_number"), invoice_date: pick("invoice_date"), items }
 }
 
+// 納品書の年（2024と2026など）の読み違いを防ぐため、今日の日付を伝える。納品日は、ふつう今日の前後数か月以内。
+function todayHint(): string {
+  const jst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+  return `
+
+参考: 今日は ${jst} です。納品日(invoice_date)は、ふつう今日から数か月以内です。年の数字が読みにくいときは、今日の年に近い年にしてください。`
+}
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
@@ -108,7 +116,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: "claude-opus-4-5",
         max_tokens: 16000,   // 明細が多いと、4096では、JSONの後ろが切れて「JSON解析失敗」になっていた
-        system: SYSTEM_PROMPT,
+        system: SYSTEM_PROMPT + todayHint(),
         messages: [
           {
             role: "user",
