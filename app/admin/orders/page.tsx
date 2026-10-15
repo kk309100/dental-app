@@ -239,14 +239,16 @@ function AdminOrdersPage() {
   // 在庫が足りていても、在庫を使わず発注した行（強制発注など）… その発注数。それ以外は 0（入荷の対象外）。
   function receiveNeedFor(it: OrderItem, stock: number): number {
     const qty = Number(it.quantity || 0)
-    const shortfall = qty - Math.max(0, stock)
-    if (shortfall > 0) return shortfall
     const ordered = orderedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0
-    if (ordered <= 0) return 0
-    // 発注書の入荷で在庫に加算済みの分（直送ボタンで記録した分 = 納品済みの数 は除く）は、直送の対象にしない
-    const recv = receivedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0
-    const viaStock = Math.max(0, recv - Number(it.delivered_quantity || 0))
-    return Math.max(0, Math.min(qty, ordered) - viaStock)
+    if (ordered > 0) {
+      // 発注書がある明細は、現在の在庫数に関係なく「発注した数」が入荷の数。
+      // 発注書の入荷で在庫に加算済みの分（直送ボタンで記録した分 = 納品済みの数 は除く）は、直送の対象にしない
+      const recv = receivedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0
+      const viaStock = Math.max(0, recv - Number(it.delivered_quantity || 0))
+      return Math.max(0, ordered - viaStock)
+    }
+    // 発注書が無い明細は、在庫が足りない分
+    return Math.max(0, qty - Math.max(0, stock))
   }
 
   // 業務状態（一目で「次にやること」が分かるバッジ用）
