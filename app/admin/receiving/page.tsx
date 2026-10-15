@@ -329,7 +329,8 @@ export default function ReceivingPage() {
       .slice(0, 5)
   }
 
-  const validRows = rows.filter((r) => r.productName.trim() && Number(r.quantity) > 0)
+  // 数量がマイナスの行は返品（在庫が減る）。0・数字でない行は除く
+  const validRows = rows.filter((r) => r.productName.trim() && Number.isFinite(Number(r.quantity)) && Number(r.quantity) !== 0)
   const totalAmount = validRows.reduce((s, r) => s + (Number(r.unitPrice) || 0) * Number(r.quantity), 0)
 
   async function submitAll() {
@@ -393,6 +394,7 @@ export default function ReceivingPage() {
 
         // 商品検索 or 新規作成
         let product = findProduct(row)
+        if (!product && qty < 0) throw new Error("返品（マイナス）は、商品マスタにある商品だけです。先に商品を紐づけてください")
         if (!product) {
           // 新規作成
           const supplierName = suppliers.find((s) => s.id === supplierId)?.name || ""
@@ -417,12 +419,13 @@ export default function ReceivingPage() {
         const before = Number(product.stock || 0)
         const after = before + qty
         const productUpdate: { stock: number; cost?: number } = { stock: after }
-        if (price !== null && updateCost) productUpdate.cost = price
+        if (price !== null && updateCost && qty > 0) productUpdate.cost = price   // 返品では原価を更新しない
         const { error: pe } = await supabase.from("products").update(productUpdate).eq("id", product.id)
         if (pe) throw new Error(pe.message)
 
-        const noOpenPO = !productIdsWithOpenPO.has(product.id)
+        const noOpenPO = qty > 0 && !productIdsWithOpenPO.has(product.id)
         const memoStr = [
+          qty < 0 ? "返品" : "",
           row.memo,
           parsedMeta?.invoice_number ? `伝票:${parsedMeta.invoice_number}` : "",
           noOpenPO ? "⚠発注記録なし" : "",
@@ -441,19 +444,21 @@ export default function ReceivingPage() {
         try {
           await supabase.from("stock_movements").insert({
             product_id: product.id,
-            movement_type: "入庫",
+            movement_type: qty < 0 ? "仕入返品" : "入庫",
             quantity: qty,
             before_stock: before,
             after_stock: after,
             ref_type: "stock_receipt",
-            reason: parsedMeta?.invoice_number ? `仕入伝票 ${parsedMeta.invoice_number}` : "仕入入力",
+            reason: (qty < 0 ? "返品 " : "") + (parsedMeta?.invoice_number ? `仕入伝票 ${parsedMeta.invoice_number}` : "仕入入力"),
             ...(backdated ? { occurred_at: receivedAt } : {}),
           })
         } catch { /* スキップ */ }
 
-        newLogs.push(`✓ ${product.name} +${qty}`)
-        stockedProductIds.push(product.id)  // 後の「出荷可能注文」判定で使用
-        receivedLines.push({ productId: product.id, name: product.name, qty })
+        newLogs.push(`✓ ${product.name} ${qty > 0 ? "+" : ""}${qty}${qty < 0 ? "（返品）" : ""}`)
+        if (qty > 0) {   // 返品は、出荷可能な注文の判定には使わない
+          stockedProductIds.push(product.id)  // 後の「出荷可能注文」判定で使用
+          receivedLines.push({ productId: product.id, name: product.name, qty })
+        }
       } catch (e) {
         newLogs.push(`✗ ${row.productName}: ${(e as Error).message}`)
       }
