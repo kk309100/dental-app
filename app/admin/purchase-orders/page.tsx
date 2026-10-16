@@ -21,7 +21,7 @@ type PO = {
   created_at: string
 }
 type Supplier = { id: string; name: string }
-type POItem = { id: string; purchase_order_id: string; product_name: string | null; quantity: number; unit_price: number | null }
+type POItem = { id: string; purchase_order_id: string; product_name: string | null; quantity: number; unit_price: number | null; received_quantity?: number | null }
 
 const STATUSES = ["下書き", "未送付", "発注済", "部分入荷", "入荷済", "取消"] as const
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -69,7 +69,7 @@ export default function PurchaseOrdersListPage() {
     else setPos((p as PO[]) || [])
     // 商品別集計用に明細も取得（テーブル無い時はスキップ）
     try {
-      const { data: items } = await fetchAllData("purchase_order_items", "id,purchase_order_id,product_name,quantity,unit_price")
+      const { data: items } = await fetchAllData("purchase_order_items", "id,purchase_order_id,product_name,quantity,unit_price,received_quantity")
       setPoItems((items as POItem[]) || [])
     } catch { setPoItems([]) }
     setLoading(false)
@@ -227,7 +227,14 @@ export default function PurchaseOrdersListPage() {
             ) : filtered.map(p => {
               const sc = STATUS_COLORS[p.status] || STATUS_COLORS["下書き"]
               const searchK = norm(search)
-              const matchedProduct = searchK ? (itemsByPo.get(p.id) || []).find(it => norm(it.product_name || "").includes(searchK)) : null
+              const matchedItems = searchK ? (itemsByPo.get(p.id) || []).filter(it => norm(it.product_name || "").includes(searchK)) : []
+              const matchedProduct = matchedItems[0] || null
+              // 商品名で検索しているときは、発注書全体ではなく「その商品だけ」の入荷の状況を出す
+              const lineQty = matchedItems.reduce((t, it) => t + Number(it.quantity || 0), 0)
+              const lineRecv = matchedItems.reduce((t, it) => t + Number(it.received_quantity || 0), 0)
+              const lineStatus = !matchedProduct || p.status === "取消" || p.status === "下書き" || p.status === "未送付" ? null
+                : lineRecv <= 0 ? "未入荷" : lineRecv >= lineQty ? "入荷済" : "部分入荷"
+              const lsc = lineStatus ? (STATUS_COLORS[lineStatus === "未入荷" ? "発注済" : lineStatus]) : null
               return (
                 <tr key={p.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (selected.has(p.id) ? "bg-blue-100" : "")}>
                   <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSel(p.id)} /></td>
@@ -237,7 +244,15 @@ export default function PurchaseOrdersListPage() {
                     {matchedProduct && <div className="text-[11px] text-blue-600 mt-0.5">🔍 {matchedProduct.product_name}</div>}
                   </td>
                   <td className="px-2 py-1.5 text-center">
-                    <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: sc.bg, color: sc.color }}>{p.status}</span>
+                    {lineStatus && lsc ? (
+                      <>
+                        <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: lsc.bg, color: lsc.color }}>{lineStatus}</span>
+                        <div className="text-[11px] text-gray-600 mt-0.5 tabular-nums">この商品 {lineRecv}/{lineQty}</div>
+                        <div className="text-[10px] text-gray-400">発注書: {p.status}</div>
+                      </>
+                    ) : (
+                      <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: sc.bg, color: sc.color }}>{p.status}</span>
+                    )}
                   </td>
                   <td className="px-2 py-1.5 text-center text-[12px] text-gray-600">
                     {p.ordered_at ? parseDbDate(p.ordered_at).toLocaleDateString("ja-JP") : "—"}
