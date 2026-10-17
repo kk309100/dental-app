@@ -44,7 +44,7 @@ export default function CsvImportPage() {
 
   const [loadingMasters, setLoadingMasters] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [result, setResult] = useState<{ inserted: number; newProducts: number; newSuppliers: number; stockRows: number } | null>(null)
+  const [result, setResult] = useState<{ inserted: number; newProducts: number; newSuppliers: number; stockRows: number; costUpdated: number } | null>(null)
 
   async function loadMasters(sinceDate?: string) {
     setLoadingMasters(true)
@@ -209,6 +209,23 @@ export default function CsvImportPage() {
         if (error) throw new Error("入荷記録の登録に失敗: " + error.message)
       }
 
+      // 3b) 商品の仕入価格を、CSVの中で一番新しい伝票の単価に更新する
+      //     （その商品に、CSVより新しい日付の入荷がすでにあるときは、新しいほうを残すので更新しない）
+      const latestByPid = new Map<string, { date: string; price: number }>()
+      for (const x of receiptRows) {
+        const price = Number(x.rec.unit_price)
+        if (!(price > 0) || !(Number(x.rec.quantity) > 0)) continue
+        const d = x.row.voucherDate || ""
+        const cur = latestByPid.get(x.pid)
+        if (!cur || d >= cur.date) latestByPid.set(x.pid, { date: d, price })
+      }
+      let costUpdated = 0
+      for (const [pid, v] of latestByPid) {
+        if (existingReceipts.some(e => e.product_id === pid && e.date > v.date)) continue
+        const { error: ce } = await supabase.from("products").update({ cost: v.price }).eq("id", pid)
+        if (!ce) costUpdated++
+      }
+
       // 4) 任意: 在庫数に反映（基準日より後の伝票のみ。履歴も残す）
       let stockRows = 0
       if (applyToStock) {
@@ -229,7 +246,7 @@ export default function CsvImportPage() {
         }
       }
 
-      setResult({ inserted: receiptRows.length, newProducts: toCreate.size, newSuppliers: createdSupplierId.size, stockRows })
+      setResult({ inserted: receiptRows.length, newProducts: toCreate.size, newSuppliers: createdSupplierId.size, stockRows, costUpdated })
       setOverrides({})
       await loadMasters(dates[0])
     } catch (e) {
@@ -418,6 +435,7 @@ export default function CsvImportPage() {
             {result.newProducts > 0 && `（新規商品 ${result.newProducts}件）`}
             {result.newSuppliers > 0 && `（新規仕入先 ${result.newSuppliers}件）`}
             {result.stockRows > 0 && `／在庫に反映 ${result.stockRows}行`}
+            {result.costUpdated > 0 && `／仕入価格を更新 ${result.costUpdated}商品`}
           </p>
           <div className="flex gap-2 mt-2">
             <Link href="/admin/receivings" className="text-sm text-blue-700 underline">入荷履歴一覧で確認</Link>
