@@ -15,6 +15,22 @@ type Clinic = { id: string; name: string; corporate_name?: string | null; paymen
 
 export default function DeliveriesPage() {
   const [orders, setOrders] = useState<Order[]>([])
+  // 納品日の編集（一覧の日付を押すと、その場で直せる。保存しても、画面は読み込み直さない）
+  const [dateEdit, setDateEdit] = useState<{ id: string; value: string } | null>(null)
+  const [dateSaving, setDateSaving] = useState(false)
+  async function saveDeliveryDate(o: Order) {
+    if (!dateEdit || dateEdit.id !== o.id || !dateEdit.value) return
+    const cur = (o.delivered_at || o.created_at).slice(0, 10)
+    if (dateEdit.value === cur) { setDateEdit(null); return }
+    if (o.invoice_id && !confirm("この納品書は、請求書に入っています。\n日付を変えると、請求の期間に影響することがあります。変更しますか？")) return
+    setDateSaving(true)
+    const iso = `${dateEdit.value}T12:00:00+09:00`
+    const { error } = await supabase.from("orders").update({ delivered_at: iso }).eq("id", o.id)
+    setDateSaving(false)
+    if (error) { alert("日付の変更に失敗しました: " + error.message); return }
+    setOrders(prev => prev.map(x => x.id === o.id ? { ...x, delivered_at: iso } : x))
+    setDateEdit(null)
+  }
   const [items, setItems] = useState<OrderItem[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [loading, setLoading] = useState(true)
@@ -219,7 +235,20 @@ export default function DeliveriesPage() {
                 <tr key={o.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (selected.has(o.id) ? "bg-blue-100" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
                   <td className="px-2 py-1.5 text-center"><input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleSel(o.id)} /></td>
                   <td className="px-2 py-1.5 text-center text-[12px] text-gray-700 whitespace-nowrap">
-                    {(o.delivered_at || o.created_at).slice(0, 10)}
+                    {dateEdit?.id === o.id ? (
+                      <span className="inline-flex items-center gap-1">
+                        <input type="date" value={dateEdit.value} onChange={e => setDateEdit({ id: o.id, value: e.target.value })}
+                          onKeyDown={e => { if (e.key === "Enter") saveDeliveryDate(o); if (e.key === "Escape") setDateEdit(null) }}
+                          className="px-1 py-0.5 border border-gray-300 rounded text-[12px]" autoFocus />
+                        <button disabled={dateSaving} onClick={() => saveDeliveryDate(o)} className="text-[11px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold disabled:opacity-50">保存</button>
+                        <button onClick={() => setDateEdit(null)} className="text-[11px] px-1.5 py-0.5 rounded border border-gray-300 text-gray-600">×</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => setDateEdit({ id: o.id, value: (o.delivered_at || o.created_at).slice(0, 10) })}
+                        className="hover:bg-blue-100 rounded px-1 underline decoration-dotted underline-offset-2" title="押すと、納品日を直せます">
+                        {(o.delivered_at || o.created_at).slice(0, 10)}
+                      </button>
+                    )}
                   </td>
                   <td className="px-2 py-1.5 font-mono text-[12px] text-gray-700 whitespace-nowrap">{o.delivery_number || o.id.slice(0, 8)}</td>
                   <td className="px-2 py-1.5 whitespace-nowrap">{cl?.name || "(削除済み)"}</td>
