@@ -62,7 +62,10 @@ export default function ReceivingsListPage() {
   // ── 入荷の取消・修正 ──────────────────────────────────────────
   // 元の入荷記録は在庫の動き（stock_movements）に「入庫取消」「入庫修正」として残る。
   const [busyId, setBusyId] = useState<string | null>(null)
-  const [editing, setEditing] = useState<{ id: string; qty: string; price: string } | null>(null)
+  const [editing, setEditing] = useState<{ id: string; qty: string; price: string; date: string; supplierId: string; memo: string; productId: string; productQ: string } | null>(null)
+  function startEdit(r: Receipt) {
+    setEditing({ id: r.id, qty: String(r.quantity), price: r.unit_price == null ? "" : String(r.unit_price), date: r.created_at.slice(0, 10), supplierId: r.supplier_id || "", memo: r.memo || "", productId: r.product_id || "", productQ: "" })
+  }
 
   // 発注書から入荷した記録なら、発注書の入荷数も同じだけ戻す（状態も判定し直す）
   async function revertPurchaseOrderReceipt(r: Receipt, delta: number) {
@@ -119,15 +122,29 @@ export default function ReceivingsListPage() {
     if (!editing) return
     const qty = Number(editing.qty), price = editing.price === "" ? null : Number(editing.price)
     if (!Number.isFinite(qty) || qty <= 0 || (price !== null && (!Number.isFinite(price) || price < 0))) { alert("数量は1以上、単価は0以上の数字で入力してください"); return }
-    if (r.supplier_invoice_item_id && (qty !== Number(r.quantity) || price !== (r.unit_price ?? null))) { alert("月次請求書と付け合わせ済みの入荷は、修正できません。先に付け合わせを外してください。"); return }
+    const newProductId = editing.productId || null
+    const productChanged = newProductId !== (r.product_id || null)
+    if (r.supplier_invoice_item_id && (qty !== Number(r.quantity) || price !== (r.unit_price ?? null) || productChanged)) { alert("月次請求書と付け合わせ済みの入荷は、数量・単価・商品を修正できません。先に付け合わせを外してください。"); return }
     setBusyId(r.id)
     try {
-      const delta = qty - Number(r.quantity)
-      if (delta !== 0 && r.product_id) {
-        if (!(await adjustStock(r.product_id, delta, "入庫修正", `入荷修正 数量 ${r.quantity}→${qty}（${r.created_at.slice(0, 10)}）`))) return
-        if (delta < 0) await revertPurchaseOrderReceipt(r, -delta)
+      const oldQty = Number(r.quantity)
+      if (productChanged) {
+        // 商品を変えるとき: 元の商品の在庫を戻し、新しい商品の在庫に足す
+        if (r.product_id) {
+          if (!(await adjustStock(r.product_id, -oldQty, "入庫修正", `入荷の商品変更（${productName(r.product_id)} から外す）`))) return
+          await revertPurchaseOrderReceipt(r, oldQty)
+        }
+        if (newProductId && !(await adjustStock(newProductId, qty, "入庫修正", `入荷の商品変更（${productName(newProductId)} に付け替え）`))) return
+      } else {
+        const delta = qty - oldQty
+        if (delta !== 0 && r.product_id) {
+          if (!(await adjustStock(r.product_id, delta, "入庫修正", `入荷修正 数量 ${oldQty}→${qty}（${r.created_at.slice(0, 10)}）`))) return
+          if (delta < 0) await revertPurchaseOrderReceipt(r, -delta)
+        }
       }
-      const { error } = await supabase.from("stock_receipts").update({ quantity: qty, unit_price: price }).eq("id", r.id)
+      const patch: Record<string, unknown> = { quantity: qty, unit_price: price, supplier_id: editing.supplierId || null, memo: editing.memo.trim() || null, product_id: newProductId }
+      if (editing.date && editing.date !== r.created_at.slice(0, 10)) patch.created_at = `${editing.date}T12:00:00`   // 入荷日を変えたときだけ
+      const { error } = await supabase.from("stock_receipts").update(patch).eq("id", r.id)
       if (error) { alert("修正に失敗しました: " + error.message); return }
       setEditing(null)
       await fetchData()
@@ -308,11 +325,36 @@ export default function ReceivingsListPage() {
                 return (
                   <tr key={r.id} className={"border-b border-gray-100 hover:bg-blue-50/40 " + (noOpenPO ? "bg-amber-50/60" : i % 2 === 0 ? "" : "bg-gray-50/30")}>
                     <td className="px-2 py-1.5 text-center text-[12px] text-gray-700">
-                      {parseDbDate(r.created_at).toLocaleDateString("ja-JP", { year: "2-digit", month: "2-digit", day: "2-digit" })}
+                      {editing?.id === r.id
+                        ? <input type="date" value={editing.date} onChange={e => setEditing({ ...editing, date: e.target.value })} className="px-1 py-0.5 border border-gray-300 rounded text-[12px]" />
+                        : parseDbDate(r.created_at).toLocaleDateString("ja-JP", { year: "2-digit", month: "2-digit", day: "2-digit" })}
                     </td>
-                    <td className="px-2 py-1.5 text-[12px]">{supplierName(r.supplier_id)}</td>
+                    <td className="px-2 py-1.5 text-[12px]">
+                      {editing?.id === r.id
+                        ? <select value={editing.supplierId} onChange={e => setEditing({ ...editing, supplierId: e.target.value })} className="px-1 py-0.5 border border-gray-300 rounded text-[12px] max-w-[160px]">
+                            <option value="">（未指定）</option>
+                            {suppliers.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                          </select>
+                        : supplierName(r.supplier_id)}
+                    </td>
                     <td className="px-2 py-1.5 text-[12px] text-gray-500 font-mono">{p?.product_code || "—"}</td>
-                    <td className="px-2 py-1.5">{productName(r.product_id)}</td>
+                    <td className="px-2 py-1.5">
+                      {editing?.id === r.id ? (
+                        <div className="relative">
+                          <div className="text-[12px] mb-0.5">{productName(editing.productId || null)}</div>
+                          <input value={editing.productQ} onChange={e => setEditing({ ...editing, productQ: e.target.value })} placeholder="商品を変えるなら、ここで検索" className="w-full px-1 py-0.5 border border-gray-300 rounded text-[11px]" />
+                          {editing.productQ.trim() && (
+                            <div className="absolute z-20 left-0 right-0 bg-white border border-gray-300 rounded shadow max-h-48 overflow-auto">
+                              {products.filter(pp => norm(pp.name + " " + (pp.product_code || "")).includes(norm(editing.productQ))).slice(0, 8).map(pp => (
+                                <button key={pp.id} onClick={() => setEditing({ ...editing, productId: pp.id, productQ: "" })} className="block w-full text-left px-2 py-1 text-[12px] hover:bg-blue-50 border-b border-gray-100">
+                                  {pp.name}<span className="text-gray-400 ml-1">{pp.product_code || ""}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : productName(r.product_id)}
+                    </td>
                     <td className="px-2 py-1.5 text-[12px] text-gray-500">{p?.manufacturer || "—"}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">
                       {editing?.id === r.id
@@ -326,7 +368,7 @@ export default function ReceivingsListPage() {
                     </td>
                     <td className="px-2 py-1.5 text-right text-[12px] font-bold tabular-nums">{fmtYen(amount)}</td>
                     <td className="px-2 py-1.5 text-[12px] text-gray-500">
-                      {(r.memo || "").replace(/\s*\/?\s*⚠発注記録なし/, "")}
+                      {editing?.id === r.id ? <input value={editing.memo} onChange={e => setEditing({ ...editing, memo: e.target.value })} className="w-full px-1 py-0.5 border border-gray-300 rounded text-[12px]" /> : (r.memo || "").replace(/\s*\/?\s*⚠発注記録なし/, "")}
                       {noOpenPO && <span className="ml-1 text-[11px] text-amber-700 bg-amber-100 px-1 py-0.5 rounded" title="受け取り時、この商品を含む未入荷の発注書が見つかりませんでした（紙注文などでデンハブに未入力だった可能性）">⚠ 発注記録なし</span>}
                     </td>
                     <td className="px-2 py-1.5 text-center">
@@ -344,7 +386,7 @@ export default function ReceivingsListPage() {
                         </>
                       ) : (
                         <>
-                          <button disabled={busyId === r.id} onClick={() => setEditing({ id: r.id, qty: String(r.quantity), price: r.unit_price == null ? "" : String(r.unit_price) })} className="text-[11px] px-2 py-0.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 mr-1 disabled:opacity-50">修正</button>
+                          <button disabled={busyId === r.id} onClick={() => startEdit(r)} className="text-[11px] px-2 py-0.5 rounded border border-gray-300 text-gray-700 hover:bg-gray-50 mr-1 disabled:opacity-50">修正</button>
                           <button disabled={busyId === r.id} onClick={() => cancelReceipt(r)} className="text-[11px] px-2 py-0.5 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50">取消</button>
                         </>
                       )}
