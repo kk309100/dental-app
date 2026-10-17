@@ -4,7 +4,8 @@
 // 発注書の商品一覧を表示し、今回届いた商品だけチェックして入荷処理。
 // 商品名の手入力・PDF読取不要。分割入荷・部分入荷に完全対応。
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { cancelPoLineReceipt } from "@/lib/po-receipt"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
 import Link from "next/link"
@@ -59,7 +60,22 @@ export default function ReceivingFromPoPage() {
   useEffect(() => { try { const v = sessionStorage.getItem("receivingFromPo.search"); if (v) setSearch(v) } catch { /* 保存できない環境では無視 */ } }, [])
   useEffect(() => { try { sessionStorage.setItem("receivingFromPo.search", search) } catch { /* 無視 */ } }, [search])
 
-  useEffect(() => { fetchData() }, [])
+  // 入荷済みの発注書も表示する（入荷の取消用）。切り替えたら、読み直す
+  const [showReceived, setShowReceived] = useState(false)
+  const loadedOnce = useRef(false)
+  useEffect(() => { fetchData({ silent: loadedOnce.current }); loadedOnce.current = true }, [showReceived])
+  const [cancelingId, setCancelingId] = useState<string | null>(null)
+  async function cancelReceipt(it: POItem) {
+    const n = Number(it.received_quantity || 0)
+    if (n <= 0) return
+    if (!confirm(`この商品の入荷 ${n}個 を取り消しますか？\n\n${it.product_name || ""}\n在庫が ${n} 減り、発注書の入荷数も戻ります。`)) return
+    setCancelingId(it.id)
+    try {
+      const r = await cancelPoLineReceipt(it.id, n)
+      if (!r.ok) { alert(r.error || "取消に失敗しました"); return }
+      await fetchData({ silent: true })
+    } finally { setCancelingId(null) }
+  }
 
   async function fetchData(opts?: { silent?: boolean }) {
     if (!opts?.silent) setLoading(true)
@@ -67,9 +83,9 @@ export default function ReceivingFromPoPage() {
     const [p, pi, s, pr, o, oi, cl] = await Promise.all([
       supabase.from("purchase_orders")
         .select("id,po_number,supplier_id,status,ordered_at,note")
-        .in("status", ["発注済", "部分入荷", "発注済み"])
+        .in("status", showReceived ? ["発注済", "部分入荷", "発注済み", "入荷済"] : ["発注済", "部分入荷", "発注済み"])
         .order("ordered_at", { ascending: false })
-        .limit(200),
+        .limit(showReceived ? 400 : 200),
       fetchAll("purchase_order_items", "id,purchase_order_id,product_id,product_name,quantity,unit_price,received_quantity,note"),
       supabase.from("suppliers").select("id,name").limit(1000),
       fetchAll("products", "id,stock,price"),
@@ -276,7 +292,7 @@ export default function ReceivingFromPoPage() {
       const someDone = mergedItems.some(i => i.received_quantity > 0)
       const newStatus = allDone ? "入荷済" : someDone ? "部分入荷" : po.status
       await supabase.from("purchase_orders").update({ status: newStatus }).eq("id", po.id)
-      if (allDone) setPos(prev => prev.filter(p => p.id !== po.id))
+      if (allDone && !showReceived) setPos(prev => prev.filter(p => p.id !== po.id))
 
       // 4. 出荷可能注文を検索
       const { nowShippable, partiallyImpacted } = await findNowShippable(receivedProductIds)
@@ -349,6 +365,10 @@ export default function ReceivingFromPoPage() {
               該当 {visiblePos.length}/{pos.length}件の発注書
             </p>
           )}
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 12, color: "#4b5563", cursor: "pointer" }}>
+            <input type="checkbox" checked={showReceived} onChange={e => setShowReceived(e.target.checked)} />
+            入荷済みの発注書も表示する（入荷を取り消したいとき）
+          </label>
         </div>
       </div>
 
@@ -587,6 +607,13 @@ export default function ReceivingFromPoPage() {
                               <div style={{ fontSize: 14, color: "#6b7280" }}>
                                 {Number(it.received_quantity || 0) > 0 ? Number(it.received_quantity) : "—"}
                               </div>
+                              {Number(it.received_quantity || 0) > 0 && (
+                                <button onClick={() => cancelReceipt(it)} disabled={cancelingId === it.id}
+                                  style={{ marginTop: 2, fontSize: 11, padding: "1px 6px", borderRadius: 6, border: "1px solid #fecaca", background: "#fff", color: "#dc2626", cursor: "pointer", opacity: cancelingId === it.id ? 0.5 : 1 }}
+                                  title="入荷を取り消す（在庫と発注書の入荷数を戻す）">
+                                  {cancelingId === it.id ? "…" : "取消"}
+                                </button>
+                              )}
                             </div>
 
                             {/* 残数 */}
