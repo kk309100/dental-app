@@ -114,7 +114,7 @@ export default function ReceivingsListPage() {
       }
       const { error } = await supabase.from("stock_receipts").delete().eq("id", r.id)
       if (error) { alert("取消に失敗しました（在庫は戻っています。もう一度お試しください）: " + error.message); return }
-      await fetchData()
+      setReceipts(prev => prev.filter(x => x.id !== r.id))   // 画面全体は読み直さず、その行だけ消す
     } finally { setBusyId(null) }
   }
 
@@ -147,7 +147,7 @@ export default function ReceivingsListPage() {
       const { error } = await supabase.from("stock_receipts").update(patch).eq("id", r.id)
       if (error) { alert("修正に失敗しました: " + error.message); return }
       setEditing(null)
-      await fetchData()
+      setReceipts(prev => prev.map(x => x.id === r.id ? ({ ...x, ...patch } as Receipt) : x))   // 画面全体は読み直さず、その行だけ更新する
     } finally { setBusyId(null) }
   }
 
