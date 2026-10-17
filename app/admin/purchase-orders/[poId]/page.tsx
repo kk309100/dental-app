@@ -1,6 +1,7 @@
 "use client"
 
 import { use, useEffect, useState } from "react"
+import { cancelPoLineReceipt } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -556,6 +557,20 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
                       onBlur={(e) => updateReceived(i.id, Number(e.target.value))}
                       disabled={receivingIds.has(i.id)}
                       className={"w-16 px-1 py-0.5 border border-gray-200 rounded text-xs text-right " + (receivingIds.has(i.id) ? "opacity-50 bg-gray-100" : "")} />
+                    {Number(i.received_quantity || 0) > 0 && (
+                      <button disabled={receivingIds.has(i.id)}
+                        onClick={async () => {
+                          const n = Number(i.received_quantity || 0)
+                          if (!confirm(`この商品の入荷 ${n}個 を取り消しますか？\n在庫が ${n} 減り、発注書の入荷数も戻ります。`)) return
+                          setReceivingIds(prev => new Set(prev).add(i.id))
+                          const r = await cancelPoLineReceipt(i.id, n)
+                          setReceivingIds(prev => { const x = new Set(prev); x.delete(i.id); return x })
+                          if (!r.ok) { alert(r.error || "取消に失敗しました"); return }
+                          await fetchData({ silent: true })
+                        }}
+                        className="ml-1 text-[11px] px-1.5 py-0.5 rounded border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        title="入荷を取り消す（在庫と発注書の入荷数を戻す）">取消</button>
+                    )}
                   </td>
                 )}
                 {editMode && (

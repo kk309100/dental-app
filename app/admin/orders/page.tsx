@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
+import { cancelPoLineReceipt } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
 import { useSearchParams } from "next/navigation"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
@@ -482,6 +483,30 @@ function AdminOrdersPage() {
       if (oie) { alert("入荷記録は保存されましたが、明細の更新に失敗しました: " + oie.message) }
       else await syncPurchaseOrderReceipt(itemId, qty)
       alert(`✅ ${qty}個の入荷を記録しました（在庫には加算されません。医院へ直送扱いです）`)
+      await fetchData({ silent: true })
+    } finally {
+      setReceivingItemId(null)
+    }
+  }
+
+  // 発注書の入荷（在庫に入った分）を取り消す。この注文明細に紐づく発注書の明細のうち、入荷済みの分を戻す
+  async function cancelPoReceiptForItem(it: OrderItem) {
+    const prefix = it.id.slice(0, 8).toLowerCase()
+    const viaStock = Math.max(0, (receivedQtyByItemPrefix.get(prefix) || 0) - Number(it.delivered_quantity || 0))
+    if (viaStock <= 0) return
+    if (!confirm(`発注書の入荷 ${viaStock}個 を取り消しますか？\n\n${it.product_name || ""}\n在庫が ${viaStock} 減り、発注書の入荷数も戻ります。`)) return
+    setReceivingItemId(it.id)
+    try {
+      const { data: lines } = await supabase.from("purchase_order_items").select("id,purchase_order_id,received_quantity").ilike("note", `%明細${prefix}%`)
+      const { data: heads } = await supabase.from("purchase_orders").select("id,status").in("id", Array.from(new Set((lines || []).map(l => l.purchase_order_id))))
+      const live = new Set((heads || []).filter(h => h.status !== "取消").map(h => h.id))
+      let left = viaStock
+      for (const l of (lines || []).filter(l => live.has(l.purchase_order_id) && Number(l.received_quantity || 0) > 0).sort((a, b) => Number(b.received_quantity || 0) - Number(a.received_quantity || 0))) {
+        if (left <= 0) break
+        const r = await cancelPoLineReceipt(l.id, Math.min(left, Number(l.received_quantity || 0)))
+        if (!r.ok) { alert(r.error || "取消に失敗しました"); break }
+        left -= r.cancelled || 0
+      }
       await fetchData({ silent: true })
     } finally {
       setReceivingItemId(null)
@@ -1310,6 +1335,13 @@ function AdminOrdersPage() {
                                               <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                               <td className="px-1 py-0.5 text-center">
+                                                {(() => { const v = Math.max(0, (receivedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0) - Number(it.delivered_quantity || 0)); return v > 0 ? (
+                                                  <div className="flex items-center gap-1 justify-center mb-0.5">
+                                                    <span className="text-[10px] text-emerald-700">発注書で入荷 {v}</span>
+                                                    <button onClick={e => { e.stopPropagation(); cancelPoReceiptForItem(it) }} disabled={receivingItemId === it.id}
+                                                      className="text-[11px] px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                                      title="発注書の入荷を取り消す（在庫を戻す）">取消</button>
+                                                  </div>) : null })()}
                                                 {receiveNeedFor(it, stock) > 0 && Number(it.delivered_quantity || 0) >= receiveNeedFor(it, stock) ? (
                                                   <div className="flex items-center gap-1 justify-center">
                                                     <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
@@ -1532,6 +1564,13 @@ function AdminOrdersPage() {
                                     <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                     <td className="px-1 py-0.5 text-center">
+                                      {(() => { const v = Math.max(0, (receivedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0) - Number(it.delivered_quantity || 0)); return v > 0 ? (
+                                        <div className="flex items-center gap-1 justify-center mb-0.5">
+                                          <span className="text-[10px] text-emerald-700">発注書で入荷 {v}</span>
+                                          <button onClick={e => { e.stopPropagation(); cancelPoReceiptForItem(it) }} disabled={receivingItemId === it.id}
+                                            className="text-[11px] px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                                            title="発注書の入荷を取り消す（在庫を戻す）">取消</button>
+                                        </div>) : null })()}
                                       {receiveNeedFor(it, stock) > 0 && Number(it.delivered_quantity || 0) >= receiveNeedFor(it, stock) ? (
                                         <div className="flex items-center gap-1 justify-center">
                                           <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
