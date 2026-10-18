@@ -64,6 +64,40 @@ function AdminOrdersPage() {
   // デフォルトは「すべて」表示（過去含む）。URLパラメータで filter 切替可能
   const initialStatus = sp.get("status") === "delivered" ? "delivered" : sp.get("status") === "undelivered" ? "undelivered" : "all"
   const [orders, setOrders] = useState<Order[]>([])
+  // 注文日（一覧の「日時」）の編集。日時を押すと、その場で日付を直せる。保存しても、画面は読み込み直さない
+  const [orderDateEdit, setOrderDateEdit] = useState<{ id: string; value: string } | null>(null)
+  const [orderDateSaving, setOrderDateSaving] = useState(false)
+  async function saveOrderDate(o: Order) {
+    if (!orderDateEdit || orderDateEdit.id !== o.id || !orderDateEdit.value) return
+    if (o.invoice_id && !confirm("この注文は、請求書に入っています。\n日付を変えると、請求の期間に影響することがあります。変更しますか？")) return
+    setOrderDateSaving(true)
+    const iso = `${orderDateEdit.value}T12:00:00+09:00`
+    const { error } = await supabase.from("orders").update({ created_at: iso }).eq("id", o.id)
+    setOrderDateSaving(false)
+    if (error) { alert("日付の変更に失敗しました: " + error.message); return }
+    setOrders(prev => prev.map(x => x.id === o.id ? { ...x, created_at: iso } : x))
+    setOrderDateEdit(null)
+  }
+  function renderOrderDate(o: Order) {
+    if (orderDateEdit?.id === o.id) {
+      return (
+        <span className="inline-flex items-center gap-1">
+          <input type="date" value={orderDateEdit.value} onChange={e => setOrderDateEdit({ id: o.id, value: e.target.value })}
+            onKeyDown={e => { if (e.key === "Enter") saveOrderDate(o); if (e.key === "Escape") setOrderDateEdit(null) }}
+            onClick={e => e.stopPropagation()}
+            className="px-1 py-0.5 border border-gray-300 rounded text-[11px]" autoFocus />
+          <button disabled={orderDateSaving} onClick={e => { e.stopPropagation(); saveOrderDate(o) }} className="text-[11px] px-1.5 py-0.5 rounded bg-blue-600 text-white font-bold disabled:opacity-50">保存</button>
+          <button onClick={e => { e.stopPropagation(); setOrderDateEdit(null) }} className="text-[11px] px-1.5 py-0.5 rounded border border-gray-300 text-gray-600">×</button>
+        </span>
+      )
+    }
+    return (
+      <button onClick={e => { e.stopPropagation(); setOrderDateEdit({ id: o.id, value: new Date(parseDbDate(o.created_at).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10) }) }}
+        className="hover:bg-blue-100 rounded px-1 underline decoration-dotted underline-offset-2 text-left" title="押すと、注文日を直せます">
+        {parseDbDate(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+      </button>
+    )
+  }
   const [orderItems, setOrderItems] = useState<OrderItem[]>([])
   const [clinics, setClinics] = useState<Clinic[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -1230,7 +1264,7 @@ function AdminOrdersPage() {
                                 {o.note?.includes("【医院修正】") && <ClinicEditBadge />}
                               </td>
                               <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
-                              <td className="px-2 py-1 text-[11px] text-gray-500">{parseDbDate(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+                              <td className="px-2 py-1 text-[11px] text-gray-500">{renderOrderDate(o)}</td>
                               <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                               <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
                                 {o.note ? <span className="bg-slate-100 text-red-600 font-medium border border-slate-300 px-1.5 py-0.5 rounded text-[11px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
@@ -1459,7 +1493,7 @@ function AdminOrdersPage() {
                       </td>
                       <td className="px-2 py-1 font-mono text-[11px] text-gray-600">{o.delivery_number || o.id.slice(0, 8)}</td>
                       <td className="px-2 py-1 whitespace-nowrap" title={clinicById.get(o.clinic_id)?.name || ""}><ClinicName name={clinicById.get(o.clinic_id)?.name} badge={clinicById.get(o.clinic_id)?.badge_label} fallback="—" /></td>
-                      <td className="px-2 py-1 text-[11px] text-gray-500">{parseDbDate(o.created_at).toLocaleString("ja-JP", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+                      <td className="px-2 py-1 text-[11px] text-gray-500">{renderOrderDate(o)}</td>
                       <td className="px-2 py-1 text-right text-[12px] font-bold">{fmtYen(o.total_price || 0)}</td>
                       <td className="px-2 py-1 text-[11px] text-gray-500 max-w-[140px]">
                         {o.note ? <span className="bg-slate-100 text-red-600 font-medium border border-slate-300 px-1.5 py-0.5 rounded text-[11px]" title={o.note}>{o.note.length > 20 ? o.note.slice(0, 20) + "…" : o.note}</span> : ""}
