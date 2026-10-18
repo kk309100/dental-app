@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { clearCompanyCache, COMPANY_FALLBACK } from "@/lib/company"
+import { resetTaxRoundingCache, setTaxRounding } from "@/lib/invoice"
 
 type Settings = {
   company_name: string
@@ -50,6 +51,9 @@ export default function SettingsPage() {
   const [tableMissing, setTableMissing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState("")
+  // 消費税の端数処理（四捨五入 / 切り捨て / 切り上げ）。company_settings.tax_rounding 列が無いときは、SQLの実行が必要
+  const [taxRounding, setTaxRoundingState] = useState("round")
+  const [taxColumnMissing, setTaxColumnMissing] = useState(false)
 
   useEffect(() => { fetchData() }, [])
 
@@ -62,6 +66,7 @@ export default function SettingsPage() {
         setTableMissing(error.code === "42P01")
       }
     } else if (data) {
+      if ("tax_rounding" in data) setTaxRoundingState(data.tax_rounding || "round"); else setTaxColumnMissing(true)
       setForm({
         company_name: data.company_name || "",
         postal_code: data.postal_code || "",
@@ -91,12 +96,14 @@ export default function SettingsPage() {
       setMsg("⚠ 適格請求書登録番号は T で始まる13桁の数字（例: T1234567890123）です")
       setSaving(false); return
     }
-    const payload = { ...form, id: 1, updated_at: new Date().toISOString() }
+    const payload: Record<string, unknown> = { ...form, id: 1, updated_at: new Date().toISOString() }
+    if (!taxColumnMissing) payload.tax_rounding = taxRounding
     const { error } = await supabase.from("company_settings").upsert(payload, { onConflict: "id" })
     if (error) {
       setMsg("保存失敗: " + error.message)
     } else {
       clearCompanyCache()
+      if (!taxColumnMissing) { setTaxRounding(taxRounding); resetTaxRoundingCache() }
       setMsg("✅ 保存しました（請求書・納品書に反映されます）")
     }
     setSaving(false)
@@ -156,6 +163,22 @@ export default function SettingsPage() {
           <Field label="口座番号" value={form.bank_number} onChange={v => setForm({ ...form, bank_number: v })} />
         </div>
         <Field label="口座名義" value={form.bank_holder} onChange={v => setForm({ ...form, bank_holder: v })} placeholder="カ）セイシン" />
+      </Section>
+
+      <Section title="消費税の端数処理">
+        <p className="text-xs text-gray-500">請求書・納品書の消費税（税抜小計 × 10%）の、1円未満の扱いです。請求書1枚ごとに、1回だけ処理します。すでに発行した請求書は、変わりません。</p>
+        {taxColumnMissing ? (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">この項目を使うには、データベースに列を追加する必要があります（db/migrations/2026-10-18_add_tax_rounding.sql を実行）。</p>
+        ) : (
+          <div className="flex gap-4 flex-wrap">
+            {[["round", "四捨五入"], ["floor", "切り捨て"], ["ceil", "切り上げ"]].map(([v, label]) => (
+              <label key={v} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input type="radio" name="tax_rounding" checked={taxRounding === v} onChange={() => setTaxRoundingState(v)} />
+                {label}
+              </label>
+            ))}
+          </div>
+        )}
       </Section>
 
       <Section title="帳票デザイン">

@@ -15,7 +15,7 @@ import { supabase } from "@/lib/supabase"
 import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
 import {
   fmtYen, fmtDate, parseDbDate, getClinicPrefix, getCorporateLabel,
-  EXPENSE_CATEGORIES, normalizeExpenseCategory, isReducedTax,
+  EXPENSE_CATEGORIES, normalizeExpenseCategory, isReducedTax, calcTaxFor, getTaxRounding,
   type ExpenseCategory,
 } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
@@ -147,9 +147,9 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
     })
     return {
       amount10,
-      tax10: Math.round(amount10 * 0.10),
+      tax10: calcTaxFor(amount10, 0.10, getTaxRounding()),
       amount8,
-      tax8: Math.round(amount8 * 0.08),
+      tax8: calcTaxFor(amount8, 0.08, getTaxRounding()),
     }
   }, [lines])
 

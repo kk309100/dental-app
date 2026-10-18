@@ -55,10 +55,31 @@ export function calcDueDate(issueDate: Date): string {
 
 // ── 消費税（10%、税抜→税込） ─────────────────────────────────────────
 // インボイス制度では「適格請求書ごとに税率ごと1回端数処理」が原則。
-// 端数処理は事業者の選択（切り捨て/四捨五入/切り上げ）。当社は四捨五入を採用。
+// 端数処理は事業者の選択（切り捨て/四捨五入/切り上げ）。初期値は四捨五入。「自社情報設定」で変えられる。
 export const TAX_RATE = 0.1
+// 端数処理は「自社情報設定」で選ぶ（四捨五入 / 切り捨て / 切り上げ）。設定は company_settings.tax_rounding に保存する。
+// 設定が無い・読めないときは四捨五入。ブラウザで読み込まれた時点で、設定を一度だけ読む。
+export type TaxRounding = "round" | "floor" | "ceil"
+let _taxRounding: TaxRounding = "round"
+let _taxLoaded: Promise<void> | null = null
+export function setTaxRounding(v: string | null | undefined) { _taxRounding = v === "floor" || v === "ceil" ? v : "round" }
+export function getTaxRounding(): TaxRounding { return _taxRounding }
+export function ensureTaxRounding(): Promise<void> {
+  if (!_taxLoaded) {
+    _taxLoaded = (async () => {
+      try {
+        const { data } = await supabase.from("company_settings").select("tax_rounding").eq("id", 1).single()
+        setTaxRounding((data as { tax_rounding?: string } | null)?.tax_rounding)
+      } catch { /* 設定が読めないときは四捨五入のまま */ }
+    })()
+  }
+  return _taxLoaded
+}
+export function resetTaxRoundingCache() { _taxLoaded = null }
+if (typeof window !== "undefined") void ensureTaxRounding()
 export function calcTax(subtotal: number): number {
-  return Math.round(subtotal * TAX_RATE)
+  const raw = subtotal * TAX_RATE
+  return _taxRounding === "floor" ? Math.floor(raw) : _taxRounding === "ceil" ? Math.ceil(raw) : Math.round(raw)
 }
 
 // ── ヘルパ ──────────────────────────────────────────────────────────

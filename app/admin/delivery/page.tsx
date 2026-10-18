@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
-import { parseDbDate } from "@/lib/invoice"
+import { parseDbDate, calcTax } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
 
 export default function DeliveryPage() {
@@ -76,7 +76,7 @@ export default function DeliveryPage() {
     )
 
     const subtotal = Number(order.total_price || 0)
-    const tax = Math.floor(subtotal * 0.1)
+    const tax = calcTax(subtotal)   // 端数処理は「自社情報設定」に合わせる
     const total = subtotal + tax
 
     return (
