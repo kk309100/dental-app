@@ -18,7 +18,7 @@ export default function NewOrderPageWrapper() {
 }
 
 type Clinic = { id: string; name: string; corporate_name?: string | null; clinic_code?: string | null }
-type Product = { id: string; name: string; product_code: string | null; price: number | null; stock: number | null; manufacturer?: string | null; category?: string | null; location?: string | null }
+type Product = { id: string; name: string; product_code: string | null; price: number | null; stock: number | null; stock_managed?: boolean | null; manufacturer?: string | null; category?: string | null; location?: string | null }
 type Row = { product_id: string | null; product_name: string; quantity: number; price: number; note?: string }
 type RecentOrder = { id: string; clinic_id: string; created_at: string; total_price: number; delivery_number: string | null }
 type ProductHistory = { product_id: string | null; product_name: string; last_price: number; last_ordered_at: string; times: number }
@@ -217,7 +217,7 @@ function NewOrderPage() {
   // 商品ピッカー: NFKC + カタカナ統一で検索
   // 自社管理在庫の商品は、同名・類似商品が並ぶ中で選び間違えないよう検索結果の先頭に出す
   const isManaged = (p: Product) => p.location === "自社管理"
-  const PCOLS = "id,name,product_code,price,stock,manufacturer,category,location"
+  const PCOLS = "id,name,product_code,price,stock,stock_managed,manufacturer,category,location"
   const [searchResults, setSearchResults] = useState<Product[]>([])
   const searchSeq = useRef(0)
   const searchActive = showProductPicker !== null || inlineOpenIdx !== null
@@ -395,7 +395,8 @@ function NewOrderPage() {
     const { data: its } = await supabase.from("order_items").select("id,product_id,quantity").eq("order_id", orderId)
     for (const it of its || []) {
       if (!it.product_id) continue
-      const { data: p } = await supabase.from("products").select("stock").eq("id", it.product_id).single()
+      const { data: p } = await supabase.from("products").select("stock,stock_managed").eq("id", it.product_id).single()
+      if (p?.stock_managed === false) continue   // 「在庫管理しない」商品は、在庫を引かない
       const before = Number(p?.stock || 0)
       const after = before - Number(it.quantity)
       await supabase.from("products").update({ stock: after }).eq("id", it.product_id)
@@ -673,7 +674,7 @@ function NewOrderPage() {
                   <div className="flex items-center gap-1">
                     <input lang="ja"
                       value={r.product_name}
-                      onChange={e => { updateRow(idx, { product_name: e.target.value, product_id: null }); setProductSearch(e.target.value); setInlineOpenIdx(idx) }}
+                      onChange={e => { updateRow(idx, { product_name: e.target.value, product_id: (r.product_id && products.find(p => p.id === r.product_id)?.stock_managed === false) ? r.product_id : null }); setProductSearch(e.target.value); setInlineOpenIdx(idx) }}
                       onFocus={() => { setProductSearch(r.product_name); setInlineOpenIdx(idx) }}
                       onBlur={() => setTimeout(() => setInlineOpenIdx(o => (o === idx ? null : o)), 150)}
                       onKeyDown={e => { if (e.key === "F4") { e.preventDefault(); setShowProductPicker(idx); setProductSearch(r.product_name) } }}
@@ -730,7 +731,7 @@ function NewOrderPage() {
               <div className="flex items-center gap-1" style={{ position: "relative" }}>
                 <input lang="ja"
                   value={r.product_name}
-                  onChange={e => { updateRow(idx, { product_name: e.target.value, product_id: null }); setProductSearch(e.target.value); setInlineOpenIdx(idx) }}
+                  onChange={e => { updateRow(idx, { product_name: e.target.value, product_id: (r.product_id && products.find(p => p.id === r.product_id)?.stock_managed === false) ? r.product_id : null }); setProductSearch(e.target.value); setInlineOpenIdx(idx) }}
                   onFocus={() => { setProductSearch(r.product_name); setInlineOpenIdx(idx) }}
                   onBlur={() => setTimeout(() => setInlineOpenIdx(o => (o === idx ? null : o)), 150)}
                   onKeyDown={e => { if (e.key === "F4") { e.preventDefault(); setShowProductPicker(idx); setProductSearch(r.product_name) } }}
@@ -925,7 +926,7 @@ function NewOrderPage() {
                           <p className="text-sm font-bold text-gray-900 tabular-nums">¥{standardPrice.toLocaleString()}</p>
                         )}
                         <p className={"text-xs " + ((p.stock || 0) > 0 ? "text-gray-500" : "text-red-500")}>
-                          在庫 {p.stock || 0}
+                          {p.stock_managed === false ? "在庫管理なし" : `在庫 ${p.stock || 0}`}
                         </p>
                       </div>
                     </div>

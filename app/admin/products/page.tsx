@@ -23,6 +23,7 @@ type Product = {
   default_supplier_id?: string | null
   image_url?: string | null
   stocktake_exclude?: boolean | null
+  stock_managed?: boolean | null
 }
 
 type Supplier = { id: string; name: string; short_name: string | null }
@@ -53,7 +54,7 @@ export default function AdminProductsPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const imgFileRef = useRef<HTMLInputElement>(null)
 
-  const COLS = "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id,image_url,stocktake_exclude"
+  const COLS = "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id,image_url,stocktake_exclude,stock_managed"
   const [totalCount, setTotalCount] = useState(0)        // 絞り込み後の件数
   const [grandTotal, setGrandTotal] = useState(0)        // 全商品の件数
   const [categories, setCategories] = useState<string[]>(["すべて"])
@@ -195,7 +196,7 @@ export default function AdminProductsPage() {
     id: "", name: "", product_code: null, manufacturer: null, category: null,
     stock: 0, reorder_level: null, cost: null, price: null, active: true,
     location: null, purchase_maker: null, default_supplier_id: null,
-    image_url: null, stocktake_exclude: false,
+    image_url: null, stocktake_exclude: false, stock_managed: true,
   }
 
   function openEdit(p: Product) {
@@ -229,6 +230,7 @@ export default function AdminProductsPage() {
       default_supplier_id: editForm.default_supplier_id || null,
       active: editForm.active !== false,
       stocktake_exclude: editForm.stocktake_exclude === true,
+      stock_managed: editForm.stock_managed !== false,
       image_url: editForm.image_url || null,
     }
     const { error } = isNew
@@ -983,6 +985,32 @@ export default function AdminProductsPage() {
                       </div>
                       <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>
                         {editForm.stocktake_exclude ? "注文してもすぐ使う消耗品。棚卸しリストに含まれません" : "年次棚卸しリストに表示されます"}
+                      </div>
+                    </div>
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "8px 0", borderTop: "1px solid #f3f4f6", marginTop: 4 }}>
+                    <div style={{
+                      width: 44, height: 24, borderRadius: 12,
+                      background: editForm.stock_managed === false ? "#0ea5e9" : "#d1d5db",
+                      position: "relative", transition: "background 0.2s", flexShrink: 0,
+                    }}>
+                      <div style={{
+                        position: "absolute", top: 3,
+                        left: editForm.stock_managed === false ? 23 : 3,
+                        width: 18, height: 18, borderRadius: "50%",
+                        background: "#fff", transition: "left 0.2s",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                      }} />
+                      <input type="checkbox" checked={editForm.stock_managed === false}
+                        onChange={e => setEditForm({ ...editForm, stock_managed: !e.target.checked })}
+                        style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", cursor: "pointer", margin: 0 }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: editForm.stock_managed === false ? "#0369a1" : "#6b7280" }}>
+                        {editForm.stock_managed === false ? "在庫管理しない" : "在庫管理する"}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>
+                        {editForm.stock_managed === false ? "パソコン関係・工事費など。在庫の不足・入荷・発注の対象にならず、納品しても在庫を引きません" : "在庫の数を管理します（ふつうの商品）"}
                       </div>
                     </div>
                   </label>

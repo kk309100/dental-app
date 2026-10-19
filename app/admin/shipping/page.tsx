@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
+import { withStockFlag } from "@/lib/stock-managed"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
@@ -14,7 +15,7 @@ type OrderItem = { id: string; order_id: string; product_id: string | null; prod
 // 入荷済み（直送）として受け取った数は、自社在庫を使わないので、出荷時に在庫から引く数・在庫が足りるかの判定から除く
 const stockNeedOf = (it: { quantity: number; delivered_quantity?: number | null }) =>
   Math.max(0, Number(it.quantity || 0) - Math.min(Number(it.delivered_quantity || 0), Number(it.quantity || 0)))
-type Product = { id: string; name: string; stock: number | null; location: string | null; cost: number | null; price: number | null }
+type Product = { id: string; name: string; stock: number | null; stock_managed?: boolean | null; location: string | null; cost: number | null; price: number | null }
 type Clinic = { id: string; name: string; corporate_name?: string | null; sales_rep?: string | null }
 
 // 出荷準備対象 = 納品済み・キャンセル以外すべて（status 値の表記ゆれを吸収）
@@ -73,7 +74,7 @@ function ShippingPage() {
       // 全件取得 → クライアント側で EXCLUDE_STATUSES を除外（PostgREST .not in は日本語値で壊れる + 表記ゆれ吸収）
       fetchAllData("orders", "id,clinic_id,status,created_at,total_price,delivery_number,sales_rep,note", (q: any) => q.order("created_at")),
       fetchAll("order_items", "id,order_id,product_id,product_name,quantity,price,delivered_quantity"),
-      fetchAll("products", "id,name,stock,location,cost,price"),
+      fetchAll("products", "id,name,stock,stock_managed,location,cost,price"),
       supabase.from("clinics").select("id,name,corporate_name,sales_rep").limit(50000),
     ])
     const allOrders = (o.data as Order[]) || []
@@ -81,7 +82,7 @@ function ShippingPage() {
     setOrders(activeOrders)
     const orderIds = new Set(activeOrders.map(x => x.id))
     setItems(((i as OrderItem[]) || []).filter(x => orderIds.has(x.order_id)))
-    setProducts((p as Product[]) || [])
+    setProducts(withStockFlag(p as Product[]))
     setClinics((c.data as Clinic[]) || [])
     if (!opts?.silent) setLoading(false)
   }
@@ -268,6 +269,7 @@ function ShippingPage() {
       for (const it of itsToShip) {
         if (!it.product_id) continue
         // 入荷済み（直送）として受け取った分は在庫を通っていないので、在庫からは引かない（引くとマイナス在庫になる）
+        if (productById.get(it.product_id)?.stock_managed === false) continue   // 「在庫管理しない」商品は、在庫を引かない
         const deduct = stockNeedOf(it)
         if (deduct <= 0) continue
         // 今回のバッチ処理で既に減算した分を差し引いた「現在の正しい在庫」を算出

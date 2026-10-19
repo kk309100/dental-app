@@ -8,6 +8,7 @@
 // ・全在庫不足 or 売上モードOFF → 準備中 + 発注プール
 
 import { useEffect, useMemo, useState } from "react"
+import { withStockFlag } from "@/lib/stock-managed"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { poolFromOrders, forceAddOrderItemToPool } from "@/lib/po-pool"
 import { fmtYen, calcTax, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
@@ -24,7 +25,7 @@ type OrderItem = {
   id: string; order_id: string; product_id: string | null
   product_name: string | null; quantity: number; price: number
 }
-type Product  = { id: string; name: string; stock: number | null; location?: string | null }
+type Product  = { id: string; name: string; stock: number | null; stock_managed?: boolean | null; location?: string | null }
 type Clinic   = { id: string; name: string; corporate_name: string | null }
 
 type ProcessResult = {
@@ -159,12 +160,12 @@ export default function OrderProcessPage() {
       // 注文明細は1000件を超えるため、全件ページング取得する（.limit だけだと新しい注文の明細が欠ける）
       fetchAllData("order_items", "id,order_id,product_id,product_name,quantity,price"),
       // products は1万件超あるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
-      fetchAll("products", "id,name,stock,location"),
+      fetchAll("products", "id,name,stock,stock_managed,location"),
       supabase.from("clinics").select("id,name,corporate_name").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
     setItems((i.data as OrderItem[]) || [])
-    setProducts((p as Product[]) || [])
+    setProducts(withStockFlag(p as Product[]))
     setClinics((c.data as Clinic[]) || [])
     setLoading(false)
   }
@@ -226,6 +227,7 @@ export default function OrderProcessPage() {
     for (const it of orderItems) {
       if (!it.product_id) continue
       const prod = productById.get(it.product_id)
+      if (prod?.stock_managed === false) continue   // 「在庫管理しない」商品は、在庫を引かない
       const newStock = Number(prod?.stock || 0) - Number(it.quantity)
       await supabase.from("products").update({ stock: newStock }).eq("id", it.product_id)
     }

@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
+import { withStockFlag } from "@/lib/stock-managed"
 import { cancelPoLineReceipt } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
 import { useSearchParams } from "next/navigation"
@@ -23,7 +24,7 @@ export default function AdminOrdersPageWrapper() {
 type Order = { id: string; clinic_id: string; status: string; created_at: string; total_price: number; delivery_number: string | null; invoice_id: string | null; source?: string | null; note?: string | null }
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null }
 type Clinic = { id: string; name: string; corporate_name?: string | null; badge_label?: string | null }
-type Product = { id: string; name: string; stock: number | null; cost: number | null; price: number | null; manufacturer?: string | null; product_code?: string | null; location?: string | null }
+type Product = { id: string; name: string; stock: number | null; stock_managed?: boolean | null; cost: number | null; price: number | null; manufacturer?: string | null; product_code?: string | null; location?: string | null }
 type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null; note?: string | null }
 type POHead = { id: string; status: string }
 
@@ -126,7 +127,7 @@ function AdminOrdersPage() {
       fetchAllData("order_items", "*"),
       supabase.from("clinics").select("id,name,corporate_name,badge_label").limit(50000).then(async (r: any) => r.error ? await supabase.from("clinics").select("id,name,corporate_name").limit(50000) : r),
       // products は1万件超あるため .limit() だけでは1000件上限に引っかかる → fetchAll でページング取得
-      fetchAll("products", "id,name,product_code,stock,cost,price,manufacturer,location"),
+      fetchAll("products", "id,name,product_code,stock,stock_managed,cost,price,manufacturer,location"),
       // 業務状態判定用: 「未入荷の発注」を検出するため
       fetchAllData("purchase_orders", "id,status"),
       fetchAllData("purchase_order_items", "id,purchase_order_id,product_id,quantity,received_quantity,note"),
@@ -135,7 +136,7 @@ function AdminOrdersPage() {
     setOrders(orders)
     setOrderItems((i.data as OrderItem[]) || [])
     setClinics((c.data as Clinic[]) || [])
-    setProducts((pData as Product[]) || [])
+    setProducts(withStockFlag(pData as Product[]))   // 「在庫管理しない」商品は、在庫が足りているものとして扱う
     setPoHeads((ph.data as POHead[]) || [])
     setPoItems((pi.data as POItem[]) || [])
     if (!opts?.silent) {

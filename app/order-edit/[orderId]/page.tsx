@@ -170,6 +170,20 @@ export default function OrderEditPage() {
     return () => clearTimeout(t)
   }, [swapQuery, swapItemId])
 
+  // 商品名だけを書き換える（商品コードのひもづけは、そのまま）。「パソコン関係」のように、1つのコードで、商品名を行ごとに変えたいとき用
+  async function renameItem(item: any) {
+    const next = window.prompt("この行の商品名を入力してください（商品コードは、そのままです）", item.product_name || "")
+    if (next === null) return
+    const name = next.trim()
+    if (!name || name === item.product_name) return
+    setSaving(true)
+    const { error } = await supabase.from("order_items").update({ product_name: name }).eq("id", item.id)
+    if (error) { setSaving(false); alert("商品名の変更に失敗しました: " + error.message); return }
+    setItems(items.map((i) => i.id === item.id ? { ...i, product_name: name } : i))
+    await tagEditNote()
+    setSaving(false)
+  }
+
   async function swapProduct(item: any, p: any) {
     if (!canEditNow()) return
     if (item.product_id === p.id) { setSwapItemId(null); return }
@@ -375,6 +389,13 @@ export default function OrderEditPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* 商品名だけの訂正（管理者のみ） */}
+                  {editable && isAdmin && (
+                    <button onClick={() => renameItem(item)} disabled={saving}
+                      style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #d1d5db", background: "#fff", fontSize: 11, cursor: "pointer", marginRight: 4 }}
+                      title="この行の商品名だけを書き換える">名前</button>
+                  )}
 
                   {/* 商品違いの訂正（管理者のみ） */}
                   {editable && isAdmin && (
