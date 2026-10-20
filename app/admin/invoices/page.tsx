@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { deleteInvoice } from "@/lib/invoice-delete"
 import { supabase } from "@/lib/supabase"
 import { fmtYen, fmtDate, INVOICE_STATUSES, type InvoiceStatus } from "@/lib/invoice"
 import Link from "next/link"
@@ -341,6 +342,20 @@ export default function InvoicesPage() {
                         fontSize: 12, padding: "3px 10px", border: "1px solid #e5e7eb",
                         borderRadius: 5, background: "#fff", textDecoration: "none", color: "#374151",
                       }}>開く</Link>
+                      {(iv.status === "cancelled" || (iv.status === "issued" && !(Number(iv.paid_amount) > 0))) && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`請求書 ${iv.invoice_number} を、完全に削除します。元に戻せません。
+関連する注文の請求紐づけは、解除されます。
+
+削除しますか？`)) return
+                            const r = await deleteInvoice(iv.id)
+                            if (!r.ok) { alert(r.error || "削除に失敗しました"); return }
+                            setInvoices(prev => prev.filter(x => x.id !== iv.id))
+                          }}
+                          style={{ marginLeft: 4, fontSize: 12, padding: "3px 8px", border: "1px solid #fecaca", borderRadius: 5, background: "#fff", color: "#dc2626", cursor: "pointer" }}
+                          title="請求書そのものを消す（元に戻せません）">削除</button>
+                      )}
                     </td>
                   </tr>
                 )

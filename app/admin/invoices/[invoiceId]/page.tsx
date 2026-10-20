@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { deleteInvoice } from "@/lib/invoice-delete"
 import { use } from "react"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
@@ -225,6 +226,17 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
     fetchData({ silent: true })
   }
 
+  async function removeInvoice() {
+    if (!invoice) return
+    if (!confirm(`請求書 ${invoice.invoice_number} を、完全に削除します。元に戻せません。
+関連する注文の請求紐づけは、解除されます。
+
+削除しますか？`)) return
+    const r = await deleteInvoice(invoice.id)
+    if (!r.ok) { alert(r.error || "削除に失敗しました"); return }
+    router.push("/admin/invoices")
+  }
+
   async function reissueFromCancel() {
     if (!invoice) return
     if (!confirm("取消した請求書を再発行（issuedに戻す）しますか？")) return
@@ -270,10 +282,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ invoic
               ✓ 入金記録
             </button>
             <button onClick={cancelInvoice} style={btnRed}>取消</button>
+            {Number(invoice.paid_amount || 0) <= 0 && <button onClick={removeInvoice} style={btnGray} title="請求書そのものを消す（元に戻せません）">削除</button>}
           </>
         )}
         {invoice.status === "cancelled" && (
-          <button onClick={reissueFromCancel} style={btnGray}>再発行</button>
+          <>
+            <button onClick={reissueFromCancel} style={btnGray}>再発行</button>
+            <button onClick={removeInvoice} style={btnRed} title="請求書そのものを消す（元に戻せません）">削除</button>
+          </>
         )}
       </div>
 
