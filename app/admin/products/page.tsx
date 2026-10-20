@@ -11,6 +11,7 @@ type Product = {
   id: string
   name: string
   product_code: string | null
+  barcode?: string | null
   manufacturer: string | null
   category: string | null
   stock: number | null
@@ -54,7 +55,7 @@ export default function AdminProductsPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const imgFileRef = useRef<HTMLInputElement>(null)
 
-  const COLS = "id,name,product_code,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id,image_url,stocktake_exclude,stock_managed"
+  const COLS = "id,name,product_code,barcode,manufacturer,category,stock,reorder_level,cost,price,active,location,purchase_maker,default_supplier_id,image_url,stocktake_exclude,stock_managed"
   const [totalCount, setTotalCount] = useState(0)        // 絞り込み後の件数
   const [grandTotal, setGrandTotal] = useState(0)        // 全商品の件数
   const [categories, setCategories] = useState<string[]>(["すべて"])
@@ -219,6 +220,7 @@ export default function AdminProductsPage() {
     const payload: Record<string, unknown> = {
       name: editForm.name || editProduct.name,
       product_code: editForm.product_code || null,
+      barcode: editForm.barcode || null,
       manufacturer: editForm.manufacturer || null,
       category: editForm.category || null,
       cost: editForm.cost != null ? Number(editForm.cost) || null : null,
@@ -626,6 +628,7 @@ export default function AdminProductsPage() {
               </th>
               <th className="px-2 py-1.5 text-left" style={{ ...td0, minWidth: 160 }}>商品名</th>
               <th className="px-2 py-1.5 text-left w-24" style={td0}>コード</th>
+              <th className="px-2 py-1.5 text-left w-32" style={td0}>JAN</th>
               <th className="px-2 py-1.5 text-left w-28" style={td0}>メーカー</th>
               <th className="px-2 py-1.5 text-left w-24" style={td0}>カテゴリ</th>
               <th className="px-2 py-1.5 text-left w-28" style={td0}>仕入先</th>
@@ -639,7 +642,7 @@ export default function AdminProductsPage() {
           </thead>
           <tbody>
             {pageItems.length === 0 ? (
-              <tr><td colSpan={12} className="px-4 py-6 text-center text-gray-400">該当商品なし</td></tr>
+              <tr><td colSpan={13} className="px-4 py-6 text-center text-gray-400">該当商品なし</td></tr>
             ) : pageItems.map((p, i) => (
               <React.Fragment key={p.id}>
                 <tr className={"border-b border-gray-100 hover:bg-blue-50/40 " + (i % 2 === 0 ? "" : "bg-gray-50/40") + (p.active === false ? " opacity-40" : "")}>
@@ -648,6 +651,7 @@ export default function AdminProductsPage() {
                   </td>
                   <td className="px-2 py-1 text-[12px]" style={td0}>{p.name}</td>
                   <td className="px-2 py-1 text-[12px] text-gray-500 font-mono" style={td0}>{p.product_code || ""}</td>
+                  <td className="px-2 py-1 text-[12px] text-gray-500 font-mono" style={td0}>{p.barcode || ""}</td>
                   <td className="px-2 py-1 text-[12px] text-gray-600" style={td0}>{p.manufacturer || ""}</td>
                   <td className="px-2 py-1 text-[12px] text-gray-500" style={td0}>{p.category || ""}</td>
                   <td className="px-2 py-1 text-[12px]" style={td0}>
@@ -810,6 +814,10 @@ export default function AdminProductsPage() {
                     <EditField label="商品コード">
                       <input value={editForm.product_code || ""} onChange={e => setEditForm({ ...editForm, product_code: e.target.value })}
                         style={{ ...fieldStyle, fontFamily: "monospace" }} />
+                    </EditField>
+                    <EditField label="JAN（バーコード）">
+                      <input value={editForm.barcode || ""} onChange={e => setEditForm({ ...editForm, barcode: e.target.value.trim() })}
+                        style={{ ...fieldStyle, fontFamily: "monospace" }} placeholder="例: 4901234567894" />
                     </EditField>
                     <EditField label="カテゴリ">
                       <input value={editForm.category || ""} onChange={e => setEditForm({ ...editForm, category: e.target.value })}
