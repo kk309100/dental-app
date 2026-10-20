@@ -188,14 +188,14 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
     const top = sec?.querySelector("tr.dr-top") as HTMLElement | null
     const bot = sec?.querySelector("tr.dr-bot") as HTMLElement | null
     if (!mm || !sec || !table || !top || !bot) return
-    const pairH = Math.max(top.offsetHeight + bot.offsetHeight, 9.2 * mm)   // 空白行（4.6mm×2）より小さくならないようにする
+    const pairH = Math.max(top.offsetHeight + bot.offsetHeight, 13.5 * mm)   // 1商品=5mm+8.5mm（固定）
     const theadH = (table.querySelector("thead") as HTMLElement | null)?.offsetHeight || 6 * mm
     const firstHeader = table.getBoundingClientRect().top - sec.getBoundingClientRect().top   // 1ページ目の、表より上の高さ（上の余白を含む）
     const miniH = (miniRef.current?.offsetHeight || 12 * mm) + 8                               // 2ページ目以降の、ミニヘッダー＋表の上の余白
     // 余裕: 画面で測った高さと、印刷したときの高さには、わずかな差が出る（1ページ目は、見出しが多いので、差が大きい）。
-    const pageH = 297 * mm, pad = 10 * mm, footer = 16 * mm
-    const first = Math.max(5, Math.floor((pageH - firstHeader - pad - theadH - footer - 14 * mm) / pairH))
-    const next = Math.max(8, Math.floor((pageH - pad - pad - miniH - theadH - footer - 16 * mm) / pairH))
+    const pageH = 297 * mm, pad = 10 * mm
+    const first = Math.max(4, Math.floor((pageH - firstHeader - pad - theadH - 10 * mm) / pairH))
+    const next = Math.max(8, Math.floor((pageH - pad - pad - miniH - theadH - 8 * mm) / pairH))
     setCaps(prev => (prev.first === first && prev.next === next ? prev : { first, next }))
   }, [loading, lines.length, caps.first, caps.next])
 
@@ -212,13 +212,16 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
   // 見出しだけが次のページに繰り返され、下の罫線も途切れてしまう。
   const FIRST_PAGE_LINES = caps.first
   const NEXT_PAGE_LINES = caps.next
+  const FOOTER_ITEMS = 2   // 最終ページの「上記の通り…」のフッターが使う高さ（商品2件ぶん）
   const pages: typeof lines[] = []
-  if (lines.length <= FIRST_PAGE_LINES) {
+  if (lines.length <= FIRST_PAGE_LINES - FOOTER_ITEMS) {
     pages.push(lines)
   } else {
     pages.push(lines.slice(0, FIRST_PAGE_LINES))
     let cursor = FIRST_PAGE_LINES
     while (cursor < lines.length) {
+      const rest = lines.length - cursor
+      if (rest <= NEXT_PAGE_LINES - FOOTER_ITEMS) { pages.push(lines.slice(cursor)); break }
       pages.push(lines.slice(cursor, cursor + NEXT_PAGE_LINES))
       cursor += NEXT_PAGE_LINES
     }
@@ -311,7 +314,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
               <DetailTable
                 lines={pageLines}
                 startIdx={isFirstPage ? 0 : (FIRST_PAGE_LINES + (pageIdx - 1) * NEXT_PAGE_LINES)}
-                fixedRows={isFirstPage ? FIRST_PAGE_LINES : NEXT_PAGE_LINES}
+                fixedRows={(isFirstPage ? FIRST_PAGE_LINES : NEXT_PAGE_LINES) - (isLastPage ? FOOTER_ITEMS : 0)}
               />
 
               {/* フッター（最終ページのみ） */}
@@ -377,7 +380,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
         .invoice-doc .invoice-page table tr.dr-top > td { border-top: 1px solid #222 !important; }
         .invoice-doc .invoice-page table tr.dr-bot > td { border-bottom: 1px solid #222 !important; }
         /* 1商品（2行）の途中で、ページが切れないようにする */
-        .invoice-doc .invoice-page table tr { break-inside: avoid; page-break-inside: avoid; }
+        .invoice-doc .invoice-page table tr, .invoice-doc .invoice-page table tbody.dr-group { break-inside: avoid; page-break-inside: avoid; }
       `}</style>
     </>
   )
@@ -587,32 +590,30 @@ function DetailTable({ lines, startIdx, fixedRows }: { lines: LineRow[]; startId
           <th style={{ ...cellLabel, border: "none", textAlign: "right", padding: "2px 3px" }}>金額</th>
         </tr>
       </thead>
-      <tbody>
-        {lines.length === 0 && emptyCount === 0 ? (
-          <tr><td colSpan={5} style={{ padding: 16, textAlign: "center", color: "#999" }}>明細なし</td></tr>
-        ) : lines.map((l, i) => (
-          <DetailRowPair key={startIdx + i} line={l} />
-        ))}
-        {/* 固定行数に足りない分を空白スロット（2行1組）で埋める */}
-        {Array.from({ length: emptyCount }).map((_, i) => (
-          <>
-            <tr key={`empty-a-${i}`} className="dr-top" style={{ height: "4.6mm" }}>
+      {lines.length === 0 && emptyCount === 0 ? (
+        <tbody><tr><td colSpan={5} style={{ padding: 16, textAlign: "center", color: "#999" }}>明細なし</td></tr></tbody>
+      ) : lines.map((l, i) => (
+        <DetailRowPair key={startIdx + i} line={l} />
+      ))}
+      {/* 固定行数に足りない分を、空白の枠（2行1組）で埋める */}
+      {Array.from({ length: emptyCount }).map((_, i) => (
+        <tbody key={`empty-${i}`} className="dr-group">
+            <tr key={`empty-0-a`} className="dr-top" style={{ height: "5mm" }}>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={emptyCell}></td>
             </tr>
-            <tr key={`empty-b-${i}`} className="dr-bot" style={{ height: "4.6mm" }}>
+            <tr key={`empty-0-b`} className="dr-bot" style={{ height: "8.5mm" }}>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={emptyCell}></td>
             </tr>
-          </>
-        ))}
-      </tbody>
+        </tbody>
+      ))}
     </table>
   )
 }
@@ -622,8 +623,8 @@ function DetailRowPair({ line }: { line: LineRow }) {
   // 1行目: 日付（左）、 売上 メーカー（中央）、 経費分類（右寄り）、 (定価)（右）
   // 2行目: 伝票No、 商品コード 商品名、 数量、 売単価、 金額
   return (
-    <>
-      <tr className="dr-top">
+    <tbody className="dr-group">
+      <tr className="dr-top" style={{ height: "5mm" }}>
         <td style={{ padding: "1px 3px", fontSize: 9 }}>{line.date}</td>
         {/* 経費分類を右端に寄せる（参考PDF準拠） */}
         <td style={{ padding: "1px 3px", fontSize: 9 }}>
@@ -640,7 +641,7 @@ function DetailRowPair({ line }: { line: LineRow }) {
         </td>
         <td style={{ padding: "1px 3px", textAlign: "right" }}></td>
       </tr>
-      <tr className="dr-bot">
+      <tr className="dr-bot" style={{ height: "8.5mm" }}>
         <td style={{ padding: "1px 3px 3px", fontSize: 9, textAlign: "right" }}>{line.delivery_number}</td>
         <td style={{ padding: "1px 3px 3px", fontSize: 9, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
           {line.product_code && <span style={{ marginRight: 6 }}>{line.product_code}</span>}
@@ -650,7 +651,7 @@ function DetailRowPair({ line }: { line: LineRow }) {
         <td style={{ padding: "1px 3px 3px", textAlign: "right", fontSize: 9 }}>{line.unit_price.toLocaleString()}</td>
         <td style={{ padding: "1px 3px 3px", textAlign: "right", fontSize: 9, fontWeight: 700 }}>{line.amount.toLocaleString()}</td>
       </tr>
-    </>
+    </tbody>
   )
 }
 
