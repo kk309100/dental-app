@@ -107,7 +107,14 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
   const lines = useMemo(() => {
     const productMap = new Map(products.map(p => [p.id, p]))
     const orderMap = new Map(orders.map(o => [o.id, o]))
-    return items.map(it => {
+    // 明細は、注文日の古い順に並べる（同じ日は伝票番号順。同じ伝票の中は、元の並びのまま）
+    const orderIndex = new Map(items.map((it, i) => [it.id, i]))
+    const sorted = items.slice().sort((a, b) => {
+      const oa = orderMap.get(a.order_id), ob = orderMap.get(b.order_id)
+      const da = oa ? String(oa.created_at) : "", db = ob ? String(ob.created_at) : ""
+      return da.localeCompare(db) || String(oa?.delivery_number || "").localeCompare(String(ob?.delivery_number || "")) || (orderIndex.get(a.id) || 0) - (orderIndex.get(b.id) || 0)
+    })
+    return sorted.map(it => {
       const product = it.product_id ? productMap.get(it.product_id) : null
       const order = orderMap.get(it.order_id)
       const cat = normalizeExpenseCategory(product?.category)
@@ -550,18 +557,18 @@ function DetailTable({ lines, startIdx, fixedRows }: { lines: LineRow[]; startId
         {/* 固定行数に足りない分を空白スロット（2行1組）で埋める */}
         {Array.from({ length: emptyCount }).map((_, i) => (
           <>
-            <tr key={`empty-a-${i}`} style={{ borderTop: "1px solid #ccc", height: "4.6mm" }}>
-              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
-              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
-              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
-              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
+            <tr key={`empty-a-${i}`} style={{ borderTop: "1px solid #888", height: "4.6mm" }}>
+              <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={emptyCell}></td>
             </tr>
-            <tr key={`empty-b-${i}`} style={{ borderBottom: "1px solid #ccc", height: "4.6mm" }}>
-              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
-              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
-              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
-              <td style={{ ...emptyCell, borderRight: "1px solid #ddd" }}></td>
+            <tr key={`empty-b-${i}`} style={{ borderBottom: "1px solid #888", height: "4.6mm" }}>
+              <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
+              <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={emptyCell}></td>
             </tr>
           </>
@@ -577,7 +584,7 @@ function DetailRowPair({ line }: { line: LineRow }) {
   // 2行目: 伝票No、 商品コード 商品名、 数量、 売単価、 金額
   return (
     <>
-      <tr style={{ borderTop: "1px solid #ddd" }}>
+      <tr style={{ borderTop: "1px solid #555" }}>
         <td style={{ padding: "1px 3px", fontSize: 9 }}>{line.date}</td>
         {/* 経費分類を右端に寄せる（参考PDF準拠） */}
         <td style={{ padding: "1px 3px", fontSize: 9 }}>
@@ -594,7 +601,7 @@ function DetailRowPair({ line }: { line: LineRow }) {
         </td>
         <td style={{ padding: "1px 3px", textAlign: "right" }}></td>
       </tr>
-      <tr style={{ borderBottom: "1px solid #eee" }}>
+      <tr style={{ borderBottom: "1px solid #555" }}>
         <td style={{ padding: "1px 3px 3px", fontSize: 9, textAlign: "right" }}>{line.delivery_number}</td>
         <td style={{ padding: "1px 3px 3px", fontSize: 9, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
           {line.product_code && <span style={{ marginRight: 6 }}>{line.product_code}</span>}
