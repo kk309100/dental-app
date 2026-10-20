@@ -38,6 +38,28 @@ const INITIAL_ROWS = 10
 
 export default function ReceivingPage() {
   const [products, setProducts] = useState<Product[]>([])
+  // JANコードの照合: 数字だけにして、先頭の0は無視する（13桁と、先頭に0が付いた14桁を、同じJANとして扱う）
+  const normJan = (v: string | null | undefined) => String(v || "").normalize("NFKC").replace(/\D/g, "").replace(/^0+/, "")
+  // 商品の barcode に無いJANは、DataLandのマスター（JAN付き）を経由して探す: JAN → マスター → マスターに紐づく商品
+  const [janViaMaster, setJanViaMaster] = useState<Map<string, string>>(new Map())   // 正規化したJAN → 商品ID
+  const janIndex = useMemo(() => {
+    const m = new Map<string, Product>()
+    for (const p of products) { const k = normJan(p.barcode); if (k.length >= 8 && !m.has(k)) m.set(k, p) }
+    return m
+  }, [products])
+  async function resolveJansViaMaster(jans: string[]) {
+    const wanted = Array.from(new Set(jans.map(normJan).filter(k => k.length >= 8 && !janIndex.has(k))))
+    if (wanted.length === 0) return
+    // マスター側のJANは、先頭に0が付いた形で入っていることがあるので、0を付けた形も一緒に探す
+    const variants = wanted.flatMap(k => [k, "0" + k, "00" + k])
+    const { data: ms } = await supabase.from("master_products").select("id,jan").in("jan", variants)
+    if (!ms || ms.length === 0) return
+    const masterJan = new Map(ms.map(m => [m.id as string, normJan(m.jan as string)]))
+    const { data: ps } = await supabase.from("products").select("id,master_product_id").in("master_product_id", Array.from(masterJan.keys()))
+    const next = new Map(janViaMaster)
+    for (const p of ps || []) { const jan = masterJan.get(p.master_product_id as string); if (jan && !next.has(jan)) next.set(jan, p.id as string) }
+    if (next.size !== janViaMaster.size) setJanViaMaster(next)
+  }
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [recent, setRecent] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -152,6 +174,7 @@ export default function ReceivingPage() {
       ? newRows
       : [...newRows, ...Array.from({ length: INITIAL_ROWS - newRows.length }, newRow)]
     setRows(padded)
+    void resolveJansViaMaster(newRows.map(r => r.supplierJan).filter(Boolean))
     if (pageWarn) setParseError(pageWarn)
     else if (partial) setParseError(`⚠ 書類が長いため、途中までの ${newRows.length} 件しか読み取れていません。残りの明細は、ファイルを分けて（ページごとに）取り込み直すか、手で追加してください。`)
     setTimeout(() => document.getElementById("receiving-table")?.scrollIntoView({ behavior: "smooth", block: "start" }), 200)
@@ -178,7 +201,7 @@ export default function ReceivingPage() {
         const head = grid[hi].map(c => String(c).trim())
         const col = (...names: string[]) => head.findIndex(h => names.some(n => h.includes(n)))
         const cDate = col("納品日", "伝票日付", "日付"), cNo = col("納品書No", "伝票№", "伝票No", "伝票番号"), cMemo = col("摘要")
-        const cCode = col("品番", "商品コード", "コード"), cName = col("商品名"), cQty = col("数量"), cUnit = col("単価"), cAmt = col("金額")
+        const cJan = col("JAN", "ＪＡＮ", "バーコード", "ﾊﾞｰｺｰﾄﾞ"), cCode = col("品番", "商品コード", "コード"), cName = col("商品名"), cQty = col("数量"), cUnit = col("単価"), cAmt = col("金額")
         const num = (v: any) => { const x = Number(String(v ?? "").replace(/[¥,\s]/g, "")); return Number.isFinite(x) ? x : 0 }
         const dateOf = (v: any) => { const m = String(v || "").match(/(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/); return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : "" }
         const groups = new Map<string, any>()
@@ -191,7 +214,7 @@ export default function ReceivingPage() {
           if (!groups.has(key)) groups.set(key, { invoice_number: no, invoice_date: date, memo: cMemo >= 0 ? String(r[cMemo] ?? "") : "", items: [] as any[] })
           const qty = num(r[cQty]); const up = num(r[cUnit]); const amt = cAmt >= 0 ? num(r[cAmt]) : qty * up
           const unit = qty > 0 && amt > 0 && Math.abs(qty * up - amt) > 1 ? amt / qty : up   // 割引後の金額が正
-          groups.get(key).items.push({ supplier_product_code: cCode >= 0 ? String(r[cCode] ?? "").trim() : "", supplier_product_name: name, quantity: qty, unit_price: unit, amount: amt })
+          groups.get(key).items.push({ supplier_jan: cJan >= 0 ? String(r[cJan] ?? "").trim() : "", supplier_product_code: cCode >= 0 ? String(r[cCode] ?? "").trim() : "", supplier_product_name: name, quantity: qty, unit_price: unit, amount: amt })
         }
         const sheetSlips = Array.from(groups.values()).map(g => ({ ...g, total: g.items.reduce((t: number, i: any) => t + (i.amount || 0), 0) }))
         if (sheetSlips.length === 0) throw new Error("明細が見つかりませんでした")
@@ -284,9 +307,14 @@ export default function ReceivingPage() {
       if (picked) return picked
     }
     if (row.supplierJan) {
-      const key = normKey(row.supplierJan)
-      const m = products.find((p) => normKey(p.barcode) === key)
-      if (m) return m
+      const key = normJan(row.supplierJan)
+      if (key.length >= 8) {
+        const m = janIndex.get(key)
+        if (m) return m
+        const pid = janViaMaster.get(key)
+        const viaMaster = pid ? products.find((p) => p.id === pid) : undefined
+        if (viaMaster) return viaMaster
+      }
     }
     if (row.supplierCode) {
       const key = normKey(row.supplierCode)
