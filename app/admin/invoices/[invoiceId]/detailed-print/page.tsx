@@ -181,8 +181,10 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
 
   // 1ページあたりの明細行数
   // ※ 各アイテムは2行（~9mm）で表示。1ページ目ヘッダー~65mm を差し引いた残り~212mmに収まる数
-  const FIRST_PAGE_LINES = 20
-  const NEXT_PAGE_LINES = 30
+  // 1商品=2行で約9mm。A4の高さ（余白を除いて約277mm）に収まる数にする。多すぎると、表が次の紙にはみ出して、
+  // 見出しだけが次のページに繰り返され、下の罫線も途切れてしまう。
+  const FIRST_PAGE_LINES = 18
+  const NEXT_PAGE_LINES = 26
   const pages: typeof lines[] = []
   if (lines.length <= FIRST_PAGE_LINES) {
     pages.push(lines)
@@ -339,6 +341,8 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
           }
         }
         @page { size: A4 portrait; margin: 0; }
+        /* 1商品（2行）の途中で、ページが切れないようにする */
+        .invoice-doc .invoice-page table tr { break-inside: avoid; page-break-inside: avoid; }
       `}</style>
     </>
   )
