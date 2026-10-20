@@ -35,7 +35,7 @@ const q = s => { s = String(s ?? ''); return /[",\r\n]/.test(s) ? '"' + s.replac
       let sc = inter / (pg.size + mg[i].size - inter)
       // 数字（サイズ・容量・型番）が合っていれば加点、食い違えば減点
       if (pn.size && mn[i].size) { const same = [...pn].filter(x => mn[i].has(x)).length; sc += (same / Math.max(pn.size, mn[i].size) - 0.5) * 0.2 }
-      return { i, sc }
+      return { i, sc: Math.min(1, sc) }
     }).sort((a, b) => b.sc - a.sc).slice(0, 3).filter(x => x.sc >= 0.45)
     if (scored.length) rows.push({ p, cands: scored })
     if (++done % 2000 === 0) console.log('  ', done, '/', prods.length)

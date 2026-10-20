@@ -10,7 +10,7 @@ const file = process.argv[2], APPLY = process.argv.includes('--apply'), BOX = pr
 function parse(t) { t = t.replace(/^\uFEFF/, ''); const rows = []; let cur = [], f = '', q = false
   for (let i = 0; i < t.length; i++) { const c = t[i]; if (q) { if (c === '"') { if (t[i + 1] === '"') { f += '"'; i++ } else q = false } else f += c } else if (c === '"') q = true; else if (c === ',') { cur.push(f); f = '' } else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; cur.push(f); rows.push(cur); cur = []; f = '' } else f += c }
   if (f || cur.length) { cur.push(f); rows.push(cur) } return rows.filter(r => r.length > 3) }
-function jan13(v) { let d = String(v || '').normalize('NFKC').replace(/\D/g, ''); if (!d) return ''; if (d.length <= 8) return d.length === 8 ? d : ''; d = d.replace(/^0+(?=\d{13}$)/, ''); if (d.length < 13) d = d.padStart(13, '0'); return d.length === 13 ? d : '' }
+function jan13(v) { let d = String(v || '').normalize('NFKC').replace(/\D/g, ''); if (!d) return ''; if (d.length <= 8) return d.length === 8 ? d : ''; d = d.replace(/^0+(?=\d{13}$)/, ''); if (d.length < 13) d = d.padStart(13, '0'); return d.length === 13 || d.length === 14 ? d : '' }
 async function all(client, t, cols) { let o = [], f = 0; for (;;) { const { data, error } = await client.from(t).select(cols).order('id').range(f, f + 999); if (error) throw error; o = o.concat(data); if (data.length < 1000) break; f += 1000 } return o }
 async function pool(items, n, fn) { let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) await fn(items[i++]) })) }
 ;(async () => {
