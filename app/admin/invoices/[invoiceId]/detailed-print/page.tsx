@@ -194,7 +194,10 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
     const miniH = (miniRef.current?.offsetHeight || 12 * mm) + 8                               // 2ページ目以降の、ミニヘッダー＋表の上の余白
     // 余裕: 画面で測った高さと、印刷したときの高さには、わずかな差が出る（1ページ目は、見出しが多いので、差が大きい）。
     const pageH = 297 * mm, pad = 10 * mm
-    const first = Math.max(4, Math.floor((pageH - firstHeader - pad - theadH - 10 * mm) / pairH))
+    // 1ページ目の「表より上の高さ」は、画面で測った値より、印刷したときのほうが大きい（印刷で約102mm、画面で約60mm）。
+    // 実際に印刷した請求明細書（スキャン）で測った値を、下限にする。これで、画面の測定が小さく出ても、はみ出さない。
+    const firstHeaderPrint = Math.max(firstHeader, 104 * mm)
+    const first = Math.max(4, Math.floor((pageH - firstHeaderPrint - pad - theadH - 4 * mm) / pairH))
     const next = Math.max(8, Math.floor((pageH - pad - pad - miniH - theadH - 8 * mm) / pairH))
     setCaps(prev => (prev.first === first && prev.next === next ? prev : { first, next }))
   }, [loading, lines.length, caps.first, caps.next])
