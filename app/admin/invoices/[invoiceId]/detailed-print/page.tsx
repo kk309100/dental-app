@@ -382,6 +382,9 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
         /* 商品ごとの区切り線。セルの線（共通CSSの薄い線）のほうが強いため、セルに直接、濃い線を指定する */
         .invoice-doc .invoice-page table tr.dr-top > td { border-top: 1px solid #222 !important; }
         .invoice-doc .invoice-page table tr.dr-bot > td { border-bottom: 1px solid #222 !important; }
+        /* 集計表・カテゴリ表の囲い。共通CSSが、セルの下の線を、薄い灰色に強制するため、四方の線を黒で指定し直す */
+        .invoice-doc .invoice-page table.frame td,
+        .invoice-doc .invoice-page table.frame th { border: 1px solid #000 !important; }
         /* 1商品（2行）の途中で、ページが切れないようにする */
         .invoice-doc .invoice-page table tr, .invoice-doc .invoice-page table tbody.dr-group { break-inside: avoid; page-break-inside: avoid; }
       `}</style>
@@ -477,8 +480,8 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
               dueFmt = `${endOfNextMonth.getFullYear()}年${endOfNextMonth.getMonth() + 1}月${endOfNextMonth.getDate()}日`
             }
             return (
-              <div style={{ display: "inline-block", border: "1px solid #999", fontSize: 10, background: "#fafafa" }}>
-                <div style={{ padding: "2px 10px", borderBottom: "1px solid #999", whiteSpace: "nowrap" }}>
+              <div style={{ display: "inline-block", border: "1px solid #000", fontSize: 10, background: "#fff" }}>
+                <div style={{ padding: "2px 10px", borderBottom: "1px solid #000", whiteSpace: "nowrap" }}>
                   締切日（請求日）：<strong>{issueFmt}</strong>
                 </div>
                 <div style={{ padding: "2px 10px", whiteSpace: "nowrap" }}>
@@ -510,7 +513,7 @@ function MiniHeader({ clinicFullName, pageInfo }: { clinicFullName: string; page
 
 function SummaryTable({ summary }: { summary: { previousTotal: number; previousPaid: number; discount: number; carryOver: number; thisBuy: number; thisTax: number; thisTotal: number } }) {
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10, fontSize: 10 }}>
+    <table className="frame" style={{ width: "100%", borderCollapse: "collapse", marginTop: 10, fontSize: 10 }}>
       <thead>
         <tr style={{ background: "#fff" }}>
           <th style={cellLabel}>前回御請求額</th>
@@ -551,7 +554,7 @@ function CategoryTable({ byCategory }: { byCategory: Map<ExpenseCategory, number
   const top = EXPENSE_CATEGORIES.slice(0, 6)
   const bottom = EXPENSE_CATEGORIES.slice(6, 12)
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 6, fontSize: 10 }}>
+    <table className="frame" style={{ width: "100%", borderCollapse: "collapse", marginTop: 6, fontSize: 10 }}>
       <thead>
         <tr>{top.map(c => <th key={c} style={cellLabel}>{c}</th>)}</tr>
       </thead>
