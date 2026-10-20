@@ -195,7 +195,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
     // 余裕: 画面で測った高さと、印刷したときの高さには、わずかな差が出る（1ページ目は、見出しが多いので、差が大きい）。
     const pageH = 297 * mm, pad = 10 * mm, footer = 16 * mm
     const first = Math.max(5, Math.floor((pageH - firstHeader - pad - theadH - footer - 14 * mm) / pairH))
-    const next = Math.max(8, Math.floor((pageH - pad - pad - miniH - theadH - footer - 10 * mm) / pairH))
+    const next = Math.max(8, Math.floor((pageH - pad - pad - miniH - theadH - footer - 16 * mm) / pairH))
     setCaps(prev => (prev.first === first && prev.next === next ? prev : { first, next }))
   }, [loading, lines.length, caps.first, caps.next])
 
