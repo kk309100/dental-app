@@ -341,6 +341,9 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
           }
         }
         @page { size: A4 portrait; margin: 0; }
+        /* 商品ごとの区切り線。セルの線（共通CSSの薄い線）のほうが強いため、セルに直接、濃い線を指定する */
+        .invoice-doc .invoice-page table tr.dr-top > td { border-top: 1px solid #222 !important; }
+        .invoice-doc .invoice-page table tr.dr-bot > td { border-bottom: 1px solid #222 !important; }
         /* 1商品（2行）の途中で、ページが切れないようにする */
         .invoice-doc .invoice-page table tr { break-inside: avoid; page-break-inside: avoid; }
       `}</style>
@@ -561,14 +564,14 @@ function DetailTable({ lines, startIdx, fixedRows }: { lines: LineRow[]; startId
         {/* 固定行数に足りない分を空白スロット（2行1組）で埋める */}
         {Array.from({ length: emptyCount }).map((_, i) => (
           <>
-            <tr key={`empty-a-${i}`} style={{ borderTop: "1px solid #888", height: "4.6mm" }}>
+            <tr key={`empty-a-${i}`} className="dr-top" style={{ height: "4.6mm" }}>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={emptyCell}></td>
             </tr>
-            <tr key={`empty-b-${i}`} style={{ borderBottom: "1px solid #888", height: "4.6mm" }}>
+            <tr key={`empty-b-${i}`} className="dr-bot" style={{ height: "4.6mm" }}>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
@@ -588,7 +591,7 @@ function DetailRowPair({ line }: { line: LineRow }) {
   // 2行目: 伝票No、 商品コード 商品名、 数量、 売単価、 金額
   return (
     <>
-      <tr style={{ borderTop: "1px solid #555" }}>
+      <tr className="dr-top">
         <td style={{ padding: "1px 3px", fontSize: 9 }}>{line.date}</td>
         {/* 経費分類を右端に寄せる（参考PDF準拠） */}
         <td style={{ padding: "1px 3px", fontSize: 9 }}>
@@ -605,7 +608,7 @@ function DetailRowPair({ line }: { line: LineRow }) {
         </td>
         <td style={{ padding: "1px 3px", textAlign: "right" }}></td>
       </tr>
-      <tr style={{ borderBottom: "1px solid #555" }}>
+      <tr className="dr-bot">
         <td style={{ padding: "1px 3px 3px", fontSize: 9, textAlign: "right" }}>{line.delivery_number}</td>
         <td style={{ padding: "1px 3px 3px", fontSize: 9, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
           {line.product_code && <span style={{ marginRight: 6 }}>{line.product_code}</span>}
