@@ -9,7 +9,7 @@
 //   2ページ目以降: ミニヘッダー（医院名 + Page N） + 明細続き
 //   最終ページ: フッター（「上記の通り...」）
 
-import { use, useEffect, useMemo, useState } from "react"
+import { use, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
@@ -172,6 +172,32 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
     return { previousTotal, previousPaid, discount, carryOver, thisBuy, thisTax, thisTotal }
   }, [prevInvoice, invoice, taxBreakdown])
 
+  // 1ページに入る明細の数: 初期値（余裕を見た固定値）で一度描いたあと、実際の高さを測って、入るだけ詰める。
+  // 紙の下の端に達した時点で、次のページに続く。件数に頼らないので、行の高さや見出しの量が変わっても、はみ出さない。
+  const [caps, setCaps] = useState<{ first: number; next: number }>({ first: 18, next: 26 })
+  const miniRef = useRef<HTMLDivElement | null>(null)
+  useLayoutEffect(() => {
+    if (loading || lines.length === 0) return
+    const probe = document.createElement("div")
+    probe.style.cssText = "position:absolute;visibility:hidden;height:100mm;width:1px"
+    document.body.appendChild(probe)
+    const mm = probe.offsetHeight / 100
+    probe.remove()
+    const sec = document.querySelector(".invoice-page") as HTMLElement | null
+    const table = sec?.querySelector("table") as HTMLElement | null
+    const top = sec?.querySelector("tr.dr-top") as HTMLElement | null
+    const bot = sec?.querySelector("tr.dr-bot") as HTMLElement | null
+    if (!mm || !sec || !table || !top || !bot) return
+    const pairH = Math.max(top.offsetHeight + bot.offsetHeight, 9.2 * mm)   // 空白行（4.6mm×2）より小さくならないようにする
+    const theadH = (table.querySelector("thead") as HTMLElement | null)?.offsetHeight || 6 * mm
+    const firstHeader = table.getBoundingClientRect().top - sec.getBoundingClientRect().top   // 1ページ目の、表より上の高さ（上の余白を含む）
+    const miniH = (miniRef.current?.offsetHeight || 12 * mm) + 8                               // 2ページ目以降の、ミニヘッダー＋表の上の余白
+    const pageH = 297 * mm, pad = 10 * mm, footer = 16 * mm, safety = 6 * mm
+    const first = Math.max(5, Math.floor((pageH - firstHeader - pad - theadH - footer - safety) / pairH))
+    const next = Math.max(8, Math.floor((pageH - pad - pad - miniH - theadH - footer - safety) / pairH))
+    setCaps(prev => (prev.first === first && prev.next === next ? prev : { first, next }))
+  }, [loading, lines.length, caps.first, caps.next])
+
   if (loading) return <div style={{ padding: 40, textAlign: "center" }}>読み込み中…</div>
   if (!invoice) return <div style={{ padding: 40, color: "#dc2626" }}>請求書が見つかりません</div>
 
@@ -183,8 +209,8 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
   // ※ 各アイテムは2行（~9mm）で表示。1ページ目ヘッダー~65mm を差し引いた残り~212mmに収まる数
   // 1商品=2行で約9mm。A4の高さ（余白を除いて約277mm）に収まる数にする。多すぎると、表が次の紙にはみ出して、
   // 見出しだけが次のページに繰り返され、下の罫線も途切れてしまう。
-  const FIRST_PAGE_LINES = 18
-  const NEXT_PAGE_LINES = 26
+  const FIRST_PAGE_LINES = caps.first
+  const NEXT_PAGE_LINES = caps.next
   const pages: typeof lines[] = []
   if (lines.length <= FIRST_PAGE_LINES) {
     pages.push(lines)
@@ -212,6 +238,11 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 12, color: "#666" }}>請求明細書（茶屋歯科フォーマット）</span>
         <button onClick={() => window.print()} style={btnDark}>🖨 印刷</button>
+      </div>
+
+      {/* ミニヘッダーの高さを測るための見本（画面にも印刷にも出ない） */}
+      <div ref={miniRef} className="no-print" aria-hidden style={{ position: "absolute", visibility: "hidden", pointerEvents: "none", width: "186mm", left: 0, top: 0 }}>
+        <MiniHeader clinicFullName={clinicFullName} pageInfo={{ current: 2, total: 9 }} />
       </div>
 
       {/* 印刷本体 */}
