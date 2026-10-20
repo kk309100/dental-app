@@ -192,9 +192,10 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
     const theadH = (table.querySelector("thead") as HTMLElement | null)?.offsetHeight || 6 * mm
     const firstHeader = table.getBoundingClientRect().top - sec.getBoundingClientRect().top   // 1ページ目の、表より上の高さ（上の余白を含む）
     const miniH = (miniRef.current?.offsetHeight || 12 * mm) + 8                               // 2ページ目以降の、ミニヘッダー＋表の上の余白
-    const pageH = 297 * mm, pad = 10 * mm, footer = 16 * mm, safety = 6 * mm
-    const first = Math.max(5, Math.floor((pageH - firstHeader - pad - theadH - footer - safety) / pairH))
-    const next = Math.max(8, Math.floor((pageH - pad - pad - miniH - theadH - footer - safety) / pairH))
+    // 余裕: 画面で測った高さと、印刷したときの高さには、わずかな差が出る（1ページ目は、見出しが多いので、差が大きい）。
+    const pageH = 297 * mm, pad = 10 * mm, footer = 16 * mm
+    const first = Math.max(5, Math.floor((pageH - firstHeader - pad - theadH - footer - 14 * mm) / pairH))
+    const next = Math.max(8, Math.floor((pageH - pad - pad - miniH - theadH - footer - 10 * mm) / pairH))
     setCaps(prev => (prev.first === first && prev.next === next ? prev : { first, next }))
   }, [loading, lines.length, caps.first, caps.next])
 
