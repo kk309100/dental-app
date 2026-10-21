@@ -121,7 +121,14 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
       return {
         date: order ? parseDbDate(order.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "/") : "",
         delivery_number: order?.delivery_number || (order?.id.slice(0, 8) ?? ""),
-        slip4: order ? (() => { const d = parseDbDate(order.created_at); return String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0") })() : "",
+        // 伝票: 注文日の月日4桁 + 納品書番号の末尾（例: 0925-674）。同じ日に複数の納品書があっても、区別できる
+        slip4: order ? (() => {
+          const d = parseDbDate(order.created_at)
+          const md = String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0")
+          const dn = String(order.delivery_number || order.id.slice(0, 8))
+          const tail = dn.includes("-") ? dn.split("-").pop() : dn.slice(-3)
+          return `${md}-${tail}`
+        })() : "",
         manufacturer: product?.manufacturer || "",
         expense_category: cat,
         product_code: product?.product_code || "",
@@ -648,7 +655,7 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
     <table className="detail detail1" style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, tableLayout: "fixed", border: "2px solid #000" }}>
       <colgroup>
         <col style={{ width: "21mm" }} />
-        <col style={{ width: "11mm" }} />
+        <col style={{ width: "17mm" }} />
         <col />
         <col style={{ width: "15mm" }} />
         <col style={{ width: "10mm" }} />
