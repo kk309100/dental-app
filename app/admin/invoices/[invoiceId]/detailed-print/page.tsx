@@ -460,7 +460,11 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           <div style={{ fontWeight: 700 }}>{company.name}</div>
           {company.invoiceNumber && <div>登録番号 {company.invoiceNumber}</div>}
           <div>〒{company.postalCode}</div>
-          <div>{company.address}</div>
+          {(() => {
+            // 住所の、最初の空白（全角・半角）のあとの、ビル名などを、1つ下の行にする（例: 「…2-37」/「黄金ステーションビル3階」）
+            const m = String(company.address || "").match(/^(S+?)[s　]+(.+)$/)
+            return m ? <><div>{m[1]}</div><div>{m[2]}</div></> : <div>{company.address}</div>
+          })()}
           <div>TEL {company.phone}　　FAX {company.fax}</div>
           <div style={{ position: "absolute", top: 0, right: 0 }}>
             <Seal size={50} />
@@ -517,7 +521,7 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
             )
           })()}
         </div>
-        <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4 }}>
+        <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4, textAlign: "right" }}>
           振込先: {company.bankName} {company.bankBranch} {company.bankType} {company.bankAccount}<br />
           振込手数料は貴院負担でお願いいたします。
         </div>
@@ -663,7 +667,7 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
         <col />
         <col style={{ width: "13mm" }} />
         <col style={{ width: "10mm" }} />
-        <col style={{ width: "30mm" }} />
+        <col style={{ width: "20mm" }} />
         <col style={{ width: "22mm" }} />
       </colgroup>
       <thead>
@@ -673,7 +677,7 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
           <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "left", padding: "2px 3px" }}>商品コード / 商品名（メーカー）</th>
           <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "center", padding: "2px 3px" }}>分類</th>
           <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>数量</th>
-          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>売単価【定価】</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>(定価)/売単価</th>
           <th style={{ ...cellLabel, border: "none", textAlign: "right", padding: "2px 3px" }}>金額</th>
         </tr>
       </thead>
@@ -694,8 +698,9 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
             </td>
             <td className="cat" style={{ padding: "1px 1px", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden" }}>{l.expense_category}</td>
             <td style={{ padding: "1px 3px", textAlign: "right" }}>{l.quantity}</td>
-            <td style={{ padding: "1px 3px", textAlign: "right", whiteSpace: "nowrap" }}>
-              {l.unit_price.toLocaleString()}<span style={{ marginLeft: 4, color: "#555" }}>【{l.list_price.toLocaleString()}】</span>
+            <td style={{ padding: "1px 3px", textAlign: "right", whiteSpace: "nowrap", lineHeight: 1.15 }}>
+              <div style={{ color: "#555" }}>({l.list_price.toLocaleString()})</div>
+              <div>{l.unit_price.toLocaleString()}</div>
             </td>
             <td style={{ padding: "1px 3px", textAlign: "right", fontWeight: 700 }}>{l.amount.toLocaleString()}</td>
           </tr>
