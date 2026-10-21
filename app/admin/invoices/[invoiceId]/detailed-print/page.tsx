@@ -462,8 +462,11 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           <div>〒{company.postalCode}</div>
           {(() => {
             // 住所の、最初の空白（全角・半角）のあとの、ビル名などを、1つ下の行にする（例: 「…2-37」/「黄金ステーションビル3階」）
+            // 表記: 「名古屋市中川区五月通2ｰ37」/「黄金ｽﾃｰｼｮﾝﾋﾞﾙ3F」（ハイフンは半角の「ｰ」、ビル名は半角カナ、「階」は「F」）
             const m = String(company.address || "").match(/^(S+?)[s　]+(.+)$/)
-            return m ? <><div>{m[1]}</div><div>{m[2]}</div></> : <div>{company.address}</div>
+            return m
+              ? <><div>{m[1].replace(/[-‐‑–—―ー－]/g, "ｰ")}</div><div>{toHalfKana(m[2]).replace(/階/g, "F")}</div></>
+              : <div>{company.address}</div>
           })()}
           <div>TEL {company.phone}　　FAX {company.fax}</div>
           <div style={{ position: "absolute", top: 0, right: 0 }}>
@@ -521,7 +524,7 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
             )
           })()}
         </div>
-        <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4, textAlign: "right" }}>
+        <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4, textAlign: "right", paddingRight: 60 }}>
           振込先: {company.bankName} {company.bankBranch} {company.bankType} {company.bankAccount}<br />
           振込手数料は貴院負担でお願いいたします。
         </div>
@@ -529,6 +532,15 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
     </>
   )
 }
+
+// 全角カタカナを、半角カタカナに（濁点・半濁点は、2文字になる）。「ー」は、半角の「ｰ」にする
+const HALF_KANA: Record<string, string> = (() => {
+  const m: Record<string, string> = {}
+  for (let c = 0xff66; c <= 0xff9d; c++) { const h = String.fromCharCode(c); m[h.normalize("NFKC")] = h }
+  for (const mark of ["ﾞ", "ﾟ"]) for (let c = 0xff66; c <= 0xff9d; c++) { const h = String.fromCharCode(c) + mark; const full = h.normalize("NFKC"); if (full.length === 1) m[full] = h }
+  return m
+})()
+function toHalfKana(s: string): string { return Array.from(s).map(ch => HALF_KANA[ch] ?? ch).join("") }
 
 function MiniHeader({ clinicFullName, pageInfo }: { clinicFullName: string; pageInfo: { current: number; total: number } }) {
   return (
