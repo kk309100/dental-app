@@ -14,7 +14,7 @@ import { QRCodeSVG } from "qrcode.react"
 // QRコードを読める大きさ（17mm≒64px）にするため行高さ18mm → 5行/ハーフページ
 export const FIXED_ROWS = 5
 
-type Item   = { id: string; product_name: string | null; quantity: number; price: number; barcode?: string | null; lot_number?: string | null }
+type Item   = { id: string; product_name: string | null; quantity: number; price: number; barcode?: string | null; lot_number?: string | null; note?: string | null }
 type Clinic = { id?: string; name: string; corporate_name: string | null; clinic_type: string | null; adress: string | null; phone: string | null }
 type Order  = { id: string; delivered_at: string | null; created_at: string; delivery_number: string | null; note?: string | null }
 
@@ -155,6 +155,7 @@ export default function DeliveryNoteSheet({
               <div style={{ ...cell({ flex: 1, minWidth: 0, alignItems: "flex-start", flexDirection: "column", justifyContent: "center" }) }}>
                 <div style={{ fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{i.product_name || "—"}</div>
                 {i.lot_number && <div style={{ fontSize: 7, color: "#555", whiteSpace: "nowrap", marginTop: 2 }}>LOT: {i.lot_number}</div>}
+                {i.note && <div style={{ fontSize: 8, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", marginTop: 1 }}>備考: {i.note}</div>}
               </div>
               {/* QRコード（スマホ読取対応: ~17mm印刷時） */}
               <div style={{ width: COL_BC, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>

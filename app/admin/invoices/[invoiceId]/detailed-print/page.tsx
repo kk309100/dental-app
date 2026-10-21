@@ -40,7 +40,7 @@ type Order = {
 }
 type OrderItem = {
   id: string; order_id: string; product_id: string | null
-  product_name: string | null; quantity: number; price: number
+  product_name: string | null; quantity: number; price: number; note?: string | null
 }
 type Product = {
   id: string; name: string; product_code: string | null
@@ -133,6 +133,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
         expense_category: cat,
         product_code: product?.product_code || "",
         product_name: it.product_name || product?.name || "(商品名なし)",
+        note: it.note || "",
         quantity: Number(it.quantity || 0),
         list_price: Number(product?.price || it.price || 0),
         unit_price: Number(it.price || 0),
@@ -457,7 +458,7 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           {clinic?.contact && <div style={{ fontSize: 9, marginTop: 4, color: "#444" }}>[{clinic.contact}]</div>}
         </div>
         {/* 自社情報: 納品書と同じ並び（社名・登録番号を太字に、〒・住所2行・TEL・FAXを、それぞれ1行で、左をそろえる） */}
-        <div style={{ flex: 1, fontSize: 10, lineHeight: 1.5, position: "relative", paddingRight: 60, textAlign: "left" }}>
+        <div style={{ flex: 1, fontSize: 10, lineHeight: 1.5, position: "relative", paddingRight: 0, textAlign: "left" }}>
           <div style={{ width: "fit-content", marginLeft: "auto" }}>
           <div style={{ fontWeight: 700 }}>{company.name}</div>
           {company.invoiceNumber && <div style={{ fontWeight: 700 }}>登録番号 {company.invoiceNumber}</div>}
@@ -611,7 +612,7 @@ function CategoryTable({ byCategory }: { byCategory: Map<ExpenseCategory, number
 
 type LineRow = {
   date: string; delivery_number: string; slip4: string; manufacturer: string
-  expense_category: ExpenseCategory; product_code: string; product_name: string
+  expense_category: ExpenseCategory; product_code: string; product_name: string; note?: string
   quantity: number; list_price: number; unit_price: number; amount: number
 }
 
@@ -706,6 +707,7 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
                 {l.product_code && <span style={{ marginRight: 6 }}>{l.product_code}</span>}
                 {l.product_name}
                 {l.manufacturer && <span style={{ marginLeft: 6, color: "#666" }}>({l.manufacturer})</span>}
+                {l.note && <span style={{ marginLeft: 6, color: "#333" }}>※{l.note}</span>}
               </div>
             </td>
             <td className="cat" style={{ padding: "1px 1px", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden" }}>{l.expense_category}</td>
@@ -757,6 +759,7 @@ function DetailRowPair({ line }: { line: LineRow }) {
         <td style={{ padding: "1px 3px 3px", fontSize: 9, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
           {line.product_code && <span style={{ marginRight: 6 }}>{line.product_code}</span>}
           {line.product_name}
+          {line.note && <span style={{ marginLeft: 6 }}>※{line.note}</span>}
         </td>
         <td style={{ padding: "1px 3px 3px", textAlign: "right", fontSize: 9 }}>{line.quantity}</td>
         <td style={{ padding: "1px 3px 3px", textAlign: "right", fontSize: 9 }}>{line.unit_price.toLocaleString()}</td>
