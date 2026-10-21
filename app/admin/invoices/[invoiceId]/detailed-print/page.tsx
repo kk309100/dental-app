@@ -663,8 +663,7 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
         <col />
         <col style={{ width: "13mm" }} />
         <col style={{ width: "10mm" }} />
-        <col style={{ width: "17mm" }} />
-        <col style={{ width: "19mm" }} />
+        <col style={{ width: "30mm" }} />
         <col style={{ width: "22mm" }} />
       </colgroup>
       <thead>
@@ -674,13 +673,12 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
           <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "left", padding: "2px 3px" }}>商品コード / 商品名（メーカー）</th>
           <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "center", padding: "2px 3px" }}>分類</th>
           <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>数量</th>
-          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>(定価)</th>
-          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>売単価</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>売単価【定価】</th>
           <th style={{ ...cellLabel, border: "none", textAlign: "right", padding: "2px 3px" }}>金額</th>
         </tr>
       </thead>
       {lines.length === 0 && emptyCount === 0 ? (
-        <tbody><tr><td colSpan={8} style={{ padding: 16, textAlign: "center", color: "#999" }}>明細なし</td></tr></tbody>
+        <tbody><tr><td colSpan={7} style={{ padding: 16, textAlign: "center", color: "#999" }}>明細なし</td></tr></tbody>
       ) : lines.map((l, i) => (
         <tbody key={startIdx + i} className="dr-group">
           <tr className="dr-one" style={{ height: "8mm" }}>
@@ -696,8 +694,9 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
             </td>
             <td className="cat" style={{ padding: "1px 1px", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden" }}>{l.expense_category}</td>
             <td style={{ padding: "1px 3px", textAlign: "right" }}>{l.quantity}</td>
-            <td style={{ padding: "1px 3px", textAlign: "right", color: "#555" }}>({l.list_price.toLocaleString()})</td>
-            <td style={{ padding: "1px 3px", textAlign: "right" }}>{l.unit_price.toLocaleString()}</td>
+            <td style={{ padding: "1px 3px", textAlign: "right", whiteSpace: "nowrap" }}>
+              {l.unit_price.toLocaleString()}<span style={{ marginLeft: 4, color: "#555" }}>【{l.list_price.toLocaleString()}】</span>
+            </td>
             <td style={{ padding: "1px 3px", textAlign: "right", fontWeight: 700 }}>{l.amount.toLocaleString()}</td>
           </tr>
         </tbody>
@@ -705,7 +704,7 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
       {Array.from({ length: emptyCount }).map((_, i) => (
         <tbody key={`empty-${i}`} className="dr-group">
           <tr className="dr-one" style={{ height: "8mm" }}>
-            {Array.from({ length: 8 }).map((__, c) => <td key={c} style={{ ...emptyCell, borderRight: c < 7 ? "1px solid #aaa" : undefined }}></td>)}
+            {Array.from({ length: 7 }).map((__, c) => <td key={c} style={{ ...emptyCell, borderRight: c < 6 ? "1px solid #aaa" : undefined }}></td>)}
           </tr>
         </tbody>
       ))}
