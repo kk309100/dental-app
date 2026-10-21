@@ -404,6 +404,10 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
         .invoice-doc .invoice-page table.detail2 td, .invoice-doc .invoice-page table.detail2 td span, .invoice-doc .invoice-page table.detail2 td div { font-size: 10px !important; }
         .invoice-doc .invoice-page table.detail1 th { font-size: 10px !important; }
         .invoice-doc .invoice-page table.detail1 tr.dr-one > td { border-bottom: 1px solid #222 !important; }
+        .invoice-doc .invoice-page table.detail1 td.cat, .invoice-doc .invoice-page table.detail1 td.cat span { font-size: 9px !important; }
+        /* 列を区切る縦線（最後の列は、外枠があるので、引かない） */
+        .invoice-doc .invoice-page table.detail1 td, .invoice-doc .invoice-page table.detail1 th { border-right: 1px solid #555 !important; }
+        .invoice-doc .invoice-page table.detail1 td:last-child, .invoice-doc .invoice-page table.detail1 th:last-child { border-right: none !important; }
         /* 集計表・カテゴリ表の囲い。共通CSSが、セルの下の線を、薄い灰色に強制するため、四方の線を黒で指定し直す */
         .invoice-doc .invoice-page table.frame td,
         .invoice-doc .invoice-page table.frame th { border: 1px solid #000 !important; }
@@ -657,7 +661,7 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
         <col style={{ width: "21mm" }} />
         <col style={{ width: "17mm" }} />
         <col />
-        <col style={{ width: "15mm" }} />
+        <col style={{ width: "13mm" }} />
         <col style={{ width: "10mm" }} />
         <col style={{ width: "17mm" }} />
         <col style={{ width: "19mm" }} />
@@ -687,7 +691,7 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
               {l.product_name}
               {l.manufacturer && <span style={{ marginLeft: 6, color: "#666" }}>({l.manufacturer})</span>}
             </td>
-            <td style={{ padding: "1px 3px", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden" }}>{l.expense_category}</td>
+            <td className="cat" style={{ padding: "1px 1px", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden" }}>{l.expense_category}</td>
             <td style={{ padding: "1px 3px", textAlign: "right" }}>{l.quantity}</td>
             <td style={{ padding: "1px 3px", textAlign: "right", color: "#555" }}>({l.list_price.toLocaleString()})</td>
             <td style={{ padding: "1px 3px", textAlign: "right" }}>{l.unit_price.toLocaleString()}</td>
