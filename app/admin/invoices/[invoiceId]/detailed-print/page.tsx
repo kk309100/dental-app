@@ -456,19 +456,18 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           <div style={{ fontSize: 13, fontWeight: 700 }}>{clinicFullName}　御中</div>
           {clinic?.contact && <div style={{ fontSize: 9, marginTop: 4, color: "#444" }}>[{clinic.contact}]</div>}
         </div>
-        <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4, position: "relative", paddingRight: 60, textAlign: "right" }}>
+        {/* 自社情報: 納品書と同じ並び（社名・登録番号を太字に、〒・住所2行・TEL・FAXを、それぞれ1行で、左をそろえる） */}
+        <div style={{ flex: 1, fontSize: 10, lineHeight: 1.5, position: "relative", paddingRight: 60, textAlign: "left" }}>
           <div style={{ fontWeight: 700 }}>{company.name}</div>
-          {company.invoiceNumber && <div>登録番号 {company.invoiceNumber}</div>}
+          {company.invoiceNumber && <div style={{ fontWeight: 700 }}>登録番号 {company.invoiceNumber}</div>}
           <div>〒{company.postalCode}</div>
           {(() => {
-            // 住所の、最初の空白（全角・半角）のあとの、ビル名などを、1つ下の行にする（例: 「…2-37」/「黄金ステーションビル3階」）
-            // 表記: 「名古屋市中川区五月通2ｰ37」/「黄金ｽﾃｰｼｮﾝﾋﾞﾙ3F」（ハイフンは半角の「ｰ」、ビル名は半角カナ、「階」は「F」）
-            const m = String(company.address || "").match(/^(S+?)[s　]+(.+)$/)
-            return m
-              ? <><div>{m[1].replace(/[-‐‑–—―ー－]/g, "ｰ")}</div><div>{toHalfKana(m[2]).replace(/階/g, "F")}</div></>
-              : <div>{company.address}</div>
+            // 住所は、最初の空白（全角・半角）で、2行に分ける（例: 「名古屋市中川区五月通2-37」/「黄金ステーションビル3階」）
+            const m = String(company.address || "").match(/^(\S+?)[\s\u3000]+(.+)$/)
+            return m ? <><div>{m[1]}</div><div>{m[2]}</div></> : <div>{company.address}</div>
           })()}
-          <div>TEL {company.phone}　　FAX {company.fax}</div>
+          <div>TEL {company.phone}</div>
+          <div>FAX {company.fax}</div>
           <div style={{ position: "absolute", top: 0, right: 0 }}>
             <Seal size={50} />
           </div>
@@ -524,7 +523,7 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
             )
           })()}
         </div>
-        <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4, textAlign: "right", paddingRight: 60 }}>
+        <div style={{ flex: 1, fontSize: 10, lineHeight: 1.5, textAlign: "left", paddingRight: 60 }}>
           振込先: {company.bankName} {company.bankBranch} {company.bankType} {company.bankAccount}<br />
           振込手数料は貴院負担でお願いいたします。
         </div>
