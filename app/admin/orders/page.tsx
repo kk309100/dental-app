@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { withStockFlag } from "@/lib/stock-managed"
-import { cancelPoLineReceipt } from "@/lib/po-receipt"
+import { cancelPoLineReceipt, receivePoLine, receiveWithoutPo } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
 import { useSearchParams } from "next/navigation"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
@@ -276,15 +276,12 @@ function AdminOrdersPage() {
   function receiveNeedFor(it: OrderItem, stock: number): number {
     const qty = Number(it.quantity || 0)
     const ordered = orderedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0
-    if (ordered > 0) {
-      // 発注書がある明細は、現在の在庫数に関係なく「発注した数」が入荷の数。
-      // 発注書の入荷で在庫に加算済みの分（直送ボタンで記録した分 = 納品済みの数 は除く）は、直送の対象にしない
-      const recv = receivedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0
-      const viaStock = Math.max(0, recv - Number(it.delivered_quantity || 0))
-      return Math.max(0, ordered - viaStock)
-    }
-    // 発注書が無い明細は、在庫が足りない分
-    return Math.max(0, qty - Math.max(0, stock))
+    // 発注書がある明細は、現在の在庫数に関係なく「発注した数」。発注書が無い明細は、在庫が足りない分
+    return ordered > 0 ? ordered : Math.max(0, qty - Math.max(0, stock))
+  }
+  // 入荷済みの数: 発注書の入荷数（在庫に加算した分）と、以前の「直送」で記録した数の、大きいほう
+  function receivedOf(it: OrderItem): number {
+    return Math.max(receivedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0, Number(it.delivered_quantity || 0))
   }
 
   // 業務状態（一目で「次にやること」が分かるバッジ用）
@@ -503,25 +500,31 @@ function AdminOrdersPage() {
         pid = newProd.id
         await supabase.from("order_items").update({ product_id: pid }).eq("id", itemId)
       }
-      const { error: sre } = await supabase.from("stock_receipts").insert({
-        product_id: pid, quantity: qty,
-        memo: `注文管理から入荷・医院へ直送（在庫は加算せず）（${productName}）`,
-      })
-      if (sre) { alert("入荷記録に失敗しました: " + sre.message); return }
-      // この注文明細は入荷済みとして扱う（在庫は増やさないため「在庫あり」表示は変わらないが、
-      // このボタンは既に入荷対応済みであることが分かるよう「入荷済み」表示に切り替える）
-      // delivered_quantity は上書きではなく加算する（分割入荷で複数回に分けて届く場合に、
-      // 前回までの入荷済み数が消えてしまわないようにするため）
-      const currentDelivered = Number(orderItems.find(oi => oi.id === itemId)?.delivered_quantity || 0)
-      const { error: oie } = await supabase.from("order_items")
-        .update({ delivered_quantity: currentDelivered + qty }).eq("id", itemId)
-      if (oie) { alert("入荷記録は保存されましたが、明細の更新に失敗しました: " + oie.message) }
-      else await syncPurchaseOrderReceipt(itemId, qty)
-      alert(`✅ ${qty}個の入荷を記録しました（在庫には加算されません。医院へ直送扱いです）`)
+      const rr = await receiveToStock(itemId, pid as string, productName, qty)
+      if (!rr.ok) { alert("入荷に失敗しました: " + (rr.error || "")); return }
+      alert(`✅ ${qty}個を入荷しました（在庫に加算しました）`)
       await fetchData({ silent: true })
     } finally {
       setReceivingItemId(null)
     }
+  }
+
+  // 入荷を、在庫に加算して記録する（「発注書から入荷」と同じ扱い）。発注書の明細があれば、その入荷数も増やす。無ければ、発注書なしの入荷として記録する
+  async function receiveToStock(itemId: string, productId: string, productName: string, qty: number): Promise<{ ok: boolean; error?: string }> {
+    const prefix = itemId.slice(0, 8).toLowerCase()
+    const { data: lines } = await supabase.from("purchase_order_items").select("id,purchase_order_id,quantity,received_quantity").ilike("note", `%明細${prefix}%`)
+    const { data: heads } = await supabase.from("purchase_orders").select("id,status").in("id", Array.from(new Set((lines || []).map(l => l.purchase_order_id))))
+    const live = new Set((heads || []).filter(h => h.status !== "取消").map(h => h.id))
+    let left = qty
+    for (const l of (lines || []).filter(l => live.has(l.purchase_order_id) && Number(l.quantity) - Number(l.received_quantity || 0) > 0)) {
+      if (left <= 0) break
+      const step = Math.min(left, Number(l.quantity) - Number(l.received_quantity || 0))
+      const r = await receivePoLine(l.id, step)
+      if (!r.ok) return r
+      left -= step
+    }
+    if (left > 0) return await receiveWithoutPo(productId, left, `注文管理から入荷（${productName}）`)
+    return { ok: true }
   }
 
   // 発注書の入荷（在庫に入った分）を取り消す。この注文明細に紐づく発注書の明細のうち、入荷済みの分を戻す
@@ -551,6 +554,8 @@ function AdminOrdersPage() {
   // 押し間違いで入荷済みにしてしまった場合に戻す（在庫を増やしていないため元に戻すだけでよい。
   // stock_receipts の記録は履歴として残す）
   async function undoReceiveItem(itemId: string) {
+    const cur = orderItems.find(oi => oi.id === itemId)
+    if (cur && Number(cur.delivered_quantity || 0) <= 0) { await cancelPoReceiptForItem(cur); return }   // 在庫に加算した入荷は、在庫も戻す
     if (!confirm("入荷済みを取り消しますか？")) return
     setReceivingItemId(itemId)
     try {
@@ -587,14 +592,8 @@ function AdminOrdersPage() {
           pid = newProd.id
           await supabase.from("order_items").update({ product_id: pid }).eq("id", t.id)
         }
-        await supabase.from("stock_receipts").insert({
-          product_id: pid, quantity: qty,
-          memo: `注文管理から一括入荷・医院へ直送（在庫は加算せず）（${t.productName}）`,
-        })
-        // delivered_quantity は上書きではなく加算する（分割入荷対応）
-        const currentDelivered = Number(orderItems.find(oi => oi.id === t.id)?.delivered_quantity || 0)
-        const { error: boe } = await supabase.from("order_items").update({ delivered_quantity: currentDelivered + qty }).eq("id", t.id)
-        if (!boe) await syncPurchaseOrderReceipt(t.id, qty)
+        const rr = await receiveToStock(t.id, pid as string, t.productName, qty)
+        if (!rr.ok) { alert("入荷に失敗しました（" + t.productName + "）: " + (rr.error || "")); break }
       }
       setReceiveSelectedIds(prev => { const n = new Set(prev); targets.forEach(t => n.delete(t.id)); return n })
       await fetchData({ silent: true })
@@ -1306,7 +1305,7 @@ function AdminOrdersPage() {
                                         const stock = Number(p?.stock || 0)
                                         const qty = Number(it.quantity || 0)
                                         const need = receiveNeedFor(it, stock)  // 在庫が足りない行は不足数、在庫を使わず発注した行は発注数
-                                        const deliveredSoFar = Number(it.delivered_quantity || 0)
+                                        const deliveredSoFar = receivedOf(it)
                                         const enough = stock >= qty
                                         const delivered = deliveredSoFar >= need
                                         return { it, enough, delivered, need, qty: Math.max(0, need - deliveredSoFar) }
@@ -1370,14 +1369,7 @@ function AdminOrdersPage() {
                                               <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                               <td className="px-1 py-0.5 text-center">
-                                                {(() => { const v = Math.max(0, (receivedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0) - Number(it.delivered_quantity || 0)); return v > 0 ? (
-                                                  <div className="flex items-center gap-1 justify-center mb-0.5">
-                                                    <span className="text-[10px] text-emerald-700">発注書で入荷 {v}</span>
-                                                    <button onClick={e => { e.stopPropagation(); cancelPoReceiptForItem(it) }} disabled={receivingItemId === it.id}
-                                                      className="text-[11px] px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                                                      title="発注書の入荷を取り消す（在庫を戻す）">取消</button>
-                                                  </div>) : null })()}
-                                                {receiveNeedFor(it, stock) > 0 && Number(it.delivered_quantity || 0) >= receiveNeedFor(it, stock) ? (
+                                                {receiveNeedFor(it, stock) > 0 && receivedOf(it) >= receiveNeedFor(it, stock) ? (
                                                   <div className="flex items-center gap-1 justify-center">
                                                     <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
                                                     <button
@@ -1387,7 +1379,7 @@ function AdminOrdersPage() {
                                                       title="間違えて入荷済みにした場合、取り消す">取消</button>
                                                   </div>
                                                 ) : receiveNeedFor(it, stock) > 0 && (() => {
-                                                  const remaining = Math.max(0, receiveNeedFor(it, stock) - Number(it.delivered_quantity || 0))
+                                                  const remaining = Math.max(0, receiveNeedFor(it, stock) - receivedOf(it))
                                                   return (
                                                   <div className="flex items-center gap-1 justify-center">
                                                     <input type="checkbox"
@@ -1536,7 +1528,7 @@ function AdminOrdersPage() {
                                 const stock = Number(p?.stock || 0)
                                 const qty = Number(it.quantity || 0)
                                 const need = receiveNeedFor(it, stock)  // 在庫が足りない行は不足数、在庫を使わず発注した行は発注数
-                                const deliveredSoFar = Number(it.delivered_quantity || 0)
+                                const deliveredSoFar = receivedOf(it)
                                 const enough = stock >= qty
                                 const delivered = deliveredSoFar >= need
                                 return { it, enough, delivered, need, qty: Math.max(0, need - deliveredSoFar) }
@@ -1599,14 +1591,7 @@ function AdminOrdersPage() {
                                     <td className={"px-1 py-0.5 text-right tabular-nums " + (grossRate < 20 && cost > 0 ? "text-red-600 font-bold" : "text-gray-500")}>{cost > 0 ? `${grossRate}%` : "—"}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums font-bold">{fmtYen(lineSubtotal)}</td>
                                     <td className="px-1 py-0.5 text-center">
-                                      {(() => { const v = Math.max(0, (receivedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0) - Number(it.delivered_quantity || 0)); return v > 0 ? (
-                                        <div className="flex items-center gap-1 justify-center mb-0.5">
-                                          <span className="text-[10px] text-emerald-700">発注書で入荷 {v}</span>
-                                          <button onClick={e => { e.stopPropagation(); cancelPoReceiptForItem(it) }} disabled={receivingItemId === it.id}
-                                            className="text-[11px] px-1 py-0.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
-                                            title="発注書の入荷を取り消す（在庫を戻す）">取消</button>
-                                        </div>) : null })()}
-                                      {receiveNeedFor(it, stock) > 0 && Number(it.delivered_quantity || 0) >= receiveNeedFor(it, stock) ? (
+                                      {receiveNeedFor(it, stock) > 0 && receivedOf(it) >= receiveNeedFor(it, stock) ? (
                                         <div className="flex items-center gap-1 justify-center">
                                           <span className="text-[11px] text-emerald-700 font-bold">✅入荷済み</span>
                                           <button
@@ -1616,7 +1601,7 @@ function AdminOrdersPage() {
                                             title="間違えて入荷済みにした場合、取り消す">取消</button>
                                         </div>
                                       ) : receiveNeedFor(it, stock) > 0 && (() => {
-                                        const remaining = Math.max(0, receiveNeedFor(it, stock) - Number(it.delivered_quantity || 0))
+                                        const remaining = Math.max(0, receiveNeedFor(it, stock) - receivedOf(it))
                                         return (
                                         <div className="flex items-center gap-1 justify-center">
                                           <input type="checkbox"
