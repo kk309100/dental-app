@@ -209,7 +209,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
     const pageH = 297 * mm, pad = 10 * mm
     // 1ページ目の「表より上の高さ」は、画面で測った値より、印刷したときのほうが大きい（印刷で約102mm、画面で約60mm）。
     // 実際に印刷した請求明細書（スキャン）で測った値を、下限にする。これで、画面の測定が小さく出ても、はみ出さない。
-    const firstHeaderPrint = Math.max(firstHeader, 104 * mm)
+    const firstHeaderPrint = Math.max(firstHeader, 112 * mm)
     const first = Math.max(4, Math.floor((pageH - firstHeaderPrint - pad - theadH - 4 * mm) / pairH))
     const next = Math.max(8, Math.floor((pageH - pad - pad - miniH - theadH - 8 * mm) / pairH))
     setCaps(prev => (prev.first === first && prev.next === next ? prev : { first, next }))
@@ -469,6 +469,9 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           })()}
           <div>TEL {company.phone}</div>
           <div>FAX {company.fax}</div>
+          {/* 振込先: 会社情報のすぐ下に、続けて入れる（間をあけない） */}
+          <div>振込先: {company.bankName} {company.bankBranch} {company.bankType} {company.bankAccount}</div>
+          <div>振込手数料は貴院負担でお願いいたします。</div>
           </div>
           <div style={{ position: "absolute", top: 0, right: 0 }}>
             <Seal size={50} />
@@ -524,12 +527,6 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
               </div>
             )
           })()}
-        </div>
-        <div style={{ flex: 1, fontSize: 10, lineHeight: 1.5, textAlign: "left", paddingRight: 60 }}>
-          <div style={{ width: "fit-content", marginLeft: "auto" }}>
-            振込先: {company.bankName} {company.bankBranch} {company.bankType} {company.bankAccount}<br />
-            振込手数料は貴院負担でお願いいたします。
-          </div>
         </div>
       </div>
     </>
