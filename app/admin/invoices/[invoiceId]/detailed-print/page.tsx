@@ -121,6 +121,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
       return {
         date: order ? parseDbDate(order.created_at).toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "/") : "",
         delivery_number: order?.delivery_number || (order?.id.slice(0, 8) ?? ""),
+        slip4: order ? (() => { const d = parseDbDate(order.created_at); return String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0") })() : "",
         manufacturer: product?.manufacturer || "",
         expense_category: cat,
         product_code: product?.product_code || "",
@@ -176,6 +177,10 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
   // 紙の下の端に達した時点で、次のページに続く。件数に頼らないので、行の高さや見出しの量が変わっても、はみ出さない。
   const [caps, setCaps] = useState<{ first: number; next: number }>({ first: 18, next: 26 })
   const miniRef = useRef<HTMLDivElement | null>(null)
+  // 明細の表示: 1行（伝票番号を月日4桁にして、1商品を1行で）/ 2行（これまでの形）
+  const [oneLine, setOneLine] = useState(true)
+  useEffect(() => { try { const v = localStorage.getItem("invoicePrint.oneLine"); if (v === "0") setOneLine(false) } catch { /* 無視 */ } }, [])
+  const chooseLayout = (v: boolean) => { setOneLine(v); try { localStorage.setItem("invoicePrint.oneLine", v ? "1" : "0") } catch { /* 無視 */ } }
   useLayoutEffect(() => {
     if (loading || lines.length === 0) return
     const probe = document.createElement("div")
@@ -185,10 +190,11 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
     probe.remove()
     const sec = document.querySelector(".invoice-page") as HTMLElement | null
     const table = sec?.querySelector("table") as HTMLElement | null
-    const top = sec?.querySelector("tr.dr-top") as HTMLElement | null
+    const top = (sec?.querySelector("tr.dr-top") || sec?.querySelector("tr.dr-one")) as HTMLElement | null
     const bot = sec?.querySelector("tr.dr-bot") as HTMLElement | null
-    if (!mm || !sec || !table || !top || !bot) return
-    const pairH = Math.max(top.offsetHeight + bot.offsetHeight, 13.5 * mm)   // 1商品=5mm+8.5mm（固定）
+    if (!mm || !sec || !table || !top || (!oneLine && !bot)) return
+    // 1商品の高さ: 2行表示は 5mm+8.5mm、1行表示は 7mm（どちらも固定）。測った値が小さくならないようにする
+    const pairH = oneLine ? Math.max(top.offsetHeight, 7 * mm) : Math.max(top.offsetHeight + (bot?.offsetHeight || 0), 13.5 * mm)
     const theadH = (table.querySelector("thead") as HTMLElement | null)?.offsetHeight || 6 * mm
     const firstHeader = table.getBoundingClientRect().top - sec.getBoundingClientRect().top   // 1ページ目の、表より上の高さ（上の余白を含む）
     const miniH = (miniRef.current?.offsetHeight || 12 * mm) + 8                               // 2ページ目以降の、ミニヘッダー＋表の上の余白
@@ -200,7 +206,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
     const first = Math.max(4, Math.floor((pageH - firstHeaderPrint - pad - theadH - 4 * mm) / pairH))
     const next = Math.max(8, Math.floor((pageH - pad - pad - miniH - theadH - 8 * mm) / pairH))
     setCaps(prev => (prev.first === first && prev.next === next ? prev : { first, next }))
-  }, [loading, lines.length, caps.first, caps.next])
+  }, [loading, lines.length, caps.first, caps.next, oneLine])
 
   if (loading) return <div style={{ padding: 40, textAlign: "center" }}>読み込み中…</div>
   if (!invoice) return <div style={{ padding: 40, color: "#dc2626" }}>請求書が見つかりません</div>
@@ -215,7 +221,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
   // 見出しだけが次のページに繰り返され、下の罫線も途切れてしまう。
   const FIRST_PAGE_LINES = caps.first
   const NEXT_PAGE_LINES = caps.next
-  const FOOTER_ITEMS = 2   // 最終ページの「上記の通り…」のフッターが使う高さ（商品2件ぶん）
+  const FOOTER_ITEMS = oneLine ? 3 : 2   // 最終ページの「上記の通り…」のフッターが使う高さ（2行表示: 商品2件ぶん / 1行表示: 3行ぶん）
   const pages: typeof lines[] = []
   if (lines.length <= FIRST_PAGE_LINES - FOOTER_ITEMS) {
     pages.push(lines)
@@ -243,6 +249,9 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
           <button style={btnGray}>← 通常表示</button>
         </Link>
         <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 12, color: "#666" }}>明細の表示:</span>
+        <button onClick={() => chooseLayout(true)} style={oneLine ? btnDark : btnGray}>1行</button>
+        <button onClick={() => chooseLayout(false)} style={!oneLine ? btnDark : btnGray}>2行</button>
         <span style={{ fontSize: 12, color: "#666" }}>請求明細書（茶屋歯科フォーマット）</span>
         <button onClick={() => window.print()} style={btnDark}>🖨 印刷</button>
       </div>
@@ -315,6 +324,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
 
               {/* 明細表（固定行数でパディング） */}
               <DetailTable
+                oneLine={oneLine}
                 lines={pageLines}
                 startIdx={isFirstPage ? 0 : (FIRST_PAGE_LINES + (pageIdx - 1) * NEXT_PAGE_LINES)}
                 fixedRows={(isFirstPage ? FIRST_PAGE_LINES : NEXT_PAGE_LINES) - (isLastPage ? FOOTER_ITEMS : 0)}
@@ -382,6 +392,11 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
         /* 商品ごとの区切り線。セルの線（共通CSSの薄い線）のほうが強いため、セルに直接、濃い線を指定する */
         .invoice-doc .invoice-page table tr.dr-top > td { border-top: 1px solid #222 !important; }
         .invoice-doc .invoice-page table tr.dr-bot > td { border-bottom: 1px solid #222 !important; }
+        /* 明細の文字の大きさ。共通CSSが 9px に強制しているため、明細表だけ、大きく指定し直す（行の高さは固定なので、ページの計算は、そのまま） */
+        .invoice-doc .invoice-page table.detail1 td, .invoice-doc .invoice-page table.detail1 td span, .invoice-doc .invoice-page table.detail1 td div { font-size: 10.5px !important; }
+        .invoice-doc .invoice-page table.detail2 td, .invoice-doc .invoice-page table.detail2 td span, .invoice-doc .invoice-page table.detail2 td div { font-size: 10px !important; }
+        .invoice-doc .invoice-page table.detail1 th { font-size: 10px !important; }
+        .invoice-doc .invoice-page table.detail1 tr.dr-one > td { border-bottom: 1px solid #222 !important; }
         /* 集計表・カテゴリ表の囲い。共通CSSが、セルの下の線を、薄い灰色に強制するため、四方の線を黒で指定し直す */
         .invoice-doc .invoice-page table.frame td,
         .invoice-doc .invoice-page table.frame th { border: 1px solid #000 !important; }
@@ -430,7 +445,7 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           <div style={{ fontSize: 13, fontWeight: 700 }}>{clinicFullName}　御中</div>
           {clinic?.contact && <div style={{ fontSize: 9, marginTop: 4, color: "#444" }}>[{clinic.contact}]</div>}
         </div>
-        <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4, position: "relative", paddingRight: 60 }}>
+        <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4, position: "relative", paddingRight: 60, textAlign: "right" }}>
           <div style={{ fontWeight: 700 }}>{company.name}</div>
           {company.invoiceNumber && <div>登録番号 {company.invoiceNumber}</div>}
           <div>〒{company.postalCode}</div>
@@ -568,18 +583,19 @@ function CategoryTable({ byCategory }: { byCategory: Map<ExpenseCategory, number
 }
 
 type LineRow = {
-  date: string; delivery_number: string; manufacturer: string
+  date: string; delivery_number: string; slip4: string; manufacturer: string
   expense_category: ExpenseCategory; product_code: string; product_name: string
   quantity: number; list_price: number; unit_price: number; amount: number
 }
 
-function DetailTable({ lines, startIdx, fixedRows }: { lines: LineRow[]; startIdx: number; fixedRows: number }) {
+function DetailTable({ lines, startIdx, fixedRows, oneLine }: { lines: LineRow[]; startIdx: number; fixedRows: number; oneLine: boolean }) {
+  if (oneLine) return <DetailTableOneLine lines={lines} startIdx={startIdx} fixedRows={fixedRows} />
   // A4(210mm) - 左右パディング(12mm×2) = 186mm のコンテンツ幅
   // 固定列: 日付26mm + 数量10mm + 売単価24mm + 金額22mm = 82mm → 商品名列 = 104mm
   // 各アイテムは2行で表示するため、空スロット数 = fixedRows - lines.length
   const emptyCount = Math.max(0, fixedRows - lines.length)
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, fontSize: 9, tableLayout: "fixed", border: "2px solid #000" }}>
+    <table className="detail detail2" style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, fontSize: 9, tableLayout: "fixed", border: "2px solid #000" }}>
       <colgroup>
         <col style={{ width: "26mm" }} />
         <col />
@@ -618,6 +634,65 @@ function DetailTable({ lines, startIdx, fixedRows }: { lines: LineRow[]; startId
               <td style={{ ...emptyCell, borderRight: "1px solid #aaa" }}></td>
               <td style={emptyCell}></td>
             </tr>
+        </tbody>
+      ))}
+    </table>
+  )
+}
+
+// 1行表示: 1商品を1行で。伝票番号は、注文日の月日4桁（例: 0925）。商品名の欄を広く取り、メーカーは、商品名のあとに、薄く出す
+function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; startIdx: number; fixedRows: number }) {
+  // 1商品=1行（7mm）。1ページに入る行数（fixedRows）は、1行の高さ（7mm）で計算してある
+  const emptyCount = Math.max(0, fixedRows - lines.length)
+  return (
+    <table className="detail detail1" style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, tableLayout: "fixed", border: "2px solid #000" }}>
+      <colgroup>
+        <col style={{ width: "21mm" }} />
+        <col style={{ width: "11mm" }} />
+        <col />
+        <col style={{ width: "15mm" }} />
+        <col style={{ width: "10mm" }} />
+        <col style={{ width: "17mm" }} />
+        <col style={{ width: "19mm" }} />
+        <col style={{ width: "22mm" }} />
+      </colgroup>
+      <thead>
+        <tr style={{ background: "#f0f0f0", borderBottom: "2px solid #000" }}>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "left", padding: "2px 3px" }}>日付</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "center", padding: "2px 3px" }}>伝票</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "left", padding: "2px 3px" }}>商品コード / 商品名（メーカー）</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "center", padding: "2px 3px" }}>分類</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>数量</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>(定価)</th>
+          <th style={{ ...cellLabel, border: "none", borderRight: "1px solid #999", textAlign: "right", padding: "2px 3px" }}>売単価</th>
+          <th style={{ ...cellLabel, border: "none", textAlign: "right", padding: "2px 3px" }}>金額</th>
+        </tr>
+      </thead>
+      {lines.length === 0 && emptyCount === 0 ? (
+        <tbody><tr><td colSpan={8} style={{ padding: 16, textAlign: "center", color: "#999" }}>明細なし</td></tr></tbody>
+      ) : lines.map((l, i) => (
+        <tbody key={startIdx + i} className="dr-group">
+          <tr className="dr-one" style={{ height: "7mm" }}>
+            <td style={{ padding: "1px 3px" }}>{l.date}</td>
+            <td style={{ padding: "1px 3px", textAlign: "center" }}>{l.slip4}</td>
+            <td style={{ padding: "1px 3px", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+              {l.product_code && <span style={{ marginRight: 6 }}>{l.product_code}</span>}
+              {l.product_name}
+              {l.manufacturer && <span style={{ marginLeft: 6, color: "#666" }}>({l.manufacturer})</span>}
+            </td>
+            <td style={{ padding: "1px 3px", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden" }}>{l.expense_category}</td>
+            <td style={{ padding: "1px 3px", textAlign: "right" }}>{l.quantity}</td>
+            <td style={{ padding: "1px 3px", textAlign: "right", color: "#555" }}>({l.list_price.toLocaleString()})</td>
+            <td style={{ padding: "1px 3px", textAlign: "right" }}>{l.unit_price.toLocaleString()}</td>
+            <td style={{ padding: "1px 3px", textAlign: "right", fontWeight: 700 }}>{l.amount.toLocaleString()}</td>
+          </tr>
+        </tbody>
+      ))}
+      {Array.from({ length: emptyCount }).map((_, i) => (
+        <tbody key={`empty-${i}`} className="dr-group">
+          <tr className="dr-one" style={{ height: "7mm" }}>
+            {Array.from({ length: 8 }).map((__, c) => <td key={c} style={{ ...emptyCell, borderRight: c < 7 ? "1px solid #aaa" : undefined }}></td>)}
+          </tr>
         </tbody>
       ))}
     </table>
