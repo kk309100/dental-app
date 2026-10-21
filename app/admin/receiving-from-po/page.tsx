@@ -593,6 +593,9 @@ export default function ReceivingFromPoPage() {
                               {it.note && (
                                 <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.note}</div>
                               )}
+                              {!it.note && it.product_id && (
+                                <div style={{ fontSize: 11, color: "#6b7280", marginTop: 1 }} title="医院の注文に紐づかない行です（在庫の補充など）">自社在庫分（医院の注文なし）</div>
+                              )}
                             </div>
 
                             {/* 発注数 */}

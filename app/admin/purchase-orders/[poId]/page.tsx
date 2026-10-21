@@ -526,6 +526,9 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
                       <p className="print-only" style={{ display: "none", margin: "3px 0 0", fontSize: 10, color: "#999" }}>{noteForPrint(i.note)}</p>
                     </>
                   )}
+                  {!i.note && i.product_id && (
+                    <p className="no-print" style={{ margin: "3px 0 0", fontSize: 10, color: "#6b7280" }} title="医院の注文に紐づかない行です（在庫の補充など）">自社在庫分（医院の注文なし）</p>
+                  )}
                 </td>
                 <td style={{ ...tdCell, textAlign: "right" }}>
                   {editMode ? (
