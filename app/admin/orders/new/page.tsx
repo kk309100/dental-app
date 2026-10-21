@@ -480,6 +480,7 @@ function NewOrderPage() {
       const items = validRows.map(r => ({
         order_id: order2.id, product_id: r.product_id, product_name: r.product_name,
         quantity: Number(r.quantity), price: Number(r.price),
+        ...(r.note && r.note.trim() ? { note: r.note.trim() } : {}),
       }))
       const { error: ie } = await supabase.from("order_items").insert(items)
       if (ie) { alert("明細エラー: " + ie.message); setSaving(false); return }
@@ -491,6 +492,7 @@ function NewOrderPage() {
     const items = validRows.map(r => ({
       order_id: order.id, product_id: r.product_id, product_name: r.product_name,
       quantity: Number(r.quantity), price: Number(r.price),
+      ...(r.note && r.note.trim() ? { note: r.note.trim() } : {}),
     }))
     const { error: ie } = await supabase.from("order_items").insert(items)
     if (ie) { alert("明細エラー: " + ie.message); setSaving(false); return }
@@ -691,6 +693,9 @@ function NewOrderPage() {
                     <p className="text-xs text-gray-400 mt-0.5">［{productById.get(r.product_id)!.manufacturer}］</p>
                   )}
                   <InlineProductSuggestions idx={idx} />
+                  <input lang="ja" value={r.note || ""} onChange={e => updateRow(idx, { note: e.target.value })}
+                    placeholder="この商品の備考（納品書・請求明細書に載ります）"
+                    className="w-full mt-1 px-2 py-0.5 border border-dashed border-gray-200 rounded text-xs text-gray-600 bg-gray-50" />
                 </td>
                 <td className="px-2 py-1">
                   <input type="number" value={r.quantity}
@@ -747,6 +752,9 @@ function NewOrderPage() {
               {r.product_id && productById.get(r.product_id)?.manufacturer && (
                 <p className="text-xs text-gray-400 -mt-1">［{productById.get(r.product_id)!.manufacturer}］</p>
               )}
+              <input lang="ja" value={r.note || ""} onChange={e => updateRow(idx, { note: e.target.value })}
+                placeholder="この商品の備考（納品書・請求明細書に載ります）"
+                className="w-full px-3 py-2 border border-dashed border-gray-200 rounded text-sm text-gray-600 bg-gray-50" />
               <div className="grid grid-cols-2 gap-2">
                 <div className="col-span-2">
                   <label style={{ fontSize: 12 }} className="text-gray-500">数量</label>
