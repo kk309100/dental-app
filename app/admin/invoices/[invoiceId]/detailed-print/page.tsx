@@ -200,8 +200,8 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
     const top = (sec?.querySelector("tr.dr-top") || sec?.querySelector("tr.dr-one")) as HTMLElement | null
     const bot = sec?.querySelector("tr.dr-bot") as HTMLElement | null
     if (!mm || !sec || !table || !top || (!oneLine && !bot)) return
-    // 1商品の高さ: 2行表示は 5mm+8.5mm、1行表示は 7mm（どちらも固定）。測った値が小さくならないようにする
-    const pairH = oneLine ? Math.max(top.offsetHeight, 7 * mm) : Math.max(top.offsetHeight + (bot?.offsetHeight || 0), 13.5 * mm)
+    // 1商品の高さ: 2行表示は 5mm+8.5mm、1行表示は 8mm（どちらも固定）。測った値が小さくならないようにする
+    const pairH = oneLine ? Math.max(top.offsetHeight, 8 * mm) : Math.max(top.offsetHeight + (bot?.offsetHeight || 0), 13.5 * mm)
     const theadH = (table.querySelector("thead") as HTMLElement | null)?.offsetHeight || 6 * mm
     const firstHeader = table.getBoundingClientRect().top - sec.getBoundingClientRect().top   // 1ページ目の、表より上の高さ（上の余白を含む）
     const miniH = (miniRef.current?.offsetHeight || 12 * mm) + 8                               // 2ページ目以降の、ミニヘッダー＋表の上の余白
@@ -653,7 +653,7 @@ function DetailTable({ lines, startIdx, fixedRows, oneLine }: { lines: LineRow[]
 
 // 1行表示: 1商品を1行で。伝票番号は、注文日の月日4桁（例: 0925）。商品名の欄を広く取り、メーカーは、商品名のあとに、薄く出す
 function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; startIdx: number; fixedRows: number }) {
-  // 1商品=1行（7mm）。1ページに入る行数（fixedRows）は、1行の高さ（7mm）で計算してある
+  // 1商品=1行（8mm）。1ページに入る行数（fixedRows）は、1行の高さ（8mm）で計算してある
   const emptyCount = Math.max(0, fixedRows - lines.length)
   return (
     <table className="detail detail1" style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, tableLayout: "fixed", border: "2px solid #000" }}>
@@ -683,13 +683,16 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
         <tbody><tr><td colSpan={8} style={{ padding: 16, textAlign: "center", color: "#999" }}>明細なし</td></tr></tbody>
       ) : lines.map((l, i) => (
         <tbody key={startIdx + i} className="dr-group">
-          <tr className="dr-one" style={{ height: "7mm" }}>
+          <tr className="dr-one" style={{ height: "8mm" }}>
             <td style={{ padding: "1px 3px" }}>{l.date}</td>
             <td style={{ padding: "1px 3px", textAlign: "center" }}>{l.slip4}</td>
-            <td style={{ padding: "1px 3px", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
-              {l.product_code && <span style={{ marginRight: 6 }}>{l.product_code}</span>}
-              {l.product_name}
-              {l.manufacturer && <span style={{ marginLeft: 6, color: "#666" }}>({l.manufacturer})</span>}
+            <td style={{ padding: "1px 3px", overflow: "hidden" }}>
+              {/* 長い商品名は、2行まで折り返して、全部見えるようにする（行の高さは固定のまま） */}
+              <div style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.2, wordBreak: "break-all" }}>
+                {l.product_code && <span style={{ marginRight: 6 }}>{l.product_code}</span>}
+                {l.product_name}
+                {l.manufacturer && <span style={{ marginLeft: 6, color: "#666" }}>({l.manufacturer})</span>}
+              </div>
             </td>
             <td className="cat" style={{ padding: "1px 1px", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden" }}>{l.expense_category}</td>
             <td style={{ padding: "1px 3px", textAlign: "right" }}>{l.quantity}</td>
@@ -701,7 +704,7 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
       ))}
       {Array.from({ length: emptyCount }).map((_, i) => (
         <tbody key={`empty-${i}`} className="dr-group">
-          <tr className="dr-one" style={{ height: "7mm" }}>
+          <tr className="dr-one" style={{ height: "8mm" }}>
             {Array.from({ length: 8 }).map((__, c) => <td key={c} style={{ ...emptyCell, borderRight: c < 7 ? "1px solid #aaa" : undefined }}></td>)}
           </tr>
         </tbody>
