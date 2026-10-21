@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { receiveAllPoRemaining, countPoRemaining } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { supabase, fetchAllData } from "@/lib/supabase"
@@ -129,6 +130,26 @@ export default function PurchaseOrdersListPage() {
     })),
   })), [filtered, itemsByPo, suppliers])
 
+  // 選んだ発注書の、残りを、全部まとめて入荷する（「発注済」「部分入荷」の発注書だけ）
+  const [bulkReceiving, setBulkReceiving] = useState(false)
+  async function bulkReceive() {
+    const targets = pos.filter(p => selected.has(p.id) && (p.status === "発注済" || p.status === "部分入荷"))
+    if (targets.length === 0) { alert("入荷できる発注書（状態が「発注済」「部分入荷」）が、選ばれていません"); return }
+    const c = await countPoRemaining(targets.map(p => p.id))
+    if (c.lines === 0) { alert("選んだ発注書に、入荷していない商品は、ありません"); return }
+    if (!confirm(`選んだ ${targets.length}件の発注書の、残り ${c.lines}行（合計 ${c.qty}個）を、すべて入荷します。在庫に加算されます。\n\nよろしいですか？`)) return
+    setBulkReceiving(true)
+    try {
+      const errors: string[] = []
+      let lines = 0, qty = 0
+      for (const p of targets) { const r = await receiveAllPoRemaining(p.id); lines += r.lines; qty += r.qty; errors.push(...r.errors) }
+      if (errors.length) alert("一部、入荷できませんでした:\n" + errors.slice(0, 10).join("\n"))
+      else alert(`✅ ${lines}行（${qty}個）を入荷しました`)
+      setSelected(new Set())
+      await fetchData()
+    } finally { setBulkReceiving(false) }
+  }
+
   function toggleSel(id: string) {
     setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
   }
@@ -163,6 +184,11 @@ export default function PurchaseOrdersListPage() {
           <span className="ml-2 text-xs font-normal text-gray-400">該当 {filtered.length}/全 {pos.length} 件</span>
         </h1>
         <div className="flex items-center gap-2">
+          <button onClick={bulkReceive} disabled={selected.size === 0 || bulkReceiving}
+            className="px-3 py-1.5 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700 disabled:opacity-40"
+            title="選んだ発注書の、残りを、全部まとめて入荷します（在庫に加算されます）">
+            {bulkReceiving ? "入荷中…" : `📦 選択を一括入荷 (${selected.size})`}
+          </button>
           <button onClick={bulkPrint} disabled={selected.size === 0}
             className="px-3 py-1.5 bg-gray-800 text-white text-sm font-bold rounded hover:bg-gray-700 disabled:opacity-40">
             🖨 選択を一括印刷 ({selected.size})

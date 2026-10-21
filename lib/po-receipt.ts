@@ -118,3 +118,25 @@ export async function receiveWithoutPo(productId: string, qty: number, memo: str
   if (re) return { ok: false, error: "入荷記録に失敗: " + re.message }
   return { ok: true }
 }
+
+// 発注書の、まだ入荷していない残りを、全部まとめて入荷する（「発注書から入荷」と同じ扱い: 在庫に加算し、入荷数・状態・仕入納品一覧を更新）。
+export async function receiveAllPoRemaining(poId: string): Promise<{ lines: number; qty: number; errors: string[] }> {
+  const { data: ls } = await supabase.from("purchase_order_items").select("id,product_name,quantity,received_quantity").eq("purchase_order_id", poId)
+  let lines = 0, qty = 0; const errors: string[] = []
+  for (const l of ls || []) {
+    const remaining = Number(l.quantity) - Number(l.received_quantity || 0)
+    if (remaining <= 0) continue
+    const r = await receivePoLine(l.id, remaining)
+    if (r.ok) { lines++; qty += r.received || 0 } else errors.push(`${l.product_name || "(商品名なし)"}: ${r.error}`)
+  }
+  return { lines, qty, errors }
+}
+
+// 発注書の、まだ入荷していない行の数と、合計の数
+export async function countPoRemaining(poIds: string[]): Promise<{ lines: number; qty: number }> {
+  if (poIds.length === 0) return { lines: 0, qty: 0 }
+  const { data: ls } = await supabase.from("purchase_order_items").select("quantity,received_quantity").in("purchase_order_id", poIds)
+  let lines = 0, qty = 0
+  for (const l of ls || []) { const r = Number(l.quantity) - Number(l.received_quantity || 0); if (r > 0) { lines++; qty += r } }
+  return { lines, qty }
+}

@@ -1,7 +1,7 @@
 "use client"
 
 import { use, useEffect, useState } from "react"
-import { cancelPoLineReceipt } from "@/lib/po-receipt"
+import { cancelPoLineReceipt, receiveAllPoRemaining, countPoRemaining } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -138,6 +138,18 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   async function updateDates(patch: { ordered_at?: string; expected_at?: string }) {
     if (!po) return
     await supabase.from("purchase_orders").update(patch).eq("id", po.id)
+    await fetchData({ silent: true })
+  }
+
+  // 残りを、全部まとめて入荷する（在庫に加算し、入荷数・状態・仕入納品一覧も更新する）
+  async function receiveAll() {
+    if (!po) return
+    const c = await countPoRemaining([po.id])
+    if (c.lines === 0) { alert("入荷していない商品は、ありません"); return }
+    if (!confirm(`この発注書の、残り ${c.lines}行（合計 ${c.qty}個）を、すべて入荷します。在庫に加算されます。\n\nよろしいですか？`)) return
+    const r = await receiveAllPoRemaining(po.id)
+    if (r.errors.length) alert("一部、入荷できませんでした:\n" + r.errors.join("\n"))
+    else alert(`✅ ${r.lines}行（${r.qty}個）を入荷しました`)
     await fetchData({ silent: true })
   }
 
@@ -307,7 +319,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
         <div className="flex items-center gap-2">
           {po.status === "下書き" && <button onClick={() => setStatus("発注済")} className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded">発注済にする</button>}
           {po.status === "発注済" && <button onClick={() => setStatus("部分入荷")} className="text-xs px-3 py-1.5 bg-amber-600 text-white rounded">部分入荷</button>}
-          {(po.status === "発注済" || po.status === "部分入荷") && <button onClick={() => setStatus("入荷済")} className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded">入荷完了</button>}
+          {(po.status === "発注済" || po.status === "部分入荷") && <button onClick={receiveAll} className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded font-bold" title="残りを全部まとめて入荷する（在庫に加算されます）">📦 一括入荷</button>}
           {po.status !== "取消" && po.status !== "入荷済" && <button onClick={() => setStatus("取消")} className="text-xs px-3 py-1.5 bg-gray-200 text-gray-700 rounded">取消</button>}
           <button onClick={sendByEmail} className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded" title={supplier?.email ? `${supplier.email} 宛に送信` : "仕入先のメール未設定"}>✉ メール送付</button>
           <button onClick={markSentByFax}
