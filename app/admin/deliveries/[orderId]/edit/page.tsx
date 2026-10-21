@@ -10,8 +10,8 @@ import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; delivered_at: string | null; total_price: number; delivery_number: string | null; invoice_id: string | null; note: string | null }
-type Item = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null; note?: string | null }
-type Line = { key: string; id: string | null; product_id: string | null; product_name: string; quantity: string; price: string; delivered: number; note: string }
+type Item = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null; note?: string | null; lot_number?: string | null }
+type Line = { key: string; id: string | null; product_id: string | null; product_name: string; quantity: string; price: string; delivered: number; note: string; lot: string }
 type PHit = { id: string; name: string; product_code: string | null; price: number | null; stock_managed: boolean | null }
 
 const DELIVERED = ["納品済み", "納品済"]
@@ -46,7 +46,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
     const { data: i } = await supabase.from("order_items").select("*").eq("order_id", orderId).order("id")
     const its = (i as Item[]) || []
     setOriginal(its)
-    setLines(its.map(it => ({ key: nextKey(), id: it.id, product_id: it.product_id, product_name: it.product_name || "", quantity: String(it.quantity ?? ""), price: String(it.price ?? ""), delivered: Number(it.delivered_quantity || 0), note: it.note || "" })))
+    setLines(its.map(it => ({ key: nextKey(), id: it.id, product_id: it.product_id, product_name: it.product_name || "", quantity: String(it.quantity ?? ""), price: String(it.price ?? ""), delivered: Number(it.delivered_quantity || 0), note: it.note || "", lot: it.lot_number || "" })))
     if ((o as Order).clinic_id) {
       const { data: c } = await supabase.from("clinics").select("name").eq("id", (o as Order).clinic_id).single()
       setClinicName((c as { name?: string } | null)?.name || "")
@@ -120,7 +120,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       const keptIds = new Set(clean.filter(l => l.id).map(l => l.id as string))
       const removed = original.filter(o => !keptIds.has(o.id)).map(o => o.id)
       for (const l of clean) {
-        const row = { product_id: l.product_id, product_name: l.product_name.trim() || null, quantity: Number(l.quantity), price: Number(l.price), note: l.note.trim() || null }
+        const row = { product_id: l.product_id, product_name: l.product_name.trim() || null, quantity: Number(l.quantity), price: Number(l.price), note: l.note.trim() || null, lot_number: l.lot.trim() || null }
         if (l.id) { const { error: e } = await supabase.from("order_items").update(row).eq("id", l.id); if (e) throw new Error("明細の更新に失敗: " + e.message) }
         else { const { error: e } = await supabase.from("order_items").insert({ ...row, order_id: orderId }); if (e) throw new Error("明細の追加に失敗: " + e.message) }
       }
@@ -185,7 +185,10 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
               <tr key={l.key} className="border-b border-gray-100 align-top">
                 <td className="px-2 py-1.5">
                   <input lang="ja" value={l.product_name} onChange={e => update(l.key, { product_name: e.target.value })} className="w-full px-2 py-1 border border-gray-200 rounded" placeholder="商品名" />
-                  <input lang="ja" value={l.note} onChange={e => update(l.key, { note: e.target.value })} className="w-full mt-1 px-2 py-0.5 border border-dashed border-gray-200 rounded text-xs bg-gray-50" placeholder="この商品の備考" />
+                  <div className="flex gap-1 mt-1">
+                    <input value={l.lot} onChange={e => update(l.key, { lot: e.target.value })} className="w-28 px-2 py-0.5 border border-dashed border-gray-200 rounded text-xs bg-gray-50" placeholder="LOT番号" />
+                    <input lang="ja" value={l.note} onChange={e => update(l.key, { note: e.target.value })} className="flex-1 px-2 py-0.5 border border-dashed border-gray-200 rounded text-xs bg-gray-50" placeholder="この商品の備考" />
+                  </div>
                 </td>
                 <td className="px-2 py-1.5 relative">
                   <div className="flex items-center gap-1">
@@ -218,7 +221,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
           </tbody>
           <tfoot>
             <tr>
-              <td className="px-2 py-2"><button onClick={() => setLines(prev => [...prev, { key: nextKey(), id: null, product_id: null, product_name: "", quantity: "1", price: "0", delivered: 0, note: "" }])} className="text-[12px] px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">＋ 行を追加</button></td>
+              <td className="px-2 py-2"><button onClick={() => setLines(prev => [...prev, { key: nextKey(), id: null, product_id: null, product_name: "", quantity: "1", price: "0", delivered: 0, note: "", lot: "" }])} className="text-[12px] px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">＋ 行を追加</button></td>
               <td></td><td></td>
               <td className="px-2 py-2 text-right text-[12px] text-gray-600">合計（税抜）</td>
               <td className="px-2 py-2 text-right font-bold text-base tabular-nums">{fmtYen(total)}</td>

@@ -40,7 +40,7 @@ type Order = {
 }
 type OrderItem = {
   id: string; order_id: string; product_id: string | null
-  product_name: string | null; quantity: number; price: number; note?: string | null
+  product_name: string | null; quantity: number; price: number; note?: string | null; lot_number?: string | null
 }
 type Product = {
   id: string; name: string; product_code: string | null
@@ -134,6 +134,7 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
         product_code: product?.product_code || "",
         product_name: it.product_name || product?.name || "(商品名なし)",
         note: it.note || "",
+        lot: it.lot_number || "",
         quantity: Number(it.quantity || 0),
         list_price: Number(product?.price || it.price || 0),
         unit_price: Number(it.price || 0),
@@ -612,7 +613,7 @@ function CategoryTable({ byCategory }: { byCategory: Map<ExpenseCategory, number
 
 type LineRow = {
   date: string; delivery_number: string; slip4: string; manufacturer: string
-  expense_category: ExpenseCategory; product_code: string; product_name: string; note?: string
+  expense_category: ExpenseCategory; product_code: string; product_name: string; note?: string; lot?: string
   quantity: number; list_price: number; unit_price: number; amount: number
 }
 
@@ -707,6 +708,7 @@ function DetailTableOneLine({ lines, startIdx, fixedRows }: { lines: LineRow[]; 
                 {l.product_code && <span style={{ marginRight: 6 }}>{l.product_code}</span>}
                 {l.product_name}
                 {l.manufacturer && <span style={{ marginLeft: 6, color: "#666" }}>({l.manufacturer})</span>}
+                {l.lot && <span style={{ marginLeft: 6, color: "#333" }}>LOT:{l.lot}</span>}
                 {l.note && <span style={{ marginLeft: 6, color: "#333" }}>※{l.note}</span>}
               </div>
             </td>
@@ -759,6 +761,7 @@ function DetailRowPair({ line }: { line: LineRow }) {
         <td style={{ padding: "1px 3px 3px", fontSize: 9, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
           {line.product_code && <span style={{ marginRight: 6 }}>{line.product_code}</span>}
           {line.product_name}
+          {line.lot && <span style={{ marginLeft: 6 }}>LOT:{line.lot}</span>}
           {line.note && <span style={{ marginLeft: 6 }}>※{line.note}</span>}
         </td>
         <td style={{ padding: "1px 3px 3px", textAlign: "right", fontSize: 9 }}>{line.quantity}</td>
