@@ -458,6 +458,7 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
         </div>
         {/* 自社情報: 納品書と同じ並び（社名・登録番号を太字に、〒・住所2行・TEL・FAXを、それぞれ1行で、左をそろえる） */}
         <div style={{ flex: 1, fontSize: 10, lineHeight: 1.5, position: "relative", paddingRight: 60, textAlign: "left" }}>
+          <div style={{ width: "fit-content", marginLeft: "auto" }}>
           <div style={{ fontWeight: 700 }}>{company.name}</div>
           {company.invoiceNumber && <div style={{ fontWeight: 700 }}>登録番号 {company.invoiceNumber}</div>}
           <div>〒{company.postalCode}</div>
@@ -468,6 +469,7 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           })()}
           <div>TEL {company.phone}</div>
           <div>FAX {company.fax}</div>
+          </div>
           <div style={{ position: "absolute", top: 0, right: 0 }}>
             <Seal size={50} />
           </div>
@@ -524,8 +526,10 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           })()}
         </div>
         <div style={{ flex: 1, fontSize: 10, lineHeight: 1.5, textAlign: "left", paddingRight: 60 }}>
-          振込先: {company.bankName} {company.bankBranch} {company.bankType} {company.bankAccount}<br />
-          振込手数料は貴院負担でお願いいたします。
+          <div style={{ width: "fit-content", marginLeft: "auto" }}>
+            振込先: {company.bankName} {company.bankBranch} {company.bankType} {company.bankAccount}<br />
+            振込手数料は貴院負担でお願いいたします。
+          </div>
         </div>
       </div>
     </>
