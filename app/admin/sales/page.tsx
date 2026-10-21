@@ -228,6 +228,7 @@ export default function SalesPage() {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <Link href="/admin/low-margin"><button style={{ ...back, margin: 0 }} title="利益がマイナス・基準未満の売上を抜き出す">利益チェック</button></Link>
           <select value={fyStartMonth} onChange={(e) => changeFyStart(Number(e.target.value))} style={select} title="決算開始月">
             {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月開始</option>)}
           </select>
