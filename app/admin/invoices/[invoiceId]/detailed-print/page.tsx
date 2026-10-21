@@ -475,8 +475,8 @@ function FullHeader({ company, clinic, invoice, corporateLabel, clinicFullName, 
           <div>振込先: {company.bankName} {company.bankBranch} {company.bankType} {company.bankAccount}</div>
           <div>振込手数料は貴院負担でお願いいたします。</div>
           </div>
-          <div style={{ position: "absolute", top: 0, right: 0 }}>
-            <Seal size={50} />
+          <div style={{ position: "absolute", top: -8, right: 0, zIndex: 1, pointerEvents: "none", mixBlendMode: "multiply" }}>
+            <Seal size={84} />
           </div>
         </div>
       </div>
