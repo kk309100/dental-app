@@ -34,10 +34,12 @@ function searchKey(s: string) { return kata(nfkc(s)) }
 
 function NumInput({ value, onChange, className }: { value: number; onChange: (n: number) => void; className?: string }) {
   const [text, setText] = useState(String(value ?? 0))
-  useEffect(() => { if (Number(text) !== Number(value ?? 0)) setText(String(value ?? 0)) }, [value])   // eslint-disable-line react-hooks/exhaustive-deps
+  const focused = useRef(false)
+  useEffect(() => { if (!focused.current && Number(text) !== Number(value ?? 0)) setText(String(value ?? 0)) }, [value])   // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <input type="text" inputMode="decimal" autoComplete="off" value={text} className={className}
-      onFocus={e => e.target.select()}
+      onFocus={e => { focused.current = true; e.target.select() }}
+      onBlur={() => { focused.current = false; setText(String(value ?? 0)) }}
       onChange={e => {
         const t = e.target.value.normalize("NFKC").replace(/[^\d.]/g, "")
         setText(t)
@@ -729,8 +731,10 @@ function NewOrderPage() {
                     onChange={n => updateRow(idx, { price: n })}
                     className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right" />
                 </td>
-                <td className="px-2 py-1 text-right text-sm tabular-nums text-gray-700">
-                  {fmtYen(Number(r.price || 0) * Number(r.quantity || 0))}
+                <td className="px-2 py-1">
+                  <NumInput value={Math.round(Number(r.price || 0) * Number(r.quantity || 0))}
+                    onChange={n => { const q = Number(r.quantity || 0); if (q > 0) updateRow(idx, { price: Math.round((n / q) * 100) / 100 }); else updateRow(idx, { quantity: 1, price: n }) }}
+                    className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right font-bold tabular-nums" />
                 </td>
                 <td className="px-2 py-1 text-center">
                   <button onClick={() => removeRow(idx)} className="text-gray-400 hover:text-red-500 text-sm">×</button>
@@ -801,9 +805,9 @@ function NewOrderPage() {
                 </div>
                 <div>
                   <label style={{ fontSize: 12 }} className="text-gray-500">金額</label>
-                  <div className="px-2 py-2 text-base text-right font-bold text-gray-900 tabular-nums">
-                    {fmtYen(Number(r.price || 0) * Number(r.quantity || 0))}
-                  </div>
+                  <NumInput value={Math.round(Number(r.price || 0) * Number(r.quantity || 0))}
+                    onChange={n => { const q = Number(r.quantity || 0); if (q > 0) updateRow(idx, { price: Math.round((n / q) * 100) / 100 }); else updateRow(idx, { quantity: 1, price: n }) }}
+                    className="w-full px-2 py-2 border border-gray-200 rounded text-base text-right font-bold tabular-nums" />
                 </div>
               </div>
             </div>
