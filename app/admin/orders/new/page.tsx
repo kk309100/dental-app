@@ -32,6 +32,21 @@ function nfkc(s: string) { return String(s || "").normalize("NFKC").toLowerCase(
 function kata(s: string) { return s.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60)) }
 function searchKey(s: string) { return kata(nfkc(s)) }
 
+function NumInput({ value, onChange, className }: { value: number; onChange: (n: number) => void; className?: string }) {
+  const [text, setText] = useState(String(value ?? 0))
+  useEffect(() => { if (Number(text) !== Number(value ?? 0)) setText(String(value ?? 0)) }, [value])   // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <input type="text" inputMode="decimal" autoComplete="off" value={text} className={className}
+      onFocus={e => e.target.select()}
+      onChange={e => {
+        const t = e.target.value.normalize("NFKC").replace(/[^\d.]/g, "")
+        setText(t)
+        const n = Number(t)
+        onChange(t !== "" && t !== "." && Number.isFinite(n) ? n : 0)
+      }} />
+  )
+}
+
 function NewOrderPage() {
   const router = useRouter()
   const search = useSearchParams()
@@ -705,14 +720,14 @@ function NewOrderPage() {
                   </div>
                 </td>
                 <td className="px-2 py-1">
-                  <input type="number" value={r.quantity}
-                    onChange={e => updateRow(idx, { quantity: Number(e.target.value) })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right" min={0} />
+                  <NumInput value={r.quantity}
+                    onChange={n => updateRow(idx, { quantity: n })}
+                    className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right" />
                 </td>
                 <td className="px-2 py-1">
-                  <input type="number" value={r.price}
-                    onChange={e => updateRow(idx, { price: Number(e.target.value) })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right" min={0} />
+                  <NumInput value={r.price}
+                    onChange={n => updateRow(idx, { price: n })}
+                    className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right" />
                 </td>
                 <td className="px-2 py-1 text-right text-sm tabular-nums text-gray-700">
                   {fmtYen(Number(r.price || 0) * Number(r.quantity || 0))}
@@ -780,9 +795,9 @@ function NewOrderPage() {
                 </div>
                 <div>
                   <label style={{ fontSize: 12 }} className="text-gray-500">単価</label>
-                  <input type="number" value={r.price}
-                    onChange={e => updateRow(idx, { price: Number(e.target.value) })}
-                    className="w-full px-2 py-2 border border-gray-200 rounded text-base text-right" min={0} />
+                  <NumInput value={r.price}
+                    onChange={n => updateRow(idx, { price: n })}
+                    className="w-full px-2 py-2 border border-gray-200 rounded text-base text-right" />
                 </div>
                 <div>
                   <label style={{ fontSize: 12 }} className="text-gray-500">金額</label>
