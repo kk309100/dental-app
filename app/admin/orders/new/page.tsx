@@ -32,12 +32,13 @@ function nfkc(s: string) { return String(s || "").normalize("NFKC").toLowerCase(
 function kata(s: string) { return s.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60)) }
 function searchKey(s: string) { return kata(nfkc(s)) }
 
-function NumInput({ value, onChange, className }: { value: number; onChange: (n: number) => void; className?: string }) {
+function NumInput({ value, onChange, className, step }: { value: number; onChange: (n: number) => void; className?: string; step?: number }) {
   const [text, setText] = useState(String(value ?? 0))
   const focused = useRef(false)
   useEffect(() => { if (!focused.current && Number(text) !== Number(value ?? 0)) setText(String(value ?? 0)) }, [value])   // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <input type="text" inputMode="decimal" autoComplete="off" value={text} className={className}
+      onKeyDown={e => { if (step && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); const n = Math.max(0, Number(value || 0) + (e.key === "ArrowUp" ? step : -step)); setText(String(n)); onChange(n) } }}
       onFocus={e => { focused.current = true; e.target.select() }}
       onBlur={() => { focused.current = false; setText(String(value ?? 0)) }}
       onChange={e => {
@@ -681,7 +682,7 @@ function NewOrderPage() {
             <tr style={{ fontSize: 12, fontWeight: 700 }} className="text-gray-500">
               <th className="px-2 py-2 text-left w-10">#</th>
               <th className="px-2 py-2 text-left">商品名</th>
-              <th className="px-2 py-2 text-right w-24">数量</th>
+              <th className="px-2 py-2 text-right w-32">数量</th>
               <th className="px-2 py-2 text-right w-28">単価</th>
               <th className="px-2 py-2 text-right w-28">金額</th>
               <th className="px-2 py-2 w-12"></th>
@@ -722,9 +723,15 @@ function NewOrderPage() {
                   </div>
                 </td>
                 <td className="px-2 py-1">
-                  <NumInput value={r.quantity}
-                    onChange={n => updateRow(idx, { quantity: n })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right" />
+                  <div className="flex items-stretch gap-0.5">
+                    <button type="button" tabIndex={-1} onClick={() => updateRow(idx, { quantity: Math.max(0, Number(r.quantity || 0) - 1) })}
+                      className="px-1.5 border border-gray-200 rounded bg-white text-gray-600 hover:bg-gray-100 font-bold" title="1つ減らす">−</button>
+                    <NumInput value={r.quantity} step={1}
+                      onChange={n => updateRow(idx, { quantity: n })}
+                      className="w-full min-w-0 px-1 py-1 border border-gray-200 rounded text-sm text-center" />
+                    <button type="button" tabIndex={-1} onClick={() => updateRow(idx, { quantity: Number(r.quantity || 0) + 1 })}
+                      className="px-1.5 border border-gray-200 rounded bg-white text-gray-600 hover:bg-gray-100 font-bold" title="1つ増やす">＋</button>
+                  </div>
                 </td>
                 <td className="px-2 py-1">
                   <NumInput value={r.price}
