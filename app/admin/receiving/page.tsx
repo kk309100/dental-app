@@ -682,12 +682,23 @@ export default function ReceivingPage() {
       {slipQueue.length > 1 && (
         <div className="rounded-lg p-3 flex items-center gap-2 flex-wrap" style={{ border: "1px solid #93c5fd", background: "#eff6ff" }}>
           <span className="text-sm font-bold text-blue-800">伝票 {slipIdx + 1} / {slipQueue.length} 枚目</span>
-          <span className="text-xs text-blue-700">確認して「仕入登録」したら、次の伝票を読み込みます</span>
-          <button className="ml-auto px-3 py-1.5 rounded-lg text-sm font-bold bg-blue-600 text-white disabled:opacity-40"
-            disabled={slipIdx + 1 >= slipQueue.length}
-            onClick={() => { const i = slipIdx + 1; setSlipIdx(i); setPostReceiveResult(null); applySlip(slipQueue[i], false, "") }}>
-            次の伝票へ →
-          </button>
+          <select value={slipIdx} onChange={e => { const i = Number(e.target.value); setSlipIdx(i); setPostReceiveResult(null); applySlip(slipQueue[i], false, "") }}
+            className="px-2 py-1 border border-blue-200 rounded text-xs bg-white max-w-[260px]" title="伝票を選んで、その伝票に移る">
+            {slipQueue.map((sl, i) => <option key={i} value={i}>{i + 1}. {sl.invoice_number || "(番号なし)"} {sl.invoice_date || ""}（{Array.isArray(sl.items) ? sl.items.length : 0}行）</option>)}
+          </select>
+          <span className="text-xs text-blue-700">確認して「仕入登録」したら、次の伝票へ進みます。戻ると、読み取った内容に戻ります（入力し直した内容は、残りません）</span>
+          <div className="ml-auto flex gap-1">
+            <button className="px-3 py-1.5 rounded-lg text-sm font-bold bg-white text-blue-700 border border-blue-300 disabled:opacity-40"
+              disabled={slipIdx <= 0}
+              onClick={() => { const i = slipIdx - 1; setSlipIdx(i); setPostReceiveResult(null); applySlip(slipQueue[i], false, "") }}>
+              ← 前の伝票へ
+            </button>
+            <button className="px-3 py-1.5 rounded-lg text-sm font-bold bg-blue-600 text-white disabled:opacity-40"
+              disabled={slipIdx + 1 >= slipQueue.length}
+              onClick={() => { const i = slipIdx + 1; setSlipIdx(i); setPostReceiveResult(null); applySlip(slipQueue[i], false, "") }}>
+              次の伝票へ →
+            </button>
+          </div>
         </div>
       )}
       {parsedMeta && (
