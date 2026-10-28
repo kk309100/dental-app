@@ -497,16 +497,8 @@ function ShippingPage() {
                                 <span className="font-mono text-gray-500 w-12 text-[12px]">{loc ? `[${loc}]` : ""}</span>
                                 <span className="flex-1 truncate">{it.product_name || "(商品名なし)"}</span>
                                 {/* 数量 */}
-                                <input type="number" defaultValue={qty}
-                                  onBlur={async (e) => {
-                                    const v = Number(e.target.value)
-                                    if (v > 0 && v !== qty) {
-                                      await supabase.from("order_items").update({ quantity: v }).eq("id", it.id)
-                                      await recalcTotal()
-                                      fetchData({ silent: true })
-                                    }
-                                  }}
-                                  className="w-12 text-right tabular-nums px-1 py-0.5 border border-gray-200 rounded text-[13px] bg-white" />
+                                <a href={`/admin/orders/${o.id}/edit`} className="w-12 text-right tabular-nums px-1 py-0.5 text-[13px] font-bold text-gray-800 underline decoration-dotted"
+                                  title="数量・商品名を直すときは、注文管理の編集画面で直します">{qty}</a>
                                 {/* 仕入（products.cost マスタ更新）*/}
                                 <input type="number" defaultValue={cost}
                                   disabled={!it.product_id}

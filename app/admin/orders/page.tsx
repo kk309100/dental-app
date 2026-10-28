@@ -1078,7 +1078,7 @@ function AdminOrdersPage() {
                 )}
 
                 <div className="grid grid-cols-3 gap-2 mt-3">
-                  <Link href={`/order-edit/${o.id}`} className="flex items-center justify-center rounded-lg border border-gray-300 text-[13px] font-bold text-gray-700" style={{ minHeight: 44 }}>✏️ 編集</Link>
+                  <Link href={`/admin/orders/${o.id}/edit`} className="flex items-center justify-center rounded-lg border border-gray-300 text-[13px] font-bold text-gray-700" style={{ minHeight: 44 }}>✏️ 編集</Link>
                   {biz === "ready" ? (
                     <Link href={`/admin/shipping?orders=${o.id}`} className="flex items-center justify-center rounded-lg bg-emerald-600 text-white text-[13px] font-bold" style={{ minHeight: 44 }}>→ 納品</Link>
                   ) : ss.short > 0 ? (
@@ -1271,7 +1271,7 @@ function AdminOrdersPage() {
                               </td>
                               <td className="px-2 py-1 text-center whitespace-nowrap">
                                 <button onClick={() => toggleOrderOpen(o.id)} className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="明細を開閉">{isOpen ? "−" : "+"}</button>
-                                <Link href={`/order-edit/${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="編集">編</button></Link>
+                                <Link href={`/admin/orders/${o.id}/edit`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1" title="編集">編</button></Link>
                                 {/* 出荷可能なら「納品」ボタン目立つ表示 */}
                                 {biz === "ready" && (
                                   <Link href={`/admin/shipping?orders=${o.id}`}>
@@ -1493,7 +1493,7 @@ function AdminOrdersPage() {
                       </td>
                       <td className="px-2 py-1 text-center whitespace-nowrap">
                         <button onClick={() => toggleOrderOpen(o.id)} className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">{open ? "−" : "+"}</button>
-                        <Link href={`/order-edit/${o.id}`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">編</button></Link>
+                        <Link href={`/admin/orders/${o.id}/edit`}><button className="text-[11px] px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50 mr-1">編</button></Link>
                         {biz === "ready" && (
                           <Link href={`/admin/shipping?orders=${o.id}`}>
                             <button className="text-[11px] px-2 py-0.5 rounded bg-emerald-600 text-white font-bold hover:bg-emerald-700 mr-1" title="出荷準備画面で納品書発行">→納品</button>

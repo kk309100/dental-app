@@ -260,7 +260,7 @@ export default function DeliveriesPage() {
                   </td>
                   <td className="px-2 py-1.5 text-center whitespace-nowrap">
                     <Link href={`/admin/deliveries/${o.id}`}><button className="text-[12px] px-2 py-0.5 border border-gray-200 rounded hover:bg-gray-50">開く</button></Link>
-                    <Link href={`/admin/deliveries/${o.id}/edit`}><button className="text-[12px] px-2 py-0.5 ml-1 border border-blue-200 text-blue-700 rounded hover:bg-blue-50" title="納品書の中身（数量・単価・商品・行）を編集する">編集</button></Link>
+                    
                   </td>
                 </tr>
               )

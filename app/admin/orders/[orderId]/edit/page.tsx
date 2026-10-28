@@ -1,6 +1,6 @@
 "use client"
 
-// 納品書の編集（納品書一覧から）
+// 注文の編集（注文管理から。数量・商品名・単価などを直せるのは、ここだけ）
 // 直せる項目: 数量・単価・商品名・商品の紐づけ・行の追加と削除・備考。合計金額は自動で計算し直す。
 // 納品済みの納品書は、数量・商品を変えた分だけ、在庫も増減する（「在庫管理しない」商品は、在庫を変えない）。在庫の動きに「出庫修正」で残る。
 import { use, useEffect, useMemo, useRef, useState } from "react"
@@ -126,6 +126,29 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       }
       if (removed.length) { const { error: e } = await supabase.from("order_items").delete().in("id", removed); if (e) throw new Error("明細の削除に失敗: " + e.message) }
 
+      // 発注書の行にも反映: 備考の「明細xxxxxxxx」で結ぶ。入荷前の行だけ、商品名・商品を合わせる。数量は、下書き（プール）の行で、元の注文数と同じだったときだけ合わせる
+      const poNotes: string[] = []
+      for (const l of clean) {
+        if (!l.id) continue
+        const o0 = original.find(o => o.id === l.id)
+        if (!o0) continue
+        const nameChanged = (o0.product_name || "") !== l.product_name.trim() || (o0.product_id || null) !== (l.product_id || null)
+        const qtyChanged = Number(o0.quantity) !== Number(l.quantity)
+        if (!nameChanged && !qtyChanged) continue
+        const { data: pls } = await supabase.from("purchase_order_items").select("id,purchase_order_id,quantity,received_quantity").ilike("note", `%明細${l.id.slice(0, 8)}%`)
+        for (const pl of pls || []) {
+          if (Number(pl.received_quantity || 0) > 0) continue
+          const patchRow: Record<string, unknown> = {}
+          if (nameChanged) { patchRow.product_name = l.product_name.trim() || null; patchRow.product_id = l.product_id }
+          if (qtyChanged) {
+            const { data: ph } = await supabase.from("purchase_orders").select("status,po_number").eq("id", pl.purchase_order_id).single()
+            if (ph && ph.status === "下書き" && Number(pl.quantity) === Number(o0.quantity)) patchRow.quantity = Number(l.quantity)
+            else poNotes.push(`・${l.product_name || "商品"}（発注書 ${ph?.po_number || ""} は ${ph?.status || ""}）… 数量は、発注書側で確認してください`)
+          }
+          if (Object.keys(patchRow).length) await supabase.from("purchase_order_items").update(patchRow).eq("id", pl.id)
+        }
+      }
+
       // 合計金額・備考
       const { error: oe } = await supabase.from("orders").update({ total_price: total, note: note.trim() || null }).eq("id", orderId)
       if (oe) throw new Error("合計金額の更新に失敗: " + oe.message)
@@ -141,7 +164,8 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
           })
         } catch { /* 記録のみ */ }
       }
-      router.push("/admin/deliveries")
+      if (poNotes.length) alert("注文を保存しました。\n次の商品は、発注書の数量を自動では変えていません:\n" + poNotes.join("\n"))
+      router.push("/admin/orders")
     } catch (e) {
       setError((e as Error).message)
       setSaving(false)
@@ -149,13 +173,13 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
   }
 
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
-  if (!order) return <p className="text-red-600 text-center py-12">納品書が見つかりません</p>
+  if (!order) return <p className="text-red-600 text-center py-12">注文が見つかりません</p>
 
   return (
     <div className="max-w-5xl mx-auto space-y-3">
       <div className="flex items-center flex-wrap gap-2">
-        <Link href="/admin/deliveries" className="px-3 py-1.5 border border-gray-200 rounded text-sm bg-white hover:bg-gray-50">← 納品書一覧</Link>
-        <h1 className="font-bold text-gray-900" style={{ fontSize: 20 }}>納品書の編集</h1>
+        <Link href="/admin/orders" className="px-3 py-1.5 border border-gray-200 rounded text-sm bg-white hover:bg-gray-50">← 注文管理</Link>
+        <h1 className="font-bold text-gray-900" style={{ fontSize: 20 }}>注文の編集</h1>
         <span className="text-sm text-gray-500 font-mono">{order.delivery_number}</span>
         <span className="text-sm text-gray-700">{clinicName}</span>
         <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">{order.status}</span>
@@ -237,7 +261,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       </div>
 
       <div className="flex justify-end gap-2 sticky bottom-2">
-        <Link href="/admin/deliveries" className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50">キャンセル</Link>
+        <Link href="/admin/orders" className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50">キャンセル</Link>
         <button onClick={save} disabled={saving} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300">{saving ? "保存中…" : "✓ 保存"}</button>
       </div>
     </div>
