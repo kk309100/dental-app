@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { use } from "react"
 import { supabase } from "@/lib/supabase"
 import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
@@ -24,7 +24,7 @@ type Quote = {
   created_at: string
 }
 type Clinic = { id: string; name: string; corporate_name: string | null; clinic_type: string | null; adress: string | null }
-type QuoteItem = { id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; sort_order: number }
+type QuoteItem = { id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; sort_order: number; section_label?: string | null }
 
 export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId: string }> }) {
   const { quoteId } = use(params)
@@ -386,15 +386,22 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
             </thead>
             <tbody>
               {items.length === 0 ? <tr><td colSpan={3} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
-                : items.map((it) => (
-                  <tr key={it.id}>
-                    <td className="no-print" style={td}>
-                      <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
-                    </td>
-                    <td style={td}>{it.product_name}</td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtYen(it.price)}</td>
-                  </tr>
-                ))}
+                : items.flatMap((it, idx) => {
+                  const rows: ReactNode[] = []
+                  if (it.section_label && it.section_label !== (items[idx - 1]?.section_label || null)) {
+                    rows.push(<tr key={it.id + "-h"} style={rowNoBreak}><td className="no-print" style={sectionTd}></td><td colSpan={2} style={sectionTd}>■ {it.section_label}</td></tr>)
+                  }
+                  rows.push(
+                    <tr key={it.id}>
+                      <td className="no-print" style={td}>
+                        <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
+                      </td>
+                      <td style={td}>{it.product_name}</td>
+                      <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtYen(it.price)}</td>
+                    </tr>
+                  )
+                  return rows
+                })}
             </tbody>
           </table>
         ) : (
@@ -411,18 +418,30 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
             </thead>
             <tbody>
               {items.length === 0 ? <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
-                : items.map((it) => (
-                  <tr key={it.id} style={rowNoBreak}>
-                    <td className="no-print" style={td}>
-                      <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
-                    </td>
-                    <td style={td}>{it.product_name}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{it.quantity}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{it.list_price != null ? fmtYen(it.list_price) : "—"}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price)}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price * it.quantity)}</td>
-                  </tr>
-                ))}
+                : items.flatMap((it, idx) => {
+                  const rows: ReactNode[] = []
+                  const label = it.section_label || null
+                  if (label && label !== (items[idx - 1]?.section_label || null)) {
+                    rows.push(<tr key={it.id + "-h"} style={rowNoBreak}><td className="no-print" style={sectionTd}></td><td colSpan={5} style={sectionTd}>■ {label}</td></tr>)
+                  }
+                  rows.push(
+                    <tr key={it.id} style={rowNoBreak}>
+                      <td className="no-print" style={td}>
+                        <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
+                      </td>
+                      <td style={td}>{it.product_name}</td>
+                      <td style={{ ...td, textAlign: "right" }}>{it.quantity}</td>
+                      <td style={{ ...td, textAlign: "right" }}>{it.list_price != null ? fmtYen(it.list_price) : "—"}</td>
+                      <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price)}</td>
+                      <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price * it.quantity)}</td>
+                    </tr>
+                  )
+                  if (showTotal && label && label !== (items[idx + 1]?.section_label || null)) {
+                    const sub = items.filter(x => (x.section_label || null) === label).reduce((n, x) => n + Number(x.price) * Number(x.quantity), 0)
+                    rows.push(<tr key={it.id + "-s"} style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", color: "#555" }}>{label} 小計</td><td style={{ ...td, textAlign: "right", color: "#555" }}>{fmtYen(sub)}</td></tr>)
+                  }
+                  return rows
+                })}
               {Array.from({ length: Math.max(0, 10 - items.length) }).map((_, i) => (
                 <tr key={"e" + i} style={rowNoBreak}><td className="no-print" style={td}></td><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
               ))}
@@ -474,6 +493,7 @@ const totalBox: React.CSSProperties = { display: "flex", justifyContent: "space-
 const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse", marginTop: 4 }
 const th: React.CSSProperties = { borderBottom: "2px solid #111", padding: "6px 8px", textAlign: "left", fontSize: 11, fontWeight: 700, background: "#fafafa" }
 const td: React.CSSProperties = { borderBottom: "1px solid #eee", padding: "5px 8px", fontSize: 11 }
+const sectionTd: React.CSSProperties = { background: "#f3f4f6", borderBottom: "1px solid #d1d5db", padding: "5px 8px", fontSize: 11, fontWeight: 700, color: "#111" }
 const tdTotal: React.CSSProperties = { borderTop: "2px solid #111", padding: "8px", fontSize: 13, fontWeight: 700 }
 // 印刷時、1行の途中でページが分割されないようにする（Chrome等はtr単位のbreak-insideに対応）
 const rowNoBreak: React.CSSProperties = { breakInside: "avoid", pageBreakInside: "avoid" }

@@ -29,6 +29,7 @@ type Line = {
   productName: string
   quantity: number
   cost: number       // 仕入価格
+  sectionLabel?: string | null  // 合算見積の、元の見積書の見出し（直さずに、そのまま持ち回る）
   listPrice: number  // 定価
   price: number      // 販売価格（実際の単価）
 }
@@ -124,6 +125,7 @@ function CreateQuotePage() {
           cost: it.cost != null ? Number(it.cost) : Number((it.product_id ? productMap.get(it.product_id) : null)?.cost || 0),
           listPrice: Number(it.list_price || 0),
           price: Number(it.price || 0),
+          sectionLabel: it.section_label || null,
         })))
       }
     }
@@ -260,6 +262,7 @@ function CreateQuotePage() {
           list_price: l.listPrice,
           cost: l.cost,
           sort_order: i,
+          ...(l.sectionLabel ? { section_label: l.sectionLabel } : {}),
         }))
         const { error: e2 } = await supabase.from("quote_items").insert(itemsPayload)
         if (e2) throw new Error("明細保存失敗: " + e2.message)
@@ -294,6 +297,7 @@ function CreateQuotePage() {
         list_price: l.listPrice,
         cost: l.cost,
         sort_order: i,
+        ...(l.sectionLabel ? { section_label: l.sectionLabel } : {}),
       }))
       const { error: e2 } = await supabase.from("quote_items").insert(itemsPayload)
       if (e2) throw new Error("明細保存失敗: " + e2.message)

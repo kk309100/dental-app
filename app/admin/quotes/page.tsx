@@ -66,7 +66,7 @@ export default function QuotesPage() {
   function clearSelection() { setSelectedIds(new Set()) }
 
   // 選択した複数の見積書を合算した、新しい見積書を作る（同じ医院のものだけ）。
-  // 元の見積書は、そのまま残す。明細は、元の見積書の順に並べて写す（同じ商品も、まとめずに別の行のまま）。
+  // 元の見積書は、そのまま残す。明細は、元の見積書の順に、見出しをつけて並べて写す（同じ商品も、まとめずに別の行のまま）。
   async function combineQuotes() {
     const targets = quotes.filter(q => selectedIds.has(q.id))
     if (targets.length < 2) { alert("2件以上選択してください"); return }
@@ -77,11 +77,11 @@ export default function QuotesPage() {
 
     setCombining(true)
     try {
-      const rows: { product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; cost: number | null }[] = []
+      const rows: { product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; cost: number | null; section_label: string }[] = []
       for (const q of sorted) {
         const { data: its, error: ie } = await supabase.from("quote_items").select("product_id,product_name,quantity,price,list_price,cost").eq("quote_id", q.id).order("sort_order")
         if (ie) throw new Error(ie.message)
-        for (const it of its || []) rows.push(it as (typeof rows)[number])
+        for (const it of its || []) rows.push({ ...(it as Omit<(typeof rows)[number], "section_label">), section_label: [q.quote_number, q.title].filter(Boolean).join(" ") })
       }
       if (rows.length === 0) throw new Error("明細がありません")
       const subtotal = rows.reduce((n, r) => n + Number(r.price || 0) * Number(r.quantity || 0), 0)
