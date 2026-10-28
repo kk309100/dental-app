@@ -8,6 +8,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
+import { poolFromOrders } from "@/lib/po-pool"
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; delivered_at: string | null; total_price: number; delivery_number: string | null; invoice_id: string | null; note: string | null }
 type Item = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null; note?: string | null; lot_number?: string | null }
@@ -15,6 +16,8 @@ type Line = { key: string; id: string | null; product_id: string | null; product
 type PHit = { id: string; name: string; product_code: string | null; price: number | null; stock_managed: boolean | null }
 
 const DELIVERED = ["納品済み", "納品済"]
+// まだ受注処理をしていない状態（受注処理の画面に出る）。それ以外で足した商品は、保存のあとに、発注の判定をかける
+const UNPROCESSED = ["注文受付", "確認中"]
 const kata = (s: string) => s.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
 // 納品のときに、在庫から引いた数（入荷済み＝直送で受け取った分は、在庫を通っていない）
 const deductOf = (qty: number, delivered: number) => Math.max(0, qty - Math.min(delivered, qty))
@@ -118,11 +121,12 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
 
       // 明細: 更新・追加・削除
       const keptIds = new Set(clean.filter(l => l.id).map(l => l.id as string))
+      const addedIds: string[] = []
       const removed = original.filter(o => !keptIds.has(o.id)).map(o => o.id)
       for (const l of clean) {
         const row = { product_id: l.product_id, product_name: l.product_name.trim() || null, quantity: Number(l.quantity), price: Number(l.price), note: l.note.trim() || null, lot_number: l.lot.trim() || null }
         if (l.id) { const { error: e } = await supabase.from("order_items").update(row).eq("id", l.id); if (e) throw new Error("明細の更新に失敗: " + e.message) }
-        else { const { error: e } = await supabase.from("order_items").insert({ ...row, order_id: orderId }); if (e) throw new Error("明細の追加に失敗: " + e.message) }
+        else { const { data: ins, error: e } = await supabase.from("order_items").insert({ ...row, order_id: orderId }).select("id").single(); if (e) throw new Error("明細の追加に失敗: " + e.message); if (ins) addedIds.push(ins.id as string) }
       }
       if (removed.length) { const { error: e } = await supabase.from("order_items").delete().in("id", removed); if (e) throw new Error("明細の削除に失敗: " + e.message) }
 
@@ -163,6 +167,18 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
             ref_type: "order", ref_id: orderId, reason: `納品書の編集 ${order.delivery_number || ""}`.trim(),
           })
         } catch { /* 記録のみ */ }
+      }
+      // 受注処理が済んでいる注文（準備中など）に足した商品は、受注処理の画面に出ないので、ここで、在庫を見て、不足分を発注プールへ入れる
+      if (addedIds.length > 0 && !isDelivered && !UNPROCESSED.includes(order.status)) {
+        if (confirm(`追加した商品が ${addedIds.length}品 あります。${"\n"}在庫を確認して、足りない分を発注プールへ入れますか？${"\n"}（受注処理と同じ判定です。在庫が足りていれば、何もしません）`)) {
+          const exclude = new Set(Array.from(keptIds))
+          const r = await poolFromOrders([orderId], undefined, exclude)
+          const added = r.pos.reduce((n, p) => n + p.added_items, 0)
+          const msg = added > 0 ? `発注プールに ${added}品 を入れました。${r.skippedNoSupplier > 0 ? "
+" + "うち仕入先が決まっていない商品は、発注プールで仕入先を設定してください。" : ""}` : "在庫が足りているので、発注プールには入れていません。"
+          if (r.errors.length) poNotes.push("・発注プールへの追加でエラー: " + r.errors.join(" / "))
+          else alert(msg)
+        }
       }
       if (poNotes.length) alert("注文を保存しました。\n次の商品は、発注書の数量を自動では変えていません:\n" + poNotes.join("\n"))
       router.push("/admin/orders")
