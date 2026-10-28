@@ -123,6 +123,26 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       const keptIds = new Set(clean.filter(l => l.id).map(l => l.id as string))
       const addedIds: string[] = []
       const removed = original.filter(o => !keptIds.has(o.id)).map(o => o.id)
+
+      // 削除する行に結びついた発注書の行を調べる。下書き（発注プール）の行は、いっしょに消す。送信済みの発注書は、そのままにして、保存のあとで知らせる
+      const removedPoLines: { id: string; poId: string; name: string; received: boolean }[] = []
+      for (const rid of removed) {
+        const { data: pls } = await supabase.from("purchase_order_items").select("id,purchase_order_id,product_name,received_quantity").ilike("note", `%明細${rid.slice(0, 8)}%`)
+        for (const pl of pls || []) removedPoLines.push({ id: pl.id, poId: pl.purchase_order_id, name: pl.product_name || "商品", received: Number(pl.received_quantity || 0) > 0 })
+      }
+      const poHeadById = new Map<string, { status: string; po_number: string }>()
+      if (removedPoLines.length) {
+        const { data: hs } = await supabase.from("purchase_orders").select("id,status,po_number").in("id", Array.from(new Set(removedPoLines.map(x => x.poId))))
+        for (const h of hs || []) poHeadById.set(h.id, { status: h.status, po_number: h.po_number })
+      }
+      const draftLines = removedPoLines.filter(x => poHeadById.get(x.poId)?.status === "下書き" && !x.received)
+      const sentLines = removedPoLines.filter(x => !draftLines.includes(x) && poHeadById.get(x.poId)?.status !== "取消")
+      if (draftLines.length || sentLines.length) {
+        const m = [`削除する商品に、発注書の行が結びついています。`]
+        if (draftLines.length) m.push(`・下書き（発注プール）の ${draftLines.length}行 は、いっしょに消します`)
+        if (sentLines.length) m.push(`・送信済み／入荷済みの発注書の ${sentLines.length}行 は、そのまま残します（保存のあとに、一覧でお知らせします）`)
+        if (!confirm(m.join("\n") + "\n\n保存しますか？")) { setSaving(false); return }
+      }
       for (const l of clean) {
         const row = { product_id: l.product_id, product_name: l.product_name.trim() || null, quantity: Number(l.quantity), price: Number(l.price), note: l.note.trim() || null, lot_number: l.lot.trim() || null }
         if (l.id) { const { error: e } = await supabase.from("order_items").update(row).eq("id", l.id); if (e) throw new Error("明細の更新に失敗: " + e.message) }
@@ -132,6 +152,17 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
 
       // 発注書の行にも反映: 備考の「明細xxxxxxxx」で結ぶ。入荷前の行だけ、商品名・商品を合わせる。数量は、下書き（プール）の行で、元の注文数と同じだったときだけ合わせる
       const poNotes: string[] = []
+      // 削除した行の発注書: 下書きの行は消して、発注書の合計を直す（行が無くなった下書きは、発注書ごと消す）。送信済みのものは、知らせるだけ
+      for (const x of draftLines) await supabase.from("purchase_order_items").delete().eq("id", x.id)
+      for (const poId of Array.from(new Set(draftLines.map(x => x.poId)))) {
+        const { data: rest } = await supabase.from("purchase_order_items").select("quantity,unit_price").eq("purchase_order_id", poId)
+        if (!rest || rest.length === 0) await supabase.from("purchase_orders").delete().eq("id", poId)
+        else await supabase.from("purchase_orders").update({ total_amount: rest.reduce((n, r) => n + Number(r.quantity) * Number(r.unit_price || 0), 0) }).eq("id", poId)
+      }
+      for (const x of sentLines) {
+        const h = poHeadById.get(x.poId)
+        poNotes.push("・" + x.name + "（発注書 " + (h?.po_number || "") + "・" + (h?.status || "") + "）… 注文からは削除しました。発注書の行と、仕入先への連絡を確認してください")
+      }
       for (const l of clean) {
         if (!l.id) continue
         const o0 = original.find(o => o.id === l.id)
@@ -179,7 +210,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
           else alert(msg)
         }
       }
-      if (poNotes.length) alert("注文を保存しました。\n次の商品は、発注書の数量を自動では変えていません:\n" + poNotes.join("\n"))
+      if (poNotes.length) alert("注文を保存しました。\n次の商品は、発注書を自動では変えていません:\n" + poNotes.join("\n"))
       router.push("/admin/orders")
     } catch (e) {
       setError((e as Error).message)
