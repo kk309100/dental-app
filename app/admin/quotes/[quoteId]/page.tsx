@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState, Fragment, type ReactNode } from "react"
 import { use } from "react"
 import { supabase } from "@/lib/supabase"
 import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
@@ -444,27 +444,57 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
                 }
                 return rows
               })
+              // 合算見積（見出しつき）は、元の見積書ごとに、ひとつの塊（tbody）にする。1ページに収まる大きさなら、ページの途中で切らない（長すぎるものは、これまでどおり切れる）。
+              // 見出しのない見積書は、これまでどおり。最後の1行と、小計・消費税・合計だけ、離さない。
+              type Run = { label: string | null; groups: ReactNode[][] }
+              const runs: Run[] = []
+              items.forEach((it, idx) => {
+                const label = it.section_label || null
+                const last = runs[runs.length - 1]
+                if (last && last.label === label) last.groups.push(groups[idx])
+                else runs.push({ label, groups: [groups[idx]] })
+              })
+              const fillers = Array.from({ length: Math.max(0, 10 - items.length) }).map((_, i) => (
+                <tr key={"e" + i} style={rowNoBreak}><td className="no-print" style={td}></td><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
+              ))
+              // 小計・消費税・合計は tfoot にすると印刷時に複数ページそれぞれの末尾に
+              // 繰り返し表示されて紛らわしいため、通常の tbody 行として明細の最後に1回だけ表示する
+              const totals = showTotal ? (
+                <>
+                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
+                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
+                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
+                </>
+              ) : null
+              if (items.length === 0) {
+                return <tbody><tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>{fillers}{totals}</tbody>
+              }
               return (
                 <>
-                  <tbody>
-                    {items.length === 0 ? <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
-                      : groups.slice(0, -1).flat()}
-                  </tbody>
-                  <tbody style={rowNoBreak}>
-                    {groups.length > 0 && groups[groups.length - 1]}
-                    {Array.from({ length: Math.max(0, 10 - items.length) }).map((_, i) => (
-                      <tr key={"e" + i} style={rowNoBreak}><td className="no-print" style={td}></td><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
-                    ))}
-                    {/* 小計・消費税・合計は tfoot にすると印刷時に複数ページそれぞれの末尾に
-                        繰り返し表示されて紛らわしいため、通常の tbody 行として明細の最後に1回だけ表示する */}
-                    {showTotal && (
-                      <>
-                        <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
-                        <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
-                        <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
-                      </>
-                    )}
-                  </tbody>
+                  {runs.map((r, ri) => {
+                    const isLast = ri === runs.length - 1
+                    if (r.label) {
+                      // 見出しつきの塊: ページの途中で切らない。最後の塊には、小計・消費税・合計もいっしょに入れる
+                      return (
+                        <tbody key={"run" + ri} style={rowNoBreak}>
+                          {r.groups.flat()}
+                          {isLast && fillers}
+                          {isLast && totals}
+                        </tbody>
+                      )
+                    }
+                    if (!isLast) return <tbody key={"run" + ri}>{r.groups.flat()}</tbody>
+                    return (
+                      <Fragment key={"run" + ri}>
+                        <tbody>{r.groups.slice(0, -1).flat()}</tbody>
+                        <tbody style={rowNoBreak}>
+                          {r.groups[r.groups.length - 1]}
+                          {fillers}
+                          {totals}
+                        </tbody>
+                      </Fragment>
+                    )
+                  })}
                 </>
               )
             })()}
