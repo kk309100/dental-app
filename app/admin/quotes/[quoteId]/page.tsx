@@ -416,45 +416,56 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
                 <th style={{ ...th, width: 100, textAlign: "right" }}>金額</th>
               </tr>
             </thead>
-            <tbody>
-              {items.length === 0 ? <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
-                : items.flatMap((it, idx) => {
-                  const rows: ReactNode[] = []
-                  const label = it.section_label || null
-                  if (label && label !== (items[idx - 1]?.section_label || null)) {
-                    rows.push(<tr key={it.id + "-h"} style={rowNoBreak}><td className="no-print" style={sectionTd}></td><td colSpan={5} style={sectionTd}>■ {label}</td></tr>)
-                  }
-                  rows.push(
-                    <tr key={it.id} style={rowNoBreak}>
-                      <td className="no-print" style={td}>
-                        <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
-                      </td>
-                      <td style={td}>{it.product_name}</td>
-                      <td style={{ ...td, textAlign: "right" }}>{it.quantity}</td>
-                      <td style={{ ...td, textAlign: "right" }}>{it.list_price != null ? fmtYen(it.list_price) : "—"}</td>
-                      <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price)}</td>
-                      <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price * it.quantity)}</td>
-                    </tr>
-                  )
-                  if (showTotal && label && label !== (items[idx + 1]?.section_label || null)) {
-                    const sub = items.filter(x => (x.section_label || null) === label).reduce((n, x) => n + Number(x.price) * Number(x.quantity), 0)
-                    rows.push(<tr key={it.id + "-s"} style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", color: "#555" }}>{label} 小計</td><td style={{ ...td, textAlign: "right", color: "#555" }}>{fmtYen(sub)}</td></tr>)
-                  }
-                  return rows
-                })}
-              {Array.from({ length: Math.max(0, 10 - items.length) }).map((_, i) => (
-                <tr key={"e" + i} style={rowNoBreak}><td className="no-print" style={td}></td><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
-              ))}
-              {/* 小計・消費税・合計は tfoot にすると印刷時に複数ページそれぞれの末尾に
-                  繰り返し表示されて紛らわしいため、通常の tbody 行として明細の最後に1回だけ表示する */}
-              {showTotal && (
+            {(() => {
+              // 明細は、1行（見出し・小計つき）ごとの束にしておく。最後の1行と、小計・消費税・合計は、ひとつの塊にして、ページの切れ目で、離れないようにする
+              const groups: ReactNode[][] = items.map((it, idx) => {
+                const rows: ReactNode[] = []
+                const label = it.section_label || null
+                if (label && label !== (items[idx - 1]?.section_label || null)) {
+                  rows.push(<tr key={it.id + "-h"} style={rowNoBreak}><td className="no-print" style={sectionTd}></td><td colSpan={5} style={sectionTd}>■ {label}</td></tr>)
+                }
+                rows.push(
+                  <tr key={it.id} style={rowNoBreak}>
+                    <td className="no-print" style={td}>
+                      <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
+                    </td>
+                    <td style={td}>{it.product_name}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{it.quantity}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{it.list_price != null ? fmtYen(it.list_price) : "—"}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price * it.quantity)}</td>
+                  </tr>
+                )
+                if (showTotal && label && label !== (items[idx + 1]?.section_label || null)) {
+                  const sub = items.filter(x => (x.section_label || null) === label).reduce((n, x) => n + Number(x.price) * Number(x.quantity), 0)
+                  rows.push(<tr key={it.id + "-s"} style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", color: "#555" }}>{label} 小計</td><td style={{ ...td, textAlign: "right", color: "#555" }}>{fmtYen(sub)}</td></tr>)
+                }
+                return rows
+              })
+              return (
                 <>
-                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
-                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
-                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
+                  <tbody>
+                    {items.length === 0 ? <tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
+                      : groups.slice(0, -1).flat()}
+                  </tbody>
+                  <tbody style={rowNoBreak}>
+                    {groups.length > 0 && groups[groups.length - 1]}
+                    {Array.from({ length: Math.max(0, 10 - items.length) }).map((_, i) => (
+                      <tr key={"e" + i} style={rowNoBreak}><td className="no-print" style={td}></td><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
+                    ))}
+                    {/* 小計・消費税・合計は tfoot にすると印刷時に複数ページそれぞれの末尾に
+                        繰り返し表示されて紛らわしいため、通常の tbody 行として明細の最後に1回だけ表示する */}
+                    {showTotal && (
+                      <>
+                        <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
+                        <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
+                        <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
+                      </>
+                    )}
+                  </tbody>
                 </>
-              )}
-            </tbody>
+              )
+            })()}
           </table>
         )}
 
