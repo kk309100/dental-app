@@ -8,7 +8,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
-import { poolFromOrders } from "@/lib/po-pool"
+import { forceAddOrderItemToPool } from "@/lib/po-pool"
 import { markPoChanged, recalcPoTotal } from "@/lib/po-change-log"
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; delivered_at: string | null; total_price: number; delivery_number: string | null; invoice_id: string | null; note: string | null }
@@ -34,6 +34,9 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  // 受注処理が済んだ注文に商品を足したとき、保存のあとに出す「発注の確認」
+  const [postAdd, setPostAdd] = useState<{ id: string; name: string; orderQty: number; stock: number | null; qty: string }[] | null>(null)
+  const [postBusy, setPostBusy] = useState(false)
   const keySeq = useRef(0)
   const nextKey = () => "k" + (++keySeq.current)
 
@@ -123,6 +126,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       // 明細: 更新・追加・削除
       const keptIds = new Set(clean.filter(l => l.id).map(l => l.id as string))
       const addedIds: string[] = []
+      const addedInfo: { id: string; product_id: string | null; name: string; qty: number }[] = []
       const removed = original.filter(o => !keptIds.has(o.id)).map(o => o.id)
 
       // 削除する行に結びついた発注書の行を調べる。
@@ -154,7 +158,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       for (const l of clean) {
         const row = { product_id: l.product_id, product_name: l.product_name.trim() || null, quantity: Number(l.quantity), price: Number(l.price), note: l.note.trim() || null, lot_number: l.lot.trim() || null }
         if (l.id) { const { error: e } = await supabase.from("order_items").update(row).eq("id", l.id); if (e) throw new Error("明細の更新に失敗: " + e.message) }
-        else { const { data: ins, error: e } = await supabase.from("order_items").insert({ ...row, order_id: orderId }).select("id").single(); if (e) throw new Error("明細の追加に失敗: " + e.message); if (ins) addedIds.push(ins.id as string) }
+        else { const { data: ins, error: e } = await supabase.from("order_items").insert({ ...row, order_id: orderId }).select("id").single(); if (e) throw new Error("明細の追加に失敗: " + e.message); if (ins) { addedIds.push(ins.id as string); addedInfo.push({ id: ins.id as string, product_id: l.product_id, name: l.product_name.trim() || "商品", qty: Number(l.quantity) }) } }
       }
       if (removed.length) { const { error: e } = await supabase.from("order_items").delete().in("id", removed); if (e) throw new Error("明細の削除に失敗: " + e.message) }
 
@@ -236,16 +240,24 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
           })
         } catch { /* 記録のみ */ }
       }
-      // 受注処理が済んでいる注文（準備中など）に足した商品は、受注処理の画面に出ないので、ここで、在庫を見て、不足分を発注プールへ入れる
-      if (addedIds.length > 0 && !isDelivered && !UNPROCESSED.includes(order.status)) {
-        if (confirm(`追加した商品が ${addedIds.length}品 あります。${"\n"}在庫を確認して、足りない分を発注プールへ入れますか？${"\n"}（受注処理と同じ判定です。在庫が足りていれば、何もしません）`)) {
-          const exclude = new Set(Array.from(keptIds))
-          const r = await poolFromOrders([orderId], undefined, exclude)
-          const added = r.pos.reduce((n, p) => n + p.added_items, 0)
-          const msg = added > 0 ? `発注プールに ${added}品 を入れました。${r.skippedNoSupplier > 0 ? "\nうち仕入先が決まっていない商品は、発注プールで仕入先を設定してください。" : ""}` : "在庫が足りているので、発注プールには入れていません。"
-          if (r.errors.length) poNotes.push("・発注プールへの追加でエラー: " + r.errors.join(" / "))
-          else alert(msg)
+      // 受注処理が済んでいる注文（準備中など）に足した商品は、受注処理の画面に出ない。保存のあとに、発注する数を選ぶ画面を出す（在庫があっても、発注できる）
+      if (addedInfo.length > 0 && !isDelivered && !UNPROCESSED.includes(order.status)) {
+        const pids = Array.from(new Set(addedInfo.map(x => x.product_id).filter(Boolean) as string[]))
+        const stockById = new Map<string, { stock: number; managed: boolean }>()
+        if (pids.length) {
+          const { data: ps } = await supabase.from("products").select("id,stock,stock_managed").in("id", pids)
+          for (const p of ps || []) stockById.set(p.id, { stock: Number(p.stock || 0), managed: p.stock_managed !== false })
         }
+        const list = addedInfo.map(x => {
+          const st = x.product_id ? stockById.get(x.product_id) : undefined
+          const stock = st && st.managed ? st.stock : null
+          const short = stock == null ? x.qty : Math.max(0, x.qty - Math.max(0, stock))
+          return { id: x.id, name: x.name, orderQty: x.qty, stock, qty: String(short) }
+        })
+        if (poNotes.length) alert("注文を保存しました。\n発注書について、確認してください:\n" + poNotes.join("\n"))
+        setPostAdd(list)
+        setSaving(false)
+        return
       }
       if (poNotes.length) alert("注文を保存しました。\n発注書について、確認してください:\n" + poNotes.join("\n"))
       router.push("/admin/orders")
@@ -253,6 +265,21 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       setError((e as Error).message)
       setSaving(false)
     }
+  }
+
+  async function submitPostAdd() {
+    if (!postAdd) return
+    setPostBusy(true)
+    const errs: string[] = []
+    for (const r of postAdd) {
+      const q = Number(r.qty)
+      if (!(q > 0)) continue
+      const res = await forceAddOrderItemToPool(r.id, undefined, q)
+      if (!res.ok) errs.push("・" + r.name + ": " + res.error)
+    }
+    setPostBusy(false)
+    if (errs.length) { alert("入れられなかった商品があります:\n" + errs.join("\n")); return }
+    router.push("/admin/orders")
   }
 
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
@@ -347,6 +374,33 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
         <Link href="/admin/orders" className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50">キャンセル</Link>
         <button onClick={save} disabled={saving} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300">{saving ? "保存中…" : "✓ 保存"}</button>
       </div>
+
+      {postAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-xl p-4 space-y-3">
+            <div className="font-bold text-gray-900">追加した商品を、発注しますか？</div>
+            <p className="text-xs text-gray-600">この注文は、受注処理が済んでいるので、受注処理の画面には出ません。ここで、発注する数を決めてください（在庫があっても、発注できます）。0 にすると、発注しません。</p>
+            <table className="w-full text-[13px]">
+              <thead><tr className="text-[12px] text-gray-500 border-b border-gray-200"><th className="text-left px-1 py-1">商品名</th><th className="text-right px-1 py-1 w-14">注文</th><th className="text-right px-1 py-1 w-14">在庫</th><th className="text-right px-1 py-1 w-24">発注する数</th></tr></thead>
+              <tbody>
+                {postAdd.map(r => (
+                  <tr key={r.id} className="border-b border-gray-100">
+                    <td className="px-1 py-1">{r.name}</td>
+                    <td className="px-1 py-1 text-right tabular-nums">{r.orderQty}</td>
+                    <td className="px-1 py-1 text-right tabular-nums">{r.stock == null ? "−" : r.stock}</td>
+                    <td className="px-1 py-1"><input type="number" min={0} value={r.qty} onChange={e => setPostAdd(prev => prev ? prev.map(x => x.id === r.id ? { ...x, qty: e.target.value } : x) : prev)} className="w-full px-2 py-1 border border-gray-300 rounded text-right" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-[11px] text-gray-500">初めに入っている数は、「注文数 − 在庫」（足りない分）です。</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => router.push("/admin/orders")} disabled={postBusy} className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50">発注しない</button>
+              <button onClick={submitPostAdd} disabled={postBusy} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300">{postBusy ? "処理中…" : "発注プールへ入れる"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
