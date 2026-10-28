@@ -174,8 +174,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
           const exclude = new Set(Array.from(keptIds))
           const r = await poolFromOrders([orderId], undefined, exclude)
           const added = r.pos.reduce((n, p) => n + p.added_items, 0)
-          const msg = added > 0 ? `発注プールに ${added}品 を入れました。${r.skippedNoSupplier > 0 ? "
-" + "うち仕入先が決まっていない商品は、発注プールで仕入先を設定してください。" : ""}` : "在庫が足りているので、発注プールには入れていません。"
+          const msg = added > 0 ? `発注プールに ${added}品 を入れました。${r.skippedNoSupplier > 0 ? "\nうち仕入先が決まっていない商品は、発注プールで仕入先を設定してください。" : ""}` : "在庫が足りているので、発注プールには入れていません。"
           if (r.errors.length) poNotes.push("・発注プールへの追加でエラー: " + r.errors.join(" / "))
           else alert(msg)
         }
