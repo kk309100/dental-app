@@ -389,7 +389,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
                 : items.flatMap((it, idx) => {
                   const rows: ReactNode[] = []
                   if (it.section_label && it.section_label !== (items[idx - 1]?.section_label || null)) {
-                    rows.push(<tr key={it.id + "-h"} style={rowNoBreak}><td className="no-print" style={sectionTd}></td><td colSpan={2} style={sectionTd}>■ {it.section_label}</td></tr>)
+                    rows.push(<tr key={it.id + "-h"} style={rowNoBreak}><td className="no-print q-sec" style={sectionTd}></td><td colSpan={2} className="q-sec" style={sectionTd}>■ {it.section_label}</td></tr>)
                   }
                   rows.push(
                     <tr key={it.id}>
@@ -422,7 +422,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
                 const rows: ReactNode[] = []
                 const label = it.section_label || null
                 if (label && label !== (items[idx - 1]?.section_label || null)) {
-                  rows.push(<tr key={it.id + "-h"} style={rowNoBreak}><td className="no-print" style={sectionTd}></td><td colSpan={5} style={sectionTd}>■ {label}</td></tr>)
+                  rows.push(<tr key={it.id + "-h"} style={rowNoBreak}><td className="no-print q-sec" style={sectionTd}></td><td colSpan={5} className="q-sec" style={sectionTd}>■ {label}</td></tr>)
                 }
                 rows.push(
                   <tr key={it.id} style={rowNoBreak}>
@@ -438,7 +438,9 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
                 )
                 if (showTotal && label && label !== (items[idx + 1]?.section_label || null)) {
                   const sub = items.filter(x => (x.section_label || null) === label).reduce((n, x) => n + Number(x.price) * Number(x.quantity), 0)
-                  rows.push(<tr key={it.id + "-s"} style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", color: "#555" }}>{label} 小計</td><td style={{ ...td, textAlign: "right", color: "#555" }}>{fmtYen(sub)}</td></tr>)
+                  rows.push(<tr key={it.id + "-s"} style={rowNoBreak}><td className="no-print q-sub" style={subTd}></td><td colSpan={4} className="q-sub" style={{ ...subTd, textAlign: "right" }}>{label} 小計</td><td className="q-sub" style={{ ...subTd, textAlign: "right" }}>{fmtYen(sub)}</td></tr>)
+                  // 次の元見積との間に、すこし間をあける
+                  if (items[idx + 1]) rows.push(<tr key={it.id + "-g"} style={rowNoBreak}><td className="no-print q-gap" style={gapTd}></td><td colSpan={5} className="q-gap" style={gapTd}></td></tr>)
                 }
                 return rows
               })
@@ -486,6 +488,17 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
           nav { display: none !important; }
           .print-area { padding: 12mm !important; max-width: none !important; }
         }
+        /* admin-base.css が、表のセルの下線・余白・文字の大きさを !important で固定しているため、見出し・小計・間の行だけ、上書きする */
+        .print-area table td.q-sec, .print-area table td.q-sub {
+          font-size: 12px !important;
+          font-weight: 700 !important;
+          padding: 6px 8px !important;
+          color: #0f172a !important;
+          -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        }
+        .print-area table td.q-sec { background: #eef2f7 !important; border-top: 1.5px solid #64748b !important; border-bottom: 1px solid #cbd5e1 !important; }
+        .print-area table td.q-sub { background: #f8fafc !important; border-top: 1px solid #64748b !important; border-bottom: 1.5px solid #64748b !important; }
+        .print-area table td.q-gap { border: none !important; padding: 0 !important; height: 10px !important; font-size: 0 !important; background: transparent !important; }
         @page { size: A4 portrait; margin: 0; }
       `}</style>
     </>
@@ -504,7 +517,12 @@ const totalBox: React.CSSProperties = { display: "flex", justifyContent: "space-
 const table: React.CSSProperties = { width: "100%", borderCollapse: "collapse", marginTop: 4 }
 const th: React.CSSProperties = { borderBottom: "2px solid #111", padding: "6px 8px", textAlign: "left", fontSize: 11, fontWeight: 700, background: "#fafafa" }
 const td: React.CSSProperties = { borderBottom: "1px solid #eee", padding: "5px 8px", fontSize: 11 }
-const sectionTd: React.CSSProperties = { background: "#f3f4f6", borderBottom: "1px solid #d1d5db", padding: "5px 8px", fontSize: 11, fontWeight: 700, color: "#111" }
+const printColor = { WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties
+// 合算見積の、元の見積書ごとの見出し（左に太い線、薄い地色）
+const sectionTd: React.CSSProperties = { ...printColor, background: "#eef2f7", borderTop: "1.5px solid #64748b", borderBottom: "1px solid #cbd5e1", padding: "6px 8px", fontSize: 12, fontWeight: 700, color: "#0f172a" }
+// 元の見積書ごとの小計（濃く・太く。上下に線）
+const subTd: React.CSSProperties = { ...printColor, background: "#f8fafc", borderTop: "1px solid #64748b", borderBottom: "1.5px solid #64748b", padding: "6px 8px", fontSize: 12, fontWeight: 700, color: "#0f172a" }
+const gapTd: React.CSSProperties = { border: "none", padding: 0, height: 10, lineHeight: "10px", fontSize: 0 }
 const tdTotal: React.CSSProperties = { borderTop: "2px solid #111", padding: "8px", fontSize: 13, fontWeight: 700 }
 // 印刷時、1行の途中でページが分割されないようにする（Chrome等はtr単位のbreak-insideに対応）
 const rowNoBreak: React.CSSProperties = { breakInside: "avoid", pageBreakInside: "avoid" }
