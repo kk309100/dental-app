@@ -40,6 +40,7 @@ export default function QuotesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [merging, setMerging] = useState(false)
+  const [combining, setCombining] = useState(false)
 
   useEffect(() => { fetchData() }, [])
 
@@ -63,6 +64,55 @@ export default function QuotesPage() {
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
   function clearSelection() { setSelectedIds(new Set()) }
+
+  // 選択した複数の見積書を合算した、新しい見積書を作る（同じ医院のものだけ）。
+  // 元の見積書は、そのまま残す。明細は、元の見積書の順に並べて写す（同じ商品も、まとめずに別の行のまま）。
+  async function combineQuotes() {
+    const targets = quotes.filter(q => selectedIds.has(q.id))
+    if (targets.length < 2) { alert("2件以上選択してください"); return }
+    if (new Set(targets.map(q => q.clinic_id)).size > 1) { alert("異なる医院の見積書は合算できません。同じ医院の見積書だけを選択してください。"); return }
+    const sorted = [...targets].sort((a, b) => (a.issue_date || "").localeCompare(b.issue_date || "") || a.quote_number.localeCompare(b.quote_number))
+    const nums = sorted.map(q => q.quote_number).join("、")
+    if (!confirm(`${sorted.length}件の見積書を合算して、新しい見積書を作ります。\n\n元になる見積書: ${nums}\n\n元の見積書は、そのまま残ります。よろしいですか？`)) return
+
+    setCombining(true)
+    try {
+      const rows: { product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; cost: number | null }[] = []
+      for (const q of sorted) {
+        const { data: its, error: ie } = await supabase.from("quote_items").select("product_id,product_name,quantity,price,list_price,cost").eq("quote_id", q.id).order("sort_order")
+        if (ie) throw new Error(ie.message)
+        for (const it of its || []) rows.push(it as (typeof rows)[number])
+      }
+      if (rows.length === 0) throw new Error("明細がありません")
+      const subtotal = rows.reduce((n, r) => n + Number(r.price || 0) * Number(r.quantity || 0), 0)
+      const tax = calcTax(subtotal)
+      const issue = new Date()
+      const issueDate = `${issue.getFullYear()}-${String(issue.getMonth() + 1).padStart(2, "0")}-${String(issue.getDate()).padStart(2, "0")}`
+      const quote_number = await generateQuoteNumber(issue)
+      const { data: nq, error: e1 } = await supabase.from("quotes").insert({
+        clinic_id: sorted[0].clinic_id,
+        title: "合算見積",
+        quote_number,
+        issue_date: issueDate,
+        expiry_date: defaultExpiryDate(issue),
+        subtotal, tax, total: subtotal + tax,
+        status: "draft",
+        notes: `${nums} を合算（元の見積書は、そのまま残しています）`,
+      }).select().single()
+      if (e1 || !nq) throw new Error(e1?.message || "見積書の作成に失敗")
+      const { error: e2 } = await supabase.from("quote_items").insert(rows.map((r, i) => ({ ...r, quote_id: nq.id, sort_order: i })))
+      if (e2) {
+        await supabase.from("quotes").delete().eq("id", nq.id)
+        throw new Error("明細の保存に失敗: " + e2.message)
+      }
+      clearSelection()
+      router.push(`/admin/quotes/${nq.id}`)
+    } catch (e) {
+      alert("合算に失敗しました: " + (e as Error).message)
+    } finally {
+      setCombining(false)
+    }
+  }
 
   // 選択した複数の見積書を1つにまとめる（同じ医院のものだけ）。
   // 発行日が一番早い見積書を残し、他の明細をそちらへ移動、金額を合算して
@@ -459,11 +509,19 @@ export default function QuotesPage() {
         <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
           <span className="text-[12px] text-indigo-900 font-bold">{selectedIds.size}件選択中</span>
           <button
+            onClick={combineQuotes}
+            disabled={combining || merging || selectedIds.size < 2}
+            className="text-[12px] px-3 py-1.5 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700 disabled:opacity-50"
+            title="元の見積書は残したまま、合算した見積書を新しく作る"
+          >
+            {combining ? "作成中…" : "➕ 合算見積を新しく作る（元は残す）"}
+          </button>
+          <button
             onClick={mergeQuotes}
-            disabled={merging || selectedIds.size < 2}
+            disabled={combining || merging || selectedIds.size < 2}
             className="text-[12px] px-3 py-1.5 bg-indigo-600 text-white font-bold rounded hover:bg-indigo-700 disabled:opacity-50"
           >
-            {merging ? "統合中…" : "🔗 選択した見積書を1つに統合する"}
+            {merging ? "統合中…" : "🔗 1つに統合する（元の見積書は削除）"}
           </button>
           <button onClick={clearSelection} className="text-[12px] text-gray-500 underline">選択解除</button>
         </div>
