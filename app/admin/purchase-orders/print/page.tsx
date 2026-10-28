@@ -154,7 +154,7 @@ function BulkPrint() {
                 </tr>
               </tbody>
             </table>
-            <table className="po-items-table" style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 15 }}>
+            <table className="po-items-table" style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 {/* ページをまたぐと印刷時にthead部分が各ページ先頭へ自動で繰り返されるため、
                     ここに発注書番号を入れておくと2ページ目以降にも番号が出る */}
@@ -207,12 +207,12 @@ function BulkPrint() {
         }
         .print-page.print-page table.po-items-table td,
         .print-page.print-page table.po-items-table th {
-          font-size: 15px !important;
+          font-size: 13px !important;
         }
         .print-page.print-page table.po-items-table td div,
         .print-page.print-page table.po-items-table td span,
         .print-page.print-page table.po-items-table td p {
-          font-size: 13px !important;
+          font-size: 11px !important;
         }
         @media print {
           .no-print { display: none !important; }
@@ -238,5 +238,5 @@ const th: React.CSSProperties = { padding: "7px 8px", textAlign: "left", borderB
 const tdL: React.CSSProperties = { padding: "7px 8px", background: "#f9fafb", fontSize: 12, lineHeight: 1.5, color: "#555", width: 80, borderRight: "1px solid #eee" }
 const tdR: React.CSSProperties = { padding: "7px 8px", fontSize: 12, lineHeight: 1.5, color: "#111", borderRight: "1px solid #eee" }
 const tdC: React.CSSProperties = { padding: "7px 8px", fontSize: 13, lineHeight: 1.5 }
-const thBig: React.CSSProperties = { padding: "9px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 15, lineHeight: 1.5, color: "#555" }
-const tdCBig: React.CSSProperties = { padding: "9px 8px", fontSize: 15, lineHeight: 1.5 }
+const thBig: React.CSSProperties = { padding: "9px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 13, lineHeight: 1.5, color: "#555" }
+const tdCBig: React.CSSProperties = { padding: "9px 8px", fontSize: 13, lineHeight: 1.5 }
