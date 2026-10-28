@@ -20,6 +20,7 @@ type PO = {
   sent_method: string | null
   sent_at: string | null
   created_at: string
+  change_log?: string | null
 }
 type Supplier = { id: string; name: string }
 type POItem = { id: string; purchase_order_id: string; product_name: string | null; quantity: number; unit_price: number | null; received_quantity?: number | null }
@@ -270,6 +271,7 @@ export default function PurchaseOrdersListPage() {
                     {matchedProduct && <div className="text-[11px] text-blue-600 mt-0.5">🔍 {matchedProduct.product_name}</div>}
                   </td>
                   <td className="px-2 py-1.5 text-center">
+                    {p.change_log && <div className="text-[11px] font-bold mb-0.5" style={{ color: "#b45309" }} title={p.change_log}>⚠ 変更あり（要連絡）</div>}
                     {lineStatus && lsc ? (
                       <>
                         <span className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ background: lsc.bg, color: lsc.color }}>{lineStatus}</span>

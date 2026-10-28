@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react"
 import { cancelPoLineReceipt, receiveAllPoRemaining, countPoRemaining } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
+import { clearPoChanged } from "@/lib/po-change-log"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
@@ -13,7 +14,7 @@ import Seal from "@/app/components/Seal"
 type PO = {
   id: string; po_number: string | null; supplier_id: string | null; status: string
   ordered_at: string | null; expected_at: string | null; total_amount: number | null
-  note: string | null; sent_method: string | null; sent_at: string | null
+  note: string | null; sent_method: string | null; sent_at: string | null; change_log?: string | null
 }
 type Item = {
   id: string; purchase_order_id: string; product_id: string | null; product_name: string | null
@@ -611,6 +612,14 @@ ALTER TABLE IF EXISTS product_suppliers DISABLE ROW LEVEL SECURITY;`}</pre>
         {editMode && (
           <div className="no-print" style={{ marginTop: 10 }}>
             <button onClick={addItem} className="text-xs px-3 py-1.5 bg-white border border-gray-300 rounded hover:bg-gray-50">＋ 明細行を追加</button>
+          </div>
+        )}
+
+        {po.change_log && (
+          <div className="no-print" style={{ marginTop: 16, padding: 10, background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 4, fontSize: 12, color: "#92400e" }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠ 変更あり（注文の編集で、この発注書の行が変わりました。仕入先に連絡してください）</div>
+            <div style={{ whiteSpace: "pre-wrap" }}>{po.change_log}</div>
+            <button onClick={async () => { await clearPoChanged(po.id); await fetchData({ silent: true }) }} className="text-xs px-3 py-1 mt-2 bg-white border border-amber-300 rounded hover:bg-amber-50">仕入先に連絡した（印を消す）</button>
           </div>
         )}
 
