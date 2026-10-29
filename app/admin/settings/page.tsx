@@ -54,6 +54,9 @@ export default function SettingsPage() {
   // 消費税の端数処理（四捨五入 / 切り捨て / 切り上げ）。company_settings.tax_rounding 列が無いときは、SQLの実行が必要
   const [taxRounding, setTaxRoundingState] = useState("round")
   const [taxColumnMissing, setTaxColumnMissing] = useState(false)
+  // 消費税を出す単位（請求書ごとに1回 / 納品書ごとに出して合計）。company_settings.tax_basis 列が無いときは、SQLの実行が必要
+  const [taxBasis, setTaxBasisState] = useState("invoice")
+  const [basisColumnMissing, setBasisColumnMissing] = useState(false)
 
   useEffect(() => { fetchData() }, [])
 
@@ -67,6 +70,7 @@ export default function SettingsPage() {
       }
     } else if (data) {
       if ("tax_rounding" in data) setTaxRoundingState(data.tax_rounding || "round"); else setTaxColumnMissing(true)
+      if ("tax_basis" in data) setTaxBasisState(data.tax_basis || "invoice"); else setBasisColumnMissing(true)
       setForm({
         company_name: data.company_name || "",
         postal_code: data.postal_code || "",
@@ -98,6 +102,7 @@ export default function SettingsPage() {
     }
     const payload: Record<string, unknown> = { ...form, id: 1, updated_at: new Date().toISOString() }
     if (!taxColumnMissing) payload.tax_rounding = taxRounding
+    if (!basisColumnMissing) payload.tax_basis = taxBasis
     const { error } = await supabase.from("company_settings").upsert(payload, { onConflict: "id" })
     if (error) {
       setMsg("保存失敗: " + error.message)
@@ -179,6 +184,21 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
+        <div className="pt-2 border-t border-gray-100">
+          <p className="text-xs text-gray-500 mb-1">請求書の消費税を、どの単位で出すかです。</p>
+          {basisColumnMissing ? (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">この項目を使うには、データベースに列を追加する必要があります（db/migrations/2026-10-29_add_tax_basis.sql）。</p>
+          ) : (
+            <div className="flex gap-4 flex-wrap">
+              {[["invoice", "請求書ごと（請求書の合計に、1回だけ）"], ["slip", "納品書ごと（納品書ごとに税額を出して、合計）"]].map(([v, label]) => (
+                <label key={v} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  <input type="radio" name="tax_basis" checked={taxBasis === v} onChange={() => setTaxBasisState(v)} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
       </Section>
 
       <Section title="帳票デザイン">

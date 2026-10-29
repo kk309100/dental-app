@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase, fetchAllData } from "@/lib/supabase"
-import { calcBillingPeriod, calcDueDate, calcTax, generateInvoiceNumber, fmtYen, fmtDate, ymd } from "@/lib/invoice"
+import { calcBillingPeriod, calcDueDate, calcInvoiceTax, generateInvoiceNumber, fmtYen, fmtDate, ymd } from "@/lib/invoice"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -67,7 +67,7 @@ export default function BulkInvoicePage() {
           })
         // 税計算規約: orders.total_price は税抜（invoices/create/page.tsx と同じ）
         const subtotal = ords.reduce((s, o) => s + (o.total_price || 0), 0)
-        const tax = calcTax(subtotal)
+        const tax = calcInvoiceTax(ords.map((o) => o.total_price || 0))
         return { clinic: c, orders: ords, subtotal, tax, total: subtotal + tax, selected: selectedClinics.has(c.id) }
       })
   }, [clinics, orders, issueDate, closingFilter, selectedClinics])

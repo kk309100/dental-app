@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase, fetchAllData } from "@/lib/supabase"
-import { calcBillingPeriod, calcDueDate, calcTax, generateInvoiceNumber, fmtYen, fmtDate, ymd } from "@/lib/invoice"
+import { calcBillingPeriod, calcDueDate, calcInvoiceTax, generateInvoiceNumber, fmtYen, fmtDate, ymd } from "@/lib/invoice"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -87,7 +87,8 @@ export default function CreateInvoicePage() {
     () => candidateOrders.filter((o) => selected.has(o.id)).reduce((s, o) => s + (o.total_price || 0), 0),
     [candidateOrders, selected]
   )
-  const tax = calcTax(subtotal)
+  // 消費税: 設定に合わせて、請求書の合計に1回 / 納品書ごとに出して合計
+  const tax = calcInvoiceTax(candidateOrders.filter((o) => selected.has(o.id)).map((o) => o.total_price || 0))
   const total = subtotal + tax
   const dueDate = calcDueDate(new Date(issueDate))
 

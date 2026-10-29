@@ -15,7 +15,7 @@ import { supabase } from "@/lib/supabase"
 import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@/lib/company"
 import {
   fmtYen, fmtDate, parseDbDate, getClinicPrefix, getCorporateLabel,
-  EXPENSE_CATEGORIES, normalizeExpenseCategory, isReducedTax, calcTaxFor, getTaxRounding,
+  EXPENSE_CATEGORIES, normalizeExpenseCategory, isReducedTax, calcTaxFor, getTaxRounding, getTaxBasis,
   type ExpenseCategory,
 } from "@/lib/invoice"
 import Seal from "@/app/components/Seal"
@@ -158,10 +158,21 @@ export default function DetailedInvoicePrint({ params }: { params: Promise<{ inv
   // 税率内訳（10% / 8%）
   const taxBreakdown = useMemo(() => {
     let amount10 = 0, amount8 = 0
+    const bySlip = new Map<string, { a10: number; a8: number }>()
     lines.forEach(l => {
       if (l.is_reduced) amount8 += l.amount
       else amount10 += l.amount
+      const k = l.delivery_number
+      const cur = bySlip.get(k) || { a10: 0, a8: 0 }
+      if (l.is_reduced) cur.a8 += l.amount; else cur.a10 += l.amount
+      bySlip.set(k, cur)
     })
+    // 税額を出す単位: 納品書ごとの設定なら、納品書ごとに税額を出して合計する
+    if (getTaxBasis() === "slip") {
+      let tax10 = 0, tax8 = 0
+      bySlip.forEach(v => { tax10 += calcTaxFor(v.a10, 0.10, getTaxRounding()); tax8 += calcTaxFor(v.a8, 0.08, getTaxRounding()) })
+      return { amount10, tax10, amount8, tax8 }
+    }
     return {
       amount10,
       tax10: calcTaxFor(amount10, 0.10, getTaxRounding()),

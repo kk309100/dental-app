@@ -68,14 +68,36 @@ export function ensureTaxRounding(): Promise<void> {
   if (!_taxLoaded) {
     _taxLoaded = (async () => {
       try {
-        const { data } = await supabase.from("company_settings").select("tax_rounding").eq("id", 1).single()
-        setTaxRounding((data as { tax_rounding?: string } | null)?.tax_rounding)
+        const r = await supabase.from("company_settings").select("tax_rounding,tax_basis").eq("id", 1).single()
+        if (r.error) {
+          // tax_basis の列がまだ無いときは、端数の設定だけ読む
+          const r2 = await supabase.from("company_settings").select("tax_rounding").eq("id", 1).single()
+          setTaxRounding((r2.data as { tax_rounding?: string } | null)?.tax_rounding)
+        } else {
+          const d = r.data as { tax_rounding?: string; tax_basis?: string } | null
+          setTaxRounding(d?.tax_rounding)
+          setTaxBasis(d?.tax_basis)
+        }
       } catch { /* 設定が読めないときは四捨五入のまま */ }
     })()
   }
   return _taxLoaded
 }
 export function resetTaxRoundingCache() { _taxLoaded = null }
+
+// 請求書の消費税を出す単位は「自社情報設定」で選ぶ。company_settings.tax_basis に保存する。
+//   invoice … 請求書の税抜合計に、1回だけ税率を掛けて、端数を処理する（これまでの形）
+//   slip    … 納品書ごとに税額を出して（端数を処理して）、その合計を請求書の税額にする
+// 設定が無い・読めないときは invoice。
+export type TaxBasis = "invoice" | "slip"
+let _taxBasis: TaxBasis = "invoice"
+export function setTaxBasis(v: string | null | undefined) { _taxBasis = v === "slip" ? "slip" : "invoice" }
+export function getTaxBasis(): TaxBasis { return _taxBasis }
+/** 請求書の消費税。slipSubtotals = 請求書に入れる、納品書ごとの税抜合計 */
+export function calcInvoiceTax(slipSubtotals: number[]): number {
+  if (_taxBasis === "slip") return slipSubtotals.reduce((n, s) => n + calcTax(s), 0)
+  return calcTax(slipSubtotals.reduce((n, s) => n + s, 0))
+}
 if (typeof window !== "undefined") void ensureTaxRounding()
 export function calcTax(subtotal: number): number {
   const raw = subtotal * TAX_RATE
