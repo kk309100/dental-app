@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase, fetchAllData } from "@/lib/supabase"
+import { romajiAlt } from "@/lib/romaji"
 import { calcBillingPeriod, calcDueDate, calcInvoiceTax, generateInvoiceNumber, fmtYen, fmtDate, ymd } from "@/lib/invoice"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-type Clinic = { id: string; name: string; corporate_name?: string | null; closing_day?: string | null }
+type Clinic = { id: string; name: string; corporate_name?: string | null; closing_day?: string | null; clinic_code?: string | null }
 type Order = {
   id: string
   clinic_id: string
@@ -19,6 +20,55 @@ type Order = {
 
 // 「納品済」「納品済み」両方を請求書発行対象として扱う（DB の表記ゆれを吸収）
 const TARGET_STATUSES = ["納品済み", "納品済"]
+
+const toKata = (t: string) => t.normalize("NFKC").toLowerCase().replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60)).replace(/\s+/g, " ").trim()
+const clinicLabel = (c: Clinic) => (c.corporate_name ? `${c.corporate_name} ${c.name}` : c.name)
+
+function ClinicSearchBox({ clinics, value, onChange }: { clinics: Clinic[]; value: string; onChange: (id: string) => void }) {
+  const [q, setQ] = useState("")
+  const [open, setOpen] = useState(false)
+  const selected = clinics.find(c => c.id === value)
+  const hits = useMemo(() => {
+    const tokens = toKata(q).split(" ").filter(Boolean)
+    if (tokens.length === 0) return clinics.slice(0, 30)
+    return clinics.filter(c => {
+      const key = toKata(`${c.corporate_name || ""} ${c.name} ${c.clinic_code || ""}`)
+      return tokens.every(t => key.includes(t) || (romajiAlt(t) ? key.includes(toKata(romajiAlt(t) as string)) : false))
+    }).slice(0, 30)
+  }, [clinics, q])
+
+  if (selected && !open) {
+    return (
+      <div style={{ ...input, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <span style={{ fontWeight: 700 }}>{clinicLabel(selected)}<span style={{ fontWeight: 400, color: "#666" }}>（締日: {selected.closing_day || "月末"}）</span></span>
+        <button type="button" onClick={() => { onChange(""); setQ(""); setOpen(true) }}
+          style={{ padding: "2px 10px", fontSize: 12, border: "1px solid #ccc", borderRadius: 6, background: "#fff", cursor: "pointer" }}>変更</button>
+      </div>
+    )
+  }
+  return (
+    <div style={{ position: "relative" }}>
+      <input type="text" autoFocus={open} value={q} placeholder="医院名・かな・ローマ字・医院コードで検索"
+        onChange={e => { setQ(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        style={input} />
+      {open && (
+        <div style={{ position: "absolute", zIndex: 20, left: 0, right: 0, top: "100%", marginTop: 2, maxHeight: 320, overflowY: "auto", background: "#fff", border: "1px solid #ccc", borderRadius: 8, boxShadow: "0 4px 12px rgba(0,0,0,0.12)" }}>
+          {hits.length === 0 ? (
+            <div style={{ padding: "10px 12px", color: "#999", fontSize: 13 }}>該当する医院がありません</div>
+          ) : hits.map(c => (
+            <button key={c.id} type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onChange(c.id); setOpen(false); setQ("") }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "8px 12px", fontSize: 13, background: "#fff", border: "none", borderBottom: "1px solid #f0f0f0", cursor: "pointer" }}>
+              {clinicLabel(c)}<span style={{ color: "#888", marginLeft: 6 }}>{c.clinic_code ? `[${c.clinic_code}] ` : ""}締日: {c.closing_day || "月末"}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function CreateInvoicePage() {
   const router = useRouter()
@@ -41,7 +91,7 @@ export default function CreateInvoicePage() {
   async function fetchData() {
     setLoading(true)
     const [c, o] = await Promise.all([
-      supabase.from("clinics").select("id,name,corporate_name,closing_day").order("name").limit(50000),
+      supabase.from("clinics").select("id,name,corporate_name,closing_day,clinic_code").order("name").limit(50000),
       fetchAllData("orders", "id,clinic_id,status,created_at,total_price,delivery_number,invoice_id"),
     ])
     setClinics(c.data || [])
@@ -155,14 +205,7 @@ export default function CreateInvoicePage() {
       {/* ステップ1: 医院選択 */}
       <div style={section}>
         <p style={sectionLabel}>① 医院</p>
-        <select value={clinicId} onChange={(e) => setClinicId(e.target.value)} style={input}>
-          <option value="">医院を選択してください</option>
-          {clinics.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.corporate_name ? `${c.corporate_name} ${c.name}` : c.name}（締日: {c.closing_day || "月末"}）
-            </option>
-          ))}
-        </select>
+        <ClinicSearchBox clinics={clinics} value={clinicId} onChange={setClinicId} />
       </div>
 
       {/* ステップ2: 期間 */}
