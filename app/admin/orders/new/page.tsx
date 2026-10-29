@@ -69,7 +69,7 @@ function NewOrderPage() {
   const [status, setStatus] = useState<string>(paperMode ? "納品済み" : "注文受付")
   const [deductStock, setDeductStock] = useState(true)
   // 保存と同時に受注処理もする（準備中にして、「発注する」の行を発注プールへ入れる）。在庫の数字はあてにならないので、手配は行ごとに選ぶ
-  const [autoProcess, setAutoProcess] = useState(true)
+  const [autoProcess, setAutoProcess] = useState(false)
   const [stockById, setStockById] = useState<Map<string, { stock: number; managed: boolean }>>(new Map())
   const [backfill, setBackfill] = useState(false) // 過去分をまとめて登録する（納品書は開かず続けて入力）
   const [savedMsg, setSavedMsg] = useState("")
