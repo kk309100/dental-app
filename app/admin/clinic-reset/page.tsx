@@ -4,6 +4,7 @@
 // テスト・試用終了後にデータを初期化するための管理者専用ページ
 
 import { useEffect, useState } from "react"
+import ClinicSelect from "@/app/components/ClinicSelect"
 import { supabase } from "@/lib/supabase"
 
 type Clinic = { id: string; name: string }
@@ -108,12 +109,7 @@ export default function ClinicResetPage() {
         <p style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 10 }}>
           Step 1：リセットする医院を選択
         </p>
-        <select value={selectedId}
-          onChange={e => { setSelectedId(e.target.value); setCounts(null); setDone(null); setConfirm("") }}
-          style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: "1.5px solid #e5e7eb", fontSize: 15, color: "#111827" }}>
-          <option value="">医院を選択…</option>
-          {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <ClinicSelect clinics={clinics} value={selectedId} onChange={id => { setSelectedId(id); setCounts(null); setDone(null); setConfirm("") }} style={{ width: "100%", padding: "10px 12px", fontSize: 15 }} className="block w-full" />
         {selectedId && (
           <button onClick={() => countData(selectedId)} disabled={counting}
             style={{

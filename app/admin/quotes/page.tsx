@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import ClinicSelect from "@/app/components/ClinicSelect"
 import { romajiAlt } from "@/lib/romaji"
 import { supabase } from "@/lib/supabase"
 import { fmtYen, fmtDate, calcTax } from "@/lib/invoice"
@@ -498,10 +499,7 @@ export default function QuotesPage() {
             {Object.entries(QUOTE_STATUSES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </optgroup>
         </select>
-        <select value={clinicFilter} onChange={(e) => setClinicFilter(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white max-w-[200px]">
-          <option value="all">全医院</option>
-          {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <ClinicSelect clinics={clinics} value={clinicFilter} onChange={setClinicFilter} allValue="all" allLabel="全医院" style={{ maxWidth: 200 }} />
       </div>
 
       {/* 一括操作バー */}

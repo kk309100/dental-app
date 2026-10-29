@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import ClinicSelect from "@/app/components/ClinicSelect"
 import { deleteInvoice } from "@/lib/invoice-delete"
 import { supabase } from "@/lib/supabase"
 import { fmtYen, fmtDate, INVOICE_STATUSES, type InvoiceStatus } from "@/lib/invoice"
@@ -225,10 +226,7 @@ export default function InvoicesPage() {
           <option value="overdue">⚠ 延滞</option>
           {Object.entries(INVOICE_STATUSES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-        <select value={clinicFilter} onChange={(e) => setClinicFilter(e.target.value)} style={selectStyle}>
-          <option value="all">すべての医院</option>
-          {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <ClinicSelect clinics={clinics} value={clinicFilter} onChange={setClinicFilter} allValue="all" allLabel="すべての医院" style={{ maxWidth: 220 }} />
         <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={selectStyle} />
         <span style={{ color: "#9ca3af", fontSize: 12 }}>〜</span>
         <input type="date" value={to} onChange={e => setTo(e.target.value)} style={selectStyle} />

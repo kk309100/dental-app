@@ -4,6 +4,7 @@
 // 発行済・一部入金の請求書を一覧し、素早く入金記録できる
 
 import { useEffect, useMemo, useState } from "react"
+import ClinicSelect from "@/app/components/ClinicSelect"
 import { supabase } from "@/lib/supabase"
 import { fmtYen, fmtDate, parseDbDate, type InvoiceStatus } from "@/lib/invoice"
 import Link from "next/link"
@@ -183,10 +184,7 @@ export default function PaymentsPage() {
           placeholder="請求書番号・医院名で検索"
           style={inputStyle}
         />
-        <select value={clinicFilter} onChange={e => setClinicFilter(e.target.value)} style={selectStyle}>
-          <option value="all">すべての医院</option>
-          {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <ClinicSelect clinics={clinics} value={clinicFilter} onChange={setClinicFilter} allValue="all" allLabel="すべての医院" style={{ maxWidth: 220 }} />
       </div>
 
       {/* 一覧 */}

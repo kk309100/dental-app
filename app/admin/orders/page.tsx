@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
+import ClinicSelect from "@/app/components/ClinicSelect"
 import { withStockFlag } from "@/lib/stock-managed"
 import { cancelPoLineReceipt, receivePoLine, receiveWithoutPo } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
@@ -956,10 +957,7 @@ function AdminOrdersPage() {
             {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
           </optgroup>
         </select>
-        <select value={clinicFilter} onChange={(e) => setClinicFilter(e.target.value)} className="col-span-2 md:col-span-1 order-last md:order-none w-full md:w-auto px-2 py-1.5 border border-gray-200 rounded text-sm bg-white md:max-w-[200px]">
-          <option value="all">全医院</option>
-          {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <ClinicSelect clinics={clinics} value={clinicFilter} onChange={setClinicFilter} allValue="all" allLabel="全医院" className="col-span-2 md:col-span-1 order-last md:order-none w-full md:w-auto md:max-w-[200px]" style={{ width: "100%" }} />
         <select value={bizStateFilter} onChange={(e) => setBizStateFilter(e.target.value as "all" | BizState)} className="w-full md:w-auto px-2 py-1.5 border border-gray-200 rounded text-sm bg-white">
           <option value="all">業務状態すべて</option>
           {(Object.keys(BIZ_BADGES) as BizState[]).map((s) => (

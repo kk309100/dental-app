@@ -14,6 +14,7 @@
 //   その医院の最初のDentHub注文日より前までに絞らないと、実績が二重に記録される）
 
 import { useState } from "react"
+import ClinicSelect from "@/app/components/ClinicSelect"
 import Link from "next/link"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
@@ -226,14 +227,7 @@ export default function ImportHistoryPage() {
               {unmatchedNames.map(name => (
                 <div key={name} className="flex items-center gap-2 text-sm">
                   <span className="text-gray-700">「{name}」→</span>
-                  <select
-                    className="border rounded px-2 py-1 text-sm"
-                    value={clinicOverride[name] || ""}
-                    onChange={e => { setClinicOverride(prev => ({ ...prev, [name]: e.target.value })); setExistingKeys(null) }}
-                  >
-                    <option value="">医院を選択…</option>
-                    {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  <ClinicSelect clinics={clinics} value={clinicOverride[name] || ""} onChange={id => { setClinicOverride(prev => ({ ...prev, [name]: id })); setExistingKeys(null) }} />
                 </div>
               ))}
             </div>

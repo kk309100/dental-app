@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import ClinicSelect from "@/app/components/ClinicSelect"
 import { romajiAlt } from "@/lib/romaji"
 import { supabase } from "@/lib/supabase"
 import { parseCSV, toCSV, downloadCSV } from "@/lib/csv"
@@ -204,11 +205,7 @@ export default function ClinicItemsPage() {
       <div className="rounded-xl p-4 space-y-3" style={{ background: "#f0fdf4", border: "1.5px solid #bbf7d0" }}>
         <p className="text-sm font-bold text-green-800">📥 CSV一括インポート（初期セットアップ用）</p>
         <div className="flex flex-wrap gap-2 items-center">
-          <select value={importClinicId} onChange={e => setImportClinicId(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white" style={{ minWidth: 180 }}>
-            <option value="">医院を選択…</option>
-            {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <ClinicSelect clinics={clinics} value={importClinicId} onChange={setImportClinicId} style={{ minWidth: 180, padding: "8px 12px", borderRadius: 8 }} />
           <button onClick={downloadTemplate}
             className="px-3 py-2 rounded-lg border text-sm"
             style={{ background: "#fff", borderColor: "#d1d5db", color: "#374151" }}>
@@ -362,11 +359,7 @@ export default function ClinicItemsPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
                 <label style={{ fontSize: 12, color: "#6b7280" }}>医院 <span style={{ color: "#ef4444" }}>*</span></label>
-                <select value={addClinicId} onChange={e => setAddClinicId(e.target.value)}
-                  style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #e5e7eb", fontSize: 14, marginTop: 4 }}>
-                  <option value="">医院を選択…</option>
-                  {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <ClinicSelect clinics={clinics} value={addClinicId} onChange={setAddClinicId} style={{ width: "100%", padding: "8px 10px", fontSize: 14 }} className="block w-full" />
               </div>
               {[
                 { key: "product_name", label: "商品名", required: true },

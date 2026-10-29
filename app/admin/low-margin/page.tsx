@@ -4,6 +4,7 @@
 // 利益がマイナス、または、利益率が基準（初期 5%）未満の売上明細を抜き出す。
 // 仕入れ値の決め方（商品ごと）: 売上日以前で、いちばん新しい入荷の単価 → 無ければ、売上日より後で、いちばん古い入荷の単価 → 無ければ、商品の「仕入価格」。
 import { useEffect, useMemo, useState } from "react"
+import ClinicSelect from "@/app/components/ClinicSelect"
 import Link from "next/link"
 import { fetchAll, fetchAllData, fetchInChunks } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
@@ -117,10 +118,7 @@ export default function LowMarginPage() {
         <label className="flex flex-col gap-0.5"><span className="text-[11px] text-gray-500">利益率の基準（％未満を抜き出す）</span>
           <input type="number" value={threshold} onChange={e => setThreshold(e.target.value)} className="px-2 py-1 border border-gray-200 rounded w-24 text-right" /></label>
         <label className="flex flex-col gap-0.5"><span className="text-[11px] text-gray-500">医院</span>
-          <select value={clinicId} onChange={e => setClinicId(e.target.value)} className="px-2 py-1 border border-gray-200 rounded max-w-[220px]">
-            <option value="all">すべて</option>
-            {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select></label>
+          <ClinicSelect clinics={clinics} value={clinicId} onChange={setClinicId} allValue="all" allLabel="すべて" style={{ maxWidth: 220 }} /></label>
         <label className="flex items-center gap-1 text-xs text-gray-600"><input type="checkbox" checked={excludeNoStock} onChange={e => setExcludeNoStock(e.target.checked)} />「在庫管理しない」商品（パソコン関係など）を除く</label>
         <button onClick={load} disabled={loading} className="px-4 py-1.5 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 disabled:bg-gray-300">{loading ? "計算中…" : "チェックする"}</button>
       </div>

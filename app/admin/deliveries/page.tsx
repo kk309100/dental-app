@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import ClinicSelect from "@/app/components/ClinicSelect"
 import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { supabase, fetchAllData } from "@/lib/supabase"
@@ -181,10 +182,7 @@ export default function DeliveriesPage() {
       <div className="flex gap-1.5 items-center bg-gray-50 p-2 rounded-lg flex-wrap" style={{ border: "1px solid #e8eaed" }}>
         <input lang="ja" value={search} onChange={e => setSearch(e.target.value)} placeholder="納品書No・医院で検索"
           className="flex-1 min-w-[180px] px-2.5 py-1.5 border border-gray-200 rounded text-sm bg-white" />
-        <select value={clinicFilter} onChange={e => setClinicFilter(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white max-w-[200px]">
-          <option value="all">全医院</option>
-          {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        <ClinicSelect clinics={clinics} value={clinicFilter} onChange={setClinicFilter} allValue="all" allLabel="全医院" style={{ maxWidth: 200 }} />
         <input type="date" value={from} onChange={e => setFrom(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
         <span className="text-xs text-gray-400">〜</span>
         <input type="date" value={to} onChange={e => setTo(e.target.value)} className="px-2 py-1.5 border border-gray-200 rounded text-sm bg-white" />
