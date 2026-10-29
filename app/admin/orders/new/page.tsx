@@ -8,6 +8,7 @@ import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { fetchAllClinicPrices, makeClinicPriceMap, clinicPriceKey, bulkUpsertClinicPrices, type ClinicPrice } from "@/lib/pricing"
 import ManagedBadge from "@/app/components/ManagedBadge"
+import { forceAddOrderItemToPool } from "@/lib/po-pool"
 
 export default function NewOrderPageWrapper() {
   return (
@@ -19,7 +20,7 @@ export default function NewOrderPageWrapper() {
 
 type Clinic = { id: string; name: string; corporate_name?: string | null; clinic_code?: string | null }
 type Product = { id: string; name: string; product_code: string | null; price: number | null; stock: number | null; stock_managed?: boolean | null; manufacturer?: string | null; category?: string | null; location?: string | null }
-type Row = { product_id: string | null; product_name: string; quantity: number; price: number; note?: string; lot?: string }
+type Row = { product_id: string | null; product_name: string; quantity: number; price: number; note?: string; lot?: string; arrange?: "stock" | "order"; orderQty?: number }
 type RecentOrder = { id: string; clinic_id: string; created_at: string; total_price: number; delivery_number: string | null }
 type ProductHistory = { product_id: string | null; product_name: string; last_price: number; last_ordered_at: string; times: number }
 
@@ -67,6 +68,9 @@ function NewOrderPage() {
   const [rows, setRows] = useState<Row[]>([{ product_id: null, product_name: "", quantity: 1, price: 0 }])
   const [status, setStatus] = useState<string>(paperMode ? "納品済み" : "注文受付")
   const [deductStock, setDeductStock] = useState(true)
+  // 保存と同時に受注処理もする（準備中にして、「発注する」の行を発注プールへ入れる）。在庫の数字はあてにならないので、手配は行ごとに選ぶ
+  const [autoProcess, setAutoProcess] = useState(true)
+  const [stockById, setStockById] = useState<Map<string, { stock: number; managed: boolean }>>(new Map())
   const [backfill, setBackfill] = useState(false) // 過去分をまとめて登録する（納品書は開かず続けて入力）
   const [savedMsg, setSavedMsg] = useState("")
   const [deliveredDate, setDeliveredDate] = useState(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10))
@@ -297,6 +301,39 @@ function NewOrderPage() {
     }
   }
 
+  useEffect(() => {
+    const need = Array.from(new Set(rows.map(r => r.product_id).filter(Boolean) as string[])).filter(id => !stockById.has(id))
+    if (need.length === 0) return
+    let alive = true
+    ;(async () => {
+      const { data } = await supabase.from("products").select("id,stock,stock_managed").in("id", need)
+      if (!alive) return
+      setStockById(prev => {
+        const n = new Map(prev)
+        for (const p of data || []) n.set(p.id, { stock: Number(p.stock || 0), managed: p.stock_managed !== false })
+        return n
+      })
+    })()
+    return () => { alive = false }
+  }, [rows, stockById])
+
+  // 手配の初期値: 在庫が足りていれば「在庫から出す」、足りない・商品が決まっていない・在庫管理しない商品は「発注する」
+  function stockInfoOf(r: Row) { return r.product_id ? stockById.get(r.product_id) : undefined }
+  function arrangeOf(r: Row): "stock" | "order" {
+    if (r.arrange) return r.arrange
+    const st = stockInfoOf(r)
+    if (!st || !st.managed) return "order"
+    return st.stock >= Number(r.quantity || 0) ? "stock" : "order"
+  }
+  function orderQtyOf(r: Row): number {
+    if (r.orderQty != null) return r.orderQty
+    const st = stockInfoOf(r)
+    const q = Number(r.quantity || 0)
+    if (!st || !st.managed) return q
+    return st.stock >= q ? q : Math.max(1, q - Math.max(0, st.stock))
+  }
+  const showArrange = !paperMode && autoProcess
+
   function updateRow(idx: number, patch: Partial<Row>) {
     setRows(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
   }
@@ -433,7 +470,7 @@ function NewOrderPage() {
     }
   }
 
-  async function finishSave(orderId: string, deliveryNumber: string, extraMsg = "") {
+  async function finishSave(orderId: string, deliveryNumber: string, extraMsg = "", next = false) {
     const willDeduct = paperMode && status === "納品済み" && deductStock
     if (willDeduct) await deductStockForOrder(orderId, deliveryNumber)
     if (paperMode && backfill && status === "納品済み") {
@@ -445,12 +482,21 @@ function NewOrderPage() {
       if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" })
       return
     }
+    if (next) {
+      // 医院・担当は残し、明細とメモだけ空にして、続けて次の注文を入力できるようにする
+      setSavedMsg(`✓ 保存しました：${clinicQuery}／${deliveryNumber}${extraMsg.replace(/\n/g, "　")}`)
+      setRows([{ product_id: null, product_name: "", quantity: 1, price: 0 }])
+      setNote("")
+      setSaving(false)
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" })
+      return
+    }
     alert(`注文を作成しました（${deliveryNumber}）${willDeduct ? "\n在庫を出庫処理しました。" : ""}${extraMsg}`)
     if (paperMode && status === "納品済み") router.push(`/admin/deliveries/print?ids=${orderId}`)
     else router.push("/admin/orders")
   }
 
-  async function save() {
+  async function save(next = false) {
     if (!clinicId) { alert("医院を選択してください"); return }
     const validRows = rows.filter(r => r.product_name && Number(r.quantity) > 0)
     if (validRows.length === 0) { alert("商品を1行以上入力してください"); return }
@@ -458,9 +504,11 @@ function NewOrderPage() {
     if (typeof window !== "undefined") localStorage.setItem(SALES_REP_KEY, salesRep)
 
     const deliveryNumber = await generateDeliveryNumber()
+    // 保存と同時に受注処理もするとき（紙の登録モードでは使わない）は、準備中で保存する
+    const processNow = showArrange && status === "注文受付"
     const orderInsert: Record<string, unknown> = {
       clinic_id: clinicId,
-      status,
+      status: processNow ? "準備中" : status,
       total_price: total,
       delivery_number: deliveryNumber,
     }
@@ -488,7 +536,7 @@ function NewOrderPage() {
       // 新スキーマ列が無い場合のフォールバック
       const { data: order2, error: e2 } = await supabase
         .from("orders")
-        .insert([{ clinic_id: clinicId, status, total_price: total, delivery_number: deliveryNumber }])
+        .insert([{ clinic_id: clinicId, status: processNow ? "準備中" : status, total_price: total, delivery_number: deliveryNumber }])
         .select()
         .single()
       if (e2 || !order2) {
@@ -501,11 +549,12 @@ function NewOrderPage() {
         ...(r.note && r.note.trim() ? { note: r.note.trim() } : {}),
         ...(r.lot && r.lot.trim() ? { lot_number: r.lot.trim() } : {}),
       }))
-      const { error: ie } = await supabase.from("order_items").insert(items)
+      const { data: ins2, error: ie } = await supabase.from("order_items").insert(items).select("id")
       if (ie) { alert("明細エラー: " + ie.message); setSaving(false); return }
       // ★ 医院別単価マスタを学習
       await bulkUpsertClinicPrices(clinicId, validRows.map(r => ({ product_id: r.product_id, price: Number(r.price) })))
-      await finishSave(order2.id, deliveryNumber, "\n※新スキーマ未適用のため、営業マン名等は保存されていません"); return
+      const poolMsg2 = processNow ? await poolArranged(ins2 || []) : ""
+      await finishSave(order2.id, deliveryNumber, "\n※新スキーマ未適用のため、営業マン名等は保存されていません" + poolMsg2, next); return
     }
 
     const items = validRows.map(r => ({
@@ -514,13 +563,33 @@ function NewOrderPage() {
       ...(r.note && r.note.trim() ? { note: r.note.trim() } : {}),
       ...(r.lot && r.lot.trim() ? { lot_number: r.lot.trim() } : {}),
     }))
-    const { error: ie } = await supabase.from("order_items").insert(items)
+    const { data: ins, error: ie } = await supabase.from("order_items").insert(items).select("id")
     if (ie) { alert("明細エラー: " + ie.message); setSaving(false); return }
 
     // ★ 医院別単価マスタを最新価格で学習（次回同じ医院×商品はこの単価が自動補完される）
     await bulkUpsertClinicPrices(clinicId, validRows.map(r => ({ product_id: r.product_id, price: Number(r.price) })))
 
-    await finishSave(order.id, deliveryNumber)
+    const poolMsg = processNow ? await poolArranged(ins || []) : ""
+    await finishSave(order.id, deliveryNumber, poolMsg, next)
+
+    // 「発注する」を選んだ行を、発注プールへ入れる（注文の目印つき）。保存した明細は、入力した順に返る
+    async function poolArranged(saved: { id: string }[]): Promise<string> {
+      let n = 0, undecided = 0
+      const errs: string[] = []
+      for (let i = 0; i < validRows.length; i++) {
+        const r = validRows[i]
+        const it = saved[i]
+        if (!it || arrangeOf(r) !== "order") continue
+        const q = orderQtyOf(r)
+        if (!(q > 0)) continue
+        const res = await forceAddOrderItemToPool(it.id, undefined, q)
+        if (res.ok) { n++; if (res.supplierName === "仕入先未定") undecided++ }
+        else errs.push(r.product_name + ": " + res.error)
+      }
+      let msg = n > 0 ? `\n発注プールに ${n}品 入れました。${undecided > 0 ? `（うち仕入先未定 ${undecided}品。発注プールで仕入先を設定してください）` : ""}` : "\n発注する商品は、ありません。"
+      if (errs.length) msg += "\n⚠ 発注プールに入れられなかった商品: " + errs.join(" / ")
+      return msg
+    }
   }
 
   return (
@@ -566,6 +635,13 @@ function NewOrderPage() {
             {["注文受付", "確認中", "準備中", "納品済み"].map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
+        {!paperMode && status === "注文受付" && (
+          <label className="flex items-center gap-1.5 text-xs text-gray-700">
+            <input type="checkbox" checked={autoProcess} onChange={e => setAutoProcess(e.target.checked)} />
+            <span className="font-bold">保存と同時に受注処理もする</span>
+            <span className="text-gray-500">（準備中で保存し、「発注する」にした行を、発注プールに入れます。在庫の数字は、目安として表示します）</span>
+          </label>
+        )}
         {savedMsg && (
           <div className="text-xs rounded px-3 py-2 bg-emerald-50 text-emerald-800 font-bold" style={{ border: "1px solid #86efac" }}>{savedMsg}</div>
         )}
@@ -685,6 +761,7 @@ function NewOrderPage() {
               <th className="px-2 py-2 text-right w-32">数量</th>
               <th className="px-2 py-2 text-right w-28">単価</th>
               <th className="px-2 py-2 text-right w-28">金額</th>
+              {showArrange && <th className="px-2 py-2 text-left w-44">手配</th>}
               <th className="px-2 py-2 w-12"></th>
             </tr>
           </thead>
@@ -743,6 +820,31 @@ function NewOrderPage() {
                     onChange={n => { const q = Number(r.quantity || 0); if (q > 0) updateRow(idx, { price: Math.round((n / q) * 100) / 100 }); else updateRow(idx, { quantity: 1, price: n }) }}
                     className="w-full px-2 py-1 border border-gray-200 rounded text-sm text-right font-bold tabular-nums" />
                 </td>
+                {showArrange && (
+                  <td className="px-2 py-1">
+                    {(r.product_name || r.product_id) && (() => {
+                      const st = stockInfoOf(r)
+                      const arr = arrangeOf(r)
+                      return (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <select value={arr} onChange={e => updateRow(idx, { arrange: e.target.value as "stock" | "order" })}
+                              className={"px-1 py-1 border rounded text-xs " + (arr === "order" ? "border-orange-300 bg-orange-50 text-orange-800 font-bold" : "border-gray-200 bg-white")}>
+                              <option value="stock">在庫から出す</option>
+                              <option value="order">発注する</option>
+                            </select>
+                            <span className="text-[11px] text-gray-400 whitespace-nowrap">{!r.product_id ? "商品未選択" : st ? (st.managed ? `在庫 ${st.stock}` : "在庫管理なし") : ""}</span>
+                          </div>
+                          {arr === "order" && (
+                            <div className="flex items-center gap-1 text-[11px] text-gray-500">発注数
+                              <NumInput value={orderQtyOf(r)} step={1} onChange={n => updateRow(idx, { orderQty: n })} className="w-16 px-1 py-0.5 border border-gray-200 rounded text-xs text-center" />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </td>
+                )}
                 <td className="px-2 py-1 text-center">
                   <button onClick={() => removeRow(idx)} className="text-gray-400 hover:text-red-500 text-sm">×</button>
                 </td>
@@ -753,6 +855,7 @@ function NewOrderPage() {
             <tr className="bg-gray-50 border-t border-gray-200">
               <td colSpan={4} className="px-2 py-2 text-right text-xs font-bold text-gray-500">合計</td>
               <td className="px-2 py-2 text-right text-base font-bold text-gray-900 tabular-nums">{fmtYen(total)}</td>
+              {showArrange && <td></td>}
               <td></td>
             </tr>
           </tfoot>
@@ -810,6 +913,26 @@ function NewOrderPage() {
                     onChange={n => updateRow(idx, { price: n })}
                     className="w-full px-2 py-2 border border-gray-200 rounded text-base text-right" />
                 </div>
+                {showArrange && (r.product_name || r.product_id) && (() => {
+                  const st = stockInfoOf(r)
+                  const arr = arrangeOf(r)
+                  return (
+                    <div className="col-span-2 flex items-center gap-2 flex-wrap">
+                      <label style={{ fontSize: 12 }} className="text-gray-500">手配</label>
+                      <select value={arr} onChange={e => updateRow(idx, { arrange: e.target.value as "stock" | "order" })}
+                        className={"px-2 py-2 border rounded text-sm " + (arr === "order" ? "border-orange-300 bg-orange-50 text-orange-800 font-bold" : "border-gray-200 bg-white")}>
+                        <option value="stock">在庫から出す</option>
+                        <option value="order">発注する</option>
+                      </select>
+                      <span className="text-xs text-gray-400">{!r.product_id ? "商品未選択" : st ? (st.managed ? `在庫 ${st.stock}` : "在庫管理なし") : ""}</span>
+                      {arr === "order" && (
+                        <span className="flex items-center gap-1 text-xs text-gray-500">発注数
+                          <NumInput value={orderQtyOf(r)} step={1} onChange={n => updateRow(idx, { orderQty: n })} className="w-16 px-1 py-1.5 border border-gray-200 rounded text-sm text-center" />
+                        </span>
+                      )}
+                    </div>
+                  )
+                })()}
                 <div>
                   <label style={{ fontSize: 12 }} className="text-gray-500">金額</label>
                   <NumInput value={Math.round(Number(r.price || 0) * Number(r.quantity || 0))}
@@ -849,8 +972,18 @@ function NewOrderPage() {
           <div className="text-lg font-bold tabular-nums">{fmtYen(total)}</div>
         </div>
         <Link href="/admin/orders" className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">キャンセル</Link>
+        {!paperMode && (
+          <button
+            onClick={() => save(true)}
+            disabled={saving || !clinicId || rows.filter(r => r.product_name && r.quantity > 0).length === 0}
+            className="px-4 py-3 sm:py-2 text-sm font-bold bg-white text-emerald-700 border border-emerald-600 rounded-lg hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed" style={{ minHeight: 48 }}
+            title="保存して、同じ医院のまま、続けて次の注文を入力する"
+          >
+            {saving ? "保存中…" : "保存して次の注文へ"}
+          </button>
+        )}
         <button
-          onClick={save}
+          onClick={() => save()}
           disabled={saving || !clinicId || rows.filter(r => r.product_name && r.quantity > 0).length === 0}
           className="px-5 py-3 sm:py-2 text-sm font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed" style={{ minHeight: 48 }}
         >
