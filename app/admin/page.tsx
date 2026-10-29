@@ -44,7 +44,7 @@ export default function AdminHomePage() {
 
   // 業務フロー順（医院からの注文 → 発注/納品 → 入荷 → 請求・売上）
   const flow: ButtonItem[] = [
-    { href: "/admin/orders/process",     label: "① 受注処理",   desc: "新着注文の確認→在庫振り分け", icon: Ic.order,    color: "#ea580c", badge: badges.newOrders || undefined,     badgeLabel: "新着" },
+    { href: "/admin/orders/new",         label: "① 新規注文",   desc: "注文を入力する",               icon: Ic.order,    color: "#ea580c" },
     { href: "/admin/purchase-orders",    label: "② 発注",       desc: "仕入先へ発注書を作成",         icon: Ic.truck,    color: "#0891b2" },
     { href: "/admin/receiving-from-po",  label: "③ 入荷処理",   desc: "発注商品が届いたらチェック",   icon: Ic.purchase, color: "#7c3aed" },
     { href: "/admin/deliveries",         label: "④ 医院納品",   desc: "医院へ出荷・納品書発行",       icon: Ic.doc,      color: "#059669", badge: badges.undeliveredCount || undefined, badgeLabel: "未納品" },
@@ -55,6 +55,7 @@ export default function AdminHomePage() {
 
   const buttons: ButtonItem[] = [
     { href: "/admin/orders",          label: "注文一覧",   desc: "受注・ステータス確認",         icon: Ic.order,    color: "#2563eb", badge: badges.pendingOrders || undefined, badgeLabel: "未処理" },
+    { href: "/admin/orders/process",  label: "受注処理",   desc: "新着注文の確認→在庫振り分け", icon: Ic.order,    color: "#ea580c", badge: badges.newOrders || undefined, badgeLabel: "新着" },
     { href: "/admin/receivings",      label: "仕入履歴",   desc: "入荷処理済みの一覧",           icon: Ic.purchase, color: "#7c3aed" },
     { href: "/admin/inventory",       label: "在庫管理",   desc: "在庫数・発注点の確認",         icon: Ic.product,  color: "#d97706", badge: badges.lowStock || undefined, badgeLabel: "在庫不足" },
     { href: "/admin/masters",         label: "マスター",   desc: "医院・仕入先・商品・設定",     icon: Ic.dash,     color: "#475569" },
