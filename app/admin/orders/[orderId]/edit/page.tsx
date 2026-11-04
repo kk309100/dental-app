@@ -20,6 +20,8 @@ type PHit = { id: string; name: string; product_code: string | null; price: numb
 const DELIVERED = ["納品済み", "納品済"]
 // まだ受注処理をしていない状態（受注処理の画面に出る）。それ以外で足した商品は、保存のあとに、発注の判定をかける
 const UNPROCESSED = ["注文受付", "確認中"]
+// まだ仕入先に送っていない発注書（下書き・未送付）。ここの行は、そのまま直す／消す（「変更あり」の印は要らない）
+const UNSENT = ["下書き", "未送付"]
 const kata = (s: string) => s.replace(/[ぁ-ん]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60))
 // 納品のときに、在庫から引いた数（入荷済み＝直送で受け取った分は、在庫を通っていない）
 const deductOf = (qty: number, delivered: number) => Math.max(0, qty - Math.min(delivered, qty))
@@ -148,14 +150,14 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       }
       await loadHeads(Array.from(new Set(removedPoLines.map(x => x.poId))))
       const SENT = ["発注済", "部分入荷"]
-      const draftLines = removedPoLines.filter(x => poHeadById.get(x.poId)?.status === "下書き" && !x.received)
+      const draftLines = removedPoLines.filter(x => UNSENT.includes(poHeadById.get(x.poId)?.status || "") && !x.received)
       const sentRemovable = removedPoLines.filter(x => SENT.includes(poHeadById.get(x.poId)?.status || "") && !x.received)
       const keptPoLines = removedPoLines.filter(x => !draftLines.includes(x) && !sentRemovable.includes(x) && poHeadById.get(x.poId)?.status !== "取消")
       if (draftLines.length || sentRemovable.length || keptPoLines.length) {
         const m = ["削除する商品に、発注書の行が結びついています。"]
-        if (draftLines.length) m.push(`・下書き（発注プール）の ${draftLines.length}行 は、いっしょに消します`)
+        if (draftLines.length) m.push(`・まだ送っていない発注書（下書き・未送付）の ${draftLines.length}行 は、いっしょに消します`)
         if (sentRemovable.length) m.push(`・送信済みの発注書の ${sentRemovable.length}行 も消して、その発注書に「変更あり」の印を付けます（仕入先への連絡が必要です）`)
-        if (keptPoLines.length) m.push(`・入荷が始まっている／入荷済みの ${keptPoLines.length}行 は、変えません（保存のあとに、お知らせします）`)
+        if (keptPoLines.length) m.push(`・入荷が始まっている／発注書が入荷済み・取消などの ${keptPoLines.length}行 は、変えません（保存のあとに、お知らせします）`)
         if (!confirm(m.join("\n") + "\n\n保存しますか？")) { setSaving(false); return }
       }
       for (const l of clean) {
@@ -184,7 +186,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       }
       for (const x of keptPoLines) {
         const h = poHeadById.get(x.poId)
-        poNotes.push("・" + x.name + "（発注書 " + (h?.po_number || "") + "・" + (h?.status || "") + "）… 入荷が始まっているので、発注書の行は消していません")
+        poNotes.push("・" + x.name + "（発注書 " + (h?.po_number || "") + "・" + (h?.status || "") + "）… " + (x.received ? "入荷が始まっているので" : "発注書の状態のため") + "、発注書の行は消していません")
       }
 
       // 変えた行
@@ -201,7 +203,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
         for (const pl of pls || []) {
           if (Number(pl.received_quantity || 0) > 0) continue
           const h = poHeadById.get(pl.purchase_order_id)
-          const isDraftPo = h?.status === "下書き"
+          const isDraftPo = UNSENT.includes(h?.status || "")
           const isSentPo = SENT.includes(h?.status || "")
           if (!isDraftPo && !isSentPo) continue
           const patchRow: Record<string, unknown> = {}
@@ -231,7 +233,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       // 発注書の合計を直す（行が無くなった下書きは、発注書ごと消す）。送信済みの発注書には「変更あり」を残す
       for (const poId of Array.from(touchedPo)) {
         const { count } = await supabase.from("purchase_order_items").select("id", { count: "exact", head: true }).eq("purchase_order_id", poId)
-        if ((count || 0) === 0 && poHeadById.get(poId)?.status === "下書き") await supabase.from("purchase_orders").delete().eq("id", poId)
+        if ((count || 0) === 0 && UNSENT.includes(poHeadById.get(poId)?.status || "")) await supabase.from("purchase_orders").delete().eq("id", poId)
         else await recalcPoTotal(poId)
       }
       for (const [poId, texts] of Array.from(changeTexts)) {
@@ -315,11 +317,11 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
         else await supabase.from("purchase_order_items").update({ quantity: nq }).eq("id", it.plId)
         touched.add(it.poId)
         heads.set(it.poId, { status: it.status, poNumber: it.poNumber })
-        if (it.status !== "下書き") changes.set(it.poId, [...(changes.get(it.poId) || []), "「" + it.name + "」の数量 " + it.plQty + " → " + nq + (nq === 0 ? "（行を削除）" : "") + "（注文の個数を減らしたため）"])
+        if (!UNSENT.includes(it.status)) changes.set(it.poId, [...(changes.get(it.poId) || []), "「" + it.name + "」の数量 " + it.plQty + " → " + nq + (nq === 0 ? "（行を削除）" : "") + "（注文の個数を減らしたため）"])
       }
       for (const poId of Array.from(touched)) {
         const { count } = await supabase.from("purchase_order_items").select("id", { count: "exact", head: true }).eq("purchase_order_id", poId)
-        if ((count || 0) === 0 && heads.get(poId)?.status === "下書き") await supabase.from("purchase_orders").delete().eq("id", poId)
+        if ((count || 0) === 0 && UNSENT.includes(heads.get(poId)?.status || "")) await supabase.from("purchase_orders").delete().eq("id", poId)
         else await recalcPoTotal(poId)
       }
       for (const [poId, texts] of Array.from(changes)) await markPoChanged(poId, texts)

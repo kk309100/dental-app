@@ -10,6 +10,8 @@ type Line = { id: string; poId: string; name: string; received: boolean }
 type Plan = { draft: Line[]; sent: Line[]; kept: Line[]; heads: Map<string, { status: string; po_number: string }> }
 
 const SENT = ["発注済", "部分入荷"]
+// まだ仕入先に送っていない発注書（下書き・未送付）
+const UNSENT = ["下書き", "未送付"]
 
 /** 消す明細に結びついた発注書の行を調べる（まだ何も変えない） */
 export async function planPoDetach(orderItemIds: string[]): Promise<Plan> {
@@ -25,7 +27,7 @@ export async function planPoDetach(orderItemIds: string[]): Promise<Plan> {
     for (const h of hs || []) heads.set(h.id, { status: h.status, po_number: h.po_number })
   }
   const live = lines.filter(l => heads.get(l.poId)?.status !== "取消")
-  const draft = live.filter(l => heads.get(l.poId)?.status === "下書き" && !l.received)
+  const draft = live.filter(l => UNSENT.includes(heads.get(l.poId)?.status || "") && !l.received)
   const sent = live.filter(l => SENT.includes(heads.get(l.poId)?.status || "") && !l.received)
   const kept = live.filter(l => !draft.includes(l) && !sent.includes(l))
   return { draft, sent, kept, heads }
@@ -34,9 +36,9 @@ export async function planPoDetach(orderItemIds: string[]): Promise<Plan> {
 /** 確認のメッセージに使う、1〜3行の説明（結びついた行が無ければ空） */
 export function describePoDetach(p: Plan): string {
   const m: string[] = []
-  if (p.draft.length) m.push(`・下書き（発注プール）の ${p.draft.length}行 は、いっしょに消します`)
+  if (p.draft.length) m.push(`・まだ送っていない発注書（下書き・未送付）の ${p.draft.length}行 は、いっしょに消します`)
   if (p.sent.length) m.push(`・送信済みの発注書の ${p.sent.length}行 も消して、その発注書に「変更あり」の印を付けます（仕入先への連絡が必要です）`)
-  if (p.kept.length) m.push(`・入荷が始まっている／入荷済みの ${p.kept.length}行 は、変えません`)
+  if (p.kept.length) m.push(`・入荷が始まっている／発注書が入荷済み・取消などの ${p.kept.length}行 は、変えません`)
   return m.length ? "\n\n結びついた発注書の行:\n" + m.join("\n") : ""
 }
 
@@ -47,7 +49,7 @@ export async function applyPoDetach(p: Plan, reason: string): Promise<string[]> 
   for (const l of [...p.draft, ...p.sent]) { await supabase.from("purchase_order_items").delete().eq("id", l.id); touched.add(l.poId) }
   for (const poId of Array.from(touched)) {
     const { count } = await supabase.from("purchase_order_items").select("id", { count: "exact", head: true }).eq("purchase_order_id", poId)
-    if ((count || 0) === 0 && p.heads.get(poId)?.status === "下書き") await supabase.from("purchase_orders").delete().eq("id", poId)
+    if ((count || 0) === 0 && UNSENT.includes(p.heads.get(poId)?.status || "")) await supabase.from("purchase_orders").delete().eq("id", poId)
     else await recalcPoTotal(poId)
   }
   const changes = new Map<string, string[]>()
@@ -56,6 +58,6 @@ export async function applyPoDetach(p: Plan, reason: string): Promise<string[]> 
     await markPoChanged(poId, texts)
     notes.push(`・発注書 ${p.heads.get(poId)?.po_number || ""} に「変更あり」の印を付けました。仕入先へ連絡してください`)
   }
-  for (const l of p.kept) notes.push(`・${l.name}（発注書 ${p.heads.get(l.poId)?.po_number || ""}）… 入荷が始まっているので、発注書の行は消していません`)
+  for (const l of p.kept) notes.push(`・${l.name}（発注書 ${p.heads.get(l.poId)?.po_number || ""}・${p.heads.get(l.poId)?.status || ""}）… ${l.received ? "入荷が始まっているので" : "発注書の状態のため"}、発注書の行は消していません`)
   return notes
 }
