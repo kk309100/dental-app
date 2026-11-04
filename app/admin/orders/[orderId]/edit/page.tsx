@@ -35,7 +35,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   // 受注処理が済んだ注文に商品を足したとき、保存のあとに出す「発注の確認」
-  const [postAdd, setPostAdd] = useState<{ id: string; name: string; orderQty: number; stock: number | null; qty: string }[] | null>(null)
+  const [postAdd, setPostAdd] = useState<{ id: string; name: string; orderQty: number; stock: number | null; qty: string; delta?: number }[] | null>(null)
   const [postBusy, setPostBusy] = useState(false)
   const keySeq = useRef(0)
   const nextKey = () => "k" + (++keySeq.current)
@@ -168,6 +168,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       const poNotes: string[] = []
       const changeTexts = new Map<string, string[]>()   // 発注書ID → 変えた内容
       const touchedPo = new Set<string>()               // 合計を計算し直す発注書
+      const absorbed = new Set<string>()                // 発注書の数量も、増やした数に合わせた明細（追加の発注は、要らない）
       const addChange = (poId: string, text: string) => { changeTexts.set(poId, [...(changeTexts.get(poId) || []), text]) }
 
       // 削除した行
@@ -208,9 +209,18 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
           }
           if (Object.keys(patchRow).length === 0) continue
           await supabase.from("purchase_order_items").update(patchRow).eq("id", pl.id)
-          if (patchRow.quantity !== undefined) touchedPo.add(pl.purchase_order_id)
+          if (patchRow.quantity !== undefined) { touchedPo.add(pl.purchase_order_id); absorbed.add(l.id) }
           if (isSentPo) for (const t of texts) addChange(pl.purchase_order_id, t)
         }
+      }
+
+      // 個数を増やした行のうち、発注書の数量が、いっしょに増えなかったもの（発注書に入っていない、数量が違う、入荷が始まっている）。増えた分の発注を、あとで確認する
+      const increasedInfo: { id: string; product_id: string | null; name: string; qty: number; delta: number }[] = []
+      for (const l of clean) {
+        if (!l.id || absorbed.has(l.id)) continue
+        const o0 = original.find(o => o.id === l.id)
+        if (!o0 || !(Number(l.quantity) > Number(o0.quantity))) continue
+        increasedInfo.push({ id: l.id, product_id: l.product_id, name: l.product_name.trim() || "商品", qty: Number(l.quantity), delta: Number(l.quantity) - Number(o0.quantity) })
       }
 
       // 発注書の合計を直す（行が無くなった下書きは、発注書ごと消す）。送信済みの発注書には「変更あり」を残す
@@ -241,19 +251,28 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
         } catch { /* 記録のみ */ }
       }
       // 受注処理が済んでいる注文（準備中など）に足した商品は、受注処理の画面に出ない。保存のあとに、発注する数を選ぶ画面を出す（在庫があっても、発注できる）
-      if (addedInfo.length > 0 && !isDelivered && !UNPROCESSED.includes(order.status)) {
-        const pids = Array.from(new Set(addedInfo.map(x => x.product_id).filter(Boolean) as string[]))
+      if ((addedInfo.length > 0 || increasedInfo.length > 0) && !isDelivered && !UNPROCESSED.includes(order.status)) {
+        const pids = Array.from(new Set([...addedInfo, ...increasedInfo].map(x => x.product_id).filter(Boolean) as string[]))
         const stockById = new Map<string, { stock: number; managed: boolean }>()
         if (pids.length) {
           const { data: ps } = await supabase.from("products").select("id,stock,stock_managed").in("id", pids)
           for (const p of ps || []) stockById.set(p.id, { stock: Number(p.stock || 0), managed: p.stock_managed !== false })
         }
-        const list = addedInfo.map(x => {
-          const st = x.product_id ? stockById.get(x.product_id) : undefined
-          const stock = st && st.managed ? st.stock : null
-          const short = stock == null ? x.qty : Math.max(0, x.qty - Math.max(0, stock))
-          return { id: x.id, name: x.name, orderQty: x.qty, stock, qty: String(short) }
-        })
+        const list = [
+          ...addedInfo.map(x => {
+            const st = x.product_id ? stockById.get(x.product_id) : undefined
+            const stock = st && st.managed ? st.stock : null
+            const short = stock == null ? x.qty : Math.max(0, x.qty - Math.max(0, stock))
+            return { id: x.id, name: x.name, orderQty: x.qty, stock, qty: String(short) } as { id: string; name: string; orderQty: number; stock: number | null; qty: string; delta?: number }
+          }),
+          // 個数を増やした行: 増えた分だけを、発注の対象にする（初めの数は、足りない分と、増えた分の、小さいほう）
+          ...increasedInfo.map(x => {
+            const st = x.product_id ? stockById.get(x.product_id) : undefined
+            const stock = st && st.managed ? st.stock : null
+            const short = stock == null ? x.delta : Math.max(0, x.qty - Math.max(0, stock))
+            return { id: x.id, name: x.name, orderQty: x.qty, stock, qty: String(Math.min(x.delta, short)), delta: x.delta } as { id: string; name: string; orderQty: number; stock: number | null; qty: string; delta?: number }
+          }),
+        ]
         if (poNotes.length) alert("注文を保存しました。\n発注書について、確認してください:\n" + poNotes.join("\n"))
         setPostAdd(list)
         setSaving(false)
@@ -274,7 +293,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
     for (const r of postAdd) {
       const q = Number(r.qty)
       if (!(q > 0)) continue
-      const res = await forceAddOrderItemToPool(r.id, undefined, q)
+      const res = await forceAddOrderItemToPool(r.id, undefined, q, { allowDuplicate: !!r.delta })
       if (!res.ok) errs.push("・" + r.name + ": " + res.error)
     }
     setPostBusy(false)
@@ -378,7 +397,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       {postAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.4)" }}>
           <div className="bg-white rounded-lg shadow-xl w-full max-w-xl p-4 space-y-3">
-            <div className="font-bold text-gray-900">追加した商品を、発注しますか？</div>
+            <div className="font-bold text-gray-900">追加した商品・個数を増やした商品を、発注しますか？</div>
             <p className="text-xs text-gray-600">この注文は、受注処理が済んでいるので、受注処理の画面には出ません。ここで、発注する数を決めてください（在庫があっても、発注できます）。0 にすると、発注しません。</p>
             <table className="w-full text-[13px]">
               <thead><tr className="text-[12px] text-gray-500 border-b border-gray-200"><th className="text-left px-1 py-1">商品名</th><th className="text-right px-1 py-1 w-14">注文</th><th className="text-right px-1 py-1 w-14">在庫</th><th className="text-right px-1 py-1 w-24">発注する数</th></tr></thead>
@@ -386,7 +405,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
                 {postAdd.map(r => (
                   <tr key={r.id} className="border-b border-gray-100">
                     <td className="px-1 py-1">{r.name}</td>
-                    <td className="px-1 py-1 text-right tabular-nums">{r.orderQty}</td>
+                    <td className="px-1 py-1 text-right tabular-nums">{r.orderQty}{r.delta ? <span className="text-orange-600">（＋{r.delta}）</span> : null}</td>
                     <td className="px-1 py-1 text-right tabular-nums">{r.stock == null ? "−" : r.stock}</td>
                     <td className="px-1 py-1"><input type="number" min={0} value={r.qty} onChange={e => setPostAdd(prev => prev ? prev.map(x => x.id === r.id ? { ...x, qty: e.target.value } : x) : prev)} className="w-full px-2 py-1 border border-gray-300 rounded text-right" /></td>
                   </tr>

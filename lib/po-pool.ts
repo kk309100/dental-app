@@ -278,6 +278,7 @@ export async function forceAddOrderItemToPool(
   orderItemId: string,
   fallbackSupplierId?: string,
   quantityOverride?: number,
+  opts?: { allowDuplicate?: boolean },   // 同じ明細が、すでに発注書にあっても、追加の分として入れる（個数を増やしたとき）
 ): Promise<{ ok: boolean; error?: string; supplierName?: string }> {
   const { data: oi, error: oiErr } = await supabase
     .from("order_items")
@@ -292,7 +293,7 @@ export async function forceAddOrderItemToPool(
     .from("purchase_order_items")
     .select("id,quantity,received_quantity,purchase_order_id")
     .ilike("note", `%明細${oi.id.slice(0, 8)}%`)
-  if (dupItems && dupItems.length > 0) {
+  if (!opts?.allowDuplicate && dupItems && dupItems.length > 0) {
     const poIds = Array.from(new Set(dupItems.map((d: any) => d.purchase_order_id)))
     const { data: pos } = await supabase.from("purchase_orders").select("id,status").in("id", poIds)
     const cancelledIds = new Set((pos || []).filter((p: any) => p.status === "取消").map((p: any) => p.id))
