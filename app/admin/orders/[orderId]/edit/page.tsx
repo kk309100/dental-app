@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { forceAddOrderItemToPool } from "@/lib/po-pool"
 import { markPoChanged, recalcPoTotal } from "@/lib/po-change-log"
+type PoFixItem = { plId: string; poId: string; poNumber: string; status: string; name: string; delta: number; plQty: number; newQty: string }
 
 type Order = { id: string; clinic_id: string; status: string; created_at: string; delivered_at: string | null; total_price: number; delivery_number: string | null; invoice_id: string | null; note: string | null }
 type Item = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null; note?: string | null; lot_number?: string | null }
@@ -37,6 +38,8 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
   // 受注処理が済んだ注文に商品を足したとき、保存のあとに出す「発注の確認」
   const [postAdd, setPostAdd] = useState<{ id: string; name: string; orderQty: number; stock: number | null; qty: string; delta?: number }[] | null>(null)
   const [postBusy, setPostBusy] = useState(false)
+  // 個数を減らしたのに、発注書の数量が、元の注文数と違って自動では変えられなかった行。保存のあとに、発注書の数量を直すか、確認する
+  const [poFix, setPoFix] = useState<{ items: PoFixItem[]; after: { id: string; name: string; orderQty: number; stock: number | null; qty: string; delta?: number }[] | null } | null>(null)
   const keySeq = useRef(0)
   const nextKey = () => "k" + (++keySeq.current)
 
@@ -166,6 +169,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       // 下書き: 商品名・商品を合わせる。数量は、元の注文数と同じだったときだけ合わせる。
       // 送信済み（発注済・部分入荷）: 同じように変えて、発注書に「変更あり」と、変えた内容を残す。
       const poNotes: string[] = []
+      const fixCands: PoFixItem[] = []   // 個数を減らしたが、発注書の数量が合わず、自動では変えなかった行
       const changeTexts = new Map<string, string[]>()   // 発注書ID → 変えた内容
       const touchedPo = new Set<string>()               // 合計を計算し直す発注書
       const absorbed = new Set<string>()                // 発注書の数量も、増やした数に合わせた明細（追加の発注は、要らない）
@@ -205,6 +209,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
           if (nameChanged) { patchRow.product_name = newName || null; patchRow.product_id = l.product_id; texts.push("商品名「" + (pl.product_name || o0.product_name || "") + "」→「" + newName + "」") }
           if (qtyChanged) {
             if (Number(pl.quantity) === Number(o0.quantity)) { patchRow.quantity = Number(l.quantity); texts.push("「" + (newName || "商品") + "」の数量 " + pl.quantity + " → " + l.quantity) }
+            else if (Number(l.quantity) < Number(o0.quantity)) fixCands.push({ plId: pl.id, poId: pl.purchase_order_id, poNumber: h?.po_number || "", status: h?.status || "", name: newName || "商品", delta: Number(o0.quantity) - Number(l.quantity), plQty: Number(pl.quantity), newQty: String(Math.max(0, Number(pl.quantity) - (Number(o0.quantity) - Number(l.quantity)))) })
             else poNotes.push("・" + (newName || "商品") + "（発注書 " + (h?.po_number || "") + "）… 発注書の数量が注文の数量と違うため、数量は自動では変えていません")
           }
           if (Object.keys(patchRow).length === 0) continue
@@ -274,7 +279,14 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
           }),
         ]
         if (poNotes.length) alert("注文を保存しました。\n発注書について、確認してください:\n" + poNotes.join("\n"))
+        if (fixCands.length) { setPoFix({ items: fixCands, after: list }); setSaving(false); return }
         setPostAdd(list)
+        setSaving(false)
+        return
+      }
+      if (fixCands.length) {
+        if (poNotes.length) alert("注文を保存しました。\n発注書について、確認してください:\n" + poNotes.join("\n"))
+        setPoFix({ items: fixCands, after: null })
         setSaving(false)
         return
       }
@@ -284,6 +296,42 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       setError((e as Error).message)
       setSaving(false)
     }
+  }
+
+  async function submitPoFix() {
+    if (!poFix) return
+    setPostBusy(true)
+    try {
+      const changes = new Map<string, string[]>()
+      const touched = new Set<string>()
+      const heads = new Map<string, { status: string; poNumber: string }>()
+      for (const it of poFix.items) {
+        const nq = Number(it.newQty)
+        if (!Number.isFinite(nq) || nq < 0 || nq === it.plQty) continue
+        // 入荷が始まった行は、入荷数より少なくしない（途中で入荷が入っていた場合の保険）
+        const { data: cur } = await supabase.from("purchase_order_items").select("received_quantity").eq("id", it.plId).single()
+        if (nq < Number(cur?.received_quantity || 0)) { alert("「" + it.name + "」は、すでに " + cur?.received_quantity + " 入荷しているため、それより少なくはできません"); continue }
+        if (nq === 0) await supabase.from("purchase_order_items").delete().eq("id", it.plId)
+        else await supabase.from("purchase_order_items").update({ quantity: nq }).eq("id", it.plId)
+        touched.add(it.poId)
+        heads.set(it.poId, { status: it.status, poNumber: it.poNumber })
+        if (it.status !== "下書き") changes.set(it.poId, [...(changes.get(it.poId) || []), "「" + it.name + "」の数量 " + it.plQty + " → " + nq + (nq === 0 ? "（行を削除）" : "") + "（注文の個数を減らしたため）"])
+      }
+      for (const poId of Array.from(touched)) {
+        const { count } = await supabase.from("purchase_order_items").select("id", { count: "exact", head: true }).eq("purchase_order_id", poId)
+        if ((count || 0) === 0 && heads.get(poId)?.status === "下書き") await supabase.from("purchase_orders").delete().eq("id", poId)
+        else await recalcPoTotal(poId)
+      }
+      for (const [poId, texts] of Array.from(changes)) await markPoChanged(poId, texts)
+      const sentNums = Array.from(changes.keys()).map(id => heads.get(id)?.poNumber).filter(Boolean)
+      if (sentNums.length) alert("発注書 " + sentNums.join("、") + " に「変更あり」の印を付けました。仕入先へ連絡してください。")
+    } finally {
+      setPostBusy(false)
+    }
+    const after = poFix.after
+    setPoFix(null)
+    if (after) setPostAdd(after)
+    else router.push("/admin/orders")
   }
 
   async function submitPostAdd() {
@@ -393,6 +441,31 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
         <Link href="/admin/orders" className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50">キャンセル</Link>
         <button onClick={save} disabled={saving} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300">{saving ? "保存中…" : "✓ 保存"}</button>
       </div>
+
+      {poFix && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-xl p-4 space-y-3">
+            <div className="font-bold text-gray-900">発注書の数量も、減らしますか？</div>
+            <p className="text-xs text-gray-600">個数を減らしましたが、次の発注書の行は、数量が注文の数量と違うため、自動では変えていません。減らす場合は、新しい数量を入れてください（0 にすると、その行を消します）。送信済みの発注書は、「変更あり」の印が付くので、仕入先へ連絡してください。</p>
+            <table className="w-full text-[13px]">
+              <thead><tr className="text-[12px] text-gray-500 border-b border-gray-200"><th className="text-left px-1 py-1">商品名／発注書</th><th className="text-right px-1 py-1 w-16">今の数量</th><th className="text-right px-1 py-1 w-24">新しい数量</th></tr></thead>
+              <tbody>
+                {poFix.items.map(r => (
+                  <tr key={r.plId} className="border-b border-gray-100">
+                    <td className="px-1 py-1">{r.name}<div className="text-[11px] text-gray-400">{r.poNumber}（{r.status}）／注文を {r.delta} 減らしました</div></td>
+                    <td className="px-1 py-1 text-right tabular-nums">{r.plQty}</td>
+                    <td className="px-1 py-1"><input type="number" min={0} value={r.newQty} onChange={e => setPoFix(prev => prev ? { ...prev, items: prev.items.map(x => x.plId === r.plId ? { ...x, newQty: e.target.value } : x) } : prev)} className="w-full px-2 py-1 border border-gray-300 rounded text-right" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { const after = poFix.after; setPoFix(null); if (after) setPostAdd(after); else router.push("/admin/orders") }} disabled={postBusy} className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50">直さない</button>
+              <button onClick={submitPoFix} disabled={postBusy} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300">{postBusy ? "処理中…" : "発注書も直す"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {postAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.4)" }}>
