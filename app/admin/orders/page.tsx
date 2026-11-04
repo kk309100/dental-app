@@ -12,6 +12,7 @@ import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 import ManagedBadge from "@/app/components/ManagedBadge"
 import { toCSV, downloadCSV } from "@/lib/csv"
+import { planPoDetach, describePoDetach, applyPoDetach } from "@/lib/po-detach"
 import { poolFromOrders, addItemsToPool, removeFromUnassignedPool, forceAddOrderItemToPool, type PoolItem } from "@/lib/po-pool"
 
 export default function AdminOrdersPageWrapper() {
@@ -389,10 +390,15 @@ function AdminOrdersPage() {
     const msg = isDelivered
       ? `⚠️ 「納品済み」の注文 ${deliveryNumber || orderId.slice(0, 8)} を削除します。\n\n業務記録（納品実績）が失われます。\n納品書・請求書とのリンクも切れる可能性があります。\n\n本当によろしいですか？`
       : `注文 ${deliveryNumber || orderId.slice(0, 8)} を削除します。\n明細も一緒に削除されます。\nよろしいですか？`
-    if (!confirm(msg)) return
+    // 結びついた発注書の行も、あわせて直す（下書きは消す／送信済みは消して「変更あり」の印／入荷が始まった行は、そのまま）
+    const { data: delItems } = await supabase.from("order_items").select("id").eq("order_id", orderId)
+    const poPlan = await planPoDetach((delItems || []).map(x => x.id as string))
+    if (!confirm(msg + describePoDetach(poPlan))) return
     await supabase.from("order_items").delete().eq("order_id", orderId)
     const { error } = await supabase.from("orders").delete().eq("id", orderId)
     if (error) { alert("削除失敗: " + error.message); return }
+    const poNotes = await applyPoDetach(poPlan, "注文の削除")
+    if (poNotes.length) alert("注文を削除しました。\n発注書について、確認してください:\n" + poNotes.join("\n"))
     fetchData({ silent: true })
   }
 
@@ -653,12 +659,16 @@ function AdminOrdersPage() {
     const msg = deliveredCount > 0
       ? `⚠️ ${targetOrders.length}件 を削除します。\nうち ${deliveredCount}件 は「納品済み」（業務記録）です。\n\n削除すると納品実績・請求書とのリンクが失われる可能性があります。\n\n本当によろしいですか？`
       : `${targetOrders.length}件 を削除します。\n明細も一緒に削除されます。\nよろしいですか？`
-    if (!confirm(msg)) return
+    const { data: delItems } = await supabase.from("order_items").select("id").in("order_id", ids)
+    const poPlan = await planPoDetach((delItems || []).map(x => x.id as string))
+    if (!confirm(msg + describePoDetach(poPlan))) return
 
     await supabase.from("order_items").delete().in("order_id", ids)
     const { error } = await supabase.from("orders").delete().in("id", ids)
     if (error) { alert("一括削除失敗: " + error.message); return }
+    const poNotes = await applyPoDetach(poPlan, "注文の削除")
     setSelectedOrderIds(new Set())
+    if (poNotes.length) alert("注文を削除しました。\n発注書について、確認してください:\n" + poNotes.join("\n"))
     fetchData({ silent: true })
   }
 
