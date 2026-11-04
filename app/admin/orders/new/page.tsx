@@ -73,9 +73,12 @@ function NewOrderPage() {
   // コードのない商品（手入力の行）を、商品として登録する。コードは「NEW-000001」の形で、自動で付ける
   const [reg, setReg] = useState<{ idx: number; name: string; maker: string; cost: string; price: string; supplierId: string; noStock: boolean } | null>(null)
   const [regBusy, setRegBusy] = useState(false)
+  // 同じ名前・似た名前の商品が、すでにあるとき、その一覧（登録の前に、確認する）
+  const [regDup, setRegDup] = useState<Product[] | null>(null)
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([])
   async function openReg(idx: number) {
     const r = rows[idx]
+    setRegDup(null)
     setReg({ idx, name: r.product_name.trim(), maker: "", cost: "", price: String(r.price || ""), supplierId: "", noStock: false })
     if (suppliers.length === 0) {
       const { data } = await supabase.from("suppliers").select("id,name").order("name").limit(5000)
@@ -88,11 +91,23 @@ function NewOrderPage() {
     for (const p of data || []) { const m = String(p.product_code || "").match(/^NEW-(\d+)$/); if (m) max = Math.max(max, Number(m[1])) }
     return "NEW-" + String(max + 1 + skip).padStart(6, "0")
   }
-  async function submitReg() {
+  const normName = (t: string) => searchKey(t).replace(/[\s・\-－ー()（）]/g, "")
+  async function submitReg(force = false) {
     if (!reg) return
     if (!reg.name.trim()) { alert("商品名を入力してください"); return }
     setRegBusy(true)
     try {
+      // 同じ名前・似た名前の商品が、すでにないか確認する（見つかったら、一覧を出して、使うか、それでも登録するかを選ぶ）
+      if (!force) {
+        const tokens = reg.name.trim().split(/[\s　]+/).filter(Boolean).slice(0, 3).map(t => searchKey(t).replace(/[%,]/g, ""))
+        let q = supabase.from("products").select("id,name,product_code,price,stock,stock_managed,manufacturer,category,location")
+        for (const t of tokens) q = q.ilike("search_key", `%${t}%`)
+        const { data: found } = await q.order("name").limit(20)
+        const list = (found as Product[]) || []
+        const me = normName(reg.name)
+        const sorted = [...list].sort((a, b) => Number(normName(b.name) === me) - Number(normName(a.name) === me))
+        if (sorted.length > 0) { setRegDup(sorted); setRegBusy(false); return }
+      }
       let created: Product | null = null
       let lastErr = ""
       for (let attempt = 0; attempt < 3 && !created; attempt++) {
@@ -112,6 +127,7 @@ function NewOrderPage() {
       setProducts(prev => [...prev, created as Product])
       updateRow(reg.idx, { product_id: created.id, product_name: created.name })
       setReg(null)
+      setRegDup(null)
       alert("商品として登録しました（コード: " + created.product_code + "）")
     } finally {
       setRegBusy(false)
@@ -1074,9 +1090,33 @@ function NewOrderPage() {
               <input type="checkbox" checked={reg.noStock} onChange={e => setReg({ ...reg, noStock: e.target.checked })} />
               在庫管理しない商品（パソコン関係など）
             </label>
+            {regDup && (
+              <div className="rounded border border-amber-300 bg-amber-50 p-2 space-y-1">
+                <div className="text-xs font-bold text-amber-900">
+                  {regDup.some(p => normName(p.name) === normName(reg.name)) ? "同じ名前の商品が、すでにあります" : "似た名前の商品が、すでにあります"}（{regDup.length}件）
+                </div>
+                <div style={{ maxHeight: 180, overflowY: "auto" }} className="space-y-1">
+                  {regDup.map(p => (
+                    <div key={p.id} className="flex items-center gap-2 bg-white border border-amber-200 rounded px-2 py-1 text-xs">
+                      <span className="flex-1">
+                        {normName(p.name) === normName(reg.name) && <span className="mr-1 text-red-600 font-bold">同名</span>}
+                        {p.name}<span className="text-gray-400 ml-1">{p.product_code ? `[${p.product_code}]` : "コードなし"}</span>
+                      </span>
+                      <button type="button" className="px-2 py-1 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700"
+                        onClick={() => {
+                          setProducts(prev => prev.some(x => x.id === p.id) ? prev : [...prev, p])
+                          updateRow(reg.idx, { product_id: p.id, product_name: p.name })
+                          setReg(null); setRegDup(null)
+                        }}>この商品を使う</button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-amber-800">同じ商品なら、「この商品を使う」を押してください。違う商品なら、下の「それでも新規登録する」を押してください。</p>
+              </div>
+            )}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setReg(null)} disabled={regBusy} className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50">キャンセル</button>
-              <button onClick={submitReg} disabled={regBusy} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300">{regBusy ? "登録中…" : "登録する"}</button>
+              <button onClick={() => { setReg(null); setRegDup(null) }} disabled={regBusy} className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50">キャンセル</button>
+              <button onClick={() => submitReg(!!regDup)} disabled={regBusy} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300">{regBusy ? "確認中…" : regDup ? "それでも新規登録する" : "登録する"}</button>
             </div>
           </div>
         </div>
