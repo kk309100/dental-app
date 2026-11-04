@@ -70,6 +70,53 @@ function NewOrderPage() {
   const [deductStock, setDeductStock] = useState(true)
   // 保存と同時に受注処理もする（準備中にして、「発注する」の行を発注プールへ入れる）。在庫の数字はあてにならないので、手配は行ごとに選ぶ
   const [autoProcess, setAutoProcess] = useState(false)
+  // コードのない商品（手入力の行）を、商品として登録する。コードは「NEW-000001」の形で、自動で付ける
+  const [reg, setReg] = useState<{ idx: number; name: string; maker: string; cost: string; price: string; supplierId: string; noStock: boolean } | null>(null)
+  const [regBusy, setRegBusy] = useState(false)
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([])
+  async function openReg(idx: number) {
+    const r = rows[idx]
+    setReg({ idx, name: r.product_name.trim(), maker: "", cost: "", price: String(r.price || ""), supplierId: "", noStock: false })
+    if (suppliers.length === 0) {
+      const { data } = await supabase.from("suppliers").select("id,name").order("name").limit(5000)
+      setSuppliers((data as { id: string; name: string }[]) || [])
+    }
+  }
+  async function nextAutoCode(skip = 0): Promise<string> {
+    const { data } = await supabase.from("products").select("product_code").like("product_code", "NEW-%").order("product_code", { ascending: false }).limit(50)
+    let max = 0
+    for (const p of data || []) { const m = String(p.product_code || "").match(/^NEW-(\d+)$/); if (m) max = Math.max(max, Number(m[1])) }
+    return "NEW-" + String(max + 1 + skip).padStart(6, "0")
+  }
+  async function submitReg() {
+    if (!reg) return
+    if (!reg.name.trim()) { alert("商品名を入力してください"); return }
+    setRegBusy(true)
+    try {
+      let created: Product | null = null
+      let lastErr = ""
+      for (let attempt = 0; attempt < 3 && !created; attempt++) {
+        const code = await nextAutoCode(attempt)
+        const payload: Record<string, unknown> = {
+          name: reg.name.trim(), product_code: code,
+          manufacturer: reg.maker.trim() || null,
+          cost: Number(reg.cost) || null, price: Number(reg.price) || null,
+          stock: 0, active: true, stock_managed: !reg.noStock,
+          default_supplier_id: reg.supplierId || null,
+        }
+        const { data, error } = await supabase.from("products").insert(payload).select("id,name,product_code,price,stock,stock_managed,manufacturer,category,location").single()
+        if (error) lastErr = error.message
+        else created = data as Product
+      }
+      if (!created) { alert("商品の登録に失敗しました: " + lastErr); return }
+      setProducts(prev => [...prev, created as Product])
+      updateRow(reg.idx, { product_id: created.id, product_name: created.name })
+      setReg(null)
+      alert("商品として登録しました（コード: " + created.product_code + "）")
+    } finally {
+      setRegBusy(false)
+    }
+  }
   const [stockById, setStockById] = useState<Map<string, { stock: number; managed: boolean }>>(new Map())
   const [backfill, setBackfill] = useState(false) // 過去分をまとめて登録する（納品書は開かず続けて入力）
   const [savedMsg, setSavedMsg] = useState("")
@@ -789,6 +836,9 @@ function NewOrderPage() {
                   {r.product_id && productById.get(r.product_id)?.manufacturer && (
                     <p className="text-xs text-gray-400 mt-0.5">［{productById.get(r.product_id)!.manufacturer}］</p>
                   )}
+                  {!r.product_id && r.product_name.trim() && (
+                    <button type="button" onClick={() => openReg(idx)} className="mt-0.5 text-[11px] text-blue-600 hover:underline" title="コードのない商品を、商品マスタに登録します（コードは自動で付きます）">＋ 商品として登録する（コード自動）</button>
+                  )}
                   <InlineProductSuggestions idx={idx} />
                   <div className="flex gap-1 mt-1">
                     <input value={r.lot || ""} onChange={e => updateRow(idx, { lot: e.target.value })}
@@ -887,6 +937,9 @@ function NewOrderPage() {
               </div>
               {r.product_id && productById.get(r.product_id)?.manufacturer && (
                 <p className="text-xs text-gray-400 -mt-1">［{productById.get(r.product_id)!.manufacturer}］</p>
+              )}
+              {!r.product_id && r.product_name.trim() && (
+                <button type="button" onClick={() => openReg(idx)} className="text-xs text-blue-600 underline text-left">＋ 商品として登録する（コード自動）</button>
               )}
               <input value={r.lot || ""} onChange={e => updateRow(idx, { lot: e.target.value })}
                 placeholder="LOT番号"
@@ -990,6 +1043,44 @@ function NewOrderPage() {
           {saving ? "保存中…" : paperMode && status === "納品済み" ? (backfill ? "✓ 登録して次へ" : "✓ 登録して納品書を発行") : "✓ 注文を作成"}
         </button>
       </div>
+
+      {/* 商品として登録 モーダル */}
+      {reg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-4 space-y-3">
+            <div className="font-bold text-gray-900">商品として登録する</div>
+            <p className="text-xs text-gray-600">商品マスタに登録します。コードは「NEW-000001」の形で、自動で付きます。登録すると、この行は、その商品に結びつきます（在庫・仕入先・売上の集計に使えます）。</p>
+            <label className="block text-xs font-bold text-gray-700">商品名
+              <input value={reg.name} onChange={e => setReg({ ...reg, name: e.target.value })} className="mt-1 w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-normal" />
+            </label>
+            <label className="block text-xs font-bold text-gray-700">メーカー（任意）
+              <input value={reg.maker} onChange={e => setReg({ ...reg, maker: e.target.value })} className="mt-1 w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-normal" />
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block text-xs font-bold text-gray-700">仕入価格（任意）
+                <input type="number" min={0} value={reg.cost} onChange={e => setReg({ ...reg, cost: e.target.value })} className="mt-1 w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-right font-normal" />
+              </label>
+              <label className="block text-xs font-bold text-gray-700">定価（任意）
+                <input type="number" min={0} value={reg.price} onChange={e => setReg({ ...reg, price: e.target.value })} className="mt-1 w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-right font-normal" />
+              </label>
+            </div>
+            <label className="block text-xs font-bold text-gray-700">仕入先（任意）
+              <select value={reg.supplierId} onChange={e => setReg({ ...reg, supplierId: e.target.value })} className="mt-1 w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-normal">
+                <option value="">（あとで設定する）</option>
+                {suppliers.map(sp => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-gray-700">
+              <input type="checkbox" checked={reg.noStock} onChange={e => setReg({ ...reg, noStock: e.target.checked })} />
+              在庫管理しない商品（パソコン関係など）
+            </label>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setReg(null)} disabled={regBusy} className="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50">キャンセル</button>
+              <button onClick={submitReg} disabled={regBusy} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300">{regBusy ? "登録中…" : "登録する"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 医院ピッカー モーダル */}
       {showClinicPicker && (() => {
