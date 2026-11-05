@@ -65,6 +65,20 @@ export default function ReceivingPage() {
   const [loading, setLoading] = useState(true)
 
   const [supplierId, setSupplierId] = useState("")
+  // 覚えた記録: この仕入先の、納品書の表記（コード・商品名）→ 商品。仕入登録を確定するたびに、増える・育つ
+  const [aliasMap, setAliasMap] = useState<Map<string, { productId: string; times: number }>>(new Map())
+  useEffect(() => {
+    if (!supplierId) { setAliasMap(new Map()); return }
+    let alive = true
+    ;(async () => {
+      try {
+        const { data, error } = await supabase.from("supplier_product_aliases").select("alias_key,product_id,times").eq("supplier_id", supplierId).limit(20000)
+        if (error || !alive) return
+        setAliasMap(new Map((data || []).map(a => [a.alias_key as string, { productId: a.product_id as string, times: Number(a.times || 1) }])))
+      } catch { /* 表がまだ無いときは、記録なしで動く */ }
+    })()
+    return () => { alive = false }
+  }, [supplierId])
   const [date, setDate] = useState(ymd(new Date()))
   const [updateCost, setUpdateCost] = useState(true)
 
@@ -301,11 +315,48 @@ export default function ReceivingPage() {
   function normKey(s: string | null | undefined): string {
     return String(s || "").normalize("NFKC").toLowerCase().trim().replace(/\s+/g, "")
   }
+  // 覚えた記録の、組み立て（品番があれば品番、商品名があれば商品名。どちらも、正規化して、記録する）
+  function aliasKeysOf(row: Row): string[] {
+    const keys: string[] = []
+    if (row.supplierCode && normKey(row.supplierCode).length >= 3) keys.push("code:" + normKey(row.supplierCode))
+    if (row.productName && normKey(row.productName).length >= 3) keys.push("name:" + normKey(row.productName))
+    return keys
+  }
+  function learnedProduct(row: Row): Product | undefined {
+    if (aliasMap.size === 0) return undefined
+    for (const k of aliasKeysOf(row)) {
+      const a = aliasMap.get(k)
+      if (a) { const p = products.find(x => x.id === a.productId); if (p) return p }
+    }
+    return undefined
+  }
+  // 仕入登録を確定した行の、組を覚える。すでにあれば、回数を足す。商品が違っていたら、今回の商品に、書き換える（新しい選択を優先）
+  async function learnAlias(row: Row, productId: string) {
+    if (!supplierId) return
+    try {
+      for (const k of aliasKeysOf(row)) {
+        const cur = aliasMap.get(k)
+        if (cur && cur.productId === productId) {
+          await supabase.from("supplier_product_aliases").update({ times: cur.times + 1, last_used_at: new Date().toISOString() }).eq("supplier_id", supplierId).eq("alias_key", k)
+          aliasMap.set(k, { productId, times: cur.times + 1 })
+        } else if (cur) {
+          await supabase.from("supplier_product_aliases").update({ product_id: productId, times: 1, last_used_at: new Date().toISOString() }).eq("supplier_id", supplierId).eq("alias_key", k)
+          aliasMap.set(k, { productId, times: 1 })
+        } else {
+          const { error } = await supabase.from("supplier_product_aliases").insert({ supplier_id: supplierId, alias_key: k, product_id: productId })
+          if (!error) aliasMap.set(k, { productId, times: 1 })
+        }
+      }
+      setAliasMap(new Map(aliasMap))
+    } catch { /* 表がまだ無い・書けないときは、覚えずに続ける（仕入登録には、影響しない） */ }
+  }
   function findProduct(row: Row): Product | undefined {
     if (row.productId) {
       const picked = products.find((p) => p.id === row.productId)
       if (picked) return picked
     }
+    const learned = learnedProduct(row)
+    if (learned) return learned
     if (row.supplierJan) {
       const key = normJan(row.supplierJan)
       if (key.length >= 8) {
@@ -442,6 +493,9 @@ export default function ReceivingPage() {
           newLogs.push(`+ 新規商品作成: ${product.name}`)
           setProducts((prev) => [...prev, product!])
         }
+
+        // この仕入先の、この表記は、この商品、と覚える（次回から、突き合わせの最優先で使う）
+        await learnAlias(row, product.id)
 
         // 在庫 + cost 更新（数量 = 在庫加算）
         const before = Number(product.stock || 0)
@@ -852,6 +906,9 @@ export default function ReceivingPage() {
               <option value="">— 仕入先を選択 —</option>
               {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.maker_name ? ` (${s.maker_name})` : ""}</option>)}
             </select>
+            {supplierId && (
+              <p className="text-[11px] text-gray-400 mt-0.5" title="仕入登録を確定するたびに、この仕入先の表記と商品の組を覚えます。次回から、突き合わせの最優先で使います">🧠 この仕入先で覚えた記録: {aliasMap.size}件</p>
+            )}
           </div>
           <div>
             <label className="block text-[12px] text-gray-500 mb-0.5 font-bold">入荷日</label>
@@ -906,7 +963,7 @@ export default function ReceivingPage() {
               }
 
               return (
-                <tr key={i} className={"border-b border-gray-100 " + (existing ? "bg-emerald-50/30" : isPdfRow && row.productName ? "bg-yellow-50/40" : "")}>
+                <tr key={i} title={learnedProduct(row) ? "覚えた記録で、この商品に一致しました（この仕入先で、前に選んだ商品）" : undefined} className={"border-b border-gray-100 " + (existing ? "bg-emerald-50/30" : isPdfRow && row.productName ? "bg-yellow-50/40" : "")}>
                   <td className="px-1.5 py-0.5 text-center text-gray-400">{i + 1}</td>
                   <td className="px-1.5 py-0.5 relative">
                     <input
