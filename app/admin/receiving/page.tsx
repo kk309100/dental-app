@@ -412,6 +412,20 @@ export default function ReceivingPage() {
   const validRows = rows.filter((r) => r.productName.trim() && Number.isFinite(Number(r.quantity)) && Number(r.quantity) !== 0)
   const totalAmount = validRows.reduce((s, r) => s + (Number(r.unitPrice) || 0) * Number(r.quantity), 0)
 
+  const [teaching, setTeaching] = useState(false)
+  async function teachOnly() {
+    if (!supplierId) { alert("先に、仕入先を選んでください"); return }
+    const matched = validRows.map(r => ({ row: r, product: findProduct(r) })).filter(x => x.product)
+    const skipped = validRows.length - matched.length
+    if (matched.length === 0) { alert("商品に一致している行がありません。先に、商品を選んで(紐づけて)ください"); return }
+    if (!confirm(`覚えさせるだけを行います。\n\n・覚える行: ${matched.length}行（納品書の表記 と 商品 の組）\n・商品に一致していない行: ${skipped}行（覚えません）\n\n在庫・仕入履歴・商品マスタは、一切、変わりません。\nこの仕入先の記録として、次回から、突き合わせに使います。よろしいですか？`)) return
+    setTeaching(true)
+    const before = aliasMap.size
+    for (const x of matched) await learnAlias(x.row, x.product!.id)
+    setTeaching(false)
+    alert(`覚えました（${matched.length}行）。この仕入先で覚えた記録: ${before}件 → ${aliasMap.size}件`)
+  }
+
   async function submitAll() {
     if (validRows.length === 0) { alert("有効な行がありません"); return }
     const newProductNames = validRows.filter((r) => !findProduct(r)).map((r) => r.productName)
@@ -1079,6 +1093,11 @@ export default function ReceivingPage() {
           <div className="flex-1 text-xs text-gray-500 text-right">
             有効: <strong className="text-gray-900">{validRows.length}行</strong> / 合計: <strong className="text-gray-900">{fmtYen(totalAmount)}</strong>
           </div>
+          <button onClick={teachOnly} disabled={submitting || teaching || !supplierId || validRows.length === 0}
+            title="過去の納品書を読み込んで、納品書の表記と商品の組だけを覚えさせます。在庫・仕入履歴は変わりません"
+            className="px-4 py-3 rounded-lg bg-white text-indigo-700 border border-indigo-300 font-bold text-sm disabled:opacity-40">
+            {teaching ? "覚えています…" : "🧠 覚えさせるだけ"}
+          </button>
           <button onClick={submitAll} disabled={submitting || validRows.length === 0} className="px-6 py-3 rounded-lg bg-gray-900 text-white font-bold text-sm disabled:opacity-50">
             {submitting ? `登録中… ${progress.done}/${progress.total}` : `${validRows.length}行 仕入登録`}
           </button>
