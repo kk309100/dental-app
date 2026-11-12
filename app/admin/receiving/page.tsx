@@ -26,6 +26,10 @@ type Row = {
   manufacturer: string        // 新規作成時用
   productId: string           // 手動で選んだ商品マスタID（指定時はJAN/コード/名前の自動照合より優先）
   pdfName: string             // PDF/写真から読み取った元の商品名（参考表示用）
+  pdfQty?: string             // 読み取った元の数量（「ばらす」などの換算を覚えるために残す）
+  pdfPrice?: string           // 読み取った元の単価
+  packChecked?: boolean       // 覚えた換算を、すでに確かめた
+  autoPack?: number           // 覚えた換算（×N）を、自動で当てた
 }
 
 const newRow = (): Row => ({
@@ -66,15 +70,17 @@ export default function ReceivingPage() {
 
   const [supplierId, setSupplierId] = useState("")
   // 覚えた記録: この仕入先の、納品書の表記（コード・商品名）→ 商品。仕入登録を確定するたびに、増える・育つ
-  const [aliasMap, setAliasMap] = useState<Map<string, { productId: string; times: number }>>(new Map())
+  const [aliasMap, setAliasMap] = useState<Map<string, { productId: string; times: number; packFactor?: number }>>(new Map())
   useEffect(() => {
     if (!supplierId) { setAliasMap(new Map()); return }
     let alive = true
     ;(async () => {
       try {
-        const { data, error } = await supabase.from("supplier_product_aliases").select("alias_key,product_id,times").eq("supplier_id", supplierId).limit(20000)
-        if (error || !alive) return
-        setAliasMap(new Map((data || []).map(a => [a.alias_key as string, { productId: a.product_id as string, times: Number(a.times || 1) }])))
+        // pack_factor の列がまだ無いときは、その列なしで読む
+        let res = await supabase.from("supplier_product_aliases").select("alias_key,product_id,times,pack_factor").eq("supplier_id", supplierId).limit(20000)
+        if (res.error) res = await supabase.from("supplier_product_aliases").select("alias_key,product_id,times").eq("supplier_id", supplierId).limit(20000) as typeof res
+        if (res.error || !alive) return
+        setAliasMap(new Map((res.data || []).map((a: { alias_key: string; product_id: string; times: number; pack_factor?: number | null }) => [a.alias_key, { productId: a.product_id, times: Number(a.times || 1), packFactor: a.pack_factor && Number(a.pack_factor) > 1 ? Number(a.pack_factor) : undefined }])))
       } catch { /* 表がまだ無いときは、記録なしで動く */ }
     })()
     return () => { alive = false }
@@ -163,7 +169,9 @@ export default function ReceivingPage() {
       manufacturer: it.manufacturer || it.maker || it.メーカー || "",
       productId: "",
       pdfName: it.supplier_product_name || it.product_name || it.name || it.商品名 || "",
-    })).filter(r => r.productName)  // 商品名が空の行は除去
+      pdfQty: String(it.quantity ?? it.qty ?? it.数量 ?? ""),
+      pdfPrice: String(it.unit_price ?? it.price ?? it.単価 ?? ""),
+    })).filter(r => r.productName)  // 商品名が空の行は除去（読み取り元の数量・単価は、pdfQty・pdfPrice に残す）  // 商品名が空の行は除去
 
     // 常にrawJsonを保持（デバッグ用）
     const rawJsonStr = JSON.stringify(data, null, 2)
@@ -331,25 +339,61 @@ export default function ReceivingPage() {
     return undefined
   }
   // 仕入登録を確定した行の、組を覚える。すでにあれば、回数を足す。商品が違っていたら、今回の商品に、書き換える（新しい選択を優先）
+  // 換算（ばらす）: 読み取った数量の、整数倍（2倍以上）で登録したら、その倍率を覚える。読み取った数量のまま登録したら、覚えた倍率を消す
+  function packFactorOf(row: Row): number | null | undefined {
+    const q0 = Number(row.pdfQty), qf = Number(row.quantity)
+    if (!row.pdfQty || !(q0 > 0) || !(qf > 0)) return undefined      // 読み取った数量が無い行（手入力）は、触らない
+    if (qf === q0) return null                                         // 換算なし
+    const r = qf / q0
+    return Number.isInteger(r) && r >= 2 ? r : undefined               // 整数倍でないものは、換算として覚えない
+  }
   async function learnAlias(row: Row, productId: string) {
     if (!supplierId) return
     try {
+      const pf = packFactorOf(row)
       for (const k of aliasKeysOf(row)) {
         const cur = aliasMap.get(k)
+        const withPack = pf === undefined ? {} : { pack_factor: pf }
+        const nextPack = pf === undefined ? cur?.packFactor : (pf === null ? undefined : pf)
+        const write = async (op: "update" | "insert", body: Record<string, unknown>) => {
+          let r = op === "update"
+            ? await supabase.from("supplier_product_aliases").update({ ...body, ...withPack }).eq("supplier_id", supplierId).eq("alias_key", k)
+            : await supabase.from("supplier_product_aliases").insert({ ...body, ...withPack, supplier_id: supplierId, alias_key: k })
+          // pack_factor の列がまだ無いときは、その列なしで書く
+          if (r.error && pf !== undefined) r = op === "update"
+            ? await supabase.from("supplier_product_aliases").update(body).eq("supplier_id", supplierId).eq("alias_key", k)
+            : await supabase.from("supplier_product_aliases").insert({ ...body, supplier_id: supplierId, alias_key: k })
+          return r
+        }
         if (cur && cur.productId === productId) {
-          await supabase.from("supplier_product_aliases").update({ times: cur.times + 1, last_used_at: new Date().toISOString() }).eq("supplier_id", supplierId).eq("alias_key", k)
-          aliasMap.set(k, { productId, times: cur.times + 1 })
+          await write("update", { times: cur.times + 1, last_used_at: new Date().toISOString() })
+          aliasMap.set(k, { productId, times: cur.times + 1, packFactor: nextPack })
         } else if (cur) {
-          await supabase.from("supplier_product_aliases").update({ product_id: productId, times: 1, last_used_at: new Date().toISOString() }).eq("supplier_id", supplierId).eq("alias_key", k)
-          aliasMap.set(k, { productId, times: 1 })
+          await write("update", { product_id: productId, times: 1, last_used_at: new Date().toISOString() })
+          aliasMap.set(k, { productId, times: 1, packFactor: nextPack })
         } else {
-          const { error } = await supabase.from("supplier_product_aliases").insert({ supplier_id: supplierId, alias_key: k, product_id: productId })
-          if (!error) aliasMap.set(k, { productId, times: 1 })
+          const r = await write("insert", { product_id: productId })
+          if (!r.error) aliasMap.set(k, { productId, times: 1, packFactor: nextPack })
         }
       }
       setAliasMap(new Map(aliasMap))
     } catch { /* 表がまだ無い・書けないときは、覚えずに続ける（仕入登録には、影響しない） */ }
   }
+  useEffect(() => {
+    if (aliasMap.size === 0) return
+    let changed = false
+    const next = rows.map(r => {
+      if (r.packChecked || !r.pdfQty) return r
+      const hit = aliasKeysOf(r).map(k => aliasMap.get(k)).find(a => a && a.packFactor && a.packFactor > 1)
+      if (!hit || !hit.packFactor) return r
+      const q0 = Number(r.pdfQty), p0 = Number(r.pdfPrice)
+      if (!(q0 > 0) || Number(r.quantity) !== q0) return { ...r, packChecked: true }   // 人がすでに直した行は、触らない
+      changed = true
+      return { ...r, packChecked: true, autoPack: hit.packFactor, quantity: String(q0 * hit.packFactor), unitPrice: Number.isFinite(p0) && r.pdfPrice !== "" ? String(Math.round((p0 / hit.packFactor) * 100) / 100) : r.unitPrice }
+    })
+    if (changed) setRows(next)
+  }, [aliasMap, rows])   // eslint-disable-line react-hooks/exhaustive-deps
+
   function findProduct(row: Row): Product | undefined {
     if (row.productId) {
       const picked = products.find((p) => p.id === row.productId)
@@ -921,7 +965,7 @@ export default function ReceivingPage() {
               {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.maker_name ? ` (${s.maker_name})` : ""}</option>)}
             </select>
             {supplierId && (
-              <p className="text-[11px] text-gray-400 mt-0.5" title="仕入登録を確定するたびに、この仕入先の表記と商品の組を覚えます。次回から、突き合わせの最優先で使います">🧠 この仕入先で覚えた記録: {aliasMap.size}件</p>
+              <p className="text-[11px] text-gray-400 mt-0.5" title="仕入登録を確定するたびに、この仕入先の表記と商品の組を覚えます。次回から、突き合わせの最優先で使います">🧠 この仕入先で覚えた記録: {aliasMap.size}件{rows.some(r => r.pdfName) ? `（いまの読み込み: ${rows.filter(r => r.pdfName && learnedProduct(r)).length}/${rows.filter(r => r.pdfName).length}行が、覚えた記録で一致）` : ""}</p>
             )}
           </div>
           <div>
@@ -1006,6 +1050,7 @@ export default function ReceivingPage() {
                       )
                     })()}
                     {row.productId && <div className="text-[11px] text-emerald-700 mt-0.5">✓ 商品マスタを手動選択済み</div>}
+                    {row.autoPack ? <div className="text-[11px] text-indigo-600 mt-0.5" title="この仕入先の、この商品は、前に、ばらして登録したため、同じ換算を当てました。違う場合は、数量・単価を直してください">⚙ 覚えた換算 ×{row.autoPack}（読取 数量{row.pdfQty}・単価{row.pdfPrice}）</div> : null}
                     {row.pdfName && row.pdfName !== row.productName && <div className="text-[11px] text-gray-400 mt-0.5">読取名: {row.pdfName}</div>}
                     {row.packSize && <div className="text-[11px] text-gray-400 mt-0.5">入数: {row.packSize}</div>}
                     {row.productName && !existing && <div className="text-[11px] text-yellow-700 mt-0.5">⚡ 新規商品として登録されます</div>}
