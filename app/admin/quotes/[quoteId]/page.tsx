@@ -520,8 +520,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
         }
         /* admin-base.css が、表のセルの下線・余白・文字の大きさを !important で固定しているため、見出し・小計・間の行だけ、上書きする */
         /* 見積の明細の行の線を濃くする（admin-base.css が、セルの下線を薄い色で固定しているため、ここで上書きする）。見出し・小計・間の行は、このあとの設定が優先される */
-        .print-area.print-area table td { border-bottom: 1px solid #6b7280 !important; }
-        .print-area.print-area table th { border-bottom: 2px solid #111 !important; }
+        .print-area.print-area table td { border-bottom: 1px solid #000 !important; }
+        .print-area.print-area table th { border-bottom: 2px solid #000 !important; }
         .print-area table td.q-sec, .print-area table td.q-sub {
           font-size: 12px !important;
           font-weight: 700 !important;
@@ -529,8 +529,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
           color: #0f172a !important;
           -webkit-print-color-adjust: exact; print-color-adjust: exact;
         }
-        .print-area table td.q-sec { background: #eef2f7 !important; border-top: 1.5px solid #64748b !important; border-bottom: 1px solid #cbd5e1 !important; }
-        .print-area table td.q-sub { background: #f8fafc !important; border-top: 1px solid #64748b !important; border-bottom: 1.5px solid #64748b !important; }
+        .print-area table td.q-sec { background: #eef2f7 !important; border-top: 1.5px solid #000 !important; border-bottom: 1px solid #000 !important; }
+        .print-area table td.q-sub { background: #f8fafc !important; border-top: 1px solid #000 !important; border-bottom: 1.5px solid #000 !important; }
         .print-area table td.q-gap { border: none !important; padding: 0 !important; height: 10px !important; font-size: 0 !important; background: transparent !important; }
         @page { size: A4 portrait; margin: 0; }
       `}</style>
