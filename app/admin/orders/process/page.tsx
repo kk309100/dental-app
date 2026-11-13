@@ -198,7 +198,7 @@ export default function OrderProcessPage() {
       willExclude ? n.add(itemId) : n.delete(itemId)
       return n
     })
-    // 見送るにチェックを入れた時だけ、在庫があっても自動で発注プールへ追加する
+    // 強制発注にチェックを入れた時だけ、在庫があっても自動で発注プールへ追加する
     // （チェックを外しても、既に追加したプール明細は自動では取り消さない。
     //   取り消したい場合は発注プール画面から手動で削除してもらう）
     if (willExclude && !forcedItemIds.has(itemId)) {
@@ -641,7 +641,7 @@ export default function OrderProcessPage() {
                             {st.ok && (
                               <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, marginTop: 3, fontSize: 10, color: "#9a3412", cursor: "pointer", userSelect: "none" }}>
                                 <input type="checkbox" checked={excluded} onChange={() => toggleExcluded(it.id, it.product_name || "(不明)")} style={{ cursor: "pointer" }} />
-                                今回は見送る{excluded && forcedItemIds.has(it.id) && "（発注済）"}
+                                強制発注{excluded && forcedItemIds.has(it.id) && "（発注済）"}
                               </label>
                             )}
                           </td>
@@ -650,7 +650,7 @@ export default function OrderProcessPage() {
                               {effOk
                                 ? <span style={{ fontSize: 11, fontWeight: 700, color: "#0f766e" }}>今回納品 →</span>
                                 : excluded
-                                ? <span style={{ fontSize: 11, fontWeight: 700, color: "#9a3412" }}>見送り（在庫あり）</span>
+                                ? <span style={{ fontSize: 11, fontWeight: 700, color: "#9a3412" }}>強制発注（在庫あり）</span>
                                 : <span style={{ fontSize: 11, fontWeight: 700, color: "#b91c1c" }}>発注後に納品</span>
                               }
                             </td>
