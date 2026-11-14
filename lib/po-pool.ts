@@ -131,6 +131,17 @@ export async function addItemsToPool(
 }
 
 /**
+ * 仕入先を選んだ商品に、その仕入先を「標準の仕入先」として覚える。次回から、発注プールに入るとき、自動でこの仕入先になる。
+ * すでに標準の仕入先がある商品は、変えない（空の商品だけ）。商品に結びついていない行（手入力）は、覚えられない。
+ */
+export async function rememberDefaultSupplier(productIds: (string | null | undefined)[], supplierId: string): Promise<number> {
+  const ids = Array.from(new Set(productIds.filter(Boolean) as string[]))
+  if (!supplierId || ids.length === 0) return 0
+  const { data } = await supabase.from("products").update({ default_supplier_id: supplierId }).in("id", ids).is("default_supplier_id", null).select("id")
+  return (data || []).length
+}
+
+/**
  * 注文1件 or 複数件から、不足商品を仕入先別にプールに追加するヘルパ
  *
  * @param orderIds 対象注文ID

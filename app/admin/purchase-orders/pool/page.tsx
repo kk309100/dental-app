@@ -11,7 +11,7 @@ import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
 import { supabase, fetchAllData } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
-import { confirmPoolPO, discardPoolPO } from "@/lib/po-pool"
+import { confirmPoolPO, discardPoolPO, rememberDefaultSupplier } from "@/lib/po-pool"
 
 // 明細の note「[医院名] 注文 xxxxxxxx」から医院名だけを取り出して表示する
 // （列の幅をそろえるため、注文IDの部分は表示しない）
@@ -137,6 +137,9 @@ export default function POPoolPage() {
   async function assignSupplier(poId: string, supplierId: string) {
     if (!supplierId) return
     await supabase.from("purchase_orders").update({ supplier_id: supplierId }).eq("id", poId)
+    // この発注書の商品に、選んだ仕入先を、標準の仕入先として覚える（空の商品だけ）
+    const { data: its } = await supabase.from("purchase_order_items").select("product_id").eq("purchase_order_id", poId)
+    await rememberDefaultSupplier((its || []).map(x => x.product_id as string | null), supplierId)
     fetchData({ silent: true })
   }
 
@@ -182,6 +185,8 @@ export default function POPoolPage() {
       const fromPoId = item.purchase_order_id
       const { error: moveErr } = await supabase.from("purchase_order_items").update({ purchase_order_id: targetPoId }).eq("id", item.id)
       if (moveErr) { alert("移動失敗: " + moveErr.message); return }
+      // この商品に、選んだ仕入先を、標準の仕入先として覚える（空のときだけ）
+      await rememberDefaultSupplier([item.product_id], supplierId)
 
       // 3. 移動元・移動先それぞれの合計金額を再計算
       const itemTotal = Number(item.quantity) * Number(item.unit_price || 0)

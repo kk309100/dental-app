@@ -12,6 +12,7 @@ import { fmtYen, parseDbDate } from "@/lib/invoice"
 import { GroupViewTabs, useGroupView, type GroupableRow } from "@/app/components/GroupViewTabs"
 import ManagedBadge from "@/app/components/ManagedBadge"
 import { toCSV, downloadCSV } from "@/lib/csv"
+import { rememberDefaultSupplier } from "@/lib/po-pool"
 import { planPoDetach, describePoDetach, applyPoDetach } from "@/lib/po-detach"
 import { poolFromOrders, addItemsToPool, removeFromUnassignedPool, forceAddOrderItemToPool, type PoolItem } from "@/lib/po-pool"
 
@@ -1738,17 +1739,19 @@ function AdminOrdersPage() {
                   if (!r.ok && r.errors.length > 0) { alert("一部失敗:\n" + r.errors.join("\n")) }
                   // 「仕入先未定」プールに二重で積まれている分を取り除く
                   await removeFromUnassignedPool(selected)
+                  // 選んだ仕入先を、標準の仕入先として覚える（次回から、自動でこの仕入先になる。すでに標準がある商品は、変えない）
+                  const remembered = await rememberDefaultSupplier(selected.map(p => p.product_id), sId)
                   const remaining = fallbackProducts.filter(p => !selectedFallbackKeys.has(fallbackKey(p)))
                   setFallbackProducts(remaining)
                   setSelectedFallbackKeys(new Set(remaining.map(fallbackKey)))
                   if (remaining.length === 0) {
                     setFallbackPickerOrderIds(null)
                     setSupplierSearch("")
-                    if (confirm(`✅ ${sName} へ ${selected.length}品を発注プールに追加しました。\n\n発注プール画面に移動しますか？`)) {
+                    if (confirm(`✅ ${sName} へ ${selected.length}品を発注プールに追加しました。${remembered > 0 ? `\n（${remembered}品は、次回から、この仕入先になります）` : ""}\n\n発注プール画面に移動しますか？`)) {
                       window.location.href = "/admin/purchase-orders/pool"
                     }
                   } else {
-                    alert(`✅ ${sName} へ ${selected.length}品を追加しました。\n残り ${remaining.length}品 の仕入先を選択してください。`)
+                    alert(`✅ ${sName} へ ${selected.length}品を追加しました。${remembered > 0 ? `\n（${remembered}品は、次回から、この仕入先になります）` : ""}\n残り ${remaining.length}品 の仕入先を選択してください。`)
                   }
                 }
                 const SupBtn = ({ s, highlight }: { s: { id: string; name: string }; highlight?: boolean }) => (
