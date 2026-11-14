@@ -3,6 +3,7 @@
 //   下書き（発注プール）で、入荷前の行 … 行を消す（行が無くなった下書きは、発注書ごと消す）
 //   送信済み（発注済・部分入荷）で、入荷前の行 … 行を消して、発注書に「変更あり」の印を付ける（仕入先へ連絡が必要）
 //   入荷が始まっている／入荷済みの行 … 変えない（お知らせだけ）
+import { deletePoLogged } from "@/lib/po-delete-log"
 import { supabase } from "@/lib/supabase"
 import { markPoChanged, recalcPoTotal } from "@/lib/po-change-log"
 
@@ -49,7 +50,7 @@ export async function applyPoDetach(p: Plan, reason: string): Promise<string[]> 
   for (const l of [...p.draft, ...p.sent]) { await supabase.from("purchase_order_items").delete().eq("id", l.id); touched.add(l.poId) }
   for (const poId of Array.from(touched)) {
     const { count } = await supabase.from("purchase_order_items").select("id", { count: "exact", head: true }).eq("purchase_order_id", poId)
-    if ((count || 0) === 0 && UNSENT.includes(p.heads.get(poId)?.status || "")) await supabase.from("purchase_orders").delete().eq("id", poId)
+    if ((count || 0) === 0 && UNSENT.includes(p.heads.get(poId)?.status || "")) await deletePoLogged(poId, "注文の削除・明細の削除")
     else await recalcPoTotal(poId)
   }
   const changes = new Map<string, string[]>()

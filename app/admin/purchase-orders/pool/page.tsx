@@ -6,6 +6,7 @@
 //   注文の「→発注」ボタンで不足商品が仕入先別の下書きにプールされる
 //   このページで仕入先ごとに「発注確定」して発注書を発行する
 
+import { deletePoLogged } from "@/lib/po-delete-log"
 import { useEffect, useMemo, useState } from "react"
 import { romajiAlt } from "@/lib/romaji"
 import Link from "next/link"
@@ -198,7 +199,7 @@ export default function POPoolPage() {
         await supabase.from("purchase_orders").update({ total_amount: newFromTotal }).eq("id", fromPoId)
       } else {
         // 明細が空になった「仕入先未定」POは片付ける
-        await supabase.from("purchase_orders").delete().eq("id", fromPoId)
+        await deletePoLogged(fromPoId, "発注プール")
       }
 
       fetchData({ silent: true })

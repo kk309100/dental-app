@@ -1,5 +1,6 @@
 "use client"
 
+import { deletePoLogged } from "@/lib/po-delete-log"
 import { use, useEffect, useState } from "react"
 import { cancelPoLineReceipt, receiveAllPoRemaining, countPoRemaining } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
@@ -226,7 +227,7 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
     if (!po) return
     if (!confirm("この発注書を完全に削除しますか？（取消の方が安全です）")) return
     await supabase.from("purchase_order_items").delete().eq("purchase_order_id", po.id)
-    await supabase.from("purchase_orders").delete().eq("id", po.id)
+    await deletePoLogged(po.id, "発注書の詳細")
     router.push("/admin/purchase-orders")
   }
 

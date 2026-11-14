@@ -1,5 +1,6 @@
 "use client"
 
+import { deletePoLogged } from "@/lib/po-delete-log"
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { romajiAlt } from "@/lib/romaji"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -149,7 +150,7 @@ function NewPOPage() {
     const { error: ie } = await supabase.from("purchase_order_items").insert(items)
     if (ie) {
       // 明細失敗 → ヘッダもロールバック削除
-      await supabase.from("purchase_orders").delete().eq("id", po.id)
+      await deletePoLogged(po.id, "発注書の新規作成")
       alert(`明細作成失敗: ${ie.message}\n\n発注書も取消しました。\n\n💡 RLS エラーの場合は db/migrations/2026-05-05_disable_rls_again.sql を Supabase Studio で実行してください。`)
       setSaving(false); return
     }

@@ -3,6 +3,7 @@
 // 注文の編集（注文管理から。数量・商品名・単価などを直せるのは、ここだけ）
 // 直せる項目: 数量・単価・商品名・商品の紐づけ・行の追加と削除・備考。合計金額は自動で計算し直す。
 // 納品済みの納品書は、数量・商品を変えた分だけ、在庫も増減する（「在庫管理しない」商品は、在庫を変えない）。在庫の動きに「出庫修正」で残る。
+import { deletePoLogged } from "@/lib/po-delete-log"
 import { use, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -233,7 +234,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       // 発注書の合計を直す（行が無くなった下書きは、発注書ごと消す）。送信済みの発注書には「変更あり」を残す
       for (const poId of Array.from(touchedPo)) {
         const { count } = await supabase.from("purchase_order_items").select("id", { count: "exact", head: true }).eq("purchase_order_id", poId)
-        if ((count || 0) === 0 && UNSENT.includes(poHeadById.get(poId)?.status || "")) await supabase.from("purchase_orders").delete().eq("id", poId)
+        if ((count || 0) === 0 && UNSENT.includes(poHeadById.get(poId)?.status || "")) await deletePoLogged(poId, "注文の編集")
         else await recalcPoTotal(poId)
       }
       for (const [poId, texts] of Array.from(changeTexts)) {
@@ -321,7 +322,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       }
       for (const poId of Array.from(touched)) {
         const { count } = await supabase.from("purchase_order_items").select("id", { count: "exact", head: true }).eq("purchase_order_id", poId)
-        if ((count || 0) === 0 && UNSENT.includes(heads.get(poId)?.status || "")) await supabase.from("purchase_orders").delete().eq("id", poId)
+        if ((count || 0) === 0 && UNSENT.includes(heads.get(poId)?.status || "")) await deletePoLogged(poId, "注文の編集")
         else await recalcPoTotal(poId)
       }
       for (const [poId, texts] of Array.from(changes)) await markPoChanged(poId, texts)

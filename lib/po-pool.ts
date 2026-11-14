@@ -9,6 +9,7 @@
 // 既存の purchase_orders.status="下書き" を「プール」として活用
 // 各明細の note に「[医院名] from 注文ID」を記録 → 医院納品先の追跡用
 
+import { deletePoLogged } from "@/lib/po-delete-log"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 
 export type PoolItem = {
@@ -435,7 +436,7 @@ export async function removeFromUnassignedPool(items: PoolItem[]): Promise<void>
     const removedTotal = toDelete.reduce((s, r) => s + Number(r.quantity || 0) * Number(r.unit_price || 0), 0)
     await supabase.from("purchase_order_items").delete().in("id", toDelete.map(r => r.id))
     if (toDelete.length >= rows.length) {
-      await supabase.from("purchase_orders").delete().eq("id", po.id)
+      await deletePoLogged(po.id, "発注プール(共通)")
     } else {
       await supabase.from("purchase_orders").update({ total_amount: Math.max(0, Number(po.total_amount || 0) - removedTotal) }).eq("id", po.id)
     }
@@ -475,7 +476,7 @@ export async function confirmPoolPO(poId: string, sentMethod?: string): Promise<
  */
 export async function discardPoolPO(poId: string): Promise<{ ok: boolean; error?: string }> {
   await supabase.from("purchase_order_items").delete().eq("purchase_order_id", poId)
-  const { error } = await supabase.from("purchase_orders").delete().eq("id", poId)
+  const { error } = await deletePoLogged(poId, "発注プール(共通)")
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }
