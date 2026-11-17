@@ -436,7 +436,7 @@ function AdminOrdersPage() {
       const r = await forceAddOrderItemToPool(itemId, undefined, qty)
       if (!r.ok) { alert("追加失敗: " + r.error); return }
       setForcedItemIds(prev => new Set(prev).add(itemId))
-      alert(`✅ ${r.supplierName} の発注プールに ${qty}個 追加しました。\nこの注文を後で「プール追加」しても、この明細は自動追加で重複しません。`)
+      alert(`✅ ${r.supplierName} の発注プールに ${r.added ?? qty}個 追加しました。${r.already ? `（すでに${r.already}個が発注書にあったので、合計${r.already + (r.added ?? 0)}個になります）` : ""}\nこの注文を後で「プール追加」しても、この明細は自動追加で重複しません。`)
     } finally {
       setForcingItemId(null)
     }

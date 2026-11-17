@@ -291,7 +291,7 @@ export async function forceAddOrderItemToPool(
   fallbackSupplierId?: string,
   quantityOverride?: number,
   opts?: { allowDuplicate?: boolean },   // 同じ明細が、すでに発注書にあっても、追加の分として入れる（個数を増やしたとき）
-): Promise<{ ok: boolean; error?: string; supplierName?: string }> {
+): Promise<{ ok: boolean; error?: string; supplierName?: string; added?: number; already?: number }> {
   const { data: oi, error: oiErr } = await supabase
     .from("order_items")
     .select("id,order_id,product_id,product_name,quantity,price")
@@ -305,13 +305,22 @@ export async function forceAddOrderItemToPool(
     .from("purchase_order_items")
     .select("id,quantity,received_quantity,purchase_order_id")
     .ilike("note", `%明細${oi.id.slice(0, 8)}%`)
+  // 強制発注で、希望の数量に、すでに発注書に入っている分が足りないときは、足りない分だけを追加する
+  // （例: 在庫を見て不足の3個だけが入っている明細に、10個で強制発注 → 残り7個を追加）
+  let topUpQty: number | null = null
+  let alreadyOrdered = 0
   if (!opts?.allowDuplicate && dupItems && dupItems.length > 0) {
     const poIds = Array.from(new Set(dupItems.map((d: any) => d.purchase_order_id)))
     const { data: pos } = await supabase.from("purchase_orders").select("id,status").in("id", poIds)
     const cancelledIds = new Set((pos || []).filter((p: any) => p.status === "取消").map((p: any) => p.id))
-    const stillActive = dupItems.find((d: any) => !cancelledIds.has(d.purchase_order_id))
-    if (stillActive) {
-      return { ok: false, error: `この明細は既に発注プールに追加済みです（数量${stillActive.quantity}個）。重複を避けるため追加をスキップしました。` }
+    const active = dupItems.filter((d: any) => !cancelledIds.has(d.purchase_order_id))
+    if (active.length > 0) {
+      alreadyOrdered = active.reduce((n: number, d: any) => n + Number(d.quantity || 0), 0)
+      const want = quantityOverride != null ? Number(quantityOverride) : Number(oi.quantity || 0)
+      if (alreadyOrdered >= want) {
+        return { ok: false, error: `この明細は、すでに ${alreadyOrdered}個 発注書に入っています（希望の ${want}個 以上）。重複を避けるため追加をスキップしました。もっと発注したいときは、数量を増やして、もう一度、実行してください。` }
+      }
+      topUpQty = want - alreadyOrdered
     }
   }
 
@@ -338,7 +347,7 @@ export async function forceAddOrderItemToPool(
   const item: PoolItem = {
     product_id: oi.product_id,
     product_name: oi.product_name || "(商品名なし)",
-    quantity: quantityOverride != null ? Number(quantityOverride) : Number(oi.quantity || 0),
+    quantity: topUpQty != null ? topUpQty : quantityOverride != null ? Number(quantityOverride) : Number(oi.quantity || 0),
     unit_price: unitPrice,
     source_order_id: oi.order_id,
     source_order_item_id: oi.id,
@@ -352,7 +361,7 @@ export async function forceAddOrderItemToPool(
     : "仕入先未定"
   const result = await addItemsToPool(new Map([[supplierId, [item]]]), new Map([[supplierId, supplierName]]))
   if (!result.ok) return { ok: false, error: result.errors.join(" / ") }
-  return { ok: true, supplierName }
+  return { ok: true, supplierName, added: item.quantity, already: alreadyOrdered }
 }
 
 /**
