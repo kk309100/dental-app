@@ -8,6 +8,7 @@
 // ・全在庫不足 or 売上モードOFF → 準備中 + 発注プール
 
 import { useEffect, useMemo, useState } from "react"
+import { isStockOrderClinic } from "@/lib/stock-order-clinic"
 import { withStockFlag } from "@/lib/stock-managed"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 import { poolFromOrders, forceAddOrderItemToPool } from "@/lib/po-pool"
@@ -26,7 +27,7 @@ type OrderItem = {
   product_name: string | null; quantity: number; price: number
 }
 type Product  = { id: string; name: string; stock: number | null; stock_managed?: boolean | null; location?: string | null }
-type Clinic   = { id: string; name: string; corporate_name: string | null }
+type Clinic   = { id: string; name: string; corporate_name: string | null; clinic_code?: string | null }
 
 type ProcessResult = {
   orderId: string; clinicName: string
@@ -161,7 +162,7 @@ export default function OrderProcessPage() {
       fetchAllData("order_items", "id,order_id,product_id,product_name,quantity,price"),
       // products は1万件超あるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
       fetchAll("products", "id,name,stock,stock_managed,location"),
-      supabase.from("clinics").select("id,name,corporate_name").limit(50000),
+      supabase.from("clinics").select("id,name,corporate_name,clinic_code").limit(50000),
     ])
     setOrders((o.data as Order[]) || [])
     setItems((i.data as OrderItem[]) || [])
@@ -187,7 +188,7 @@ export default function OrderProcessPage() {
     const need  = Number(item.quantity || 0)
     // 「※在庫分発注用」の医院の注文は、自社の在庫を補充するための発注なので、在庫があっても、注文数をそのまま発注する（納品はしない）
     const clinicId = orders.find(o => o.id === item.order_id)?.clinic_id
-    if (clinicId && String(clinicById.get(clinicId)?.name || "").includes("在庫分発注用")) return { ok: false, stock, short: need }
+    if (clinicId && isStockOrderClinic(clinicById.get(clinicId))) return { ok: false, stock, short: need }
     return { ok: stock >= need, stock, short: Math.max(0, need - Math.max(0, stock)) }
   }
 

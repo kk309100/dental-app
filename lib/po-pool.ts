@@ -10,6 +10,7 @@
 // 各明細の note に「[医院名] from 注文ID」を記録 → 医院納品先の追跡用
 
 import { deletePoLogged } from "@/lib/po-delete-log"
+import { isStockOrderClinic } from "@/lib/stock-order-clinic"
 import { logOp } from "@/lib/op-log"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 
@@ -169,7 +170,7 @@ export async function poolFromOrders(
     // 過去仕入履歴（最新優先で仕入先決定）
     // 入荷記録は1000件を超えるため全件取得する（新しい順。同時刻の並びが安定するよう id でも並べる）
     fetchAll("stock_receipts", "id,product_id,supplier_id,unit_price,created_at", (q: any) => q.order("created_at", { ascending: false }).order("id", { ascending: true })).then((data: any[]) => ({ data })),
-    supabase.from("clinics").select("id,name").limit(50000),
+    supabase.from("clinics").select("id,name,clinic_code").limit(50000),
     // 既に発注プールへ追加済みの明細を検出するため（ページ再読み込み後の二重追加防止）
     fetchAllData("purchase_order_items", "id,note,purchase_order_id", (q: any) => q.not("note", "is", null)),
     fetchAllData("purchase_orders", "id,status"),
@@ -193,6 +194,7 @@ export async function poolFromOrders(
   const productById = new Map(products.map((p: any) => [p.id, p]))
   const supplierById = new Map<string, string>(suppliers.map((s: any) => [s.id, s.name]))
   const clinicById = new Map(clinics.map((c: any) => [c.id, c.name]))
+  const clinicRowById = new Map(clinics.map((c: any) => [c.id, c]))
   const orderById = new Map(orders.map((o: any) => [o.id, o]))
 
   // 商品ごとの「最新の仕入先」を計算
@@ -248,7 +250,7 @@ export async function poolFromOrders(
     const orderQty = Number(oi.quantity || 0)
     // 在庫がマイナス（記録ズレ）でも、実際の在庫は0以下にならないため、注文数を超えて発注しない
     // 「※在庫分発注用」の医院の注文は、自社の在庫を補充するための発注なので、在庫を見ずに、注文数をそのまま発注する
-    const stockOrderClinic = String(clinicById.get((orderById.get(oi.order_id) as any)?.clinic_id) || "").includes("在庫分発注用")
+    const stockOrderClinic = isStockOrderClinic(clinicRowById.get((orderById.get(oi.order_id) as any)?.clinic_id))
     const shortBy = stockOrderClinic ? orderQty : orderQty - Math.max(0, stock)
     if (shortBy <= 0) { skippedNoShortage++; continue }
 
