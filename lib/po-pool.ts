@@ -247,7 +247,9 @@ export async function poolFromOrders(
     const stock = Number(product.stock || 0)
     const orderQty = Number(oi.quantity || 0)
     // 在庫がマイナス（記録ズレ）でも、実際の在庫は0以下にならないため、注文数を超えて発注しない
-    const shortBy = orderQty - Math.max(0, stock)
+    // 「※在庫分発注用」の医院の注文は、自社の在庫を補充するための発注なので、在庫を見ずに、注文数をそのまま発注する
+    const stockOrderClinic = String(clinicById.get((orderById.get(oi.order_id) as any)?.clinic_id) || "").includes("在庫分発注用")
+    const shortBy = stockOrderClinic ? orderQty : orderQty - Math.max(0, stock)
     if (shortBy <= 0) { skippedNoShortage++; continue }
 
     // 仕入先決定: default_supplier_id > 過去履歴 > fallbackSupplierId

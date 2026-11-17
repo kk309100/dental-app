@@ -185,6 +185,9 @@ export default function OrderProcessPage() {
     const p = item.product_id ? productById.get(item.product_id) : null
     const stock = Number(p?.stock || 0)
     const need  = Number(item.quantity || 0)
+    // 「※在庫分発注用」の医院の注文は、自社の在庫を補充するための発注なので、在庫があっても、注文数をそのまま発注する（納品はしない）
+    const clinicId = orders.find(o => o.id === item.order_id)?.clinic_id
+    if (clinicId && String(clinicById.get(clinicId)?.name || "").includes("在庫分発注用")) return { ok: false, stock, short: need }
     return { ok: stock >= need, stock, short: Math.max(0, need - Math.max(0, stock)) }
   }
 
