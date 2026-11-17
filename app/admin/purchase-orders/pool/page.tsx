@@ -13,6 +13,7 @@ import Link from "next/link"
 import { supabase, fetchAllData } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { confirmPoolPO, discardPoolPO, rememberDefaultSupplier } from "@/lib/po-pool"
+import { linkedOrderWarning } from "@/lib/po-delete-log"
 
 // 明細の note「[医院名] 注文 xxxxxxxx」から医院名だけを取り出して表示する
 // （列の幅をそろえるため、注文IDの部分は表示しない）
@@ -112,7 +113,8 @@ export default function POPoolPage() {
   }
 
   async function handleDiscard(poId: string, supplierName: string) {
-    if (!confirm(`${supplierName} の下書き発注書を破棄しますか？\n（明細も全て削除されます）`)) return
+    const warn = await linkedOrderWarning({ poId })
+    if (!confirm(`${supplierName} の下書き発注書を破棄しますか？\n（明細も全て削除されます）${warn}`)) return
     setBusy(poId)
     const r = await discardPoolPO(poId)
     setBusy(null)
@@ -215,7 +217,8 @@ export default function POPoolPage() {
   }
 
   async function deleteItem(itemId: string) {
-    if (!confirm("この明細行を削除しますか？")) return
+    const warn = await linkedOrderWarning({ itemId })
+    if (!confirm("この明細行を削除しますか？" + warn)) return
     await supabase.from("purchase_order_items").delete().eq("id", itemId)
     fetchData({ silent: true })
   }

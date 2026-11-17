@@ -1,6 +1,7 @@
 "use client"
 
-import { deletePoLogged } from "@/lib/po-delete-log"
+import { deletePoLogged, linkedOrderWarning } from "@/lib/po-delete-log"
+import { logOp } from "@/lib/op-log"
 import { use, useEffect, useState } from "react"
 import { cancelPoLineReceipt, receiveAllPoRemaining, countPoRemaining } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
@@ -112,7 +113,8 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
   }
 
   async function deleteItem(itemId: string) {
-    if (!confirm("この明細を削除しますか？")) return
+    const warn = await linkedOrderWarning({ itemId })
+    if (!confirm("この明細を削除しますか？" + warn)) return
     await supabase.from("purchase_order_items").delete().eq("id", itemId)
     await fetchData({ silent: true })
   }
@@ -157,9 +159,13 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
 
   async function setStatus(status: string) {
     if (!po) return
-    if (status === "取消" && !confirm("この発注書を取消しますか？")) return
+    if (status === "取消") {
+      const warn = await linkedOrderWarning({ poId: po.id })
+      if (!confirm("この発注書を取消しますか？" + warn)) return
+    }
     const { error } = await supabase.from("purchase_orders").update({ status }).eq("id", po.id)
     if (error) { alert("更新失敗: " + error.message); return }
+    await logOp("発注書の状態を変更", { entity: "purchase_order", id: po.id, detail: { po_number: po.po_number, from: po.status, to: status } })
     fetchData({ silent: true })
   }
 
@@ -225,7 +231,8 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
 
   async function deletePO() {
     if (!po) return
-    if (!confirm("この発注書を完全に削除しますか？（取消の方が安全です）")) return
+    const warn = await linkedOrderWarning({ poId: po.id })
+    if (!confirm("この発注書を完全に削除しますか？（取消の方が安全です）" + warn)) return
     await supabase.from("purchase_order_items").delete().eq("purchase_order_id", po.id)
     await deletePoLogged(po.id, "発注書の詳細")
     router.push("/admin/purchase-orders")

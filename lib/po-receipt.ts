@@ -2,6 +2,7 @@
 // 発注書の明細の入荷数・商品の在庫・仕入納品一覧（stock_receipts）・発注書の状態を、同じ数だけ戻す。
 // 取り消しの記録は、在庫の動き（stock_movements）に「入庫取消」で残る。
 import { supabase } from "@/lib/supabase"
+import { logOp } from "@/lib/op-log"
 
 export async function cancelPoLineReceipt(poItemId: string, qty: number): Promise<{ ok: boolean; error?: string; cancelled?: number }> {
   const { data: line, error: le } = await supabase.from("purchase_order_items")
@@ -54,6 +55,7 @@ export async function cancelPoLineReceipt(poItemId: string, qty: number): Promis
     const status = done ? "入荷済" : some ? "部分入荷" : "発注済"
     if (status !== po.status) await supabase.from("purchase_orders").update({ status }).eq("id", line.purchase_order_id)
   }
+  await logOp("入荷を取消", { entity: "purchase_order_item", id: poItemId, detail: { qty: n } })
   return { ok: true, cancelled: n }
 }
 
@@ -98,6 +100,7 @@ export async function receivePoLine(poItemId: string, qty: number): Promise<{ ok
     const status = done ? "入荷済" : "部分入荷"
     if (status !== po.status) await supabase.from("purchase_orders").update({ status }).eq("id", line.purchase_order_id)
   }
+  await logOp("入荷", { entity: "purchase_order_item", id: poItemId, detail: { qty: n, po: poLabel, product_id: line.product_id } })
   return { ok: true, received: n }
 }
 

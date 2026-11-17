@@ -4,6 +4,8 @@
 // 直せる項目: 数量・単価・商品名・商品の紐づけ・行の追加と削除・備考。合計金額は自動で計算し直す。
 // 納品済みの納品書は、数量・商品を変えた分だけ、在庫も増減する（「在庫管理しない」商品は、在庫を変えない）。在庫の動きに「出庫修正」で残る。
 import { deletePoLogged } from "@/lib/po-delete-log"
+import ClinicSelect, { type ClinicOption } from "@/app/components/ClinicSelect"
+import { logOp } from "@/lib/op-log"
 import { use, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -45,6 +47,51 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
   const [poFix, setPoFix] = useState<{ items: PoFixItem[]; after: { id: string; name: string; orderQty: number; stock: number | null; qty: string; delta?: number }[] | null } | null>(null)
   const keySeq = useRef(0)
   const nextKey = () => "k" + (++keySeq.current)
+
+  // 医院の変更（注文の医院を、まちがえたとき）。明細・金額・納品書番号は、そのまま。
+  const [clinicEdit, setClinicEdit] = useState(false)
+  const [allClinics, setAllClinics] = useState<ClinicOption[]>([])
+  const [newClinicId, setNewClinicId] = useState("")
+  const [clinicBusy, setClinicBusy] = useState(false)
+  async function openClinicEdit() {
+    if (order?.invoice_id) { alert("この納品書は、請求書に入っているため、医院を変えられません。先に、請求書から外してください。"); return }
+    if (allClinics.length === 0) {
+      const { data } = await supabase.from("clinics").select("id,name,corporate_name,clinic_code").order("name")
+      setAllClinics((data as ClinicOption[]) || [])
+    }
+    setNewClinicId(""); setClinicEdit(true)
+  }
+  async function applyClinicChange() {
+    if (!order || !newClinicId || newClinicId === order.clinic_id) return
+    const to = allClinics.find(c => c.id === newClinicId)?.name || ""
+    if (!confirm(`この注文の医院を変更します。
+
+  ${clinicName}
+  ↓
+  ${to}
+
+・納品書番号、商品、数量、単価は、そのままです（単価は、医院ごとの価格に自動では直りません）。
+・結びついた発注書の備考の医院名も、書き換えます。
+
+よろしいですか？`)) return
+    setClinicBusy(true)
+    try {
+      const { error: ue } = await supabase.from("orders").update({ clinic_id: newClinicId }).eq("id", order.id)
+      if (ue) { alert("医院を変更できませんでした: " + ue.message); return }
+      // 発注書の行の備考「[旧医院名] 注文 xxxxxxxx 明細yyyyyyyy」の医院名を、新しい医院名に書き換える
+      const oldTag = "[" + clinicName + "] 注文 " + order.id.slice(0, 8)
+      const { data: pls } = await supabase.from("purchase_order_items").select("id,note").ilike("note", "%注文 " + order.id.slice(0, 8) + "%")
+      let n = 0
+      for (const pl of pls || []) {
+        if (!String(pl.note || "").startsWith(oldTag)) continue
+        await supabase.from("purchase_order_items").update({ note: String(pl.note).replace(oldTag, "[" + to + "] 注文 " + order.id.slice(0, 8)) }).eq("id", pl.id)
+        n++
+      }
+      await logOp("注文の医院を変更", { entity: "order", id: order.id, detail: { from: clinicName, to, po_lines: n } })
+      setOrder({ ...order, clinic_id: newClinicId }); setClinicName(to); setClinicEdit(false)
+      alert(`医院を「${to}」に変更しました。発注書の行 ${n}件 の備考も書き換えました。`)
+    } finally { setClinicBusy(false) }
+  }
 
   // 商品の検索（行ごと）
   const [pickKey, setPickKey] = useState<string | null>(null)
@@ -258,6 +305,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
           })
         } catch { /* 記録のみ */ }
       }
+      await logOp("注文を編集", { entity: "order", id: orderId, detail: { delivery_number: order.delivery_number, lines: clean.length, before: original.map(o => ({ name: o.product_name, qty: o.quantity })), after: clean.map(c => ({ name: c.product_name, qty: Number(c.quantity) })) } })
       // 受注処理が済んでいる注文（準備中など）に足した商品は、受注処理の画面に出ない。保存のあとに、発注する数を選ぶ画面を出す（在庫があっても、発注できる）
       if ((addedInfo.length > 0 || increasedInfo.length > 0) && !isDelivered && !UNPROCESSED.includes(order.status)) {
         const pids = Array.from(new Set([...addedInfo, ...increasedInfo].map(x => x.product_id).filter(Boolean) as string[]))
@@ -362,8 +410,18 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
         <h1 className="font-bold text-gray-900" style={{ fontSize: 20 }}>注文の編集</h1>
         <span className="text-sm text-gray-500 font-mono">{order.delivery_number}</span>
         <span className="text-sm text-gray-700">{clinicName}</span>
+        <button onClick={openClinicEdit} className="text-[11px] px-2 py-0.5 rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-50" title="医院をまちがえたとき">医院を変更</button>
         <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">{order.status}</span>
       </div>
+
+      {clinicEdit && (
+        <div className="bg-amber-50 border border-amber-200 rounded px-3 py-2 flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-amber-900">変更先の医院:</span>
+          <ClinicSelect clinics={allClinics} value={newClinicId} onChange={setNewClinicId} />
+          <button onClick={applyClinicChange} disabled={!newClinicId || clinicBusy} className="px-3 py-1 text-sm rounded bg-amber-600 text-white disabled:opacity-40">{clinicBusy ? "変更中…" : "この医院に変更"}</button>
+          <button onClick={() => setClinicEdit(false)} className="px-3 py-1 text-sm rounded border border-gray-300 bg-white">やめる</button>
+        </div>
+      )}
 
       {isDelivered && (
         <div className="text-xs bg-sky-50 border border-sky-200 text-sky-800 rounded px-3 py-2">

@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
+import { logOp } from "@/lib/op-log"
 import ClinicSelect from "@/app/components/ClinicSelect"
 import { withStockFlag } from "@/lib/stock-managed"
 import { cancelPoLineReceipt, receivePoLine, receiveWithoutPo } from "@/lib/po-receipt"
@@ -28,7 +29,7 @@ type Order = { id: string; clinic_id: string; status: string; created_at: string
 type OrderItem = { id: string; order_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; delivered_quantity?: number | null; note?: string | null; lot_number?: string | null }
 type Clinic = { id: string; name: string; corporate_name?: string | null; badge_label?: string | null }
 type Product = { id: string; name: string; stock: number | null; stock_managed?: boolean | null; cost: number | null; price: number | null; manufacturer?: string | null; product_code?: string | null; location?: string | null }
-type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null; note?: string | null }
+type POItem = { purchase_order_id: string; product_id: string | null; quantity: number; received_quantity: number | null; note?: string | null; source_order_item_id?: string | null }
 type POHead = { id: string; status: string }
 
 const STATUSES = ["注文受付", "確認中", "準備中", "納品済み", "キャンセル"] as const
@@ -114,6 +115,7 @@ function AdminOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<"undelivered" | "delivered" | "all" | string>(initialStatus)
   const [clinicFilter, setClinicFilter] = useState("all")
   const [bizStateFilter, setBizStateFilter] = useState<"all" | BizState>("all")
+  const [gapOnly, setGapOnly] = useState(false)   // 手配にズレがある注文だけ
   const [openOrderIds, setOpenOrderIds] = useState<Set<string>>(new Set())
   const [openClinicIds, setOpenClinicIds] = useState<Set<string>>(new Set())
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
@@ -133,7 +135,7 @@ function AdminOrdersPage() {
       fetchAll("products", "id,name,product_code,stock,stock_managed,cost,price,manufacturer,location"),
       // 業務状態判定用: 「未入荷の発注」を検出するため
       fetchAllData("purchase_orders", "id,status"),
-      fetchAllData("purchase_order_items", "id,purchase_order_id,product_id,quantity,received_quantity,note"),
+      fetchAllData("purchase_order_items", "id,purchase_order_id,product_id,quantity,received_quantity,note,source_order_item_id"),
     ])
     const orders = (o.data as Order[]) || []
     setOrders(orders)
@@ -255,8 +257,8 @@ function AdminOrdersPage() {
     const m = new Map<string, number>()
     poItems.forEach(it => {
       if (!live.has(it.purchase_order_id)) return
-      const t = String(it.note || "").match(/明細([0-9a-f]{8})/i)
-      if (t) m.set(t[1].toLowerCase(), (m.get(t[1].toLowerCase()) || 0) + Number(it.quantity || 0))
+      const key = (it.source_order_item_id ? String(it.source_order_item_id).slice(0, 8) : (String(it.note || "").match(/明細([0-9a-f]{8})/i)?.[1] || "")).toLowerCase()
+      if (key) m.set(key, (m.get(key) || 0) + Number(it.quantity || 0))
     })
     return m
   }, [poHeads, poItems])
@@ -267,8 +269,8 @@ function AdminOrdersPage() {
     const m = new Map<string, number>()
     poItems.forEach(it => {
       if (!live.has(it.purchase_order_id)) return
-      const t = String(it.note || "").match(/明細([0-9a-f]{8})/i)
-      if (t) m.set(t[1].toLowerCase(), (m.get(t[1].toLowerCase()) || 0) + Number(it.received_quantity || 0))
+      const key = (it.source_order_item_id ? String(it.source_order_item_id).slice(0, 8) : (String(it.note || "").match(/明細([0-9a-f]{8})/i)?.[1] || "")).toLowerCase()
+      if (key) m.set(key, (m.get(key) || 0) + Number(it.received_quantity || 0))
     })
     return m
   }, [poHeads, poItems])
@@ -285,6 +287,39 @@ function AdminOrdersPage() {
   // 入荷済みの数: 発注書の入荷数（在庫に加算した分）と、以前の「直送」で記録した数の、大きいほう
   function receivedOf(it: OrderItem): number {
     return Math.max(receivedQtyByItemPrefix.get(it.id.slice(0, 8).toLowerCase()) || 0, Number(it.delivered_quantity || 0))
+  }
+
+  // 1行ごとの「注文・発注・入荷・在庫」の数と、手配のズレ（赤い印）。
+  // ズレ: 過剰発注（発注が注文数を超える）／手配不足（在庫＋入荷待ちの合計が注文数に届かない）
+  function flowOf(it: OrderItem, orderStatus: string) {
+    const qty = Number(it.quantity || 0)
+    const pre = it.id.slice(0, 8).toLowerCase()
+    const ordered = orderedQtyByItemPrefix.get(pre) || 0
+    const received = receivedQtyByItemPrefix.get(pre) || 0
+    const stock = it.product_id ? Number(productById.get(it.product_id)?.stock || 0) : 0
+    const flags: string[] = []
+    const done = ["納品済み", "納品済", "キャンセル", "取消"].includes(orderStatus)
+    if (!done) {
+      if (ordered > qty) flags.push(`過剰発注（注文${qty}に対して発注${ordered}）`)
+      const covered = stock + Math.max(0, ordered - received) >= qty
+        || (it.product_id ? orderedAwaitingReceipt.has(it.product_id) : (orderedAwaitingReceiptByItemId.has(pre)))
+      if (!covered && productById.get(it.product_id || "")?.stock_managed !== false && stock < qty) flags.push("手配不足（在庫と入荷待ちで足りません）")
+    }
+    return { qty, ordered, received, stock, flags }
+  }
+  function orderHasGap(orderId: string): boolean {
+    const o = orders.find(x => x.id === orderId)
+    if (!o) return false
+    return (itemsByOrder.get(orderId) || []).some(it => flowOf(it, o.status).flags.length > 0)
+  }
+  function flowTag(it: OrderItem, orderStatus: string) {
+    const f = flowOf(it, orderStatus)
+    return (
+      <div className="text-[10px] text-gray-400 leading-tight">
+        注文{f.qty}・発注{f.ordered}・入荷{f.received}・在庫{f.stock}
+        {f.flags.map(x => <span key={x} className="ml-1 text-red-600 font-bold">⚠{x}</span>)}
+      </div>
+    )
   }
 
   // 業務状態（一目で「次にやること」が分かるバッジ用）
@@ -397,6 +432,7 @@ function AdminOrdersPage() {
     if (!confirm(msg + describePoDetach(poPlan))) return
     await supabase.from("order_items").delete().eq("order_id", orderId)
     const { error } = await supabase.from("orders").delete().eq("id", orderId)
+    if (!error) await logOp("注文を削除", { entity: "order", id: orderId, detail: { delivery_number: deliveryNumber } })
     if (error) { alert("削除失敗: " + error.message); return }
     const poNotes = await applyPoDetach(poPlan, "注文の削除")
     if (poNotes.length) alert("注文を削除しました。\n発注書について、確認してください:\n" + poNotes.join("\n"))
@@ -669,6 +705,7 @@ function AdminOrdersPage() {
 
     await supabase.from("order_items").delete().in("order_id", ids)
     const { error } = await supabase.from("orders").delete().in("id", ids)
+    if (!error) await logOp("注文を一括削除", { entity: "order", detail: { ids: ids.map(x => x.slice(0, 8)), count: ids.length } })
     if (error) { alert("一括削除失敗: " + error.message); return }
     const poNotes = await applyPoDetach(poPlan, "注文の削除")
     setSelectedOrderIds(new Set())
@@ -691,9 +728,10 @@ function AdminOrdersPage() {
 
       if (clinicFilter !== "all" && o.clinic_id !== clinicFilter) return false
       if (bizStateFilter !== "all" && businessState(o.id) !== bizStateFilter) return false
+      if (gapOnly && !orderHasGap(o.id)) return false
       return matchSearch
     })
-  }, [orders, itemsByOrder, clinicById, search, statusFilter, clinicFilter, bizStateFilter, productById, orderedAwaitingReceipt, orderedAwaitingReceiptByItemId, orderedAwaitingReceiptByOrderId])
+  }, [orders, itemsByOrder, clinicById, search, statusFilter, clinicFilter, bizStateFilter, gapOnly, productById, orderedAwaitingReceipt, orderedAwaitingReceiptByItemId, orderedAwaitingReceiptByOrderId])
 
   // 未納品の注文明細をCSVに書き出す（医院ごとに「何がまだ納品されていないか」を確認する用）。
   // 納品済み・キャンセル以外の注文が対象。医院の絞り込みと検索ワードは反映する（状態の絞り込みは無視して常に未納品）。
@@ -978,6 +1016,8 @@ function AdminOrdersPage() {
             <option key={s} value={s}>{BIZ_BADGES[s].icon} {BIZ_BADGES[s].label} ({bizStateCounts[s]})</option>
           ))}
         </select>
+        <label className="text-[12px] text-red-700 flex items-center gap-1 whitespace-nowrap" title="注文の数と、発注・入荷・在庫の数が合わない注文だけを出す"><input type="checkbox" checked={gapOnly} onChange={e => setGapOnly(e.target.checked)} />⚠ 発注数・在庫が合わない注文だけ（過剰発注・手配不足）</label>
+        <Link href="/admin/operation-log" className="text-[12px] text-gray-500 underline whitespace-nowrap">操作の記録を見る</Link>
       </div>
 
       {/* バルクアクション: 業務フロー順（見積→納品 + 不足発注） */}
@@ -1372,7 +1412,7 @@ function AdminOrdersPage() {
                                                   {enough ? "OK" : `0`}
                                                 </span>
                                               </td>
-                                              <td className="px-1 py-0.5 whitespace-nowrap">{it.product_name || "(不明)"}{it.lot_number && <span className="ml-1 text-sky-700">LOT:{it.lot_number}</span>}{it.note && <span className="ml-1 text-amber-700">※{it.note}</span>}{p?.manufacturer && <span className="text-gray-400 ml-1">［{p.manufacturer}］</span>}<ManagedBadge location={p?.location} /></td>
+                                              <td className="px-1 py-0.5 whitespace-nowrap">{it.product_name || "(不明)"}{it.lot_number && <span className="ml-1 text-sky-700">LOT:{it.lot_number}</span>}{it.note && <span className="ml-1 text-amber-700">※{it.note}</span>}{p?.manufacturer && <span className="text-gray-400 ml-1">［{p.manufacturer}］</span>}<ManagedBadge location={p?.location} />{flowTag(it, o.status)}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums">{qty}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(cost)}</td>
                                               <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(listPrice)}</td>
@@ -1594,7 +1634,7 @@ function AdminOrdersPage() {
                                         {enough ? "OK" : `0`}
                                       </span>
                                     </td>
-                                    <td className="px-1 py-0.5 whitespace-nowrap">{it.product_name || "(不明)"}{it.lot_number && <span className="ml-1 text-sky-700">LOT:{it.lot_number}</span>}{it.note && <span className="ml-1 text-amber-700">※{it.note}</span>}{p?.manufacturer && <span className="text-gray-400 ml-1">［{p.manufacturer}］</span>}<ManagedBadge location={p?.location} /></td>
+                                    <td className="px-1 py-0.5 whitespace-nowrap">{it.product_name || "(不明)"}{it.lot_number && <span className="ml-1 text-sky-700">LOT:{it.lot_number}</span>}{it.note && <span className="ml-1 text-amber-700">※{it.note}</span>}{p?.manufacturer && <span className="text-gray-400 ml-1">［{p.manufacturer}］</span>}<ManagedBadge location={p?.location} />{flowTag(it, o.status)}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums">{qty}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(cost)}</td>
                                     <td className="px-1 py-0.5 text-right tabular-nums text-gray-500">{fmtYen(listPrice)}</td>

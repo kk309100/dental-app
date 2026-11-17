@@ -10,6 +10,7 @@
 // 各明細の note に「[医院名] from 注文ID」を記録 → 医院納品先の追跡用
 
 import { deletePoLogged } from "@/lib/po-delete-log"
+import { logOp } from "@/lib/op-log"
 import { supabase, fetchAll, fetchAllData } from "@/lib/supabase"
 
 export type PoolItem = {
@@ -98,6 +99,7 @@ export async function addItemsToPool(
         quantity: it.quantity,
         unit_price: it.unit_price,
         received_quantity: 0,
+        source_order_item_id: sourceLabel === "注文" && it.source_order_item_id ? it.source_order_item_id : null,
         note: `[${it.source_clinic_name}] ${sourceLabel} ${it.source_order_id.slice(0, 8)}`
           + (it.source_order_item_id ? ` 明細${it.source_order_item_id.slice(0, 8)}` : ""),
       }))
@@ -128,6 +130,10 @@ export async function addItemsToPool(
   }
 
   if (result.errors.length > 0) result.ok = false
+  await logOp("発注プールに追加", { entity: "purchase_order", detail: {
+    ok: result.ok, errors: result.errors,
+    items: Array.from(itemsBySupplier.values()).flat().map(it => ({ name: it.product_name, qty: it.quantity, order: it.source_order_id.slice(0, 8), item: it.source_order_item_id?.slice(0, 8) })),
+  } })
   return result
 }
 
@@ -318,7 +324,8 @@ export async function forceAddOrderItemToPool(
       alreadyOrdered = active.reduce((n: number, d: any) => n + Number(d.quantity || 0), 0)
       const want = quantityOverride != null ? Number(quantityOverride) : Number(oi.quantity || 0)
       if (alreadyOrdered >= want) {
-        return { ok: false, error: `この明細は、すでに ${alreadyOrdered}個 発注書に入っています（希望の ${want}個 以上）。重複を避けるため追加をスキップしました。もっと発注したいときは、数量を増やして、もう一度、実行してください。` }
+        await logOp("強制発注（追加せず）", { entity: "order_item", id: oi.id, detail: { reason: "すでに発注書にあり", already: alreadyOrdered, want } })
+      return { ok: false, error: `この明細は、すでに ${alreadyOrdered}個 発注書に入っています（希望の ${want}個 以上）。重複を避けるため追加をスキップしました。もっと発注したいときは、数量を増やして、もう一度、実行してください。` }
       }
       topUpQty = want - alreadyOrdered
     }
@@ -361,6 +368,7 @@ export async function forceAddOrderItemToPool(
     : "仕入先未定"
   const result = await addItemsToPool(new Map([[supplierId, [item]]]), new Map([[supplierId, supplierName]]))
   if (!result.ok) return { ok: false, error: result.errors.join(" / ") }
+  await logOp("強制発注", { entity: "order_item", id: oi.id, detail: { name: item.product_name, qty: item.quantity, already: alreadyOrdered, supplier: supplierName } })
   return { ok: true, supplierName, added: item.quantity, already: alreadyOrdered }
 }
 
