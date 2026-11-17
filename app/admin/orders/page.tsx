@@ -425,7 +425,10 @@ function AdminOrdersPage() {
   // 在庫が足りていても、この商品だけ数量を指定して強制的に発注プールへ入れる
   async function forceOrderItem(itemId: string, productName: string, defaultQty: number) {
     const input = prompt(
-      `「${productName}」を発注プールへ追加します。\n発注する数量を入力してください（注文数量: ${defaultQty}個）`,
+      `「${productName}」を、在庫に関係なく、発注プールへ追加します。\n発注する数量を入力してください（注文数量: ${defaultQty}個）` +
+        ((orderedQtyByItemPrefix.get(itemId.slice(0, 8).toLowerCase()) || 0) > 0
+          ? `\n※この明細は、すでに ${orderedQtyByItemPrefix.get(itemId.slice(0, 8).toLowerCase())}個 発注書に入っています。入力した数量が、追加の発注になります。`
+          : ""),
       String(defaultQty)
     )
     if (input === null) return
