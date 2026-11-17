@@ -6,6 +6,7 @@
 import { deletePoLogged } from "@/lib/po-delete-log"
 import ClinicSelect, { type ClinicOption } from "@/app/components/ClinicSelect"
 import { logOp } from "@/lib/op-log"
+import { planPoDetach, describePoDetach, applyPoDetach } from "@/lib/po-detach"
 import { use, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -143,6 +144,27 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
     setPickKey(null); setPickQ(""); setHits([])
   }
 
+  // 明細が1行もなくなったとき、注文ごと削除する（注文管理の「削除」と同じ処理）
+  async function deleteWholeOrder() {
+    if (!order) return
+    if (order.invoice_id) { setError("この納品書は、請求書に入っているため、削除できません。先に、請求書から外してください。"); return }
+    const isDel = ["納品済み", "納品済"].includes(order.status)
+    const poPlan = await planPoDetach(original.map(x => x.id))
+    const msg = (isDel ? "⚠️ 「納品済み」の注文です。業務記録（納品実績）が失われます。\n\n" : "") +
+      `明細が1行もありません。\n注文 ${order.delivery_number || order.id.slice(0, 8)}（${clinicName}）を、注文ごと削除します。\n元に戻せません。よろしいですか？`
+    if (!confirm(msg + describePoDetach(poPlan))) return
+    setSaving(true)
+    try {
+      await supabase.from("order_items").delete().eq("order_id", order.id)
+      const { error: de } = await supabase.from("orders").delete().eq("id", order.id)
+      if (de) { setError("削除に失敗しました: " + de.message); return }
+      await logOp("注文を削除（編集画面で明細が0行）", { entity: "order", id: order.id, detail: { delivery_number: order.delivery_number, clinic: clinicName, before: original.map(o => ({ name: o.product_name, qty: o.quantity })) } })
+      const poNotes = await applyPoDetach(poPlan, "注文の削除")
+      if (poNotes.length) alert("注文を削除しました。\n発注書について、確認してください:\n" + poNotes.join("\n"))
+      router.push("/admin/orders")
+    } finally { setSaving(false) }
+  }
+
   async function save() {
     if (!order) return
     setError("")
@@ -152,7 +174,7 @@ export default function DeliveryEditPage({ params }: { params: Promise<{ orderId
       if (!Number.isFinite(q) || q <= 0) { setError(`「${l.product_name || "商品名なし"}」の数量は、1以上の数字にしてください`); return }
       if (!Number.isFinite(p) || p < 0) { setError(`「${l.product_name || "商品名なし"}」の単価は、0以上の数字にしてください`); return }
     }
-    if (clean.length === 0) { setError("明細が1行もありません。納品書を消すときは、注文管理から削除してください"); return }
+    if (clean.length === 0) { await deleteWholeOrder(); return }
     if (order.invoice_id && !confirm("この納品書は、請求書に入っています。\n金額を変えても、発行済みの請求書は、自動では変わりません（請求書を取り消して、作り直してください）。\n保存しますか？")) return
 
     setSaving(true)
