@@ -300,7 +300,8 @@ function AdminOrdersPage() {
     const flags: string[] = []
     const done = ["納品済み", "納品済", "キャンセル", "取消"].includes(orderStatus)
     if (!done) {
-      if (ordered > qty) flags.push(`過剰発注（注文${qty}に対して発注${ordered}）`)
+      // 発注書に入っている行は、注文数と発注数が、1個でも違えば印を出す（発注0＝在庫から出荷する行は、対象外）
+      if (ordered > 0 && ordered !== qty) flags.push(ordered > qty ? `発注が多い（注文${qty}・発注${ordered}）` : `発注が少ない（注文${qty}・発注${ordered}）`)
       const covered = stock + Math.max(0, ordered - received) >= qty
         || (it.product_id ? orderedAwaitingReceipt.has(it.product_id) : (orderedAwaitingReceiptByItemId.has(pre)))
       if (!covered && productById.get(it.product_id || "")?.stock_managed !== false && stock < qty) flags.push("手配不足（在庫と入荷待ちで足りません）")
@@ -1016,7 +1017,7 @@ function AdminOrdersPage() {
             <option key={s} value={s}>{BIZ_BADGES[s].icon} {BIZ_BADGES[s].label} ({bizStateCounts[s]})</option>
           ))}
         </select>
-        <label className="text-[12px] text-red-700 flex items-center gap-1 whitespace-nowrap" title="注文の数と、発注・入荷・在庫の数が合わない注文だけを出す"><input type="checkbox" checked={gapOnly} onChange={e => setGapOnly(e.target.checked)} />⚠ 発注数・在庫が合わない注文だけ（過剰発注・手配不足）</label>
+        <label className="text-[12px] text-red-700 flex items-center gap-1 whitespace-nowrap" title="注文の数と、発注・入荷・在庫の数が合わない注文だけを出す"><input type="checkbox" checked={gapOnly} onChange={e => setGapOnly(e.target.checked)} />⚠ 注文数と発注数が違う注文だけ</label>
         <Link href="/admin/operation-log" className="text-[12px] text-gray-500 underline whitespace-nowrap">操作の記録を見る</Link>
       </div>
 
