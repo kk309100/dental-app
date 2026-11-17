@@ -146,7 +146,7 @@ function ShippingPage() {
     if (!Number.isFinite(qty) || qty <= 0) { alert("正しい数量を入力してください"); return }
     setForcingItemId(itemId)
     try {
-      const r = await forceAddOrderItemToPool(itemId, undefined, qty)
+      const r = await forceAddOrderItemToPool(itemId, undefined, qty, { allowDuplicate: true })
       if (!r.ok) { alert("追加失敗: " + r.error); return }
       alert(`✅ ${r.supplierName} の発注プールに ${qty}個 追加しました。`)
     } finally {

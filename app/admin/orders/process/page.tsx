@@ -98,7 +98,7 @@ export default function OrderProcessPage() {
     if (!Number.isFinite(qty) || qty <= 0) { alert("正しい数量を入力してください"); return }
     setForcingItemId(itemId)
     try {
-      const r = await forceAddOrderItemToPool(itemId, undefined, qty)
+      const r = await forceAddOrderItemToPool(itemId, undefined, qty, { allowDuplicate: true })
       if (!r.ok) { alert("追加失敗: " + r.error); return }
       setForcedItemIds(prev => new Set(prev).add(itemId))
       alert(`✅ ${r.supplierName} の発注プールに ${qty}個 追加しました。\nこの注文を後で処理しても、この明細は自動追加で重複しません。`)
