@@ -57,6 +57,25 @@ type ActionModal = {
   qty: number
 }
 
+// カテゴリを、一覧から選べるようにする（すでにあるカテゴリを、タップで入力。入力欄に文字を入れると、候補が絞られる）
+function CategoryChips({ cats, value, onPick }: { cats: string[]; value: string; onPick: (v: string) => void }) {
+  const v = (value || "").trim()
+  const list = v ? cats.filter(c => c.includes(v) && c !== v) : cats
+  const picked = cats.includes(v)
+  if (cats.length === 0 || (list.length === 0 && !picked)) return null
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>{picked ? "選んでいるカテゴリ:" : "いまあるカテゴリから選ぶ（タップ）:"}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 112, overflowY: "auto" }}>
+        {picked && <button type="button" onClick={() => onPick("")} style={{ padding: "5px 11px", borderRadius: 16, border: "1.5px solid #2563eb", background: "#eff6ff", color: "#1d4ed8", fontSize: 13, fontWeight: "bold", cursor: "pointer" }}>{v} ✕</button>}
+        {list.map(c => (
+          <button key={c} type="button" onClick={() => onPick(c)} style={{ padding: "5px 11px", borderRadius: 16, border: "1.5px solid #d1d5db", background: "#fff", color: "#374151", fontSize: 13, cursor: "pointer" }}>{c}</button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function ClinicInventoryPage() {
   const router = useRouter()
 
@@ -212,7 +231,7 @@ export default function ClinicInventoryPage() {
   }
 
   async function deleteCategory(name: string) {
-    if (!confirm(`「${name}」を削除しますか？\n※このカテゴリが設定された商品のカテゴリは空欄になります`)) return
+    if (!(await askConfirm(`「${name}」を削除しますか？\n※このカテゴリが設定された商品のカテゴリは空欄になります`))) return
     await supabase.from("inventory_categories").delete().eq("clinic_id", clinicId).eq("name", name)
     setMasterCategories(prev => prev.filter(c => c !== name))
     if (categoryFilter === name) setCategoryFilter("すべて")
@@ -443,10 +462,19 @@ export default function ClinicInventoryPage() {
     setEditItemSaving(false)
   }
 
+  // 確認の表示。ブラウザ標準の confirm() は、LINEなどのアプリ内ブラウザや、ホーム画面のアプリで、
+  // 表示されずに「いいえ」と同じ扱いになることがある（削除ボタンを押しても、何も起きない）。そのため、画面の中の確認を使う。
+  const [confirmDlg, setConfirmDlg] = useState<{ msg: string; resolve: (ok: boolean) => void } | null>(null)
+  function askConfirm(msg: string, okLabel = "削除する"): Promise<boolean> {
+    return new Promise(resolve => setConfirmDlg({ msg: msg + "\u0000" + okLabel, resolve }))
+  }
+
   async function deleteItem(id: string, name: string) {
-    if (!confirm(`「${name}」を在庫リストから削除しますか？`)) return
-    const { error } = await supabase.from("clinic_inventory_items").delete().eq("id", id)
-    if (error) { alert("削除に失敗しました: " + error.message); return }
+    if (!(await askConfirm(`「${name}」を在庫リストから削除しますか？`))) return
+    // 削除した行を返してもらい、実際に消えたかを確かめる（権限などで0件のときは、消えたふりをしない）
+    const { data: gone, error } = await supabase.from("clinic_inventory_items").delete().eq("id", id).select("id")
+    if (error) { showToast("削除に失敗しました: " + error.message); return }
+    if (!gone || gone.length === 0) { showToast("削除できませんでした（すでに削除済みか、権限がありません）"); return }
     setItems(prev => prev.filter(i => i.id !== id))
     showToast("✓ 削除しました")
   }
@@ -503,7 +531,7 @@ export default function ClinicInventoryPage() {
 
   async function deletePhoto(item: Item) {
     if (!item.item_image_url) return
-    if (!confirm(`「${item.product_name}」の写真を削除しますか？`)) return
+    if (!(await askConfirm(`「${item.product_name}」の写真を削除しますか？`))) return
     setUploadingPhotoId(item.id)
     try {
       const res = await fetch("/api/clinic/delete-item-image", {
@@ -523,16 +551,18 @@ export default function ClinicInventoryPage() {
 
   async function bulkDelete() {
     if (bulkSelected.size === 0) return
-    if (!confirm(`選択した ${bulkSelected.size} 件を削除しますか？\nこの操作は取り消せません。`)) return
+    if (!(await askConfirm(`選択した ${bulkSelected.size} 件を削除しますか？\nこの操作は取り消せません。`))) return
     setBulkDeleting(true)
     const ids = Array.from(bulkSelected)
-    const { error } = await supabase.from("clinic_inventory_items").delete().in("id", ids)
-    if (error) { alert("エラー: " + error.message); setBulkDeleting(false); return }
-    setItems(prev => prev.filter(i => !bulkSelected.has(i.id)))
+    const { data: gone, error } = await supabase.from("clinic_inventory_items").delete().in("id", ids).select("id")
+    if (error) { showToast("削除に失敗しました: " + error.message); setBulkDeleting(false); return }
+    const goneIds = new Set((gone || []).map((r: any) => r.id as string))
+    if (goneIds.size === 0) { showToast("削除できませんでした（すでに削除済みか、権限がありません）"); setBulkDeleting(false); return }
+    setItems(prev => prev.filter(i => !goneIds.has(i.id)))
     setBulkSelected(new Set())
     setBulkDeleteMode(false)
     setBulkDeleting(false)
-    showToast(`✓ ${ids.length}件を削除しました`)
+    showToast(goneIds.size === ids.length ? `✓ ${ids.length}件を削除しました` : `✓ ${goneIds.size}件を削除しました（${ids.length - goneIds.size}件は削除できませんでした）`)
   }
 
   function toggleBulkSelect(id: string) {
@@ -1318,6 +1348,7 @@ export default function ClinicInventoryPage() {
                   <input value={(editItemForm as any)[key]} placeholder={placeholder}
                     onChange={e => setEditItemForm(f => ({ ...f, [key]: e.target.value }))}
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
+                  {key === "category" && <CategoryChips cats={categories.filter(c => c !== "すべて")} value={(editItemForm as any).category} onPick={v => setEditItemForm(f => ({ ...f, category: v }))} />}
                 </div>
               ))}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -1642,6 +1673,7 @@ export default function ClinicInventoryPage() {
                   <input value={(addForm as any)[key]} placeholder={placeholder}
                     onChange={e => setAddForm(f => ({ ...f, [key]: e.target.value }))}
                     style={{ width: "100%", padding: "10px 12px", borderRadius: 9, border: `1.5px solid ${C.border}`, fontSize: 15, marginTop: 4, boxSizing: "border-box", outline: "none", color: C.text }} />
+                  {key === "category" && <CategoryChips cats={categories.filter(c => c !== "すべて")} value={(addForm as any).category} onPick={v => setAddForm(f => ({ ...f, category: v }))} />}
                 </div>
               ))}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -1782,6 +1814,23 @@ export default function ClinicInventoryPage() {
         style={{ display: "none" }} onChange={handlePhotoCapture} />
 
       {/* 一括削除フッター */}
+      {confirmDlg && (() => {
+        const [msg, okLabel] = confirmDlg.msg.split("\u0000")
+        const close = (ok: boolean) => { const r = confirmDlg.resolve; setConfirmDlg(null); r(ok) }
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+            onClick={(e) => { if (e.target === e.currentTarget) close(false) }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: "22px 20px 16px", width: "100%", maxWidth: 360, boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}>
+              <p style={{ margin: "0 0 18px", fontSize: 15, color: "#111827", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{msg}</p>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => close(false)} style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "1.5px solid #d1d5db", background: "#fff", fontSize: 15, fontWeight: "bold", color: "#374151", cursor: "pointer" }}>やめる</button>
+                <button onClick={() => close(true)} style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none", background: "#dc2626", fontSize: 15, fontWeight: "bold", color: "#fff", cursor: "pointer" }}>{okLabel || "削除する"}</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {bulkDeleteMode && (
         <div style={{
           position: "fixed", bottom: 56, left: 0, right: 0, zIndex: 40,
