@@ -302,7 +302,8 @@ function AdminOrdersPage() {
     if (!done) {
       // 発注書に入っている行は、注文数と発注数が、1個でも違えば印を出す（発注0＝在庫から出荷する行は、対象外）
       if (ordered > 0 && ordered !== qty) flags.push(ordered > qty ? `発注が多い（注文${qty}・発注${ordered}）` : `発注が少ない（注文${qty}・発注${ordered}）`)
-      const covered = stock + Math.max(0, ordered - received) >= qty
+      // この行の分が、発注書で、注文数以上に手配されていれば（入荷済みを含む）、手配は済んでいる
+      const covered = ordered >= qty || stock + Math.max(0, ordered - received) >= qty
         || (it.product_id ? orderedAwaitingReceipt.has(it.product_id) : (orderedAwaitingReceiptByItemId.has(pre)))
       if (!covered && productById.get(it.product_id || "")?.stock_managed !== false && stock < qty) flags.push("手配不足（在庫と入荷待ちで足りません）")
     }
