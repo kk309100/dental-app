@@ -277,7 +277,8 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
     }
   }
 
-  function doPrint() { window.print() }
+  // 印刷は、開設見積書と同じレイアウトの、印刷用の画面で行う
+  function doPrint() { window.open(`/admin/quotes/${quoteId}/print?unit=${unitPriceMode ? 1 : 0}&total=${showTotal ? 1 : 0}`, "_blank") }
 
   if (loading) return <main style={page}><p>読み込み中…</p></main>
   if (error || !quote) return <main style={page}><p style={{ color: "#dc2626" }}>{error}</p></main>
