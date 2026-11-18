@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
+import { logOp } from "@/lib/op-log"
 import type { OpeningQuote } from "@/lib/opening-quote"
 
 export default function OpeningQuoteListPage() {
@@ -22,6 +23,15 @@ export default function OpeningQuoteListPage() {
     setClinics(new Map(((cl as { id: string; name: string }[]) || []).map(c => [c.id, c.name])))
     setLoading(false)
   })() }, [])
+
+  async function remove(r: OpeningQuote) {
+    const ordered = r.status === "ordered" && r.order_id
+    if (!confirm(`開設見積 ${r.manage_no}（${r.title || "表題なし"}）を削除します。\n\n・内訳に入れていた個別見積は、削除されません。\n${ordered ? "・この見積から作った注文は、削除されません（注文管理に、そのまま残ります）。\n" : ""}・元に戻せません。\n\nよろしいですか？`)) return
+    const { error } = await supabase.from("opening_quotes").delete().eq("id", r.id)
+    if (error) { alert("削除できませんでした: " + error.message); return }
+    await logOp("開設見積を削除", { entity: "opening_quote", id: r.id, detail: { manage_no: r.manage_no, title: r.title, sections: r.section_count, ordered: !!ordered } })
+    setRows(prev => prev.filter(x => x.id !== r.id))
+  }
 
   const shown = useMemo(() => {
     const k = q.trim().toLowerCase()
@@ -55,7 +65,10 @@ export default function OpeningQuoteListPage() {
                   <td className="px-2 py-1.5">{r.title || ""}{r.status === "ordered" && <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">注文済</span>}</td>
                   <td className="px-2 py-1.5 text-right">{r.section_count}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums font-bold">{fmtYen(Number(r.total || 0))}</td>
-                  <td className="px-2 py-1.5 whitespace-nowrap"><Link href={`/admin/opening-quotes/${r.id}/print`} target="_blank" className="text-[12px] px-2 py-0.5 rounded border border-gray-300 bg-white">印刷</Link></td>
+                  <td className="px-2 py-1.5 whitespace-nowrap">
+                    <Link href={`/admin/opening-quotes/${r.id}/print`} target="_blank" className="text-[12px] px-2 py-0.5 rounded border border-gray-300 bg-white">印刷</Link>
+                    <button onClick={() => remove(r)} className="ml-1 text-[12px] px-2 py-0.5 rounded border border-gray-300 bg-white text-red-600">削除</button>
+                  </td>
                 </tr>
               ))}
             </tbody>

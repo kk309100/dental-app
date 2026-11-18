@@ -126,6 +126,14 @@ export default function OpeningQuoteEditPage({ params }: { params: Promise<{ id:
     if (isNew) router.replace(`/admin/opening-quotes/${r}`)
     setMsg("登録しました")
   }
+  async function onDelete() {
+    if (!oq) return
+    if (!confirm(`開設見積 ${oq.manage_no}（${oq.title || "表題なし"}）を削除します。\n\n・内訳に入れていた個別見積は、削除されません。\n${oq.order_id ? "・この見積から作った注文は、削除されません（注文管理に、そのまま残ります）。\n" : ""}・元に戻せません。\n\nよろしいですか？`)) return
+    const { error } = await supabase.from("opening_quotes").delete().eq("id", oq.id)
+    if (error) { alert("削除できませんでした: " + error.message); return }
+    await logOp("開設見積を削除", { entity: "opening_quote", id: oq.id, detail: { manage_no: oq.manage_no, title: oq.title, sections: oq.section_count, ordered: !!oq.order_id } })
+    router.push("/admin/opening-quotes")
+  }
   async function onSavePrint() {
     const r = await save()
     if (r) window.open(`/admin/opening-quotes/${r}/print`, "_blank")
@@ -238,6 +246,7 @@ export default function OpeningQuoteEditPage({ params }: { params: Promise<{ id:
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 flex gap-2 justify-end flex-wrap" style={{ zIndex: 30 }}>
+        {oq && <button onClick={onDelete} disabled={saving} className="px-4 py-2 text-sm rounded border border-red-300 bg-white text-red-600 disabled:opacity-50 mr-auto">削除</button>}
         <Link href="/admin/opening-quotes" className="px-4 py-2 text-sm rounded border border-gray-300 bg-white">中止</Link>
         {oq && <button onClick={toOrder} disabled={saving} className="px-4 py-2 text-sm rounded bg-emerald-600 text-white disabled:opacity-50">注文にする</button>}
         <button onClick={onSavePrint} disabled={saving} className="px-4 py-2 text-sm rounded bg-gray-800 text-white disabled:opacity-50">登録して印刷</button>
