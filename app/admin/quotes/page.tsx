@@ -478,6 +478,9 @@ export default function QuotesPage() {
         <Link href="/admin/quotes/create" className="px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded hover:bg-emerald-700">
           ＋ 見積書を作成
         </Link>
+        <Link href="/admin/opening-quotes" className="px-3 py-2 bg-indigo-600 text-white text-sm font-bold rounded hover:bg-indigo-700">
+          📑 開設見積書
+        </Link>
         <button onClick={openImport} className="px-3 py-2 bg-white border border-gray-200 text-sm font-bold rounded hover:bg-gray-50">
           📥 他ツールからインポート
         </button>
