@@ -72,18 +72,16 @@ export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id
   const sumPages = chunk(secs.map((s, i) => ({ s, i })), SUM_FIRST, SUM_REST)
 
   const Totals = () => (
-    <table className="grid totals"><colgroup><col style={{ width: "9%" }} /><col /><col style={{ width: "22%" }} /></colgroup>
-      <tbody><tr>
-        <td className="remark-h">備<br />考</td>
-        <td className="remark" rowSpan={1}>{noteText}</td>
-        <td className="sums">
-          <div><span>明 細 計</span><b>{yen(subtotal)}</b></div>
-          <div><span>値　　引</span><b>{disc ? yen(disc) : ""}</b></div>
-          <div><span>消 費 税</span><b>{yen(tax)}</b></div>
-          <div className="grand"><span>合　　計</span><b>{yen(total)}</b></div>
-        </td>
-      </tr></tbody>
-    </table>
+    <div className="gt" style={{ gridTemplateColumns: "9% 1fr 22%", marginTop: -1 }}>
+      <div className="remark-h">備<br />考</div>
+      <div className="remark">{noteText}</div>
+      <div className="sums">
+        <div><span>明 細 計</span><b>{yen(subtotal)}</b></div>
+        <div><span>値　　引</span><b>{disc ? yen(disc) : ""}</b></div>
+        <div><span>消 費 税</span><b>{yen(tax)}</b></div>
+        <div className="grand"><span>合　　計</span><b>{yen(total)}</b></div>
+      </div>
+    </div>
   )
 
   const Head = ({ title, no, sub }: { title: string; no: string; sub?: string }) => (
@@ -105,17 +103,18 @@ export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id
         .oq.oq .meta { position:absolute; right:0; top:2px; font-size:10.5px; line-height:1.55; text-align:right; }
         .oq.oq .to { font-size:18px; font-weight:700; border-bottom:1px solid #111; display:inline-block; min-width:60%; padding:0 6px 3px 0; margin:6px 0 10px; }
         .oq.oq .subject { font-size:14px; font-weight:700; margin:0 0 8px; }
-        .oq.oq table.grid { width:100% !important; border-collapse:collapse; table-layout:fixed; }
-        .oq.oq table.grid th { border:1px solid #111 !important; background:#eef0f3 !important; color:#111 !important; font-size:10.5px !important; font-weight:700 !important; padding:3px 5px !important; text-align:center; white-space:normal !important; letter-spacing:.05em !important; line-height:1.3; }
-        .oq.oq table.grid td { border:1px solid #111 !important; background:#fff !important; color:#111 !important; font-size:11px !important; padding:2px 6px !important; vertical-align:middle !important; line-height:1.35; }
-        .oq.oq table.grid tbody tr:hover td { background:#fff !important; }
-        .oq.oq table.grid td.r { text-align:right; font-variant-numeric:tabular-nums; }
-        .oq.oq table.grid td.c { text-align:center; }
-        .oq.oq table.grid td.mono { font-family:"Consolas","Courier New",monospace; font-size:10px !important; }
-        .oq.oq table.terms { width:44% !important; flex:none; }
-        .oq.oq table.terms th { width:30%; background:#eef0f3 !important; }
-        .oq.oq table.terms td { height:6.2mm; }
-        .oq.oq table.sumlist tbody tr { height:7.6mm; }
+        .oq.oq .gt { display:grid; border-top:1px solid #111; border-left:1px solid #111; width:100%; box-sizing:border-box; }
+        .oq.oq .gt > div { border-right:1px solid #111; border-bottom:1px solid #111; padding:2px 6px; font-size:11px; line-height:1.35; color:#111; min-width:0; box-sizing:border-box; }
+        .oq.oq .gt > .h { background:#eef0f3; font-weight:700; font-size:10.5px; text-align:center; letter-spacing:.05em; display:flex; align-items:center; justify-content:center; padding:3px 5px; }
+        .oq.oq .gt > .c { display:flex; align-items:center; justify-content:center; }
+        .oq.oq .gt > .r { display:flex; align-items:center; justify-content:flex-end; font-variant-numeric:tabular-nums; }
+        .oq.oq .gt > .l { display:flex; align-items:center; }
+        .oq.oq .gt > .mono { display:flex; align-items:center; font-family:"Consolas","Courier New",monospace; font-size:10px; }
+        .oq.oq .terms { width:44%; flex:none; grid-auto-rows:6.2mm; }
+        .oq.oq .sumlist { grid-auto-rows:minmax(7.6mm,auto); }
+        .oq.oq .detail { grid-auto-rows:minmax(11.2mm,auto); }
+        .oq.oq .detail > .nmcell { display:flex; flex-direction:column; justify-content:center; }
+        .oq.oq .detail > .pricecell { display:flex; flex-direction:column; justify-content:center; align-items:flex-end; font-variant-numeric:tabular-nums; }
         .oq.oq .company { position:relative; font-size:10.5px; line-height:1.65; padding-right:62px; }
         .oq.oq .company .nm { font-size:14px; font-weight:700; margin-bottom:2px; }
         .oq.oq .company .seal { position:absolute; top:-2px; right:0; }
@@ -123,10 +122,9 @@ export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id
         .oq.oq .grand-box .lb { font-size:13px; letter-spacing:.2em; margin-right:18px; }
         .oq.oq .grand-box .am { font-size:25px; font-weight:700; letter-spacing:.04em; }
         .oq.oq .grand-box .tx { font-size:10px; margin-left:8px; }
-        .oq.oq table.totals { margin-top:-1px; }
-        .oq.oq table.totals td.remark-h { text-align:center; vertical-align:top !important; background:#eef0f3 !important; font-size:10.5px !important; line-height:1.4; }
-        .oq.oq table.totals td.remark { vertical-align:top !important; white-space:pre-wrap; height:23mm; font-size:10.5px !important; }
-        .oq.oq table.totals td.sums { padding:0 !important; vertical-align:top !important; }
+        .oq.oq .gt > .remark-h { text-align:center; display:block; background:#eef0f3; font-size:10.5px; line-height:1.4; }
+        .oq.oq .gt > .remark { white-space:pre-wrap; min-height:23mm; font-size:10.5px; }
+        .oq.oq .gt > .sums { padding:0; }
         .oq.oq .sums div { display:flex; justify-content:space-between; padding:2.5px 8px; border-bottom:1px solid #111; font-size:11px; }
         .oq.oq .sums div:last-child { border-bottom:none; }
         .oq.oq .sums .grand { background:#eef0f3; font-size:12.5px; font-weight:700; }
@@ -141,6 +139,7 @@ export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id
         @media print {
           .oq.oq { background:#fff; }
           .oq.oq .bar { display:none !important; }
+          .no-print, .fab, .fab-fb, .mobile-bottom-nav, .admin-layout-header { display:none !important; }
           .oq.oq .page { margin:0; box-shadow:none; break-after:page; page-break-after:always; }
           .oq.oq .page:last-of-type { break-after:auto; page-break-after:auto; }
           @page { size:A4; margin:0; }
@@ -157,11 +156,11 @@ export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id
               <div className="to">{clinicName}　御中</div>
               <p className="subject">{oq.title || ""}</p>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
-                <table className="grid terms"><tbody>
-                  {([["納　　期", oq.delivery_date], ["納入場所", oq.delivery_place], ["検収期間", oq.inspection_period], ["有効期限", oq.expiry_text], ["支払条件", oq.payment_terms]] as [string, string | null][]).map(([k, v]) => (
-                    <tr key={k}><th>{k}</th><td>{v || ""}</td></tr>
-                  ))}
-                </tbody></table>
+                <div className="gt terms" style={{ gridTemplateColumns: "30% 1fr" }}>
+                  {([["納　　期", oq.delivery_date], ["納入場所", oq.delivery_place], ["検収期間", oq.inspection_period], ["有効期限", oq.expiry_text], ["支払条件", oq.payment_terms]] as [string, string | null][]).flatMap(([k, v]) => [
+                    <div className="h" key={k}>{k}</div>, <div className="l" key={k + "v"}>{v || ""}</div>,
+                  ])}
+                </div>
                 <div className="company" style={{ flex: 1 }}>
                   <div className="nm">{company.name}</div>
                   <div>登録番号 {company.invoiceNumber}</div>
@@ -173,15 +172,15 @@ export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id
               <div className="grand-box"><span className="lb">御見積合計金額</span><span className="am">¥ {yen(total)}</span><span className="tx">（消費税込）</span></div>
             </>
           ) : <Head title="開設見積書" no={`No. ${oq.manage_no}`} sub="（内訳の続き）" />}
-          <table className="grid sumlist">
-            <colgroup><col style={{ width: "7%" }} /><col style={{ width: "21%" }} /><col /><col style={{ width: "20%" }} /></colgroup>
-            <thead><tr><th>No.</th><th>内訳管理No.</th><th>表　題</th><th>金額（税別）</th></tr></thead>
-            <tbody>
-              {rows.map(({ s, i }) => (
-                <tr key={i}><td className="c">{i + 1}</td><td className="mono">{s.quote?.quote_number || ""}</td><td>{s.title}</td><td className="r">{yen(s.total)}</td></tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="gt sumlist" style={{ gridTemplateColumns: "7% 21% 1fr 20%" }}>
+            <div className="h">No.</div><div className="h">内訳管理No.</div><div className="h">表　題</div><div className="h">金額（税別）</div>
+            {rows.flatMap(({ s, i }) => [
+              <div className="c" key={i + "a"}>{i + 1}</div>,
+              <div className="mono" key={i + "b"}>{s.quote?.quote_number || ""}</div>,
+              <div className="l" key={i + "c"}>{s.title}</div>,
+              <div className="r" key={i + "d"}>{yen(s.total)}</div>,
+            ])}
+          </div>
           {pi === sumPages.length - 1 && <Totals />}
           <div className="pgno">{sumPages.length > 1 ? `総括 ${pi + 1} / ${sumPages.length}` : ""}</div>
         </section>
@@ -196,26 +195,21 @@ export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id
             <div className="to" style={{ fontSize: 15, minWidth: "50%" }}>{clinicName}　御中</div>
             <div className="sec-title">{s.title}</div>
             <div className="sec-total">内訳合計金額（税別）　　¥ {yen(s.total)}</div>
-            <table className="grid detail">
-              <colgroup><col style={{ width: "5%" }} /><col /><col style={{ width: "15%" }} /><col style={{ width: "7%" }} /><col style={{ width: "16%" }} /><col style={{ width: "13%" }} /></colgroup>
-              <thead><tr><th></th><th>商品コード ／ メーカー ／ 商品名</th><th>(定価)／単価</th><th>数量</th><th>金　額</th><th>摘　要</th></tr></thead>
-              <tbody>
-                {rows.map(({ it, i }) => {
-                  const p = it.product_id ? prods.get(it.product_id) : undefined
-                  const amount = Number(it.quantity || 0) * Number(it.price || 0)
-                  return (
-                    <tr key={it.id}>
-                      <td className="c">{i + 1}</td>
-                      <td><div className="pcode"><span>{p?.product_code || ""}</span><span>{p?.manufacturer || ""}</span></div><div className="nm2">{it.product_name}</div></td>
-                      <td className="r"><div className="lp">{Number(it.list_price || 0) > 0 ? `(${yen(Number(it.list_price))})` : ""}</div><div>{yen(Number(it.price || 0))}</div></td>
-                      <td className="r">{it.quantity}</td>
-                      <td className="r">{yen(amount)}</td>
-                      <td></td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="gt detail" style={{ gridTemplateColumns: "5% 1fr 15% 7% 16% 13%" }}>
+              <div className="h"></div><div className="h">商品コード ／ メーカー ／ 商品名</div><div className="h">(定価)／単価</div><div className="h">数量</div><div className="h">金　額</div><div className="h">摘　要</div>
+              {rows.flatMap(({ it, i }) => {
+                const p = it.product_id ? prods.get(it.product_id) : undefined
+                const amount = Number(it.quantity || 0) * Number(it.price || 0)
+                return [
+                  <div className="c" key={it.id + "a"}>{i + 1}</div>,
+                  <div className="nmcell" key={it.id + "b"}><div className="pcode"><span>{p?.product_code || ""}</span><span>{p?.manufacturer || ""}</span></div><div className="nm2">{it.product_name}</div></div>,
+                  <div className="pricecell" key={it.id + "c"}><div className="lp">{Number(it.list_price || 0) > 0 ? `(${yen(Number(it.list_price))})` : ""}</div><div>{yen(Number(it.price || 0))}</div></div>,
+                  <div className="r" key={it.id + "d"}>{it.quantity}</div>,
+                  <div className="r" key={it.id + "e"}>{yen(amount)}</div>,
+                  <div key={it.id + "f"}></div>,
+                ]
+              })}
+            </div>
             <div className="pgno">{pages.length > 1 ? `${pi + 1} / ${pages.length}` : ""}</div>
           </section>
         ))
