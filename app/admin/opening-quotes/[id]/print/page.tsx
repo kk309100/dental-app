@@ -112,7 +112,8 @@ export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id
         .oq.oq table.grid td.r { text-align:right; font-variant-numeric:tabular-nums; }
         .oq.oq table.grid td.c { text-align:center; }
         .oq.oq table.grid td.mono { font-family:"Consolas","Courier New",monospace; font-size:10px !important; }
-        .oq.oq table.terms th { width:20%; background:#eef0f3 !important; }
+        .oq.oq table.terms { width:44% !important; flex:none; }
+        .oq.oq table.terms th { width:30%; background:#eef0f3 !important; }
         .oq.oq table.terms td { height:6.2mm; }
         .oq.oq table.sumlist tbody tr { height:7.6mm; }
         .oq.oq .company { position:relative; font-size:10.5px; line-height:1.65; padding-right:62px; }
@@ -156,7 +157,7 @@ export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id
               <div className="to">{clinicName}　御中</div>
               <p className="subject">{oq.title || ""}</p>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
-                <table className="grid terms" style={{ width: "46%" }}><tbody>
+                <table className="grid terms"><tbody>
                   {([["納　　期", oq.delivery_date], ["納入場所", oq.delivery_place], ["検収期間", oq.inspection_period], ["有効期限", oq.expiry_text], ["支払条件", oq.payment_terms]] as [string, string | null][]).map(([k, v]) => (
                     <tr key={k}><th>{k}</th><td>{v || ""}</td></tr>
                   ))}
