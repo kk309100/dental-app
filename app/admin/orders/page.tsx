@@ -1020,6 +1020,7 @@ function AdminOrdersPage() {
         </select>
         <label className="text-[12px] text-red-700 flex items-center gap-1 whitespace-nowrap" title="注文の数と、発注・入荷・在庫の数が合わない注文だけを出す"><input type="checkbox" checked={gapOnly} onChange={e => setGapOnly(e.target.checked)} />⚠ 注文数と発注数が違う注文だけ</label>
         <Link href="/admin/operation-log" className="text-[12px] text-gray-500 underline whitespace-nowrap">操作の記録を見る</Link>
+        <Link href="/admin/orders/mismatch" className="text-[12px] text-red-700 underline whitespace-nowrap">数が違う明細を日付別に見る</Link>
       </div>
 
       {/* バルクアクション: 業務フロー順（見積→納品 + 不足発注） */}
