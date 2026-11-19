@@ -2,17 +2,17 @@
 // 管理画面の共通スタイル（表・見出し）と衝突しないよう、表は table ではなく grid（.gt）で組む。
 export const PRINT_CSS = `
 
-        .oq.oq { font-family: "MS Mincho","ＭＳ 明朝","MS PMincho","Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif; color:#111; background:#e5e7eb; }
+        .oq.oq { font-family: "MS Mincho","ＭＳ 明朝","MS PMincho","Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif; color:#000; background:#e5e7eb; }
         .oq.oq .bar { position:sticky; top:0; background:#111827; color:#fff; padding:8px 16px; display:flex; gap:12px; align-items:center; z-index:10; font-family:sans-serif; font-size:13px; }
         .oq.oq .bar button { background:#2563eb; color:#fff; border:none; padding:6px 18px; border-radius:6px; font-size:13px; cursor:pointer; }
         .oq.oq .page { width:210mm; height:297mm; margin:12px auto; background:#fff; padding:13mm 14mm 11mm; box-sizing:border-box; box-shadow:0 1px 6px rgba(0,0,0,.25); overflow:hidden; position:relative; }
-        .oq.oq h1 { font-family:inherit !important; font-size:24px !important; font-weight:700 !important; letter-spacing:.45em !important; color:#111 !important; text-align:center; margin:0 !important; padding:0 0 0 .45em; line-height:1.3 !important; }
+        .oq.oq h1 { font-family:inherit !important; font-size:24px !important; font-weight:700 !important; letter-spacing:.45em !important; color:#000 !important; text-align:center; margin:0 !important; padding:0 0 0 .45em; line-height:1.3 !important; }
         .oq.oq .head { position:relative; border-bottom:2.5px double #111; padding-bottom:7px; margin-bottom:10px; }
         .oq.oq .meta { position:absolute; right:0; top:2px; font-size:10.5px; line-height:1.55; text-align:right; }
         .oq.oq .to { font-size:18px; font-weight:700; border-bottom:1px solid #111; display:inline-block; min-width:60%; padding:0 6px 3px 0; margin:6px 0 10px; }
         .oq.oq .subject { font-size:14px; font-weight:700; margin:0 0 8px; }
         .oq.oq .gt { display:grid; border-top:1px solid #111; border-left:1px solid #111; width:100%; box-sizing:border-box; }
-        .oq.oq .gt > div { border-right:1px solid #111; border-bottom:1px solid #111; padding:2px 6px; font-size:11px; line-height:1.35; color:#111; min-width:0; box-sizing:border-box; }
+        .oq.oq .gt > div { border-right:1px solid #111; border-bottom:1px solid #111; padding:2px 6px; font-size:11px; line-height:1.35; color:#000; min-width:0; box-sizing:border-box; }
         .oq.oq .gt > .h { background:#eef0f3; font-weight:700; font-size:10.5px; text-align:center; letter-spacing:.05em; display:flex; align-items:center; justify-content:center; padding:3px 5px; }
         .oq.oq .gt > .c { display:flex; align-items:center; justify-content:center; }
         .oq.oq .gt > .r { display:flex; align-items:center; justify-content:flex-end; font-variant-numeric:tabular-nums; }
@@ -41,9 +41,9 @@ export const PRINT_CSS = `
         .oq.oq table.detail tbody tr { height:11.2mm; }
         .oq.oq table.detail td.code { padding:0 !important; }
         .oq.oq .nm2 { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-        .oq.oq .pcode { display:flex; justify-content:space-between; font-size:9.5px; color:#444; gap:6px; }
-        .oq.oq .lp { font-size:9.5px; color:#555; }
-        .oq.oq .pgno { position:absolute; bottom:6mm; left:0; right:0; text-align:center; font-size:9.5px; color:#555; }
+        .oq.oq .pcode { display:flex; justify-content:space-between; font-size:9.5px; color:#000; gap:6px; }
+        .oq.oq .lp { font-size:9.5px; color:#000; }
+        .oq.oq .pgno { position:absolute; bottom:6mm; left:0; right:0; text-align:center; font-size:9.5px; color:#000; }
         @media print {
           .oq.oq { background:#fff; }
           .oq.oq .bar { display:none !important; }

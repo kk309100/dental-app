@@ -215,6 +215,7 @@ function BulkPrint() {
           font-size: 12.5px !important;
         }
         @media print {
+          .print-page.print-page, .print-page.print-page * { color: #000 !important; }
           .no-print { display: none !important; }
           .mobile-bottom-nav { display: none !important; }
           nav { display: none !important; }

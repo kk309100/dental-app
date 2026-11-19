@@ -25,7 +25,7 @@ const COL_QT = "13mm"  // 数量
 const COL_UP = "25mm"  // 単価
 const COL_AM = "29mm"  // 金額
 const QR_PX  = 58      // QRコードサイズ(px) ≈ 17mm印刷時 → スマホ読取OK
-const INK = "#1f2937"
+const INK = "#000"
 const NAVY = "#1e3a5f"
 const LINE = "#d1d5db"
 const SOFT = "#f3f6fa"
@@ -67,7 +67,7 @@ export default function DeliveryNoteSheet({
 
   function Half({ kind }: { kind: "original" | "copy" }) {
     const isCopy = kind === "copy"
-    const accent = isCopy ? "#6b7280" : NAVY
+    const accent = isCopy ? "#374151" : NAVY
     return (
       <div style={{
         position: "relative", padding: "3mm 7mm 1mm 12mm", boxSizing: "border-box",
@@ -78,9 +78,9 @@ export default function DeliveryNoteSheet({
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", borderBottom: `2.5px solid ${accent}`, paddingBottom: 2 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "0.45em", color: accent }}>{isCopy ? "納品書控" : "納品書"}</span>
-            {pageLabel && <span style={{ fontSize: 9, color: "#6b7280" }}>{pageLabel}</span>}
+            {pageLabel && <span style={{ fontSize: 9, color: "#000" }}>{pageLabel}</span>}
           </div>
-          <div style={{ textAlign: "right", fontSize: 10.5, lineHeight: 1.45, color: "#374151" }}>
+          <div style={{ textAlign: "right", fontSize: 10.5, lineHeight: 1.45, color: "#000" }}>
             <div>納品日　<b style={{ fontSize: 12 }}>{dateStr}</b></div>
             <div>No. <b>{order.delivery_number || order.id.slice(0, 8)}</b></div>
           </div>
@@ -89,14 +89,14 @@ export default function DeliveryNoteSheet({
         {/* 宛先 + 自社 */}
         <div style={{ display: "flex", gap: 12, marginTop: 4, marginBottom: 4 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            {corporateLabel && <div style={{ fontSize: 10, color: "#4b5563" }}>{corporateLabel}</div>}
+            {corporateLabel && <div style={{ fontSize: 10, color: "#000" }}>{corporateLabel}</div>}
             <div style={{ fontSize: 16, fontWeight: 700, borderBottom: `1px solid ${INK}`, paddingBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {prefix}{clinic?.name || "(医院不明)"}<span style={{ fontSize: 11, fontWeight: 400, marginLeft: 8 }}>御中</span>
             </div>
-            {clinic?.adress && <div style={{ fontSize: 10, color: "#4b5563", marginTop: 2 }}>{clinic.adress}</div>}
-            {clinic?.phone && <div style={{ fontSize: 10, color: "#4b5563" }}>TEL {clinic.phone}</div>}
+            {clinic?.adress && <div style={{ fontSize: 10, color: "#000", marginTop: 2 }}>{clinic.adress}</div>}
+            {clinic?.phone && <div style={{ fontSize: 10, color: "#000" }}>TEL {clinic.phone}</div>}
           </div>
-          <div style={{ flexShrink: 0, fontSize: 10, lineHeight: 1.4, position: "relative", paddingRight: 40, minWidth: 170, color: "#374151" }}>
+          <div style={{ flexShrink: 0, fontSize: 10, lineHeight: 1.4, position: "relative", paddingRight: 40, minWidth: 170, color: "#000" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: INK }}>{COMPANY.name}</div>
             <div>〒{COMPANY.postalCode}　{COMPANY.address}</div>
             <div>TEL {COMPANY.phone}{COMPANY.fax ? `　FAX ${COMPANY.fax}` : ""}</div>
@@ -124,11 +124,11 @@ export default function DeliveryNoteSheet({
 
           {items.map((i, n) => (
             <div key={i.id} style={{ display: "flex", alignItems: "center", borderTop: n ? `1px solid ${LINE}` : "none", height: ROW_H, background: n % 2 ? SOFT : "#fff" }}>
-              <div style={td({ width: COL_NO, justifyContent: "center", padding: 0, fontSize: 10, color: "#6b7280" })}>{(((pageNum ?? 1) - 1) * FIXED_ROWS) + n + 1}</div>
+              <div style={td({ width: COL_NO, justifyContent: "center", padding: 0, fontSize: 10, color: "#000" })}>{(((pageNum ?? 1) - 1) * FIXED_ROWS) + n + 1}</div>
               <div style={td({ flex: 1, minWidth: 0, alignItems: "flex-start", flexDirection: "column", justifyContent: "center" })}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{i.product_name || "—"}</div>
-                {i.lot_number && <div style={{ fontSize: 9.5, color: "#4b5563", whiteSpace: "nowrap", marginTop: 2 }}>LOT: {i.lot_number}</div>}
-                {i.note && <div style={{ fontSize: 10, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", marginTop: 1 }}>備考: {i.note}</div>}
+                {i.lot_number && <div style={{ fontSize: 9.5, color: "#000", whiteSpace: "nowrap", marginTop: 2 }}>LOT: {i.lot_number}</div>}
+                {i.note && <div style={{ fontSize: 10, color: "#000", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", marginTop: 1 }}>備考: {i.note}</div>}
               </div>
               <div style={{ width: COL_BC, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {i.barcode ? <QRCodeSVG value={i.barcode} size={QR_PX} level="M" marginSize={1} /> : null}
@@ -149,12 +149,12 @@ export default function DeliveryNoteSheet({
           {isCopy && (
             <div style={{ display: "flex", gap: 6 }}>
               <div style={{ textAlign: "center", border: `1px solid ${INK}`, borderRadius: 3, padding: "1px 4px", minWidth: 54 }}>
-                <div style={{ fontSize: 8, color: "#6b7280" }}>受領印</div>
+                <div style={{ fontSize: 8, color: "#000" }}>受領印</div>
                 <div style={{ width: 34, height: 20, margin: "1px auto" }} />
               </div>
               <div style={{ textAlign: "center", border: `1px solid ${INK}`, borderRadius: 3, padding: "1px 4px", minWidth: 84 }}>
-                <div style={{ fontSize: 8, color: "#6b7280" }}>受領日</div>
-                <div style={{ height: 20, lineHeight: "26px", color: "#9ca3af", fontSize: 9 }}>　年　月　日</div>
+                <div style={{ fontSize: 8, color: "#000" }}>受領日</div>
+                <div style={{ height: 20, lineHeight: "26px", color: "#000", fontSize: 9 }}>　年　月　日</div>
               </div>
             </div>
           )}
@@ -165,7 +165,7 @@ export default function DeliveryNoteSheet({
               { label: "消費税(10%)", val: fmtYen(tax) },
             ].map(row => (
               <div key={row.label} style={{ display: "flex", borderBottom: `1px solid ${LINE}`, fontSize: 11.5 }}>
-                <div style={{ flex: 1, padding: "1px 8px", color: "#374151" }}>{row.label}</div>
+                <div style={{ flex: 1, padding: "1px 8px", color: "#000" }}>{row.label}</div>
                 <div style={{ padding: "1px 8px", textAlign: "right", minWidth: "28mm" }}>{row.val}</div>
               </div>
             ))}

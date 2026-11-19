@@ -190,6 +190,7 @@ function BulkPrint() {
           font-size: 28px !important;
         }
         @media print {
+          .print-page.print-page, .print-page.print-page * { color: #000 !important; }
           .no-print { display: none !important; }
           /* ナビ・ヘッダーを完全に非表示 */
           .admin-layout-header,
