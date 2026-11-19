@@ -18,12 +18,17 @@ type Item   = { id: string; product_name: string | null; quantity: number; price
 type Clinic = { id?: string; name: string; corporate_name: string | null; clinic_type: string | null; adress: string | null; phone: string | null }
 type Order  = { id: string; delivered_at: string | null; created_at: string; delivery_number: string | null; note?: string | null }
 
-const ROW_H  = "18mm"  // QR読み取り可能サイズ確保（5行 × 18mm = 90mm）
+const ROW_H  = "16mm"  // QR読み取り可能サイズ確保（5行 × 18mm = 90mm）
+const COL_NO = "8mm"   // 行番号
 const COL_BC = "20mm"  // QRコード列幅
-const COL_QT = "10mm"  // 数量（拡大）
-const COL_UP = "24mm"  // 単価（拡大）
-const COL_AM = "28mm"  // 金額（拡大）
-const QR_PX  = 64      // QRコードサイズ(px) ≈ 17mm印刷時 → スマホ読取OK
+const COL_QT = "13mm"  // 数量
+const COL_UP = "25mm"  // 単価
+const COL_AM = "29mm"  // 金額
+const QR_PX  = 58      // QRコードサイズ(px) ≈ 17mm印刷時 → スマホ読取OK
+const INK = "#1f2937"
+const NAVY = "#1e3a5f"
+const LINE = "#d1d5db"
+const SOFT = "#f3f6fa"
 
 export default function DeliveryNoteSheet({
   order, items, clinic,
@@ -52,170 +57,122 @@ export default function DeliveryNoteSheet({
   const pageLabel = isMultiPage ? `（${pageNum ?? 1} / ${totalPages}ページ）` : ""
   const emptyRows = Math.max(0, FIXED_ROWS - items.length)
 
-  // ── 列ヘッダー共通スタイル ─────────────────────────
-  const colHead = (extra?: React.CSSProperties): React.CSSProperties => ({
-    padding: "2px 4px",
-    fontSize: 9.5,
-    fontWeight: 700,
-    color: "#555",
-    ...extra,
+  const th = (extra?: React.CSSProperties): React.CSSProperties => ({
+    padding: "0 6px", fontSize: 10, fontWeight: 700, color: "#fff", letterSpacing: "0.12em",
+    display: "flex", alignItems: "center", ...extra,
   })
-  // ── データセル共通スタイル ─────────────────────────
-  const cell = (extra?: React.CSSProperties): React.CSSProperties => ({
-    padding: "1px 4px",
-    fontSize: 10,
-    display: "flex",
-    alignItems: "center",
-    overflow: "hidden",
-    ...extra,
+  const td = (extra?: React.CSSProperties): React.CSSProperties => ({
+    padding: "0 6px", fontSize: 12, display: "flex", alignItems: "center", overflow: "hidden", color: INK, ...extra,
   })
 
   function Half({ kind }: { kind: "original" | "copy" }) {
     const isCopy = kind === "copy"
+    const accent = isCopy ? "#6b7280" : NAVY
     return (
       <div style={{
-        position: "relative",
-        padding: "2mm 4mm 1mm 10mm",
-        boxSizing: "border-box",
-        height: "148.5mm",
-        overflow: "hidden",
-        borderTop: isCopy ? "1.5px solid #555" : "none",
+        position: "relative", padding: "3mm 7mm 1mm 12mm", boxSizing: "border-box",
+        height: "148.5mm", overflow: "hidden", color: INK,
+        borderTop: isCopy ? "1px dashed #9ca3af" : "none",
       }}>
-        {/* 種別タグ */}
-        <div style={{
-          position: "absolute", top: 4, right: 6,
-          fontSize: 8, fontWeight: 700, padding: "1px 6px",
-          border: `1px solid ${isCopy ? "#6b7280" : "#2563eb"}`,
-          color: isCopy ? "#6b7280" : "#2563eb",
-          borderRadius: 3, background: "#fff",
-        }}>
-          {isCopy ? "納品書控え" : "納品書"}
-        </div>
-
-        {/* タイトル（div で h1 を避ける → admin-base の h1 強制スタイルを回避） */}
-        <div style={{ borderBottom: "1.5px solid #111", paddingBottom: 2, marginBottom: 3 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.3em", margin: "1px 0", textAlign: "center", color: "#111" }}>
-            {isCopy ? "納 品 書 控" : "納 品 書"}
+        {/* タイトル行 */}
+        <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", borderBottom: `2.5px solid ${accent}`, paddingBottom: 2 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "0.45em", color: accent }}>{isCopy ? "納品書控" : "納品書"}</span>
+            {pageLabel && <span style={{ fontSize: 9, color: "#6b7280" }}>{pageLabel}</span>}
           </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
-            <span style={{ fontSize: 8, color: "#666" }}>No. {order.delivery_number || order.id.slice(0, 8)}</span>
-            {pageLabel && <span style={{ fontSize: 8, color: "#999" }}>{pageLabel}</span>}
+          <div style={{ textAlign: "right", fontSize: 10.5, lineHeight: 1.45, color: "#374151" }}>
+            <div>納品日　<b style={{ fontSize: 12 }}>{dateStr}</b></div>
+            <div>No. <b>{order.delivery_number || order.id.slice(0, 8)}</b></div>
           </div>
         </div>
 
         {/* 宛先 + 自社 */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 2 }}>
-          <div style={{ flex: 1 }}>
-            {corporateLabel && <div style={{ fontSize: 8, color: "#444", margin: 0 }}>{corporateLabel}</div>}
-            <div style={{ fontSize: 11, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 1, margin: 0 }}>
-              {prefix}{clinic?.name || "(医院不明)"} 御中
+        <div style={{ display: "flex", gap: 12, marginTop: 4, marginBottom: 4 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {corporateLabel && <div style={{ fontSize: 10, color: "#4b5563" }}>{corporateLabel}</div>}
+            <div style={{ fontSize: 16, fontWeight: 700, borderBottom: `1px solid ${INK}`, paddingBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {prefix}{clinic?.name || "(医院不明)"}<span style={{ fontSize: 11, fontWeight: 400, marginLeft: 8 }}>御中</span>
             </div>
-            {clinic?.adress && <div style={{ fontSize: 7.5, color: "#666", marginTop: 1 }}>{clinic.adress}</div>}
-            {clinic?.phone && <div style={{ fontSize: 7.5, color: "#666" }}>TEL {clinic.phone}</div>}
-            <div style={{ fontSize: 8, color: "#444", marginTop: 1 }}>納品日: {dateStr}</div>
+            {clinic?.adress && <div style={{ fontSize: 9, color: "#6b7280", marginTop: 2 }}>{clinic.adress}</div>}
+            {clinic?.phone && <div style={{ fontSize: 9, color: "#6b7280" }}>TEL {clinic.phone}</div>}
           </div>
-          <div style={{ flexShrink: 0, fontSize: 7.5, lineHeight: 1.3, position: "relative", paddingRight: 36, minWidth: 155 }}>
-            <div style={{ fontSize: 9, fontWeight: 700 }}>{COMPANY.name}</div>
-            <div>〒{COMPANY.postalCode}</div>
-            <div>{COMPANY.address}</div>
-            <div>TEL {COMPANY.phone}</div>
-            {COMPANY.fax && <div>FAX {COMPANY.fax}</div>}
-            <div style={{ position: "absolute", top: -2, right: 0 }}><Seal size={32} /></div>
+          <div style={{ flexShrink: 0, fontSize: 9, lineHeight: 1.4, position: "relative", paddingRight: 40, minWidth: 170, color: "#374151" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: INK }}>{COMPANY.name}</div>
+            <div>〒{COMPANY.postalCode}　{COMPANY.address}</div>
+            <div>TEL {COMPANY.phone}{COMPANY.fax ? `　FAX ${COMPANY.fax}` : ""}</div>
+            <div style={{ position: "absolute", top: -2, right: 0 }}><Seal size={36} /></div>
           </div>
         </div>
 
-        {/* 注文時のメモ（社内連絡・特記事項） */}
+        {/* 注文時のメモ */}
         {order.note && (
-          <div style={{
-            fontSize: 7.5, color: "#92400e", background: "#fffbeb",
-            border: "1px solid #fde68a", borderRadius: 3,
-            padding: "1px 5px", marginBottom: 2,
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>
+          <div style={{ fontSize: 9, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 3, padding: "1px 6px", marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             📝 {order.note}
           </div>
         )}
 
-        {/* ── 明細（div フレックス・admin-base.css 干渉なし） ── */}
-        <div style={{ width: "100%", fontSize: 9 }}>
-
-          {/* ヘッダー行 */}
-          <div style={{ display: "flex", background: "#f3f4f6", borderBottom: "1.5px solid #ccc" }}>
-            <div style={{ ...colHead({ flex: 1 }) }}>商品名</div>
-            <div style={{ ...colHead({ width: COL_BC, textAlign: "center" }) }}>QR</div>
-            <div style={{ ...colHead({ width: COL_QT, textAlign: "right" }) }}>数量</div>
-            <div style={{ ...colHead({ width: COL_UP, textAlign: "right" }) }}>単価</div>
-            <div style={{ ...colHead({ width: COL_AM, textAlign: "right" }) }}>金額</div>
+        {/* 明細 */}
+        <div style={{ width: "100%", border: `1px solid ${LINE}`, borderRadius: 3, overflow: "hidden" }}>
+          <div style={{ display: "flex", background: accent, height: "6mm" }}>
+            <div style={th({ width: COL_NO, justifyContent: "center", padding: 0 })}>No</div>
+            <div style={th({ flex: 1 })}>商品名</div>
+            <div style={th({ width: COL_BC, justifyContent: "center" })}>QR</div>
+            <div style={th({ width: COL_QT, justifyContent: "flex-end" })}>数量</div>
+            <div style={th({ width: COL_UP, justifyContent: "flex-end" })}>単価</div>
+            <div style={th({ width: COL_AM, justifyContent: "flex-end" })}>金額</div>
           </div>
 
-          {/* データ行 */}
-          {items.map(i => (
-            <div key={i.id} style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #eee", height: ROW_H }}>
-              {/* 商品名 */}
-              <div style={{ ...cell({ flex: 1, minWidth: 0, alignItems: "flex-start", flexDirection: "column", justifyContent: "center" }) }}>
-                <div style={{ fontSize: 10, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{i.product_name || "—"}</div>
-                {i.lot_number && <div style={{ fontSize: 7, color: "#555", whiteSpace: "nowrap", marginTop: 2 }}>LOT: {i.lot_number}</div>}
-                {i.note && <div style={{ fontSize: 8, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", marginTop: 1 }}>備考: {i.note}</div>}
+          {items.map((i, n) => (
+            <div key={i.id} style={{ display: "flex", alignItems: "center", borderTop: n ? `1px solid ${LINE}` : "none", height: ROW_H, background: n % 2 ? SOFT : "#fff" }}>
+              <div style={td({ width: COL_NO, justifyContent: "center", padding: 0, fontSize: 10, color: "#9ca3af" })}>{(((pageNum ?? 1) - 1) * FIXED_ROWS) + n + 1}</div>
+              <div style={td({ flex: 1, minWidth: 0, alignItems: "flex-start", flexDirection: "column", justifyContent: "center" })}>
+                <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{i.product_name || "—"}</div>
+                {i.lot_number && <div style={{ fontSize: 8.5, color: "#6b7280", whiteSpace: "nowrap", marginTop: 2 }}>LOT: {i.lot_number}</div>}
+                {i.note && <div style={{ fontSize: 9, color: "#4b5563", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", marginTop: 1 }}>備考: {i.note}</div>}
               </div>
-              {/* QRコード（スマホ読取対応: ~17mm印刷時） */}
               <div style={{ width: COL_BC, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {i.barcode ? (
-                  <QRCodeSVG
-                    value={i.barcode}
-                    size={QR_PX}
-                    level="M"
-                    marginSize={1}
-                  />
-                ) : null}
+                {i.barcode ? <QRCodeSVG value={i.barcode} size={QR_PX} level="M" marginSize={1} /> : null}
               </div>
-              {/* 数量 */}
-              <div style={{ ...cell({ width: COL_QT, justifyContent: "flex-end" }) }}>{i.quantity}</div>
-              {/* 単価 */}
-              <div style={{ ...cell({ width: COL_UP, justifyContent: "flex-end" }) }}>{fmtYen(i.price)}</div>
-              {/* 金額 */}
-              <div style={{ ...cell({ width: COL_AM, justifyContent: "flex-end", fontWeight: 700 }) }}>{fmtYen(Number(i.quantity) * Number(i.price))}</div>
+              <div style={td({ width: COL_QT, justifyContent: "flex-end", fontWeight: 700, fontSize: 13 })}>{i.quantity}</div>
+              <div style={td({ width: COL_UP, justifyContent: "flex-end" })}>{fmtYen(i.price)}</div>
+              <div style={td({ width: COL_AM, justifyContent: "flex-end", fontWeight: 700, fontSize: 13 })}>{fmtYen(Number(i.quantity) * Number(i.price))}</div>
             </div>
           ))}
 
-          {/* 空白行 */}
           {Array.from({ length: emptyRows }).map((_, idx) => (
-            <div key={`e-${idx}`} style={{ display: "flex", borderBottom: "1px solid #eee", height: ROW_H }}>
-              <div style={{ flex: 1 }} />
-              <div style={{ width: COL_BC }} />
-              <div style={{ width: COL_QT }} />
-              <div style={{ width: COL_UP }} />
-              <div style={{ width: COL_AM }} />
-            </div>
+            <div key={`e-${idx}`} style={{ height: ROW_H, borderTop: `1px solid ${LINE}`, background: (items.length + idx) % 2 ? SOFT : "#fff" }} />
           ))}
         </div>
 
-        {/* 合計 + 受領印 */}
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginTop: 2 }}>
+        {/* 受領印 + 合計 */}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginTop: 4 }}>
           {isCopy && (
-            <div style={{ display: "flex", gap: 5 }}>
-              <div style={{ textAlign: "center", border: "1.5px solid #111", borderRadius: 3, padding: "1px 3px", minWidth: 52 }}>
-                <div style={{ fontSize: 7, color: "#666" }}>受領印</div>
-                <div style={{ width: 34, height: 26, margin: "1px auto", border: "1px dashed #aaa", borderRadius: 3 }} />
+            <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ textAlign: "center", border: `1px solid ${INK}`, borderRadius: 3, padding: "1px 4px", minWidth: 54 }}>
+                <div style={{ fontSize: 8, color: "#6b7280" }}>受領印</div>
+                <div style={{ width: 34, height: 20, margin: "1px auto" }} />
               </div>
-              <div style={{ textAlign: "center", border: "1.5px solid #111", borderRadius: 3, padding: "1px 3px", minWidth: 80, alignSelf: "flex-end" }}>
-                <div style={{ fontSize: 7, color: "#666" }}>受領日</div>
-                <div style={{ height: 14, lineHeight: "14px", margin: "1px 3px 0", borderBottom: "1px solid #aaa", color: "#bbb", fontSize: 7.5 }}>　年　月　日</div>
+              <div style={{ textAlign: "center", border: `1px solid ${INK}`, borderRadius: 3, padding: "1px 4px", minWidth: 84 }}>
+                <div style={{ fontSize: 8, color: "#6b7280" }}>受領日</div>
+                <div style={{ height: 20, lineHeight: "26px", color: "#9ca3af", fontSize: 9 }}>　年　月　日</div>
               </div>
             </div>
           )}
           <div style={{ flex: 1 }} />
-          {/* 小計 / 消費税 / 合計（div で実装） */}
-          <div style={{ minWidth: "60mm", fontSize: 10, border: "1px solid #ddd" }}>
+          <div style={{ minWidth: "72mm", border: `1px solid ${LINE}`, borderRadius: 3, overflow: "hidden" }}>
             {[
-              { label: "小計",       val: fmtYen(subtotal), bg: "#f9fafb", bold: false },
-              { label: "消費税(10%)", val: fmtYen(tax),      bg: "#f9fafb", bold: false },
-              { label: "合計",        val: fmtYen(total),    bg: "#fef3c7", bold: true  },
+              { label: "小計", val: fmtYen(subtotal) },
+              { label: "消費税(10%)", val: fmtYen(tax) },
             ].map(row => (
-              <div key={row.label} style={{ display: "flex", background: row.bg, borderTop: "1px solid #ddd" }}>
-                <div style={{ flex: 1, padding: "2px 6px", fontSize: 9.5, color: "#555", fontWeight: row.bold ? 700 : 400 }}>{row.label}</div>
-                <div style={{ padding: "2px 6px", fontSize: row.bold ? 12 : 9.5, fontWeight: row.bold ? 700 : 400, textAlign: "right", minWidth: "24mm" }}>{row.val}</div>
+              <div key={row.label} style={{ display: "flex", borderBottom: `1px solid ${LINE}`, fontSize: 10.5 }}>
+                <div style={{ flex: 1, padding: "1px 8px", color: "#4b5563" }}>{row.label}</div>
+                <div style={{ padding: "1px 8px", textAlign: "right", minWidth: "28mm" }}>{row.val}</div>
               </div>
             ))}
+            <div style={{ display: "flex", alignItems: "center", background: accent, color: "#fff" }}>
+              <div style={{ flex: 1, padding: "2px 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.2em" }}>合計（税込）</div>
+              <div style={{ padding: "2px 8px", fontSize: 16, fontWeight: 800, textAlign: "right", minWidth: "34mm" }}>{fmtYen(total)}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -232,6 +189,8 @@ export default function DeliveryNoteSheet({
         background: "#fff",
         boxSizing: "border-box",
         overflow: "hidden",
+        WebkitPrintColorAdjust: "exact",
+        printColorAdjust: "exact",
       }}
     >
       <Half kind="original" />
