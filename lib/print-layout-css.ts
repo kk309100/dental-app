@@ -19,8 +19,8 @@ export const PRINT_CSS = `
         .oq.oq .gt > .l { display:flex; align-items:center; }
         .oq.oq .gt > .mono { display:flex; align-items:center; font-family:"Consolas","Courier New",monospace; font-size:10px; }
         .oq.oq .terms { width:44%; flex:none; grid-auto-rows:6.2mm; }
-        .oq.oq .sumlist { grid-auto-rows:minmax(7.6mm,auto); }
-        .oq.oq .detail { grid-auto-rows:minmax(11.2mm,auto); }
+        .oq.oq .sumlist { grid-auto-rows:minmax(9mm,auto); }
+        .oq.oq .detail { grid-auto-rows:minmax(12.5mm,auto); }
         .oq.oq .detail > .nmcell { display:flex; flex-direction:column; justify-content:center; }
         .oq.oq .detail > .pricecell { display:flex; flex-direction:column; justify-content:center; align-items:flex-end; font-variant-numeric:tabular-nums; }
         .oq.oq .company { position:relative; font-size:10.5px; line-height:1.65; padding-right:62px; }
@@ -71,4 +71,11 @@ export const PRINT_CSS = `
         .oq.oq .gt.quote > .h { font-size:11px; }
         .oq.oq .gt.quote > .sec { font-size:13px; }
         .oq.oq .gt.quote > .subl, .oq.oq .gt.quote > .subr { font-size:12.5px; }
+        .oq.oq .gt.detail > .c, .oq.oq .gt.detail > .r, .oq.oq .gt.detail > .pricecell { font-size:13px; }
+        .oq.oq .gt.detail > .nmcell .nm2 { font-size:13px; line-height:1.3; }
+        .oq.oq .gt.detail > .nmcell .pcode { font-size:10.5px; }
+        .oq.oq .gt.detail > .pricecell .lp { font-size:10.5px; }
+        .oq.oq .gt.detail > .h { font-size:11px; }
+        .oq.oq .gt.sumlist > .c, .oq.oq .gt.sumlist > .r, .oq.oq .gt.sumlist > .l { font-size:13px; }
+        .oq.oq .gt.sumlist > .mono { font-size:11px; }
 `
