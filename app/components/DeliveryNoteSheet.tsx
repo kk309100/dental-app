@@ -105,7 +105,7 @@ export default function DeliveryNoteSheet({
         </div>
 
         {/* 注文時のメモ */}
-        {order.note && (
+        {order.note && !order.note.startsWith("売上CSV取込") && (
           <div style={{ fontSize: 9, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 3, padding: "1px 6px", marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             📝 {order.note}
           </div>
