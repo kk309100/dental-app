@@ -214,6 +214,14 @@ function BulkPrint() {
         .print-page.print-page table.po-items-table td p {
           font-size: 12.5px !important;
         }
+        /* 発注の明細に、行の線（黒）を引く。1行目（発注書番号の行）には引かない */
+        .print-page.print-page table.po-items-table tbody td,
+        .print-page.print-page table.po-items-table thead tr:nth-child(2) th {
+          border: 1px solid #000 !important;
+        }
+        .print-page.print-page table.po-items-table thead tr:nth-child(2) th {
+          border-bottom: 2px solid #000 !important;
+        }
         @media print {
           .print-page.print-page, .print-page.print-page * { color: #000 !important; }
           .no-print { display: none !important; }
