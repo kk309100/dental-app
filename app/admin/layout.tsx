@@ -34,14 +34,14 @@ const NAV = [
   // ③納品・請求・売上
   { id: "deliveries",     href: "/admin/deliveries",          label: "医院納品",   icon: Ic.doc,       group: "納品・請求" },
   { id: "quotes",         href: "/admin/quotes",              label: "見積",       icon: Ic.quote,     group: "納品・請求" },
-  { id: "invoices",       href: "/admin/invoices",            label: "請求",       icon: Ic.sales,     group: "納品・請求" },
+  { id: "repair-orders",  href: "/admin/repair-orders",        label: "修理依頼",   icon: Ic.wrench,    group: "納品・請求" },
   { id: "sales",          href: "/admin/sales",               label: "売上",       icon: Ic.sales,     group: "納品・請求" },
 
   // ④在庫・その他
   { id: "inventory",      href: "/admin/inventory",           label: "在庫",       icon: Ic.product,   group: "在庫・その他" },
   { id: "scan",           href: "/admin/scan",                label: "📷 スキャン", icon: Ic.product,   group: "在庫・その他" },
   { id: "masters",        href: "/admin/masters",             label: "マスター",   icon: Ic.dash,      group: "在庫・その他" },
-  { id: "repair-orders",  href: "/admin/repair-orders",        label: "修理依頼",   icon: Ic.wrench,    group: "在庫・その他" },
+  { id: "invoices",       href: "/admin/invoices",            label: "請求",       icon: Ic.sales,     group: "在庫・その他" },
   { id: "notices",        href: "/admin/notices",             label: "お知らせ",   icon: Ic.dash,      group: "在庫・その他" },
   { id: "dashboard",      href: "/admin/dashboard",           label: "分析",       icon: Ic.dash,      group: "在庫・その他" },
 ]
