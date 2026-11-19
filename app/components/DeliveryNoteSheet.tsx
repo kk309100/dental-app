@@ -58,11 +58,11 @@ export default function DeliveryNoteSheet({
   const emptyRows = Math.max(0, FIXED_ROWS - items.length)
 
   const th = (extra?: React.CSSProperties): React.CSSProperties => ({
-    padding: "0 6px", fontSize: 10, fontWeight: 700, color: "#fff", letterSpacing: "0.12em",
+    padding: "0 6px", fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.12em",
     display: "flex", alignItems: "center", ...extra,
   })
   const td = (extra?: React.CSSProperties): React.CSSProperties => ({
-    padding: "0 6px", fontSize: 12, display: "flex", alignItems: "center", overflow: "hidden", color: INK, ...extra,
+    padding: "0 6px", fontSize: 13, display: "flex", alignItems: "center", overflow: "hidden", color: INK, ...extra,
   })
 
   function Half({ kind }: { kind: "original" | "copy" }) {
@@ -93,10 +93,10 @@ export default function DeliveryNoteSheet({
             <div style={{ fontSize: 16, fontWeight: 700, borderBottom: `1px solid ${INK}`, paddingBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {prefix}{clinic?.name || "(医院不明)"}<span style={{ fontSize: 11, fontWeight: 400, marginLeft: 8 }}>御中</span>
             </div>
-            {clinic?.adress && <div style={{ fontSize: 9, color: "#6b7280", marginTop: 2 }}>{clinic.adress}</div>}
-            {clinic?.phone && <div style={{ fontSize: 9, color: "#6b7280" }}>TEL {clinic.phone}</div>}
+            {clinic?.adress && <div style={{ fontSize: 10, color: "#4b5563", marginTop: 2 }}>{clinic.adress}</div>}
+            {clinic?.phone && <div style={{ fontSize: 10, color: "#4b5563" }}>TEL {clinic.phone}</div>}
           </div>
-          <div style={{ flexShrink: 0, fontSize: 9, lineHeight: 1.4, position: "relative", paddingRight: 40, minWidth: 170, color: "#374151" }}>
+          <div style={{ flexShrink: 0, fontSize: 10, lineHeight: 1.4, position: "relative", paddingRight: 40, minWidth: 170, color: "#374151" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: INK }}>{COMPANY.name}</div>
             <div>〒{COMPANY.postalCode}　{COMPANY.address}</div>
             <div>TEL {COMPANY.phone}{COMPANY.fax ? `　FAX ${COMPANY.fax}` : ""}</div>
@@ -124,18 +124,18 @@ export default function DeliveryNoteSheet({
 
           {items.map((i, n) => (
             <div key={i.id} style={{ display: "flex", alignItems: "center", borderTop: n ? `1px solid ${LINE}` : "none", height: ROW_H, background: n % 2 ? SOFT : "#fff" }}>
-              <div style={td({ width: COL_NO, justifyContent: "center", padding: 0, fontSize: 10, color: "#9ca3af" })}>{(((pageNum ?? 1) - 1) * FIXED_ROWS) + n + 1}</div>
+              <div style={td({ width: COL_NO, justifyContent: "center", padding: 0, fontSize: 10, color: "#6b7280" })}>{(((pageNum ?? 1) - 1) * FIXED_ROWS) + n + 1}</div>
               <div style={td({ flex: 1, minWidth: 0, alignItems: "flex-start", flexDirection: "column", justifyContent: "center" })}>
-                <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{i.product_name || "—"}</div>
-                {i.lot_number && <div style={{ fontSize: 8.5, color: "#6b7280", whiteSpace: "nowrap", marginTop: 2 }}>LOT: {i.lot_number}</div>}
-                {i.note && <div style={{ fontSize: 9, color: "#4b5563", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", marginTop: 1 }}>備考: {i.note}</div>}
+                <div style={{ fontSize: 13.5, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{i.product_name || "—"}</div>
+                {i.lot_number && <div style={{ fontSize: 9.5, color: "#4b5563", whiteSpace: "nowrap", marginTop: 2 }}>LOT: {i.lot_number}</div>}
+                {i.note && <div style={{ fontSize: 10, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", marginTop: 1 }}>備考: {i.note}</div>}
               </div>
               <div style={{ width: COL_BC, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {i.barcode ? <QRCodeSVG value={i.barcode} size={QR_PX} level="M" marginSize={1} /> : null}
               </div>
-              <div style={td({ width: COL_QT, justifyContent: "flex-end", fontWeight: 700, fontSize: 13 })}>{i.quantity}</div>
+              <div style={td({ width: COL_QT, justifyContent: "flex-end", fontWeight: 700, fontSize: 15 })}>{i.quantity}</div>
               <div style={td({ width: COL_UP, justifyContent: "flex-end" })}>{fmtYen(i.price)}</div>
-              <div style={td({ width: COL_AM, justifyContent: "flex-end", fontWeight: 700, fontSize: 13 })}>{fmtYen(Number(i.quantity) * Number(i.price))}</div>
+              <div style={td({ width: COL_AM, justifyContent: "flex-end", fontWeight: 700, fontSize: 15 })}>{fmtYen(Number(i.quantity) * Number(i.price))}</div>
             </div>
           ))}
 
@@ -164,8 +164,8 @@ export default function DeliveryNoteSheet({
               { label: "小計", val: fmtYen(subtotal) },
               { label: "消費税(10%)", val: fmtYen(tax) },
             ].map(row => (
-              <div key={row.label} style={{ display: "flex", borderBottom: `1px solid ${LINE}`, fontSize: 10.5 }}>
-                <div style={{ flex: 1, padding: "1px 8px", color: "#4b5563" }}>{row.label}</div>
+              <div key={row.label} style={{ display: "flex", borderBottom: `1px solid ${LINE}`, fontSize: 11.5 }}>
+                <div style={{ flex: 1, padding: "1px 8px", color: "#374151" }}>{row.label}</div>
                 <div style={{ padding: "1px 8px", textAlign: "right", minWidth: "28mm" }}>{row.val}</div>
               </div>
             ))}

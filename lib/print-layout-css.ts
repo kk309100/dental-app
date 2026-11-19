@@ -19,8 +19,8 @@ export const PRINT_CSS = `
         .oq.oq .gt > .l { display:flex; align-items:center; }
         .oq.oq .gt > .mono { display:flex; align-items:center; font-family:"Consolas","Courier New",monospace; font-size:10px; }
         .oq.oq .terms { width:44%; flex:none; grid-auto-rows:6.2mm; }
-        .oq.oq .sumlist { grid-auto-rows:minmax(9mm,auto); }
-        .oq.oq .detail { grid-auto-rows:minmax(12.5mm,auto); }
+        .oq.oq .sumlist { grid-auto-rows:minmax(9.5mm,auto); }
+        .oq.oq .detail { grid-auto-rows:minmax(13.5mm,auto); }
         .oq.oq .detail > .nmcell { display:flex; flex-direction:column; justify-content:center; }
         .oq.oq .detail > .pricecell { display:flex; flex-direction:column; justify-content:center; align-items:flex-end; font-variant-numeric:tabular-nums; }
         .oq.oq .company { position:relative; font-size:10.5px; line-height:1.65; padding-right:62px; }
@@ -57,27 +57,27 @@ export const PRINT_CSS = `
         .oq.oq .gt > .subr { background:#f6f7f9; font-weight:700; font-size:11.5px; display:flex; align-items:center; justify-content:flex-end; font-variant-numeric:tabular-nums; }
         .oq.oq .gt > .gapc { grid-column:1 / -1; height:3mm; padding:0; border-bottom:none; border-right:none; border-left:none; background:transparent; }
         .oq.oq .gt.quote { grid-auto-rows:auto; }
-        .oq.oq .gt.quote > .c, .oq.oq .gt.quote > .nmcell, .oq.oq .gt.quote > .pricecell, .oq.oq .gt.quote > .r, .oq.oq .gt.quote > .nt { min-height:12.5mm; }
-        .oq.oq .gt.quote.unit > .c, .oq.oq .gt.quote.unit > .nmcell, .oq.oq .gt.quote.unit > .r { min-height:10mm; }
+        .oq.oq .gt.quote > .c, .oq.oq .gt.quote > .nmcell, .oq.oq .gt.quote > .pricecell, .oq.oq .gt.quote > .r, .oq.oq .gt.quote > .nt { min-height:13.5mm; }
+        .oq.oq .gt.quote.unit > .c, .oq.oq .gt.quote.unit > .nmcell, .oq.oq .gt.quote.unit > .r { min-height:10.5mm; }
         .oq.oq .gt.quote > .sec, .oq.oq .gt.quote > .subl, .oq.oq .gt.quote > .subr { min-height:7.5mm; }
         .oq.oq .gt.quote > .gapc { min-height:0; }
         .oq.oq .gt > .notecell { grid-column:1 / -1; white-space:pre-wrap; min-height:20mm; font-size:10.5px; }
         .oq.oq .lead { font-size:11px; margin:12px 0 6px; }
         .oq.oq .head { min-height:13mm; box-sizing:border-box; }
-        .oq.oq .gt.quote > .c, .oq.oq .gt.quote > .r, .oq.oq .gt.quote > .pricecell { font-size:13px; }
-        .oq.oq .gt.quote > .nmcell .nm2 { font-size:13px; line-height:1.3; }
-        .oq.oq .gt.quote > .nmcell .pcode { font-size:10.5px; }
-        .oq.oq .gt.quote > .pricecell .lp { font-size:10.5px; }
-        .oq.oq .gt.quote > .h { font-size:11px; }
-        .oq.oq .gt > .nt { font-size:11px; line-height:1.3; }
+        .oq.oq .gt.quote > .c, .oq.oq .gt.quote > .r, .oq.oq .gt.quote > .pricecell { font-size:14px; }
+        .oq.oq .gt.quote > .nmcell .nm2 { font-size:14px; line-height:1.3; }
+        .oq.oq .gt.quote > .nmcell .pcode { font-size:11px; }
+        .oq.oq .gt.quote > .pricecell .lp { font-size:11px; }
+        .oq.oq .gt.quote > .h { font-size:11.5px; }
+        .oq.oq .gt > .nt { font-size:12px; line-height:1.3; }
         .oq.oq .gt > .nt .ntt { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; white-space:pre-wrap; }
         .oq.oq .gt.quote > .sec { font-size:13px; }
         .oq.oq .gt.quote > .subl, .oq.oq .gt.quote > .subr { font-size:12.5px; }
-        .oq.oq .gt.detail > .c, .oq.oq .gt.detail > .r, .oq.oq .gt.detail > .pricecell { font-size:13px; }
-        .oq.oq .gt.detail > .nmcell .nm2 { font-size:13px; line-height:1.3; }
-        .oq.oq .gt.detail > .nmcell .pcode { font-size:10.5px; }
-        .oq.oq .gt.detail > .pricecell .lp { font-size:10.5px; }
+        .oq.oq .gt.detail > .c, .oq.oq .gt.detail > .r, .oq.oq .gt.detail > .pricecell { font-size:14px; }
+        .oq.oq .gt.detail > .nmcell .nm2 { font-size:14px; line-height:1.3; }
+        .oq.oq .gt.detail > .nmcell .pcode { font-size:11px; }
+        .oq.oq .gt.detail > .pricecell .lp { font-size:11px; }
         .oq.oq .gt.detail > .h { font-size:11px; }
-        .oq.oq .gt.sumlist > .c, .oq.oq .gt.sumlist > .r, .oq.oq .gt.sumlist > .l { font-size:13px; }
+        .oq.oq .gt.sumlist > .c, .oq.oq .gt.sumlist > .r, .oq.oq .gt.sumlist > .l { font-size:14px; }
         .oq.oq .gt.sumlist > .mono { font-size:11px; }
 `

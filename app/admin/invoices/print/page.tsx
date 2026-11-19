@@ -179,12 +179,12 @@ function BulkPrint() {
         .print-page.print-page table td,
         .print-page.print-page table th {
           padding: 6px 8px !important;
-          font-size: 12px !important;
+          font-size: 13.5px !important;
         }
         .print-page.print-page table td div,
         .print-page.print-page table td span,
         .print-page.print-page table td p {
-          font-size: 12px !important;
+          font-size: 13.5px !important;
         }
         .print-page.print-page h1 {
           font-size: 28px !important;

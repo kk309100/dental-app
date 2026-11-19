@@ -193,13 +193,13 @@ function BulkPrint() {
         .print-page.print-page table td,
         .print-page.print-page table th {
           padding: 7px 8px !important;
-          font-size: 12px !important;
+          font-size: 13.5px !important;
           line-height: 1.5 !important;
         }
         .print-page.print-page table td div,
         .print-page.print-page table td span,
         .print-page.print-page table td p {
-          font-size: 11px !important;
+          font-size: 12.5px !important;
           line-height: 1.5 !important;
         }
         .print-page.print-page h1 {
@@ -207,12 +207,12 @@ function BulkPrint() {
         }
         .print-page.print-page table.po-items-table td,
         .print-page.print-page table.po-items-table th {
-          font-size: 13px !important;
+          font-size: 14.5px !important;
         }
         .print-page.print-page table.po-items-table td div,
         .print-page.print-page table.po-items-table td span,
         .print-page.print-page table.po-items-table td p {
-          font-size: 11px !important;
+          font-size: 12.5px !important;
         }
         @media print {
           .no-print { display: none !important; }
