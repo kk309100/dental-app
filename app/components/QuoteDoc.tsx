@@ -13,7 +13,7 @@ export type Row = { kind: "sec"; label: string } | { kind: "item"; it: Item; no:
 const yen = (n: number) => Math.round(n).toLocaleString("ja-JP")
 
 // 1行の高さ（目安）。1ページに入る量を、これで数える
-const H = { item: 1.21, sec: 0.7, sub: 0.7, gap: 0.3, totals: 2.8, notesOnly: 2.1 }
+const H = { item: 1, sec: 0.7, sub: 0.7, gap: 0.3, totals: 2.8, notesOnly: 2.1 }
 const CAP_FIRST = 14.3, CAP_REST = 20.3
 
 
@@ -36,7 +36,7 @@ export default function QuoteDoc({ quote, clinic, items, prods, company, unit, s
     }
     groups.push(g)
   })
-  const hOf = (g: Row[]) => g.reduce((n, r) => n + (r.kind === "item" && unit ? 0.94 : H[r.kind]), 0)
+  const hOf = (g: Row[]) => g.reduce((n, r) => n + (r.kind === "item" && unit ? 0.82 : H[r.kind]), 0)
   // 見出し〜最初の明細は、離さない。最後の明細は、合計・備考と、離さない（最後のページに、まとめて載せる）
   const tail = showTotal ? H.totals : H.notesOnly
   const pages: Row[][] = [[]]

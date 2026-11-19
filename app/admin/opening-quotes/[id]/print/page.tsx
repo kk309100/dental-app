@@ -20,9 +20,9 @@ const chunk = <T,>(a: T[], first: number, rest: number): T[][] => {
   return out
 }
 
-const SUM_FIRST = 10      // 総括ページ（1枚目）に入る内訳の行数
-const SUM_REST = 24       // 総括が、2枚目以降に続くときの行数
-const DETAIL_ROWS = 15    // 内訳ページ1枚の明細の行数
+const SUM_FIRST = 12      // 総括ページ（1枚目）に入る内訳の行数
+const SUM_REST = 30       // 総括が、2枚目以降に続くときの行数
+const DETAIL_ROWS = 18    // 内訳ページ1枚の明細の行数
 
 export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
