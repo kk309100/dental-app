@@ -59,6 +59,7 @@ export default function AdminHomePage() {
     { href: "/admin/receivings",      label: "仕入履歴",   desc: "入荷処理済みの一覧",           icon: Ic.purchase, color: "#7c3aed" },
     { href: "/admin/inventory",       label: "在庫管理",   desc: "在庫数・発注点の確認",         icon: Ic.product,  color: "#d97706", badge: badges.lowStock || undefined, badgeLabel: "在庫不足" },
     { href: "/admin/masters",         label: "マスター",   desc: "医院・仕入先・商品・設定",     icon: Ic.dash,     color: "#475569" },
+    { href: "/admin/repair-orders",   label: "修理依頼",   desc: "修理の依頼・進み具合の確認",   icon: Ic.wrench,   color: "#dc2626" },
   ]
 
   const quickLinks = [
