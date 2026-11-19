@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { fmtYen, parseDbDate } from "@/lib/invoice"
+import { parseDbDate } from "@/lib/invoice"
+import { PRINT_CSS } from "@/lib/print-layout-css"
 import { COMPANY } from "@/lib/company"
 import Seal from "@/app/components/Seal"
 
@@ -18,6 +19,10 @@ function noteForPrint(note: string, clinicCodeByName: Map<string, string>): stri
   const code = clinicCodeByName.get(m[1])
   return code ? `[${code}]${m[2]}` : note
 }
+
+// 1枚に入る行数（最後のページに、注記と備考が入る余裕を残す）
+const FIRST_ROWS = 16
+const REST_ROWS = 20
 
 export default function BulkPrintWrapper() {
   return (
@@ -119,133 +124,73 @@ function BulkPrint() {
         <button onClick={() => window.close()} className="px-4 py-2 bg-gray-200 text-sm rounded">閉じる</button>
         <span className="ml-3 text-xs text-gray-700">{pos.length}件の発注書</span>
       </div>
-      {pos.map((po, idx) => {
-        const sup = po.supplier_id ? supBy.get(po.supplier_id) : null
-        const its = itemsByPO.get(po.id) || []
-        const isLast = idx === pos.length - 1
-        return (
-          <main key={po.id} className="bg-white max-w-3xl mx-auto p-8 mb-8 print-page" style={{ pageBreakAfter: isLast ? "auto" : "always", minHeight: isLast ? undefined : "27cm" }}>
-            <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
-              <h1 style={{ fontSize: 27, letterSpacing: "0.3em", margin: "16px 0 4px", textAlign: "center" }}>発 注 書</h1>
-              <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {po.po_number || po.id.slice(0, 8)}</p>
-            </header>
-            <div style={{ display: "flex", gap: 20, marginTop: 18 }}>
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
-                  {sup?.name || "(仕入先未設定)"} 御中
-                </p>
-                {sup?.address && <p style={{ margin: "6px 0 0", fontSize: 11, color: "#666" }}>{sup.address}</p>}
-                {sup?.phone && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#666" }}>TEL {sup.phone}{sup.fax && ` / FAX ${sup.fax}`}</p>}
+      <div className="oq">
+        <style>{PRINT_CSS}</style>
+        {pos.map((po) => {
+          const sup = po.supplier_id ? supBy.get(po.supplier_id) : null
+          const its = itemsByPO.get(po.id) || []
+          const no = po.po_number || po.id.slice(0, 8)
+          const dateStr = po.ordered_at ? parseDbDate(po.ordered_at).toLocaleDateString("ja-JP") : ""
+          const pages: Item[][] = [its.slice(0, FIRST_ROWS)]
+          for (let i = FIRST_ROWS; i < its.length; i += REST_ROWS) pages.push(its.slice(i, i + REST_ROWS))
+          return pages.map((rows, pi) => (
+            <section className="page" key={po.id + "-" + pi}>
+              <header className="head">
+                <h1>発 注 書</h1>
+                <div className="meta">{dateStr}<br />No. {no}{pi > 0 ? <><br />（続き）</> : null}</div>
+              </header>
+              {pi === 0 && (
+                <>
+                  <div className="to">{sup?.name || "(仕入先未設定)"}　御中</div>
+                  {sup?.address && <div style={{ fontSize: 11, margin: "-4px 0 2px" }}>{sup.address}</div>}
+                  {sup?.phone && <div style={{ fontSize: 11, margin: "0 0 8px" }}>TEL {sup.phone}{sup.fax ? `　FAX ${sup.fax}` : ""}</div>}
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginTop: 6 }}>
+                    <div className="gt terms" style={{ gridTemplateColumns: "34% 1fr", gridAutoRows: "6.2mm" }}>
+                      <div className="h">発 注 日</div><div className="l">{dateStr}</div>
+                      <div className="h">納期希望</div><div className="l">{po.expected_at ? parseDbDate(po.expected_at).toLocaleDateString("ja-JP") : "最短"}</div>
+                    </div>
+                    <div className="company" style={{ flex: 1 }}>
+                      <div className="nm">{COMPANY.name}</div>
+                      <div>〒{COMPANY.postalCode}　{COMPANY.address}</div>
+                      <div>TEL {COMPANY.phone}{COMPANY.fax ? `　FAX ${COMPANY.fax}` : ""}</div>
+                      <div className="seal"><Seal size={62} /></div>
+                    </div>
+                  </div>
+                  <p className="lead">下記のとおり発注いたします。</p>
+                </>
+              )}
+              <div className="gt quote" style={{ gridTemplateColumns: "7% 1fr 13%" }}>
+                <div className="h">No.</div><div className="h">メーカー ／ 商品名</div><div className="h">数量</div>
+                {rows.flatMap((i, k) => {
+                  const mk = i.product_id ? manufacturerByProduct.get(i.product_id) : ""
+                  const n = pi === 0 ? k + 1 : FIRST_ROWS + (pi - 1) * REST_ROWS + k + 1
+                  return [
+                    <div className="c" key={i.id + "a"}>{n}</div>,
+                    <div className="nmcell" key={i.id + "b"}>
+                      <div className="pcode"><span>{mk ? `［${mk}］` : ""}</span><span>{i.note ? noteForPrint(i.note, clinicCodeByName) : ""}</span></div>
+                      <div className="nm2">{i.product_name}</div>
+                    </div>,
+                    <div className="r" key={i.id + "c"}>{i.quantity}</div>,
+                  ]
+                })}
+                {its.length === 0 && <div className="notecell" style={{ minHeight: "12mm" }}>明細なし</div>}
               </div>
-              <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.5, position: "relative", paddingRight: 70 }}>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{COMPANY.name}</p>
-                <p style={{ margin: 0 }}>〒{COMPANY.postalCode}</p>
-                <p style={{ margin: 0 }}>{COMPANY.address}</p>
-                <p style={{ margin: 0 }}>TEL {COMPANY.phone}</p>
-                {COMPANY.fax && <p style={{ margin: 0 }}>FAX {COMPANY.fax}</p>}
-                <div style={{ position: "absolute", top: 0, right: 0 }}><Seal size={64} /></div>
-              </div>
-            </div>
-            <table style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 12 }}>
-              <tbody>
-                <tr>
-                  <td style={tdL}>発注日</td><td style={tdR}>{po.ordered_at ? parseDbDate(po.ordered_at).toLocaleDateString("ja-JP") : "—"}</td>
-                  <td style={tdL}>納期希望</td><td style={tdR}>{po.expected_at ? parseDbDate(po.expected_at).toLocaleDateString("ja-JP") : "最短"}</td>
-                </tr>
-              </tbody>
-            </table>
-            <table className="po-items-table" style={{ width: "100%", marginTop: 12, borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                {/* ページをまたぐと印刷時にthead部分が各ページ先頭へ自動で繰り返されるため、
-                    ここに発注書番号を入れておくと2ページ目以降にも番号が出る */}
-                <tr>
-                  <th colSpan={2} style={{ padding: "2px 8px", textAlign: "left", fontSize: 11, fontWeight: 400, color: "#999", border: "none" }}>
-                    発注書 No. {po.po_number || po.id.slice(0, 8)}
-                  </th>
-                </tr>
-                <tr style={{ background: "#f3f4f6" }}>
-                  <th style={thBig}>商品名</th>
-                  <th style={{ ...thBig, textAlign: "right", width: 80 }}>数量</th>
-                </tr>
-              </thead>
-              <tbody>
-                {its.map(i => (
-                  <tr key={i.id} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={tdCBig}>
-                      {i.product_name}
-                      {i.product_id && manufacturerByProduct.has(i.product_id) && (
-                        <span style={{ marginLeft: 6, fontSize: 11, color: "#888" }}>［{manufacturerByProduct.get(i.product_id)}］</span>
-                      )}
-                      {i.note && <p style={{ margin: "3px 0 0", fontSize: 11, color: "#999" }}>{noteForPrint(i.note, clinicCodeByName)}</p>}
-                    </td>
-                    <td style={{ ...tdCBig, textAlign: "right" }}>{i.quantity}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p style={{ marginTop: 10, fontSize: 11, color: "#666" }}>※ 単価・金額は貴社見積書にてご確認ください。</p>
-            {po.note && <div style={{ marginTop: 12, padding: 8, background: "#f9fafb", borderRadius: 4, fontSize: 11, color: "#555" }}>備考: {po.note}</div>}
-          </main>
-        )
-      })}
-      <style jsx global>{`
-        /* ── admin-base.css の table/h1 強制スタイルを発注書印刷ページ内で上書き ── */
-        .print-page.print-page table td,
-        .print-page.print-page table th {
-          padding: 7px 8px !important;
-          font-size: 13.5px !important;
-          line-height: 1.5 !important;
-        }
-        .print-page.print-page table td div,
-        .print-page.print-page table td span,
-        .print-page.print-page table td p {
-          font-size: 12.5px !important;
-          line-height: 1.5 !important;
-        }
-        .print-page.print-page h1 {
-          font-size: 27px !important;
-        }
-        .print-page.print-page table.po-items-table td,
-        .print-page.print-page table.po-items-table th {
-          font-size: 14.5px !important;
-        }
-        .print-page.print-page table.po-items-table td div,
-        .print-page.print-page table.po-items-table td span,
-        .print-page.print-page table.po-items-table td p {
-          font-size: 12.5px !important;
-        }
-        /* 発注の明細に、行の線（黒）を引く。1行目（発注書番号の行）には引かない */
-        .print-page.print-page table.po-items-table tbody td,
-        .print-page.print-page table.po-items-table thead tr:nth-child(2) th {
-          border: 1px solid #000 !important;
-        }
-        .print-page.print-page table.po-items-table thead tr:nth-child(2) th {
-          border-bottom: 2px solid #000 !important;
-        }
-        @media print {
-          .print-page.print-page, .print-page.print-page * { color: #000 !important; }
-          .no-print { display: none !important; }
-          .mobile-bottom-nav { display: none !important; }
-          nav { display: none !important; }
-          @page { size: A4; margin: 10mm; }
-          /* 発注書ごとに改ページ（最後の1件のあとは空白ページを作らない） */
-          .print-page:not(:last-of-type) { break-after: page !important; }
-          .print-page:last-of-type { break-after: auto !important; }
-          /* テーブル行が途中で切れないようにする */
-          .print-page table { break-inside: auto; }
-          .print-page table thead { display: table-header-group; }
-          .print-page table tr { break-inside: avoid; break-after: auto; }
-          /* ヘッダーブロックを明細と分離させない */
-          .print-page header { break-inside: avoid; break-after: avoid; }
-        }
-      `}</style>
+              {pi === pages.length - 1 && (
+                <>
+                  <p style={{ fontSize: 11, margin: "8px 0 0" }}>※ 単価・金額は貴社見積書にてご確認ください。</p>
+                  {po.note && (
+                    <div className="gt" style={{ gridTemplateColumns: "9% 1fr", marginTop: 8 }}>
+                      <div className="remark-h">備<br />考</div>
+                      <div className="remark" style={{ minHeight: "14mm" }}>{po.note}</div>
+                    </div>
+                  )}
+                </>
+              )}
+              <div className="pgno">{pages.length > 1 ? `${pi + 1} / ${pages.length}` : ""}</div>
+            </section>
+          ))
+        })}
+      </div>
     </>
   )
 }
-
-const th: React.CSSProperties = { padding: "7px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 12, lineHeight: 1.5, color: "#555" }
-const tdL: React.CSSProperties = { padding: "7px 8px", background: "#f9fafb", fontSize: 12, lineHeight: 1.5, color: "#555", width: 80, borderRight: "1px solid #eee" }
-const tdR: React.CSSProperties = { padding: "7px 8px", fontSize: 12, lineHeight: 1.5, color: "#111", borderRight: "1px solid #eee" }
-const tdC: React.CSSProperties = { padding: "7px 8px", fontSize: 13, lineHeight: 1.5 }
-const thBig: React.CSSProperties = { padding: "9px 8px", textAlign: "left", borderBottom: "2px solid #ddd", fontSize: 13, lineHeight: 1.5, color: "#555" }
-const tdCBig: React.CSSProperties = { padding: "9px 8px", fontSize: 13, lineHeight: 1.5 }
