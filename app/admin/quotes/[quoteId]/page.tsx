@@ -7,7 +7,8 @@ import { COMPANY_FALLBACK as COMPANY_DEFAULT, getCompany, type Company } from "@
 import { fmtYen, fmtDate, getClinicPrefix, getCorporateLabel, generateInvoiceNumber, calcDueDate } from "@/lib/invoice"
 import { QUOTE_STATUSES, type QuoteStatus } from "@/lib/quote"
 import { forceAddQuoteItemToPool } from "@/lib/po-pool"
-import Seal from "@/app/components/Seal"
+import QuoteDoc, { type Prod } from "@/app/components/QuoteDoc"
+import { PRINT_CSS } from "@/lib/print-layout-css"
 import Link from "next/link"
 
 type Quote = {
@@ -32,6 +33,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
   const [quote, setQuote] = useState<Quote | null>(null)
   const [clinic, setClinic] = useState<Clinic | null>(null)
   const [items, setItems] = useState<QuoteItem[]>([])
+  const [prods, setProds] = useState<Map<string, Prod>>(new Map())
   const [loading, setLoading] = useState(true)
   const [company, setCompany] = useState<Company>(COMPANY_DEFAULT)
   useEffect(() => { getCompany().then(setCompany) }, [])
@@ -71,6 +73,15 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
     }
     const { data: its } = await supabase.from("quote_items").select("*").eq("quote_id", quoteId).order("sort_order")
     setItems((its as QuoteItem[]) || [])
+    {
+      const pids = Array.from(new Set(((its as QuoteItem[]) || []).map(i => i.product_id).filter(Boolean) as string[]))
+      const pm = new Map<string, Prod>()
+      for (let i = 0; i < pids.length; i += 200) {
+        const { data: ps } = await supabase.from("products").select("id,product_code,manufacturer").in("id", pids.slice(i, i + 200))
+        for (const p of (ps as Prod[]) || []) pm.set(p.id, p)
+      }
+      setProds(pm)
+    }
     if (!opts?.silent) setLoading(false)
   }
 
@@ -277,8 +288,7 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
     }
   }
 
-  // 印刷は、開設見積書と同じレイアウトの、印刷用の画面で行う
-  function doPrint() { window.open(`/admin/quotes/${quoteId}/print?unit=${unitPriceMode ? 1 : 0}&total=${showTotal ? 1 : 0}`, "_blank") }
+  function doPrint() { window.print() }
 
   if (loading) return <main style={page}><p>読み込み中…</p></main>
   if (error || !quote) return <main style={page}><p style={{ color: "#dc2626" }}>{error}</p></main>
@@ -320,195 +330,30 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ quoteId:
         {quote.invoice_id && <Link href={`/admin/invoices/${quote.invoice_id}`}><button style={btnGray}>請求書を見る →</button></Link>}
       </div>
 
-      <main style={printArea} className="print-area">
-        <header style={{ borderBottom: "2px solid #111", paddingBottom: 8 }}>
-          <h1 style={{ fontSize: 28, letterSpacing: "0.3em", margin: "20px 0 4px", textAlign: "center" }}>御 見 積 書</h1>
-          <p style={{ textAlign: "center", margin: 0, fontSize: 11, color: "#666" }}>No. {quote.quote_number}</p>
-          {quote.title && <p style={{ textAlign: "center", margin: "6px 0 0", fontSize: 15, fontWeight: 700 }}>{quote.title}</p>}
-        </header>
-
-        <div style={{ display: "flex", gap: 20, marginTop: 24 }}>
-          <div style={{ flex: 1 }}>
-            {clinic ? (
-              <>
-                {corporateLabel && <p style={{ margin: "0 0 4px", fontSize: 13 }}>{corporateLabel}</p>}
-                <p style={{ margin: 0, fontSize: 22, fontWeight: 700, borderBottom: "1px solid #111", paddingBottom: 6 }}>
-                  {clinicPrefix}{clinic.name}　御中
-                </p>
-              </>
-            ) : <p style={{ color: "#999" }}>(医院情報なし)</p>}
-          </div>
-          <div style={{ flexShrink: 0, fontSize: 11, lineHeight: 1.6, position: "relative", paddingRight: 70 }}>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{company.name}</p>
-            <p style={{ margin: 0 }}>〒{company.postalCode}</p>
-            <p style={{ margin: 0 }}>{company.address}</p>
-            <p style={{ margin: 0 }}>TEL {company.phone}</p>
-            {/* 印影 */}
-            <div style={{ position: "absolute", top: 0, right: 0 }}>
-              <Seal size={64} />
-            </div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 20, display: "flex", gap: 20, fontSize: 12 }}>
-          <div><strong>発行日:</strong> {fmtDate(quote.issue_date)}</div>
-          {quote.expiry_date && <div><strong>有効期限:</strong> {fmtDate(quote.expiry_date)}</div>}
-        </div>
-
-        {!unitPriceMode && showTotal && (
-          <div style={totalBox}>
-            <span style={{ fontSize: 13 }}>御見積金額（税込）</span>
-            <span style={{ fontSize: 28, fontWeight: 800 }}>{fmtYen(quote.total)}</span>
-          </div>
-        )}
-
-        <p style={{ fontSize: 11, color: "#666", margin: "16px 0 6px" }}>
-          {unitPriceMode ? "下記の各案より、ご希望のものをお選びください。" : "下記のとおり御見積申し上げます。"}
-        </p>
-
+      <div className="oq">
+        <style>{PRINT_CSS}</style>
         {/* 明細から選んで発注（画面上のみ。印刷には出ない） */}
         {items.length > 0 && (
-          <div className="no-print" style={{ marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-            <button onClick={orderCheckedItems} disabled={orderingId !== null || checkedIds.size === 0} style={{ ...btnGray, opacity: checkedIds.size === 0 ? 0.5 : 1 }}>
-              {orderingId ? "処理中…" : `📦 チェックした商品を発注（${checkedIds.size}）`}
-            </button>
-            <span style={{ fontSize: 11, color: "#9ca3af" }}>在庫があっても、選んだ商品だけ強制的に発注プールへ追加します</span>
-          </div>
+          <details className="no-print" style={{ maxWidth: 794, margin: "12px auto 0", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px", fontFamily: "sans-serif" }}>
+            <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#374151" }}>📦 明細から選んで発注する（在庫があっても、選んだ商品だけ、強制的に発注プールへ追加）</summary>
+            <div style={{ marginTop: 8 }}>
+              <button onClick={orderCheckedItems} disabled={orderingId !== null || checkedIds.size === 0} style={{ ...btnGray, opacity: checkedIds.size === 0 ? 0.5 : 1 }}>
+                {orderingId ? "処理中…" : `📦 チェックした商品を発注（${checkedIds.size}）`}
+              </button>
+              <div style={{ maxHeight: 260, overflowY: "auto", marginTop: 8, fontSize: 12 }}>
+                {items.map(it => (
+                  <label key={it.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "3px 0", borderBottom: "1px solid #f3f4f6" }}>
+                    <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
+                    <span style={{ flex: 1 }}>{it.product_name}</span>
+                    <span style={{ color: "#6b7280" }}>× {it.quantity}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </details>
         )}
-
-        {unitPriceMode ? (
-          <table style={table}>
-            <thead>
-              <tr>
-                <th className="no-print" style={{ ...th, width: 28 }}></th>
-                <th style={th}>品名</th>
-                <th style={{ ...th, width: 100, textAlign: "right" }}>単価</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.length === 0 ? <tr><td colSpan={3} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>
-                : items.flatMap((it, idx) => {
-                  const rows: ReactNode[] = []
-                  if (it.section_label && it.section_label !== (items[idx - 1]?.section_label || null)) {
-                    rows.push(<tr key={it.id + "-h"} style={rowNoBreak}><td className="no-print q-sec" style={sectionTd}></td><td colSpan={2} className="q-sec" style={sectionTd}>■ {it.section_label}</td></tr>)
-                  }
-                  rows.push(
-                    <tr key={it.id}>
-                      <td className="no-print" style={td}>
-                        <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
-                      </td>
-                      <td style={td}>{it.product_name}</td>
-                      <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{fmtYen(it.price)}</td>
-                    </tr>
-                  )
-                  return rows
-                })}
-            </tbody>
-          </table>
-        ) : (
-          <table style={table}>
-            <thead>
-              <tr>
-                <th className="no-print" style={{ ...th, width: 28 }}></th>
-                <th style={th}>品名</th>
-                <th style={{ ...th, width: 60, textAlign: "right" }}>数量</th>
-                <th style={{ ...th, width: 80, textAlign: "right" }}>定価</th>
-                <th style={{ ...th, width: 80, textAlign: "right" }}>単価</th>
-                <th style={{ ...th, width: 100, textAlign: "right" }}>金額</th>
-              </tr>
-            </thead>
-            {(() => {
-              // 明細は、1行（見出し・小計つき）ごとの束にしておく。最後の1行と、小計・消費税・合計は、ひとつの塊にして、ページの切れ目で、離れないようにする
-              const groups: ReactNode[][] = items.map((it, idx) => {
-                const rows: ReactNode[] = []
-                const label = it.section_label || null
-                if (label && label !== (items[idx - 1]?.section_label || null)) {
-                  rows.push(<tr key={it.id + "-h"} style={rowNoBreak}><td className="no-print q-sec" style={sectionTd}></td><td colSpan={5} className="q-sec" style={sectionTd}>■ {label}</td></tr>)
-                }
-                rows.push(
-                  <tr key={it.id} style={rowNoBreak}>
-                    <td className="no-print" style={td}>
-                      <input type="checkbox" checked={checkedIds.has(it.id)} onChange={() => toggleChecked(it.id)} />
-                    </td>
-                    <td style={td}>{it.product_name}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{it.quantity}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{it.list_price != null ? fmtYen(it.list_price) : "—"}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price)}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{fmtYen(it.price * it.quantity)}</td>
-                  </tr>
-                )
-                if (showTotal && label && label !== (items[idx + 1]?.section_label || null)) {
-                  const sub = items.filter(x => (x.section_label || null) === label).reduce((n, x) => n + Number(x.price) * Number(x.quantity), 0)
-                  rows.push(<tr key={it.id + "-s"} style={rowNoBreak}><td className="no-print q-sub" style={subTd}></td><td colSpan={4} className="q-sub" style={{ ...subTd, textAlign: "right" }}>{label} 小計</td><td className="q-sub" style={{ ...subTd, textAlign: "right" }}>{fmtYen(sub)}</td></tr>)
-                  // 次の元見積との間に、すこし間をあける
-                  if (items[idx + 1]) rows.push(<tr key={it.id + "-g"} style={rowNoBreak}><td className="no-print q-gap" style={gapTd}></td><td colSpan={5} className="q-gap" style={gapTd}></td></tr>)
-                }
-                return rows
-              })
-              // 合算見積（見出しつき）は、元の見積書ごとに、ひとつの塊（tbody）にする。1ページに収まる大きさなら、ページの途中で切らない（長すぎるものは、これまでどおり切れる）。
-              // 見出しのない見積書は、これまでどおり。最後の1行と、小計・消費税・合計だけ、離さない。
-              type Run = { label: string | null; groups: ReactNode[][] }
-              const runs: Run[] = []
-              items.forEach((it, idx) => {
-                const label = it.section_label || null
-                const last = runs[runs.length - 1]
-                if (last && last.label === label) last.groups.push(groups[idx])
-                else runs.push({ label, groups: [groups[idx]] })
-              })
-              const fillers = Array.from({ length: Math.max(0, 10 - items.length) }).map((_, i) => (
-                <tr key={"e" + i} style={rowNoBreak}><td className="no-print" style={td}></td><td style={td}>&nbsp;</td><td style={td}></td><td style={td}></td><td style={td}></td><td style={td}></td></tr>
-              ))
-              // 小計・消費税・合計は tfoot にすると印刷時に複数ページそれぞれの末尾に
-              // 繰り返し表示されて紛らわしいため、通常の tbody 行として明細の最後に1回だけ表示する
-              const totals = showTotal ? (
-                <>
-                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>小計</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.subtotal)}</td></tr>
-                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...td, textAlign: "right", fontWeight: 600 }}>消費税</td><td style={{ ...td, textAlign: "right" }}>{fmtYen(quote.tax)}</td></tr>
-                  <tr style={rowNoBreak}><td className="no-print" style={td}></td><td colSpan={4} style={{ ...tdTotal, textAlign: "right" }}>合計</td><td style={{ ...tdTotal, textAlign: "right" }}>{fmtYen(quote.total)}</td></tr>
-                </>
-              ) : null
-              if (items.length === 0) {
-                return <tbody><tr><td colSpan={6} style={{ ...td, textAlign: "center", color: "#999" }}>明細なし</td></tr>{fillers}{totals}</tbody>
-              }
-              return (
-                <>
-                  {runs.map((r, ri) => {
-                    const isLast = ri === runs.length - 1
-                    if (r.label) {
-                      // 見出しつきの塊: ページの途中で切らない。最後の塊には、小計・消費税・合計もいっしょに入れる
-                      return (
-                        <tbody key={"run" + ri} style={rowNoBreak}>
-                          {r.groups.flat()}
-                          {isLast && fillers}
-                          {isLast && totals}
-                        </tbody>
-                      )
-                    }
-                    if (!isLast) return <tbody key={"run" + ri}>{r.groups.flat()}</tbody>
-                    return (
-                      <Fragment key={"run" + ri}>
-                        <tbody>{r.groups.slice(0, -1).flat()}</tbody>
-                        <tbody style={rowNoBreak}>
-                          {r.groups[r.groups.length - 1]}
-                          {fillers}
-                          {totals}
-                        </tbody>
-                      </Fragment>
-                    )
-                  })}
-                </>
-              )
-            })()}
-          </table>
-        )}
-
-        {quote.notes && (
-          <div style={{ marginTop: 12, padding: 10, background: "#fafafa", border: "1px solid #eee", borderRadius: 4 }}>
-            <p style={{ fontSize: 10, fontWeight: 700, margin: "0 0 4px", color: "#666" }}>備考</p>
-            <p style={{ fontSize: 11, margin: 0, whiteSpace: "pre-wrap" }}>{quote.notes}</p>
-          </div>
-        )}
-      </main>
+        <QuoteDoc quote={quote} clinic={clinic} items={items} prods={prods} company={company} unit={unitPriceMode} showTotal={showTotal && !unitPriceMode} />
+      </div>
 
       <style jsx global>{`
         @media print {
