@@ -189,6 +189,13 @@ function BulkPrint() {
         .print-page.print-page h1 {
           font-size: 28px !important;
         }
+        /* 明細の行の線を濃くする（admin-base.css が、セルの下線を薄い色で固定しているため、ここで上書きする） */
+        .print-page.print-page table tbody td {
+          border-bottom: 1px solid #000 !important;
+        }
+        .print-page.print-page table thead th {
+          border-bottom: 2px solid #000 !important;
+        }
         @media print {
           .print-page.print-page, .print-page.print-page * { color: #000 !important; }
           .no-print { display: none !important; }
