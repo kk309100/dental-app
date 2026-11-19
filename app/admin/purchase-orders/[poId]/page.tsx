@@ -2,6 +2,7 @@
 
 import { deletePoLogged, linkedOrderWarning } from "@/lib/po-delete-log"
 import { logOp } from "@/lib/op-log"
+import { rememberDefaultSupplier } from "@/lib/po-pool"
 import { use, useEffect, useState } from "react"
 import { cancelPoLineReceipt, receiveAllPoRemaining, countPoRemaining } from "@/lib/po-receipt"
 import { romajiAlt } from "@/lib/romaji"
@@ -93,6 +94,11 @@ export default function POPage({ params }: { params: Promise<{ poId: string }> }
     if (!po) return
     setSavingField("supplier")
     await supabase.from("purchase_orders").update({ supplier_id: supplierId || null }).eq("id", po.id)
+    // 仕入先が、まだ決まっていなかった商品は、この仕入先を、次回から、標準の仕入先にする（すでに決まっている商品は、変えない）
+    if (supplierId) {
+      const { data: its } = await supabase.from("purchase_order_items").select("product_id").eq("purchase_order_id", po.id)
+      await rememberDefaultSupplier((its || []).map(x => x.product_id as string | null), supplierId)
+    }
     await fetchData({ silent: true })
     setSavingField(null)
   }
