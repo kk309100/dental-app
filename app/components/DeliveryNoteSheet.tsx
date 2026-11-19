@@ -58,7 +58,7 @@ export default function DeliveryNoteSheet({
   const emptyRows = Math.max(0, FIXED_ROWS - items.length)
 
   const th = (extra?: React.CSSProperties): React.CSSProperties => ({
-    padding: "0 6px", fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: "0.12em",
+    padding: "0 6px", fontSize: 11, fontWeight: 700, color: "#000", letterSpacing: "0.12em",
     display: "flex", alignItems: "center", ...extra,
   })
   const td = (extra?: React.CSSProperties): React.CSSProperties => ({
@@ -68,6 +68,7 @@ export default function DeliveryNoteSheet({
   function Half({ kind }: { kind: "original" | "copy" }) {
     const isCopy = kind === "copy"
     const accent = isCopy ? "#374151" : NAVY
+    const band = isCopy ? "#e5e7eb" : "#dbe3ee"
     return (
       <div style={{
         position: "relative", padding: "3mm 7mm 1mm 12mm", boxSizing: "border-box",
@@ -77,7 +78,7 @@ export default function DeliveryNoteSheet({
         {/* タイトル行 */}
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", borderBottom: `2.5px solid ${accent}`, paddingBottom: 2 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "0.45em", color: accent }}>{isCopy ? "納品書控" : "納品書"}</span>
+            <span style={{ fontSize: 20, fontWeight: 800, letterSpacing: "0.45em", color: "#000" }}>{isCopy ? "納品書控" : "納品書"}</span>
             {pageLabel && <span style={{ fontSize: 9, color: "#000" }}>{pageLabel}</span>}
           </div>
           <div style={{ textAlign: "right", fontSize: 10.5, lineHeight: 1.45, color: "#000" }}>
@@ -113,7 +114,7 @@ export default function DeliveryNoteSheet({
 
         {/* 明細 */}
         <div style={{ width: "100%", border: `1px solid ${LINE}`, borderRadius: 3, overflow: "hidden" }}>
-          <div style={{ display: "flex", background: accent, height: "6mm" }}>
+          <div style={{ display: "flex", background: band, height: "6mm", borderBottom: `1.5px solid ${accent}` }}>
             <div style={th({ width: COL_NO, justifyContent: "center", padding: 0 })}>No</div>
             <div style={th({ flex: 1 })}>商品名</div>
             <div style={th({ width: COL_BC, justifyContent: "center" })}>QR</div>
@@ -169,7 +170,7 @@ export default function DeliveryNoteSheet({
                 <div style={{ padding: "1px 8px", textAlign: "right", minWidth: "28mm" }}>{row.val}</div>
               </div>
             ))}
-            <div style={{ display: "flex", alignItems: "center", background: accent, color: "#fff" }}>
+            <div style={{ display: "flex", alignItems: "center", background: band, color: "#000", borderTop: `1.5px solid ${accent}` }}>
               <div style={{ flex: 1, padding: "2px 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.2em" }}>合計（税込）</div>
               <div style={{ padding: "2px 8px", fontSize: 16, fontWeight: 800, textAlign: "right", minWidth: "34mm" }}>{fmtYen(total)}</div>
             </div>

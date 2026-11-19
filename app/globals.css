@@ -53,3 +53,8 @@ body {
     -webkit-text-stroke: 0.25px currentColor;
   }
 }
+
+/* 書類は、文字をすべて黒にする */
+@media print {
+  html body .oq, html body .oq *, html body .print-page, html body .print-page *, html body .delivery-page, html body .delivery-page * { color: #000 !important; }
+}
