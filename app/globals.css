@@ -40,3 +40,14 @@ body {
   }
   .admin-main { -webkit-text-size-adjust: 100%; }
 }
+
+
+/* 印刷するときは、すべての文字を MS 明朝にする（画面の表示は変えない） */
+@media print {
+  html body, html body * {
+    font-family: "MS Mincho", "ＭＳ 明朝", "MS PMincho", "ＭＳ Ｐ明朝", "Yu Mincho", serif !important;
+  }
+  html body .main-inner, html body .main-inner * {
+    font-family: "MS Mincho", "ＭＳ 明朝", "MS PMincho", "ＭＳ Ｐ明朝", "Yu Mincho", serif !important;
+  }
+}

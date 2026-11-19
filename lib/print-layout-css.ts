@@ -2,7 +2,7 @@
 // 管理画面の共通スタイル（表・見出し）と衝突しないよう、表は table ではなく grid（.gt）で組む。
 export const PRINT_CSS = `
 
-        .oq.oq { font-family: "Yu Mincho","MS PMincho","Hiragino Mincho ProN","Noto Serif JP",serif; color:#111; background:#e5e7eb; }
+        .oq.oq { font-family: "MS Mincho","ＭＳ 明朝","MS PMincho","Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif; color:#111; background:#e5e7eb; }
         .oq.oq .bar { position:sticky; top:0; background:#111827; color:#fff; padding:8px 16px; display:flex; gap:12px; align-items:center; z-index:10; font-family:sans-serif; font-size:13px; }
         .oq.oq .bar button { background:#2563eb; color:#fff; border:none; padding:6px 18px; border-radius:6px; font-size:13px; cursor:pointer; }
         .oq.oq .page { width:210mm; height:297mm; margin:12px auto; background:#fff; padding:13mm 14mm 11mm; box-sizing:border-box; box-shadow:0 1px 6px rgba(0,0,0,.25); overflow:hidden; position:relative; }

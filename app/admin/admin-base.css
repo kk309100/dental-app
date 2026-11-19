@@ -244,3 +244,11 @@
     margin: 0 !important;
   }
 }
+
+
+/* 印刷するときは、すべての文字を MS 明朝にする */
+@media print {
+  html body .main-inner, html body .main-inner * {
+    font-family: "MS Mincho", "ＭＳ 明朝", "MS PMincho", "ＭＳ Ｐ明朝", "Yu Mincho", serif !important;
+  }
+}
