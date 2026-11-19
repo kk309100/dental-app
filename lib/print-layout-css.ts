@@ -57,11 +57,18 @@ export const PRINT_CSS = `
         .oq.oq .gt > .subr { background:#f6f7f9; font-weight:700; font-size:11.5px; display:flex; align-items:center; justify-content:flex-end; font-variant-numeric:tabular-nums; }
         .oq.oq .gt > .gapc { grid-column:1 / -1; height:3mm; padding:0; border-bottom:none; border-right:none; border-left:none; background:transparent; }
         .oq.oq .gt.quote { grid-auto-rows:auto; }
-        .oq.oq .gt.quote > .c, .oq.oq .gt.quote > .nmcell, .oq.oq .gt.quote > .pricecell, .oq.oq .gt.quote > .r { min-height:11.2mm; }
-        .oq.oq .gt.quote.unit > .c, .oq.oq .gt.quote.unit > .nmcell, .oq.oq .gt.quote.unit > .r { min-height:9mm; }
+        .oq.oq .gt.quote > .c, .oq.oq .gt.quote > .nmcell, .oq.oq .gt.quote > .pricecell, .oq.oq .gt.quote > .r { min-height:12.5mm; }
+        .oq.oq .gt.quote.unit > .c, .oq.oq .gt.quote.unit > .nmcell, .oq.oq .gt.quote.unit > .r { min-height:10mm; }
         .oq.oq .gt.quote > .sec, .oq.oq .gt.quote > .subl, .oq.oq .gt.quote > .subr { min-height:7.5mm; }
         .oq.oq .gt.quote > .gapc { min-height:0; }
         .oq.oq .gt > .notecell { grid-column:1 / -1; white-space:pre-wrap; min-height:20mm; font-size:10.5px; }
         .oq.oq .lead { font-size:11px; margin:12px 0 6px; }
         .oq.oq .head { min-height:13mm; box-sizing:border-box; }
+        .oq.oq .gt.quote > .c, .oq.oq .gt.quote > .r, .oq.oq .gt.quote > .pricecell { font-size:13px; }
+        .oq.oq .gt.quote > .nmcell .nm2 { font-size:13px; line-height:1.3; }
+        .oq.oq .gt.quote > .nmcell .pcode { font-size:10.5px; }
+        .oq.oq .gt.quote > .pricecell .lp { font-size:10.5px; }
+        .oq.oq .gt.quote > .h { font-size:11px; }
+        .oq.oq .gt.quote > .sec { font-size:13px; }
+        .oq.oq .gt.quote > .subl, .oq.oq .gt.quote > .subr { font-size:12.5px; }
 `
