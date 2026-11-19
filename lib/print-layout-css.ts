@@ -5,7 +5,7 @@ export const PRINT_CSS = `
         .oq.oq { font-family: "MS Mincho","ＭＳ 明朝","MS PMincho","Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif; color:#000; background:#e5e7eb; }
         .oq.oq .bar { position:sticky; top:0; background:#111827; color:#fff; padding:8px 16px; display:flex; gap:12px; align-items:center; z-index:10; font-family:sans-serif; font-size:13px; }
         .oq.oq .bar button { background:#2563eb; color:#fff; border:none; padding:6px 18px; border-radius:6px; font-size:13px; cursor:pointer; }
-        .oq.oq .page { width:210mm; height:297mm; margin:12px auto; background:#fff; padding:13mm 14mm 11mm; box-sizing:border-box; box-shadow:0 1px 6px rgba(0,0,0,.25); overflow:hidden; position:relative; }
+        .oq.oq .page { width:210mm; height:297mm; margin:12px auto; background:#fff; padding:11mm 8mm 11mm; box-sizing:border-box; box-shadow:0 1px 6px rgba(0,0,0,.25); overflow:hidden; position:relative; }
         .oq.oq h1 { font-family:inherit !important; font-size:24px !important; font-weight:700 !important; letter-spacing:.45em !important; color:#000 !important; text-align:center; margin:0 !important; padding:0 0 0 .45em; line-height:1.3 !important; }
         .oq.oq .head { position:relative; border-bottom:2.5px double #111; padding-bottom:7px; margin-bottom:10px; }
         .oq.oq .meta { position:absolute; right:0; top:2px; font-size:10.5px; line-height:1.55; text-align:right; }
