@@ -29,6 +29,7 @@ type Line = {
   productName: string
   quantity: number
   cost: number       // 仕入価格
+  note?: string       // 行ごとの備考（見積書の「摘要」欄に出る）
   sectionLabel?: string | null  // 合算見積の、元の見積書の見出し（直さずに、そのまま持ち回る）
   listPrice: number  // 定価
   price: number      // 販売価格（実際の単価）
@@ -51,7 +52,7 @@ function CreateQuotePage() {
   const [title, setTitle] = useState("")
   const [issueDate, setIssueDate] = useState(ymd(new Date()))
   const [expiryDate, setExpiryDate] = useState(defaultExpiryDate(new Date()))
-  const [lines, setLines] = useState<Line[]>([{ productId: null, productName: "", quantity: 1, cost: 0, listPrice: 0, price: 0 }])
+  const [lines, setLines] = useState<Line[]>([{ productId: null, productName: "", quantity: 1, cost: 0, listPrice: 0, price: 0, note: "" }])
   const [notes, setNotes] = useState("")
   const [error, setError] = useState("")
   const [viewMode, setViewMode] = useState<ViewMode>("internal")
@@ -125,6 +126,7 @@ function CreateQuotePage() {
           cost: it.cost != null ? Number(it.cost) : Number((it.product_id ? productMap.get(it.product_id) : null)?.cost || 0),
           listPrice: Number(it.list_price || 0),
           price: Number(it.price || 0),
+          note: it.note || "",
           sectionLabel: it.section_label || null,
         })))
       }
@@ -142,7 +144,7 @@ function CreateQuotePage() {
     setLines((prev) => prev.map((l, i) => i === idx ? { ...l, ...partial } : l))
   }
   function addLine() {
-    setLines((prev) => [...prev, { productId: null, productName: "", quantity: 1, cost: 0, listPrice: 0, price: 0 }])
+    setLines((prev) => [...prev, { productId: null, productName: "", quantity: 1, cost: 0, listPrice: 0, price: 0, note: "" }])
   }
   // 明細テーブル内で Enter を押したら、次の入力欄へフォーカスを移す
   // （最後の行の最後の欄なら、新しい行を追加してそこへ移動）
@@ -262,6 +264,7 @@ function CreateQuotePage() {
           list_price: l.listPrice,
           cost: l.cost,
           sort_order: i,
+          ...(l.note && l.note.trim() ? { note: l.note.trim() } : {}),
           ...(l.sectionLabel ? { section_label: l.sectionLabel } : {}),
         }))
         const { error: e2 } = await supabase.from("quote_items").insert(itemsPayload)
@@ -297,6 +300,7 @@ function CreateQuotePage() {
         list_price: l.listPrice,
         cost: l.cost,
         sort_order: i,
+        ...(l.note && l.note.trim() ? { note: l.note.trim() } : {}),
         ...(l.sectionLabel ? { section_label: l.sectionLabel } : {}),
       }))
       const { error: e2 } = await supabase.from("quote_items").insert(itemsPayload)
@@ -425,6 +429,7 @@ function CreateQuotePage() {
             <tr className="text-[10px] text-gray-500">
               <th className="px-2 py-1.5 text-left w-8">#</th>
               <th className="px-2 py-1.5 text-left">商品名</th>
+              <th className="px-2 py-1.5 text-left w-36">備考（摘要）</th>
               <th className="px-2 py-1.5 text-right w-16">数量</th>
               {isInternal && <th className="px-2 py-1.5 text-right w-24">仕入価格</th>}
               <th className="px-2 py-1.5 text-right w-24">定価</th>
@@ -466,6 +471,13 @@ function CreateQuotePage() {
                         ))}
                       </div>
                     )}
+                  </td>
+                  <td className="px-2 py-1">
+                    <input value={l.note || ""}
+                      onChange={(e) => updateLine(i, { note: e.target.value })}
+                      placeholder="例）納期 2週間"
+                      className="w-full px-2 py-1 border border-gray-200 rounded text-xs"
+                      title="見積書の「摘要」欄に出ます（空なら、何も出ません）" />
                   </td>
                   <td className="px-2 py-1">
                     <input type="number" value={l.quantity}
@@ -523,14 +535,14 @@ function CreateQuotePage() {
           </tbody>
           <tfoot className="bg-gray-50">
             <tr className="border-t-2 border-gray-300">
-              <td colSpan={isInternal ? 9 : 6} className="px-2 py-2 text-right text-xs font-bold text-gray-500">税抜小計</td>
+              <td colSpan={isInternal ? 10 : 7} className="px-2 py-2 text-right text-xs font-bold text-gray-500">税抜小計</td>
               <td className="px-2 py-2 text-right text-sm font-bold tabular-nums">{fmtYen(subtotal)}</td>
               <td></td>
             </tr>
             {isInternal && totalCost > 0 && (
               <>
                 <tr>
-                  <td colSpan={9} className="px-2 py-1 text-right text-[10px] text-gray-500">仕入合計 / 粗利合計（社内のみ）</td>
+                  <td colSpan={10} className="px-2 py-1 text-right text-[10px] text-gray-500">仕入合計 / 粗利合計（社内のみ）</td>
                   <td className="px-2 py-1 text-right text-[11px] tabular-nums">
                     <span className="text-gray-500">{fmtYen(totalCost)}</span> /
                     <span className={totalGross >= 0 ? "text-emerald-700 font-bold ml-1" : "text-red-600 font-bold ml-1"}>
@@ -542,12 +554,12 @@ function CreateQuotePage() {
               </>
             )}
             <tr>
-              <td colSpan={isInternal ? 9 : 6} className="px-2 py-1 text-right text-xs text-gray-500">消費税 (10%)</td>
+              <td colSpan={isInternal ? 10 : 7} className="px-2 py-1 text-right text-xs text-gray-500">消費税 (10%)</td>
               <td className="px-2 py-1 text-right text-xs tabular-nums">{fmtYen(tax)}</td>
               <td></td>
             </tr>
             <tr className="border-t-2 border-gray-300">
-              <td colSpan={isInternal ? 9 : 6} className="px-2 py-2 text-right text-sm font-bold">合計（税込）</td>
+              <td colSpan={isInternal ? 10 : 7} className="px-2 py-2 text-right text-sm font-bold">合計（税込）</td>
               <td className="px-2 py-2 text-right text-base font-bold tabular-nums">{fmtYen(total)}</td>
               <td></td>
             </tr>

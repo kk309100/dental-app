@@ -156,7 +156,7 @@ export default function OpeningQuotePrintPage({ params }: { params: Promise<{ id
                   <div className="pricecell" key={it.id + "c"}><div className="lp">{Number(it.list_price || 0) > 0 ? `(${yen(Number(it.list_price))})` : ""}</div><div>{yen(Number(it.price || 0))}</div></div>,
                   <div className="r" key={it.id + "d"}>{it.quantity}</div>,
                   <div className="r" key={it.id + "e"}>{yen(amount)}</div>,
-                  <div key={it.id + "f"}></div>,
+                  <div className="l nt" key={it.id + "f"}><span className="ntt">{(it as { note?: string | null }).note || ""}</span></div>,
                 ]
               })}
             </div>

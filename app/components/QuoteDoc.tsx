@@ -7,7 +7,7 @@ import { fmtDate, getClinicPrefix, getCorporateLabel } from "@/lib/invoice"
 
 export type Quote = { id: string; clinic_id: string | null; title: string | null; quote_number: string; issue_date: string; expiry_date: string | null; subtotal: number; tax: number; total: number; notes: string | null }
 export type Clinic = { id: string; name: string; corporate_name: string | null; clinic_type: string | null }
-export type Item = { id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; sort_order: number; section_label?: string | null }
+export type Item = { id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; sort_order: number; section_label?: string | null; note?: string | null }
 export type Prod = { id: string; product_code: string | null; manufacturer: string | null }
 export type Row = { kind: "sec"; label: string } | { kind: "item"; it: Item; no: number } | { kind: "sub"; label: string; amount: number } | { kind: "gap" }
 const yen = (n: number) => Math.round(n).toLocaleString("ja-JP")
@@ -50,18 +50,22 @@ export default function QuoteDoc({ quote, clinic, items, prods, company, unit, s
     used += hOf(g)
   })
 
-  const cols = unit ? "8% 1fr 22%" : "5% 1fr 14% 7% 16%"
+  // 摘要（行ごとの備考）が1つでもあるときだけ、摘要の列を出す
+  const hasNote = items.some(i => String(i.note || "").trim() !== "")
+  const cols = unit ? (hasNote ? "8% 1fr 18% 24%" : "8% 1fr 22%") : (hasNote ? "5% 1fr 13% 6% 14% 17%" : "5% 1fr 14% 7% 16%")
   const span = unit ? 2 : 4
+  const noteCell = (it: Item, k: string) => <div className="l nt" key={k}><span className="ntt">{it.note || ""}</span></div>
   const renderRows = (rows: Row[]) => rows.flatMap((r, i) => {
     if (r.kind === "sec") return [<div className="sec" key={i + "s"}>■ {r.label}</div>]
     if (r.kind === "gap") return [<div className="gapc" key={i + "g"} />]
-    if (r.kind === "sub") return [<div className="subl" key={i + "l"} style={{ gridColumn: `1 / span ${span}` }}>{r.label} 小計</div>, <div className="subr" key={i + "r"}>{yen(r.amount)}</div>]
+    if (r.kind === "sub") return [<div className="subl" key={i + "l"} style={{ gridColumn: `1 / span ${span}` }}>{r.label} 小計</div>, <div className="subr" key={i + "r"}>{yen(r.amount)}</div>, ...(hasNote ? [<div className="subr" key={i + "n"} />] : [])]
     const it = r.it
     const p = it.product_id ? prods.get(it.product_id) : undefined
     if (unit) return [
       <div className="c" key={i + "a"}>{r.no}</div>,
       <div className="nmcell" key={i + "b"}><div className="nm2">{it.product_name}</div></div>,
       <div className="r" key={i + "c"}><b>{yen(Number(it.price))}</b></div>,
+      ...(hasNote ? [noteCell(it, i + "n")] : []),
     ]
     return [
       <div className="c" key={i + "a"}>{r.no}</div>,
@@ -69,6 +73,7 @@ export default function QuoteDoc({ quote, clinic, items, prods, company, unit, s
       <div className="pricecell" key={i + "c"}><div className="lp">{it.list_price != null && Number(it.list_price) > 0 ? `(${yen(Number(it.list_price))})` : ""}</div><div>{yen(Number(it.price))}</div></div>,
       <div className="r" key={i + "d"}>{it.quantity}</div>,
       <div className="r" key={i + "e"}>{yen(Number(it.price) * Number(it.quantity))}</div>,
+      ...(hasNote ? [noteCell(it, i + "n")] : []),
     ]
   })
 
@@ -123,7 +128,7 @@ export default function QuoteDoc({ quote, clinic, items, prods, company, unit, s
             </>
           ) : <Head cont />}
           <div className={"gt quote" + (unit ? " unit" : "")} style={{ gridTemplateColumns: cols }}>
-            {unit ? <><div className="h">No.</div><div className="h">品　名</div><div className="h">単　価</div></> : <><div className="h">No.</div><div className="h">商品コード ／ メーカー ／ 商品名</div><div className="h">(定価)／単価</div><div className="h">数量</div><div className="h">金　額</div></>}
+            {unit ? <><div className="h">No.</div><div className="h">品　名</div><div className="h">単　価</div>{hasNote && <div className="h">摘　要</div>}</> : <><div className="h">No.</div><div className="h">商品コード ／ メーカー ／ 商品名</div><div className="h">(定価)／単価</div><div className="h">数量</div><div className="h">金　額</div>{hasNote && <div className="h">摘　要</div>}</>}
             {renderRows(rows)}
             {items.length === 0 && <div className="notecell" style={{ minHeight: "12mm" }}>明細なし</div>}
           </div>

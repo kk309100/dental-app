@@ -10,7 +10,7 @@ export type OpeningQuote = {
   discount: number; note: string | null; subtotal: number; tax: number; total: number; section_count: number; status: string; order_id: string | null; created_at: string
 }
 export type QuoteLite = { id: string; quote_number: string; title: string | null; subtotal: number | null; total: number | null; clinic_id: string | null }
-export type QuoteItem = { id: string; quote_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; cost: number | null; sort_order: number | null }
+export type QuoteItem = { id: string; quote_id: string; product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; cost: number | null; sort_order: number | null; note?: string | null }
 export type SectionRow = { quote_id: string; title_override: string }
 
 export async function nextManageNo(): Promise<number> {
@@ -29,7 +29,7 @@ export async function findQuotes(input: string): Promise<QuoteLite[]> {
 
 export async function loadQuoteItems(quoteIds: string[]): Promise<QuoteItem[]> {
   if (quoteIds.length === 0) return []
-  const { data } = await supabase.from("quote_items").select("id,quote_id,product_id,product_name,quantity,price,list_price,cost,sort_order").in("quote_id", quoteIds).order("sort_order")
+  const { data } = await supabase.from("quote_items").select("*").in("quote_id", quoteIds).order("sort_order")
   return (data as QuoteItem[]) || []
 }
 

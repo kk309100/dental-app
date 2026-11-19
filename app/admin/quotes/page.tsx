@@ -78,11 +78,11 @@ export default function QuotesPage() {
 
     setCombining(true)
     try {
-      const rows: { product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; cost: number | null; section_label: string }[] = []
+      const rows: { product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; cost: number | null; note?: string; section_label: string }[] = []
       for (const q of sorted) {
-        const { data: its, error: ie } = await supabase.from("quote_items").select("product_id,product_name,quantity,price,list_price,cost").eq("quote_id", q.id).order("sort_order")
+        const { data: its, error: ie } = await supabase.from("quote_items").select("*").eq("quote_id", q.id).order("sort_order")
         if (ie) throw new Error(ie.message)
-        for (const it of its || []) rows.push({ ...(it as Omit<(typeof rows)[number], "section_label">), section_label: [q.quote_number, q.title].filter(Boolean).join(" ") })
+        for (const it0 of its || []) { const it = it0 as { product_id: string | null; product_name: string | null; quantity: number; price: number; list_price: number | null; cost: number | null; note?: string | null }; rows.push({ product_id: it.product_id, product_name: it.product_name, quantity: it.quantity, price: it.price, list_price: it.list_price, cost: it.cost, ...(it.note ? { note: it.note } : {}), section_label: [q.quote_number, q.title].filter(Boolean).join(" ") }) }
       }
       if (rows.length === 0) throw new Error("明細がありません")
       const subtotal = rows.reduce((n, r) => n + Number(r.price || 0) * Number(r.quantity || 0), 0)
