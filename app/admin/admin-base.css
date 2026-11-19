@@ -250,6 +250,6 @@
 @media print {
   html body .main-inner, html body .main-inner * {
     font-family: "MS Mincho", "ＭＳ 明朝", "MS PMincho", "ＭＳ Ｐ明朝", "Yu Mincho", serif !important;
-    -webkit-text-stroke: 0.7px currentColor;
+    -webkit-text-stroke: 0.55px currentColor;
   }
 }
