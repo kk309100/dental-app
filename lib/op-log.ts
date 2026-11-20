@@ -3,16 +3,30 @@
 import { supabase } from "@/lib/supabase"
 import { getActor } from "@/lib/audit"
 
+// 名前は、profiles.display_name（無ければ、ログインのメール）を使う。1回調べたら覚えておく
+let cached: { uid: string; name: string } | null = null
+
+async function whoAmI(): Promise<string> {
+  const local = getActor()
+  if (local) return local
+  const { data } = await supabase.auth.getSession()
+  const user = data.session?.user
+  if (!user) return ""
+  if (cached && cached.uid === user.id) return cached.name
+  let name = ""
+  try {
+    const { data: p } = await supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle()
+    name = (p as { display_name?: string | null } | null)?.display_name || ""
+  } catch { /* 列が無くても、メールで代用する */ }
+  name = name || user.email || ""
+  cached = { uid: user.id, name }
+  return name
+}
+
 export async function logOp(action: string, opts?: { entity?: string; id?: string | null; detail?: unknown }) {
   try {
-    // 名前の記録が無いので、ログインしている人のメールアドレスを使う
-    let actor = getActor()
-    if (!actor) {
-      const { data } = await supabase.auth.getSession()
-      actor = data.session?.user?.email || ""
-    }
     await supabase.from("operation_log").insert({
-      actor: actor || null,
+      actor: (await whoAmI()) || null,
       action,
       entity_type: opts?.entity || null,
       entity_id: opts?.id || null,
