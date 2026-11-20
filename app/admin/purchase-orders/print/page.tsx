@@ -124,8 +124,13 @@ function BulkPrint() {
         <button onClick={() => window.close()} className="px-4 py-2 bg-gray-200 text-sm rounded">閉じる</button>
         <span className="ml-3 text-xs text-gray-700">{pos.length}件の発注書</span>
       </div>
-      <div className="oq">
+      <div className="oq po-gothic">
         <style>{PRINT_CSS}</style>
+        {/* 発注書だけ、ゴシック体にする（ほかの書類は、MS明朝のまま） */}
+        <style>{`
+          .oq.po-gothic, .oq.po-gothic * { font-family: "MS PGothic", "ＭＳ Ｐゴシック", "Yu Gothic", "Meiryo", sans-serif !important; }
+          .oq.po-gothic, .oq.po-gothic * { -webkit-text-stroke: 0.15px currentColor; }
+        `}</style>
         {pos.map((po) => {
           const sup = po.supplier_id ? supBy.get(po.supplier_id) : null
           const its = itemsByPO.get(po.id) || []
