@@ -5,8 +5,14 @@ import { getActor } from "@/lib/audit"
 
 export async function logOp(action: string, opts?: { entity?: string; id?: string | null; detail?: unknown }) {
   try {
+    // 名前の記録が無いので、ログインしている人のメールアドレスを使う
+    let actor = getActor()
+    if (!actor) {
+      const { data } = await supabase.auth.getSession()
+      actor = data.session?.user?.email || ""
+    }
     await supabase.from("operation_log").insert({
-      actor: getActor() || null,
+      actor: actor || null,
       action,
       entity_type: opts?.entity || null,
       entity_id: opts?.id || null,
