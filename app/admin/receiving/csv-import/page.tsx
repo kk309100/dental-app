@@ -15,7 +15,7 @@ import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { readTextSmart, parsePurchaseCsv, type PurchaseCsvRow } from "@/lib/purchase-csv"
 
-type Product = { id: string; name: string; product_code: string | null }
+type Product = { id: string; name: string; product_code: string | null; legacy_code?: string | null }
 type Supplier = { id: string; name: string; supplier_code: string | null }
 type ExistingReceipt = { product_id: string; quantity: number; date: string; memo: string | null }
 type SupplierChoice = { mode: "existing" | "create" | "skip"; id: string }
@@ -51,7 +51,7 @@ export default function CsvImportPage() {
     // 商品は1万件を超えるため、Supabase既定の1000件上限に引っかからないよう fetchAll でページング取得する
     const [{ data: sup }, prod] = await Promise.all([
       supabase.from("suppliers").select("id,name,supplier_code").order("name").limit(2000),
-      fetchAll("products", "id,name,product_code"),
+      fetchAll("products", "id,name,product_code,legacy_code"),
     ])
     setSuppliers((sup as Supplier[]) || [])
     setProducts((prod as Product[]) || [])
@@ -108,7 +108,11 @@ export default function CsvImportPage() {
   }
 
   // ── 商品: コード → 名前 の順で既存一致 ──
-  const byCode = useMemo(() => new Map(products.filter(p => p.product_code).map(p => [(p.product_code as string).trim(), p])), [products])
+  // 旧コード（書き換え前のコード）でも探せるようにする。今のコードが同じなら、今のコードを優先
+  const byCode = useMemo(() => new Map<string, Product>([
+    ...products.filter(p => p.legacy_code).map(p => [(p.legacy_code as string).trim(), p] as [string, Product]),
+    ...products.filter(p => p.product_code).map(p => [(p.product_code as string).trim(), p] as [string, Product]),
+  ]), [products])
   const byName = useMemo(() => new Map(products.map(p => [normName(p.name), p])), [products])
 
   const resolved = useMemo(() => {

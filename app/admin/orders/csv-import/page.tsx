@@ -16,7 +16,7 @@ type Line = {
   productCode: string; productName: string; price: number; qty: number; note: string
   discount: boolean // 区分「値引」の行（金額がマイナスの明細として取り込む）
 }
-type Product = { id: string; name: string; product_code: string | null; stock: number | null }
+type Product = { id: string; name: string; product_code: string | null; legacy_code?: string | null; stock: number | null }
 type Clinic = { id: string; name: string; clinic_code: string | null }
 type Group = {
   key: string; date: string; slip: string; deliveryNumber: string
@@ -98,7 +98,7 @@ export default function OrderCsvImportPage() {
       }
       if (!parsed.some(l => !l.discount)) throw new Error("「売上」の行がありません")
       const [p, cl, ex] = await Promise.all([
-        fetchAll("products", "id,name,product_code,stock"),
+        fetchAll("products", "id,name,product_code,legacy_code,stock"),
         supabase.from("clinics").select("id,name,clinic_code").limit(50000),
         fetchAllData("orders", "id,delivery_number", (q: any) => q.like("delivery_number", "EXT-%")),
       ])
@@ -140,7 +140,11 @@ export default function OrderCsvImportPage() {
     // 商品コードで照合。Excelで開いて保存されたCSVは JAN が「4.90184E+12」のように壊れるため、
     // その場合（および未一致の場合）は商品名（全角半角・大小・空白を無視）で照合する
     const normName = (s: string) => String(s || "").normalize("NFKC").toLowerCase().replace(/\s+/g, "")
-    const byCode = new Map(products.filter(p => p.product_code).map(p => [p.product_code as string, p]))
+    // 旧コード（書き換え前のコード）でも探せるようにする。今のコードが同じなら、今のコードを優先
+    const byCode = new Map<string, Product>([
+      ...products.filter(p => p.legacy_code).map(p => [p.legacy_code as string, p] as [string, Product]),
+      ...products.filter(p => p.product_code).map(p => [p.product_code as string, p] as [string, Product]),
+    ])
     const byNameKey = new Map(products.map(p => [normName(p.name), p]))
     const clinicByCode = new Map(clinics.filter(c => c.clinic_code).map(c => [c.clinic_code as string, c]))
     const clinicByName = new Map(clinics.map(c => [c.name, c]))
