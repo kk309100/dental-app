@@ -70,7 +70,7 @@ function NewOrderPage() {
   const [deductStock, setDeductStock] = useState(true)
   // 保存と同時に受注処理もする（準備中にして、「発注する」の行を発注プールへ入れる）。在庫の数字はあてにならないので、手配は行ごとに選ぶ
   const [autoProcess, setAutoProcess] = useState(false)
-  // コードのない商品（手入力の行）を、商品として登録する。コードは「NEW-000001」の形で、自動で付ける
+  // コードのない商品（手入力の行）を、商品として登録する。コードは「9999＋6桁の連番」で、自動で付ける
   const [reg, setReg] = useState<{ idx: number; name: string; maker: string; cost: string; price: string; supplierId: string; noStock: boolean } | null>(null)
   const [regBusy, setRegBusy] = useState(false)
   // 同じ名前・似た名前の商品が、すでにあるとき、その一覧（登録の前に、確認する）
@@ -86,10 +86,11 @@ function NewOrderPage() {
     }
   }
   async function nextAutoCode(skip = 0): Promise<string> {
-    const { data } = await supabase.from("products").select("product_code").like("product_code", "NEW-%").order("product_code", { ascending: false }).limit(50)
+    // 自社コードは「9999＋6桁の連番」（数字だけ）。9999900000以降は別用途なので数えない
+    const { data } = await supabase.from("products").select("product_code").like("product_code", "9999%").lt("product_code", "9999900000").order("product_code", { ascending: false }).limit(50)
     let max = 0
-    for (const p of data || []) { const m = String(p.product_code || "").match(/^NEW-(\d+)$/); if (m) max = Math.max(max, Number(m[1])) }
-    return "NEW-" + String(max + 1 + skip).padStart(6, "0")
+    for (const p of data || []) { const m = String(p.product_code || "").match(/^9999(\d{6})$/); if (m) max = Math.max(max, Number(m[1])) }
+    return "9999" + String(max + 1 + skip).padStart(6, "0")
   }
   const normName = (t: string) => searchKey(t).replace(/[\s・\-－ー()（）]/g, "")
   async function submitReg(force = false) {
@@ -1065,7 +1066,7 @@ function NewOrderPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3" style={{ background: "rgba(0,0,0,0.4)" }}>
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-4 space-y-3">
             <div className="font-bold text-gray-900">商品として登録する</div>
-            <p className="text-xs text-gray-600">商品マスタに登録します。コードは「NEW-000001」の形で、自動で付きます。登録すると、この行は、その商品に結びつきます（在庫・仕入先・売上の集計に使えます）。</p>
+            <p className="text-xs text-gray-600">商品マスタに登録します。コードは「9999＋6桁の連番」（例: 9999007826）で、自動で付きます。登録すると、この行は、その商品に結びつきます（在庫・仕入先・売上の集計に使えます）。</p>
             <label className="block text-xs font-bold text-gray-700">商品名
               <input value={reg.name} onChange={e => setReg({ ...reg, name: e.target.value })} className="mt-1 w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-normal" />
             </label>
