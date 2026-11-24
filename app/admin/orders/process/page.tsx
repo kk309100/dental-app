@@ -613,7 +613,7 @@ export default function OrderProcessPage() {
                       {predictMode === "split" && (
                         <th style={{ ...thStyle, textAlign: "center", width: 70 }}>今回の処理</th>
                       )}
-                      <th style={{ ...thStyle, textAlign: "center", width: 70 }}>発注</th>
+                      <th style={{ ...thStyle, textAlign: "center", width: 130 }}>発注</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -670,7 +670,7 @@ export default function OrderProcessPage() {
                                   onClick={() => forceOrderItem(it.id, it.product_name || "(不明)", Number(it.quantity || 0))}
                                   disabled={forcingItemId === it.id}
                                   style={{
-                                    fontSize: 11, padding: "3px 6px", borderRadius: 6,
+                                    fontSize: 13, fontWeight: 700, padding: "6px 12px", borderRadius: 6, whiteSpace: "nowrap", display: "block", margin: "0 auto",
                                     border: "1px solid #fdba74", background: "#fff7ed", color: "#9a3412",
                                     cursor: "pointer", opacity: forcingItemId === it.id ? 0.5 : 1,
                                   }}
@@ -684,7 +684,7 @@ export default function OrderProcessPage() {
                                 onClick={() => splitStockAndOrder(it, it.product_name || "(不明)")}
                                 disabled={forcingItemId === it.id}
                                 style={{
-                                  fontSize: 11, padding: "3px 6px", borderRadius: 6, marginTop: 3,
+                                  fontSize: 13, fontWeight: 700, padding: "6px 12px", borderRadius: 6, whiteSpace: "nowrap", margin: "6px auto 0",
                                   border: "1px solid #93c5fd", background: "#eff6ff", color: "#1d4ed8",
                                   cursor: "pointer", opacity: forcingItemId === it.id ? 0.5 : 1, display: "block",
                                 }}
