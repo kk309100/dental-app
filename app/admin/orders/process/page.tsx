@@ -642,8 +642,8 @@ export default function OrderProcessPage() {
                               ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.green }}>✅ 在庫{st.stock}</span>
                               : <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, ...C.red }}>❌ {st.short}個不足</span>
                             }
-                            {st.ok && (
-                              <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, marginTop: 3, fontSize: 10, color: "#9a3412", cursor: "pointer", userSelect: "none" }}>
+                            {it.product_id && (
+                              <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3, marginTop: 3, fontSize: 11, color: "#9a3412", cursor: "pointer", userSelect: "none" }}>
                                 <input type="checkbox" checked={excluded} onChange={() => toggleExcluded(it.id, it.product_name || "(不明)")} style={{ cursor: "pointer" }} />
                                 強制発注{excluded && forcedItemIds.has(it.id) && "（発注済）"}
                               </label>
