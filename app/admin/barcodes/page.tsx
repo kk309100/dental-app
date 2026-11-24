@@ -231,8 +231,8 @@ export default function BarcodePage() {
         @media print {
           .no-print { display: none !important; }
           .print-only { display: block !important; }
-          body { background: #fff; margin: 0; }
-          @page { margin: 10mm; }
+          body { background: #fff; margin: 0; padding: 10mm; }
+          @page { margin: 0; }
         }
       `}</style>
     </main>
