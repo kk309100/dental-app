@@ -59,6 +59,8 @@ export default function AdminProductsPage() {
   const [totalCount, setTotalCount] = useState(0)        // 絞り込み後の件数
   const [grandTotal, setGrandTotal] = useState(0)        // 全商品の件数
   const [categories, setCategories] = useState<string[]>(["すべて"])
+  const [makers, setMakers] = useState<string[]>([])          // メーカーのプルダウン用（今ある名前の一覧）
+  const [makerCustom, setMakerCustom] = useState(false)       // 一覧にないメーカーを、手で入力する
   const [dupInfo, setDupInfo] = useState<{ dupCodes: number; dupNames: number } | null>(null)
   const [checkingDup, setCheckingDup] = useState(false)
   const allCache = useRef<Product[] | null>(null)
@@ -88,7 +90,15 @@ export default function AdminProductsPage() {
     fetchAll("products", "category", (q) => q.not("category", "is", null).order("id")).then((rows: { category: string }[]) => {
       setCategories(["すべて", ...Array.from(new Set(rows.map(r => r.category).filter(c => c && c.trim() !== "")))])
     })
+    fetchAll("products", "manufacturer", (q) => q.not("manufacturer", "is", null).order("id")).then((rows: { manufacturer: string }[]) => {
+      const list = Array.from(new Set(rows.map(r => (r.manufacturer || "").trim()).filter(Boolean)))
+      list.sort((a, b) => a.localeCompare(b, "ja"))
+      setMakers(list)
+    })
   }, [])
+
+  // 編集画面を開くたびに、メーカーは、プルダウンの表示に戻す
+  useEffect(() => { setMakerCustom(false) }, [editProduct])
 
   // マスター検索（入力が止まってから、サーバーで検索）
   useEffect(() => {
@@ -240,6 +250,9 @@ export default function AdminProductsPage() {
       : await supabase.from("products").update(payload).eq("id", editProduct.id)
     if (error) { alert("保存失敗: " + error.message); setSaving(false); return }
     setSaving(false)
+    // 手で入力した新しいメーカーは、次からプルダウンに出す
+    const mk = String(editForm.manufacturer || "").trim()
+    if (mk && !makers.includes(mk)) setMakers(prev => [...prev, mk].sort((a, b) => a.localeCompare(b, "ja")))
     closeEdit()
     fetchProducts({ silent: true })
   }
@@ -826,8 +839,21 @@ export default function AdminProductsPage() {
                   </div>
                   <div style={grid1}>
                     <EditField label="メーカー（ブランド名）">
-                      <input value={editForm.manufacturer || ""} onChange={e => setEditForm({ ...editForm, manufacturer: e.target.value })}
-                        style={fieldStyle} />
+                      {makerCustom ? (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input value={editForm.manufacturer || ""} onChange={e => setEditForm({ ...editForm, manufacturer: e.target.value })}
+                            style={{ ...fieldStyle, flex: 1 }} placeholder="新しいメーカー名を入力" autoFocus />
+                          <button type="button" onClick={() => setMakerCustom(false)} style={{ fontSize: 12, padding: "0 10px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", whiteSpace: "nowrap" }}>一覧から選ぶ</button>
+                        </div>
+                      ) : (
+                        <select value={editForm.manufacturer || ""} style={fieldStyle}
+                          onChange={e => { if (e.target.value === "__new__") { setMakerCustom(true); setEditForm({ ...editForm, manufacturer: "" }) } else setEditForm({ ...editForm, manufacturer: e.target.value || null }) }}>
+                          <option value="">（未設定）</option>
+                          {editForm.manufacturer && !makers.includes(editForm.manufacturer) && <option value={editForm.manufacturer}>{editForm.manufacturer}</option>}
+                          {makers.map(m => <option key={m} value={m}>{m}</option>)}
+                          <option value="__new__">＋ 一覧にないメーカーを入力…</option>
+                        </select>
+                      )}
                     </EditField>
                   </div>
                 </EditSection>
