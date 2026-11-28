@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { fmtYen } from "@/lib/invoice"
 import { downloadCSV, toCSV } from "@/lib/csv"
+import { deleteStocktake } from "@/lib/stocktake-delete"
 
 type Stocktake = { id: string; taken_on: string; status: string; note: string | null; finalized_at: string | null }
 type Item = { id: string; product_id: string; system_stock: number; counted_stock: number | null; diff: number | null; reason: string | null; note: string | null }
@@ -225,6 +226,14 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
     downloadCSV(`棚卸_${st?.taken_on || ""}.csv`, csv)
   }
 
+  async function removeStocktake() {
+    if (!st) return
+    if (!confirm(`${new Date(st.taken_on).toLocaleDateString("ja-JP")} の棚卸を削除します。\n\n・数えた内容（明細 ${stats.total} 件）も、すべて消えます。\n・元に戻せません。\n・在庫数は、変わりません。\n\nよろしいですか？`)) return
+    const r = await deleteStocktake(st.id, st.taken_on)
+    if (!r.ok) { alert(r.error || "削除に失敗しました"); return }
+    router.push("/admin/stocktakes")
+  }
+
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
   if (!st) return <p className="text-red-600 text-center py-12">棚卸が見つかりません</p>
   const isFinalized = st.status === "確定"
@@ -250,6 +259,7 @@ export default function StocktakeDetailPage({ params }: { params: Promise<{ stId
             </label>
           )}
           {!isFinalized && <button onClick={finalize} className="text-xs px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 font-bold">✓ 確定</button>}
+          {!isFinalized && <button onClick={removeStocktake} className="text-xs px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded hover:bg-red-50">🗑 この棚卸を削除</button>}
           <Link href="/admin/stocktakes" className="text-xs text-gray-500 underline">← 一覧</Link>
         </div>
       </div>

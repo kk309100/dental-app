@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { supabase, fetchAll } from "@/lib/supabase"
 import { parseDbDate } from "@/lib/invoice"
+import { deleteStocktake } from "@/lib/stocktake-delete"
 
 type Stocktake = {
   id: string
@@ -63,6 +64,13 @@ export default function StocktakesPage() {
     router.push(`/admin/stocktakes/${st.id}`)
   }
 
+  async function remove(st: Stocktake) {
+    if (!confirm(`${new Date(st.taken_on).toLocaleDateString("ja-JP")} の棚卸（${st.status}）を削除します。\n\n・数えた内容（明細）も、すべて消えます。\n・元に戻せません。\n・在庫数は、変わりません。\n\nよろしいですか？`)) return
+    const r = await deleteStocktake(st.id, st.taken_on)
+    if (!r.ok) { alert(r.error || "削除に失敗しました"); return }
+    fetchData()
+  }
+
   if (loading) return <p className="text-gray-400 text-center py-12">読み込み中…</p>
 
   if (tableMissing) {
@@ -103,11 +111,12 @@ export default function StocktakesPage() {
               <th className="px-3 py-1.5 text-left">備考</th>
               <th className="px-2 py-1.5 text-center w-32">確定日時</th>
               <th className="px-2 py-1.5 text-center w-24">開く</th>
+              <th className="px-2 py-1.5 text-center w-20">削除</th>
             </tr>
           </thead>
           <tbody>
             {list.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">棚卸履歴なし</td></tr>
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">棚卸履歴なし</td></tr>
             ) : list.map(st => (
               <tr key={st.id} className="border-b border-gray-100 hover:bg-blue-50/40">
                 <td className="px-3 py-1.5">{new Date(st.taken_on).toLocaleDateString("ja-JP")}</td>
@@ -122,6 +131,11 @@ export default function StocktakesPage() {
                 </td>
                 <td className="px-2 py-1.5 text-center">
                   <Link href={`/admin/stocktakes/${st.id}`} className="text-[12px] px-2 py-1 border border-gray-200 rounded hover:bg-gray-50">開く</Link>
+                </td>
+                <td className="px-2 py-1.5 text-center">
+                  {st.status === "確定"
+                    ? <span className="text-[11px] text-gray-300" title="確定した棚卸は、削除できません">—</span>
+                    : <button onClick={() => remove(st)} className="text-[12px] px-2 py-1 border border-red-200 text-red-600 rounded hover:bg-red-50">削除</button>}
                 </td>
               </tr>
             ))}
