@@ -278,6 +278,7 @@ export default function ReceivingPage() {
           const results: any[] = new Array(n)
           const failed: number[] = []
           let next = 0, done = 0
+          let lastErr = ""
           setParseProgress(`0 / ${n} ページ`)
           await Promise.all(Array.from({ length: Math.min(3, n) }, async () => {
             while (next < n) {
@@ -288,7 +289,12 @@ export default function ReceivingPage() {
                 const b64 = await toB64(new Blob([await doc.save() as BlobPart], { type: "application/pdf" }))
                 let res: { data: any; partial?: boolean } | null = null
                 for (let t = 0; t < 3 && !res; t++) {
-                  try { res = await callParse({ pdfBase64: b64 }) } catch { await new Promise(r => setTimeout(r, 1500 * (t + 1))) }
+                  try { res = await callParse({ pdfBase64: b64 }) } catch (e) {
+                    lastErr = (e as Error).message
+                    // キーが無効・未設定のときは、何度やっても同じなので、すぐやめる
+                    if (/401|authentication|invalid x-api-key|API_KEY/.test(lastErr)) break
+                    await new Promise(r => setTimeout(r, 1500 * (t + 1)))
+                  }
                 }
                 if (res) { results[i] = res; if (res.partial) partial = true } else failed.push(i + 1)
               } catch { failed.push(i + 1) }
@@ -297,7 +303,7 @@ export default function ReceivingPage() {
             }
           }))
           const ok = results.filter(Boolean)
-          if (ok.length === 0) throw new Error("どのページも読み取れませんでした")
+          if (ok.length === 0) throw new Error("どのページも読み取れませんでした" + (lastErr ? `\n\n【原因】${lastErr}` : ""))
           // 伝票ごと（ページごと）に分ける。日付・伝票番号が違うので、1枚ずつ確認して入荷確定する
           slips = ok.map(r => r.data)
           data = slips[0]
