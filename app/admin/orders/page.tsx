@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { logOp } from "@/lib/op-log"
+import { splitOrderItems } from "@/lib/order-split"
 import ClinicSelect from "@/app/components/ClinicSelect"
 import { withStockFlag } from "@/lib/stock-managed"
 import { cancelPoLineReceipt, receivePoLine, receiveWithoutPo } from "@/lib/po-receipt"
@@ -622,6 +623,26 @@ function AdminOrdersPage() {
   const [receiveSelectedIds, setReceiveSelectedIds] = useState<Set<string>>(new Set())
   function toggleReceiveSelect(itemId: string) {
     setReceiveSelectedIds(prev => { const n = new Set(prev); if (n.has(itemId)) n.delete(itemId); else n.add(itemId); return n })
+  }
+  // 在庫のある商品だけにチェックを付けて、その商品だけ納品書を作る（残りは、今の注文に残る）
+  const [shipSelectedIds, setShipSelectedIds] = useState<Set<string>>(new Set())
+  const [shipBusy, setShipBusy] = useState(false)
+  function toggleShipSelect(itemId: string) {
+    setShipSelectedIds(prev => { const n = new Set(prev); if (n.has(itemId)) n.delete(itemId); else n.add(itemId); return n })
+  }
+  async function shipSelectedItems(orderId: string, itemIds: string[]) {
+    if (itemIds.length === 0 || shipBusy) return
+    if (!confirm(`選んだ ${itemIds.length}品 だけを、別の注文に分けて、納品書の作成画面へ進みます。
+
+・残りの商品は、今の注文に、そのまま残ります。
+・在庫は、納品書を確定したときに、減ります。
+
+よろしいですか？`)) return
+    setShipBusy(true)
+    const r = await splitOrderItems(orderId, itemIds)
+    setShipBusy(false)
+    if (!r.ok || !r.orderId) { alert(r.error || "分割に失敗しました"); return }
+    window.location.href = `/admin/shipping?orders=${r.orderId}`
   }
   async function bulkReceiveItems(targets: { id: string; productId: string | null; productName: string; qty: number; max: number }[]) {
     if (targets.length === 0) return
@@ -1379,7 +1400,23 @@ function AdminOrdersPage() {
                                         </button>
                                       </div>
                                     )}
-                                    <table className="w-full text-[11px]" style={{ minWidth: 640 }}>
+                                    {(() => {
+                      if (["納品済み", "納品済", "キャンセル"].includes(o.status)) return null
+                      const shipCand = items.filter(it => it.product_id && Number(productById.get(it.product_id)?.stock || 0) >= Number(it.quantity || 0))
+                      if (shipCand.length === 0) return null
+                      const shipIds = items.filter(it => shipSelectedIds.has(it.id) && shipCand.some(c => c.id === it.id)).map(it => it.id)
+                      return (
+                        <div className="flex items-center gap-2 mb-1">
+                          <button onClick={() => shipSelectedItems(o.id, shipIds)} disabled={shipIds.length === 0 || shipBusy}
+                            className="text-[11px] px-2 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40 font-bold"
+                            title="チェックを付けた商品だけ、別の注文に分けて、納品書を作ります。残りは、この注文に残ります">
+                            {shipBusy ? "処理中…" : `📄 選択した商品だけ納品書を作る（${shipIds.length}）`}
+                          </button>
+                          <span className="text-[11px] text-gray-500">在庫が「OK」の商品の、左のチェックを付けてください</span>
+                        </div>
+                      )
+                    })()}
+                    <table className="w-full text-[11px]" style={{ minWidth: 640 }}>
                                       <thead className="text-[12px] text-gray-500">
                                         <tr>
                                           <th className="text-left px-1 py-0.5 w-16">在庫</th>
@@ -1411,7 +1448,10 @@ function AdminOrdersPage() {
                                           return (
                                             <tr key={it.id} className="border-b border-gray-100">
                                               <td className="px-1 py-0.5">
-                                                <span className={"text-[11px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
+                                                {enough && it.product_id && !["納品済み", "納品済", "キャンセル"].includes(o.status) && (
+                  <input type="checkbox" className="mr-1 align-middle" checked={shipSelectedIds.has(it.id)} onChange={() => toggleShipSelect(it.id)} onClick={e => e.stopPropagation()} title="この商品だけ納品書を作る（在庫あり）" />
+                )}
+<span className={"text-[11px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
                                                   {enough ? "OK" : `0`}
                                                 </span>
                                               </td>
@@ -1602,7 +1642,23 @@ function AdminOrdersPage() {
                                 </button>
                               </div>
                             )}
-                            <table className="w-full text-[11px]" style={{ minWidth: 640 }}>
+                            {(() => {
+                      if (["納品済み", "納品済", "キャンセル"].includes(o.status)) return null
+                      const shipCand = items.filter(it => it.product_id && Number(productById.get(it.product_id)?.stock || 0) >= Number(it.quantity || 0))
+                      if (shipCand.length === 0) return null
+                      const shipIds = items.filter(it => shipSelectedIds.has(it.id) && shipCand.some(c => c.id === it.id)).map(it => it.id)
+                      return (
+                        <div className="flex items-center gap-2 mb-1">
+                          <button onClick={() => shipSelectedItems(o.id, shipIds)} disabled={shipIds.length === 0 || shipBusy}
+                            className="text-[11px] px-2 py-1 rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40 font-bold"
+                            title="チェックを付けた商品だけ、別の注文に分けて、納品書を作ります。残りは、この注文に残ります">
+                            {shipBusy ? "処理中…" : `📄 選択した商品だけ納品書を作る（${shipIds.length}）`}
+                          </button>
+                          <span className="text-[11px] text-gray-500">在庫が「OK」の商品の、左のチェックを付けてください</span>
+                        </div>
+                      )
+                    })()}
+                    <table className="w-full text-[11px]" style={{ minWidth: 640 }}>
                               <thead className="text-[12px] text-gray-500">
                                 <tr>
                                   <th className="text-left px-1 py-0.5 w-16">在庫</th>
@@ -1633,7 +1689,10 @@ function AdminOrdersPage() {
                                 return (
                                   <tr key={it.id} className="border-b border-gray-100">
                                     <td className="px-1 py-0.5">
-                                      <span className={"text-[11px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
+                                      {enough && it.product_id && !["納品済み", "納品済", "キャンセル"].includes(o.status) && (
+                  <input type="checkbox" className="mr-1 align-middle" checked={shipSelectedIds.has(it.id)} onChange={() => toggleShipSelect(it.id)} onClick={e => e.stopPropagation()} title="この商品だけ納品書を作る（在庫あり）" />
+                )}
+<span className={"text-[11px] font-bold px-1 py-0.5 rounded " + (enough ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700")}>
                                         {enough ? "OK" : `0`}
                                       </span>
                                     </td>
