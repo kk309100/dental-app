@@ -65,8 +65,11 @@ export default function OrderProcessPage() {
   // 在庫数は実態とズレることがあり、ONのままだと在庫あり判定で誤って
   // 自動的に納品済み・請求書発行までされてしまう事故が実際に発生したため、
   // 選択はブラウザに記憶し、うっかり毎回ONに戻らないようにする。
-  const SELL_MODE_KEY = "denthub:orders_process_sell_mode"
-  const [sellMode, setSellModeState] = useState(false)
+  // 「やり直し用の環境（新しい箱）」だけは、最初から ON にする（NEXT_PUBLIC_ENV_LABEL が入っている環境）。
+  // 本番は、これまでどおり OFF が初期値。箱では、以前の記憶（OFF）に引きずられないよう、記憶の名前を別にしている。
+  const IS_REDO_ENV = (process.env.NEXT_PUBLIC_ENV_LABEL || "").trim() !== ""
+  const SELL_MODE_KEY = IS_REDO_ENV ? "denthub:orders_process_sell_mode:redo" : "denthub:orders_process_sell_mode"
+  const [sellMode, setSellModeState] = useState(IS_REDO_ENV)
   useEffect(() => {
     try {
       const saved = localStorage.getItem(SELL_MODE_KEY)
