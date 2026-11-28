@@ -11,6 +11,7 @@ type Product = {
   manufacturer: string | null
   stock: number | null
   cost: number | null
+  price?: number | null
   barcode: string | null
 }
 type Supplier = { id: string; name: string; maker_name: string | null }
@@ -22,19 +23,21 @@ type Row = {
   packSize: string            // 「20枚入」等
   quantity: string            // 数量（在庫加算数 = この数だけ stock 増える）
   unitPrice: string           // 単価（1個あたり）
+  listPrice: string           // 定価（1個あたり。入れた行だけ、商品マスタの定価を更新する）
   memo: string
   manufacturer: string        // 新規作成時用
   productId: string           // 手動で選んだ商品マスタID（指定時はJAN/コード/名前の自動照合より優先）
   pdfName: string             // PDF/写真から読み取った元の商品名（参考表示用）
   pdfQty?: string             // 読み取った元の数量（「ばらす」などの換算を覚えるために残す）
   pdfPrice?: string           // 読み取った元の単価
+  pdfListPrice?: string       // 読み取った元の定価
   packChecked?: boolean       // 覚えた換算を、すでに確かめた
   autoPack?: number           // 覚えた換算（×N）を、自動で当てた
 }
 
 const newRow = (): Row => ({
   productName: "", supplierJan: "", supplierCode: "",
-  packSize: "", quantity: "", unitPrice: "",
+  packSize: "", quantity: "", unitPrice: "", listPrice: "",
   memo: "", manufacturer: "", productId: "", pdfName: "",
 })
 
@@ -119,7 +122,7 @@ export default function ReceivingPage() {
     if (!opts?.silent) setLoading(true)
     // products は1万件超あるため、Supabase既定の1000件上限を回避するため fetchAll でページング取得する
     const [p, s, r] = await Promise.all([
-      fetchAll("products", "id,name,product_code,manufacturer,stock,cost,barcode"),
+      fetchAll("products", "id,name,product_code,manufacturer,stock,cost,price,barcode"),
       supabase.from("suppliers").select("id,name,maker_name").order("name").limit(50000),
       supabase.from("stock_receipts").select("*").order("created_at", { ascending: false }).limit(20),
     ])
@@ -165,12 +168,14 @@ export default function ReceivingPage() {
       packSize: it.pack_size || it.quantity_per_pack || it.入数 || "",
       quantity: String(it.quantity ?? it.qty ?? it.数量 ?? ""),
       unitPrice: String(it.unit_price ?? it.price ?? it.単価 ?? ""),
+      listPrice: String(it.list_price ?? it.定価 ?? it.上代 ?? ""),
       memo: "",
       manufacturer: it.manufacturer || it.maker || it.メーカー || "",
       productId: "",
       pdfName: it.supplier_product_name || it.product_name || it.name || it.商品名 || "",
       pdfQty: String(it.quantity ?? it.qty ?? it.数量 ?? ""),
       pdfPrice: String(it.unit_price ?? it.price ?? it.単価 ?? ""),
+      pdfListPrice: String(it.list_price ?? it.定価 ?? it.上代 ?? ""),
     })).filter(r => r.productName)  // 商品名が空の行は除去（読み取り元の数量・単価は、pdfQty・pdfPrice に残す）  // 商品名が空の行は除去
 
     // 常にrawJsonを保持（デバッグ用）
@@ -223,7 +228,7 @@ export default function ReceivingPage() {
         const head = grid[hi].map(c => String(c).trim())
         const col = (...names: string[]) => head.findIndex(h => names.some(n => h.includes(n)))
         const cDate = col("納品日", "伝票日付", "日付"), cNo = col("納品書No", "伝票№", "伝票No", "伝票番号"), cMemo = col("摘要")
-        const cJan = col("JAN", "ＪＡＮ", "バーコード", "ﾊﾞｰｺｰﾄﾞ"), cCode = col("品番", "商品コード", "コード"), cName = col("商品名"), cQty = col("数量"), cUnit = col("単価"), cAmt = col("金額")
+        const cJan = col("JAN", "ＪＡＮ", "バーコード", "ﾊﾞｰｺｰﾄﾞ"), cCode = col("品番", "商品コード", "コード"), cName = col("商品名"), cQty = col("数量"), cUnit = col("単価"), cList = col("定価", "上代", "希望小売"), cAmt = col("金額")
         const num = (v: any) => { const x = Number(String(v ?? "").replace(/[¥,\s]/g, "")); return Number.isFinite(x) ? x : 0 }
         const dateOf = (v: any) => { const m = String(v || "").match(/(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/); return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : "" }
         const groups = new Map<string, any>()
@@ -236,7 +241,7 @@ export default function ReceivingPage() {
           if (!groups.has(key)) groups.set(key, { invoice_number: no, invoice_date: date, memo: cMemo >= 0 ? String(r[cMemo] ?? "") : "", items: [] as any[] })
           const qty = num(r[cQty]); const up = num(r[cUnit]); const amt = cAmt >= 0 ? num(r[cAmt]) : qty * up
           const unit = qty > 0 && amt > 0 && Math.abs(qty * up - amt) > 1 ? amt / qty : up   // 割引後の金額が正
-          groups.get(key).items.push({ supplier_jan: cJan >= 0 ? String(r[cJan] ?? "").trim() : "", supplier_product_code: cCode >= 0 ? String(r[cCode] ?? "").trim() : "", supplier_product_name: name, quantity: qty, unit_price: unit, amount: amt })
+          groups.get(key).items.push({ supplier_jan: cJan >= 0 ? String(r[cJan] ?? "").trim() : "", supplier_product_code: cCode >= 0 ? String(r[cCode] ?? "").trim() : "", supplier_product_name: name, quantity: qty, unit_price: unit, list_price: cList >= 0 ? (num(r[cList]) || null) : null, amount: amt })
         }
         const sheetSlips = Array.from(groups.values()).map(g => ({ ...g, total: g.items.reduce((t: number, i: any) => t + (i.amount || 0), 0) }))
         if (sheetSlips.length === 0) throw new Error("明細が見つかりませんでした")
@@ -395,7 +400,7 @@ export default function ReceivingPage() {
       const q0 = Number(r.pdfQty), p0 = Number(r.pdfPrice)
       if (!(q0 > 0) || Number(r.quantity) !== q0) return { ...r, packChecked: true }   // 人がすでに直した行は、触らない
       changed = true
-      return { ...r, packChecked: true, autoPack: hit.packFactor, quantity: String(q0 * hit.packFactor), unitPrice: Number.isFinite(p0) && r.pdfPrice !== "" ? String(Math.round((p0 / hit.packFactor) * 100) / 100) : r.unitPrice }
+      return { ...r, packChecked: true, autoPack: hit.packFactor, quantity: String(q0 * hit.packFactor), unitPrice: Number.isFinite(p0) && r.pdfPrice !== "" ? String(Math.round((p0 / hit.packFactor) * 100) / 100) : r.unitPrice, listPrice: Number(r.pdfListPrice) > 0 ? String(Math.round((Number(r.pdfListPrice) / hit.packFactor) * 100) / 100) : r.listPrice }
     })
     if (changed) setRows(next)
   }, [aliasMap, rows])   // eslint-disable-line react-hooks/exhaustive-deps
@@ -534,6 +539,7 @@ export default function ReceivingPage() {
       try {
         const qty = Number(row.quantity)
         const price = row.unitPrice === "" ? null : Number(row.unitPrice)
+        const listPrice = Number(row.listPrice) > 0 ? Number(row.listPrice) : null   // 空欄・0 は、マスタの定価を変えない
 
         // 商品検索 or 新規作成
         let product = findProduct(row)
@@ -549,7 +555,7 @@ export default function ReceivingPage() {
             stock: 0,
             reorder_level: 10,
             cost: price,
-            price: 0,
+            price: listPrice ?? 0,
             is_active: true,
           }).select().single()
           if (cpe) throw new Error("商品新規作成失敗: " + cpe.message)
@@ -564,7 +570,8 @@ export default function ReceivingPage() {
         // 在庫 + cost 更新（数量 = 在庫加算）
         const before = Number(product.stock || 0)
         const after = before + qty
-        const productUpdate: { stock: number; cost?: number } = { stock: after }
+        const productUpdate: { stock: number; cost?: number; price?: number } = { stock: after }
+        if (listPrice !== null && Number(product.price || 0) !== listPrice) productUpdate.price = listPrice
         if (price !== null && updateCost && qty > 0) productUpdate.cost = price   // 返品では原価を更新しない
         const { error: pe } = await supabase.from("products").update(productUpdate).eq("id", product.id)
         if (pe) throw new Error(pe.message)
@@ -600,7 +607,7 @@ export default function ReceivingPage() {
           })
         } catch { /* スキップ */ }
 
-        newLogs.push(`✓ ${product.name} ${qty > 0 ? "+" : ""}${qty}${qty < 0 ? "（返品）" : ""}`)
+        newLogs.push(`✓ ${product.name} ${qty > 0 ? "+" : ""}${qty}${qty < 0 ? "（返品）" : ""}${productUpdate.price !== undefined ? `（定価 ${fmtYen(Number(product.price || 0))} → ${fmtYen(productUpdate.price)}）` : ""}`)
         if (qty > 0) {   // 返品は、出荷可能な注文の判定には使わない
           stockedProductIds.push(product.id)  // 後の「出荷可能注文」判定で使用
           receivedLines.push({ productId: product.id, name: product.name, qty })
@@ -991,6 +998,7 @@ export default function ReceivingPage() {
               <th className="px-1.5 py-1.5 text-left w-32">JAN / 商品コード</th>
               <th className="px-1.5 py-1.5 text-right w-16">数量</th>
               <th className="px-1.5 py-1.5 text-right w-20">単価</th>
+              <th className="px-1.5 py-1.5 text-right w-20" title="定価。入れると、商品マスタの定価も更新されます">定価</th>
               <th className="px-1.5 py-1.5 text-right w-24">小計</th>
               <th className="px-1.5 py-1.5 text-center w-12" title="1パックを N個に分割（小計固定）">分割</th>
               <th className="px-1.5 py-1.5 text-left w-28">メモ</th>
@@ -1023,6 +1031,7 @@ export default function ReceivingPage() {
                 updateRow(i, {
                   quantity: String(qty * factor),
                   unitPrice: String(Math.round((price / factor) * 100) / 100),
+                  ...(Number(row.listPrice) > 0 ? { listPrice: String(Math.round((Number(row.listPrice) / factor) * 100) / 100) } : {}),
                 })
               }
 
@@ -1097,6 +1106,17 @@ export default function ReceivingPage() {
                   <td className="px-1.5 py-0.5">
                     <input
                       type="text"
+                      inputMode="decimal"
+                      value={row.listPrice ? Number(row.listPrice).toLocaleString("ja-JP", { maximumFractionDigits: 2 }) : ""}
+                      onChange={(e) => updateRow(i, { listPrice: e.target.value.replace(/[^d.]/g, "") })}
+                      placeholder={existing?.price ? `マスタ ${Number(existing.price).toLocaleString("ja-JP")}` : "¥"}
+                      className="w-full px-1 py-0.5 border border-gray-200 rounded text-right text-[12px]"
+                      title="定価。入れると、商品マスタの定価も、この値に更新されます（空欄のときは、マスタの定価は変わりません）"
+                    />
+                  </td>
+                  <td className="px-1.5 py-0.5">
+                    <input
+                      type="text"
                       inputMode="numeric"
                       value={subtotal > 0 ? Math.round(subtotal).toLocaleString("ja-JP") : ""}
                       onChange={(e) => onSubtotalChange(e.target.value)}
@@ -1120,7 +1140,7 @@ export default function ReceivingPage() {
           </tbody>
           <tfoot className="bg-gray-50 sticky bottom-0">
             <tr className="border-t-2 border-gray-300">
-              <td colSpan={5} className="px-2 py-2 text-right text-xs font-bold text-gray-700">合計</td>
+              <td colSpan={6} className="px-2 py-2 text-right text-xs font-bold text-gray-700">合計</td>
               <td className="px-2 py-2 text-right text-base font-bold text-gray-900">{fmtYen(totalAmount)}</td>
               <td colSpan={3}></td>
             </tr>

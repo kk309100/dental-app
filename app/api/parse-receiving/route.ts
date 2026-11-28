@@ -13,6 +13,7 @@ type ParsedItem = {
   pack_size?: string  // 例: "20枚入" 等の人間表記
   quantity: number
   unit_price: number
+  list_price?: number | null  // 定価（納品書に、定価・上代の列があるときだけ）
   amount?: number
 }
 
@@ -42,7 +43,8 @@ const SYSTEM_PROMPT = `あなたは歯科材料の仕入納品書を構造化デ
   - supplier_product_name: 商品名（メーカー名 + 商品名 + 規格、複数行は1行に結合）
   - pack_size: 「20枚入」「6個入」「100g」等の入数・容量表記。商品名から抽出
   - quantity: 数量（個数）
-  - unit_price: 単価（税抜）
+  - unit_price: 単価（税抜。仕入れ値）
+  - list_price: 定価・上代・希望小売価格の列が、納品書にあるときだけ、その1個あたりの金額（税抜）。列がなければ null。単価（仕入れ値）と混同しない。推測で作らない
   - amount: 金額（無ければ quantity * unit_price で計算）
 
 出力は JSON のみ。説明文・マークダウン記号 (\`\`\`) は不要。`
